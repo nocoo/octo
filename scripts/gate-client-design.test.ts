@@ -45,6 +45,14 @@ describe("Basalt client layout boundary", () => {
 		).toEqual([]);
 	});
 	it.each([
+		`const page = <Grid className={\`gap-4 \${active}\`} />`,
+		"const layout = { padding: 12 }; const page = <Grid style={layout} />",
+		"const layout = { padding: 12 }; const page = <Grid style={{ ...layout }} />",
+		"const page = <Grid style={{ [property]: 12 }} />",
+	])("fails closed for indirect or template spacing: %s", (source) => {
+		expect(checkClientDesign("page.tsx", source).length).toBeGreaterThan(0);
+	});
+	it.each([
 		"padding:12px",
 		"margin-top: 1rem",
 		"gap: 0",

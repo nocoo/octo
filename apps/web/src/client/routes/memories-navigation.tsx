@@ -1,9 +1,8 @@
-import type { CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import { Link, type LinkProps, useNavigate } from "react-router";
 
-export function memoryTransition(id: string): CSSProperties {
-	return { viewTransitionName: `memory-${id.replace(/[^A-Za-z0-9_-]/g, "-")}` };
+export function memoryTransition(id: string): string {
+	return `memory-${id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
 }
 
 export function MemoryLink({
@@ -19,7 +18,7 @@ export function MemoryLink({
 			{...props}
 			to={to}
 			state={{ memoryTitle }}
-			style={memoryTransition(memoryId)}
+			style={{ viewTransitionName: memoryTransition(memoryId) }}
 			onClick={(event) => {
 				props.onClick?.(event);
 				if (

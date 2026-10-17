@@ -59,7 +59,13 @@ export function checkClientDesign(file: string, source: string): string[] {
 			value?: {
 				value?: unknown;
 				expression?: {
-					properties?: { key: { name?: string; value?: string }; value: { value?: unknown } }[];
+					type?: string;
+					properties?: {
+						type: string;
+						computed?: boolean;
+						key: { name?: string; value?: string };
+						value: { value?: unknown };
+					}[];
 				};
 			};
 		}[];
@@ -74,14 +80,24 @@ export function checkClientDesign(file: string, source: string): string[] {
 		for (const attribute of attributes) {
 			if (attribute.name?.name === "className")
 				walk(attribute.value, (part) => {
+					const text =
+						part.type === "TemplateElement" ? (part.value as { raw: string }).raw : part.value;
 					if (
-						typeof part.value === "string" &&
-						/(?:^|[\s:])(?:[mp][trblxy]?|gap(?:-[xy])?|space-[xy])-(?:\d|\[)/.test(part.value)
+						typeof text === "string" &&
+						/(?:^|[\s:])(?:[mp][trblxy]?|gap(?:-[xy])?|space-[xy])-(?:\d|\[|$)/.test(text)
 					)
 						errors.push(`${file}: raw spacing utility`);
 				});
 			if (attribute.name?.name !== "style") continue;
+			if (attribute.value?.expression?.type !== "ObjectExpression") {
+				errors.push(`${file}: style must be an explicit object for spacing inspection`);
+				continue;
+			}
 			for (const property of attribute.value?.expression?.properties ?? []) {
+				if (property.type === "SpreadElement" || property.computed) {
+					errors.push(`${file}: style must not hide spacing in spreads or computed keys`);
+					continue;
+				}
 				const key = property.key?.name ?? property.key?.value;
 				if (key && spacing.test(key) && !tokenSpacing(property.value.value))
 					errors.push(`${file}: ${key} must use Basalt tokens`);

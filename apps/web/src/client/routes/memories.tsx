@@ -428,7 +428,11 @@ export function MemoryPage() {
 		<Grid columns={1}>
 			<PageHeader
 				size="xl"
-				title={<span style={memoryTransition(id)}>{memory?.title ?? cachedTitle ?? "记忆"}</span>}
+				title={
+					<span style={{ viewTransitionName: memoryTransition(id) }}>
+						{memory?.title ?? cachedTitle ?? "记忆"}
+					</span>
+				}
 				description={memory ? `第 ${memory.version} 版 / ${memory.space}` : "私有知识"}
 				actions={
 					<>
