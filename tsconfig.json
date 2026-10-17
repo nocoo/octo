@@ -22,6 +22,7 @@
 		}
 	},
 	"include": [
+		"worker-configuration.d.ts",
 		"apps/web/src/**/*.ts",
 		"apps/web/src/**/*.tsx",
 		"vitest.config.ts",
