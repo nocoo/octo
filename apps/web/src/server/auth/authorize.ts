@@ -13,11 +13,16 @@ export type AuthzKey = {
 };
 
 export type ApiPrincipal = AuthzKey & {
+	actor?: `admin:${string}`;
 	name: string;
 	role: string;
 	autoOwnSpace: boolean;
 	expiresAt: number | null;
 };
+
+export function principalActor(principal: ApiPrincipal): string {
+	return principal.actor ?? `key:${principal.id}`;
+}
 
 export type AuthzTarget = {
 	spaceId?: string;

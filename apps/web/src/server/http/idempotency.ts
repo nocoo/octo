@@ -28,20 +28,22 @@ async function writeFailure(
 	}
 }
 
-export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> {
+export function idempotencyMiddleware(
+	prefix = "/api/v1",
+): MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> {
 	return async (c, next) => {
 		if (
 			c.req.method === "GET" ||
-			!c.req.path.startsWith("/api/v1/") ||
+			!c.req.path.startsWith(`${prefix}/`) ||
 			(c.req.method === "POST" &&
-				(c.req.path === "/api/v1/search" || c.req.path === "/api/v1/memories:batchGet"))
+				(c.req.path === `${prefix}/search` || c.req.path === `${prefix}/memories:batchGet`))
 		) {
 			await next();
 			return;
 		}
 		const writes: D1PreparedStatement[] = [];
 		c.set("writeStatements", writes);
-		await authorizeMemoryRequest(c);
+		await authorizeMemoryRequest(c, undefined, prefix);
 		const key = parseIdempotencyKey(c.req.header("Idempotency-Key"));
 		if (key === null) {
 			await next();
@@ -65,15 +67,15 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 		try {
 			const existing = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
 			if (existing) {
-				await authorizeMemoryRequest(c, existing);
-				await authorizeBatchReplay(c, existing);
+				await authorizeMemoryRequest(c, existing, prefix);
+				await authorizeBatchReplay(c, existing, prefix);
 				return replayResponse(existing);
 			}
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
 			throw new ApiError("unavailable", "idempotency store unavailable");
 		}
-		await prepareBatchAuthorization(c);
+		await prepareBatchAuthorization(c, prefix);
 		await next();
 		const body = await c.res.clone().text();
 		try {
@@ -95,8 +97,8 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 			try {
 				const outcome = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
 				if (outcome) {
-					await authorizeMemoryRequest(c, outcome);
-					await authorizeBatchReplay(c, outcome);
+					await authorizeMemoryRequest(c, outcome, prefix);
+					await authorizeBatchReplay(c, outcome, prefix);
 					c.res = replayResponse(outcome);
 					return;
 				}

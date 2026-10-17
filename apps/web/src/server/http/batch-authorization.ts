@@ -14,15 +14,16 @@ import { currentMemoryAuthz } from "./memory-authorization";
 
 const BATCH_JSON_BODY_MAX_BYTES = BATCH_MAX_ITEMS * JSON_BODY_MAX_BYTES;
 const operations: Record<string, "write" | "update" | "delete"> = {
-	"/api/v1/memories:batchCreate": "write",
-	"/api/v1/memories:batchUpdate": "update",
-	"/api/v1/memories:batchDelete": "delete",
+	"/memories:batchCreate": "write",
+	"/memories:batchUpdate": "update",
+	"/memories:batchDelete": "delete",
 };
 
 export async function prepareBatchAuthorization(
 	context: Context<{ Bindings: Env; Variables: AppVars }>,
+	prefix = "/api/v1",
 ): Promise<void> {
-	const op = operations[context.req.path];
+	const op = operations[context.req.path.slice(prefix.length)];
 	if (context.req.method === "POST" && (op === "update" || op === "delete")) {
 		await readAuthorizationBody(context, BATCH_JSON_BODY_MAX_BYTES);
 	}
@@ -47,8 +48,9 @@ const cachedBatchSchema = z.object({
 export async function authorizeBatchReplay(
 	context: Context<{ Bindings: Env; Variables: AppVars }>,
 	outcome: { status: number; body: string },
+	prefix = "/api/v1",
 ): Promise<void> {
-	const op = operations[context.req.path];
+	const op = operations[context.req.path.slice(prefix.length)];
 	if (context.req.method !== "POST" || !op || outcome.status >= 400) return;
 	let parsed: unknown;
 	try {

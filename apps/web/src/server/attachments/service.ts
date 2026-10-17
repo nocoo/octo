@@ -1,4 +1,4 @@
-import { type ApiPrincipal, authorize } from "../auth/authorize";
+import { type ApiPrincipal, authorize, principalActor } from "../auth/authorize";
 import { ApiError } from "../lib/errors";
 import type { BlobStore } from "../ports/blob";
 import { sha256Hex } from "./crypto";
@@ -51,10 +51,6 @@ export class AttachmentService {
 		this.now = deps.now ?? (() => Date.now());
 	}
 
-	private actor(key: ApiPrincipal): string {
-		return `key:${key.id}`;
-	}
-
 	private async loadMemory(memoryId: string): Promise<MemoryRow> {
 		const memory = await this.deps.repo.getMemory(memoryId);
 		if (!memory) {
@@ -93,11 +89,16 @@ export class AttachmentService {
 			content_type: upload.contentType,
 			size_bytes: upload.bytes.byteLength,
 			sha256,
-			created_by: this.actor(key),
+			created_by: principalActor(key),
 			created_at: now,
 			deleted_at: null,
 		};
-		const statements = this.deps.repo.insertStatements(row, memory.space_id, this.actor(key), now);
+		const statements = this.deps.repo.insertStatements(
+			row,
+			memory.space_id,
+			principalActor(key),
+			now,
+		);
 		await this.deps.blobs.put(row.r2_key, upload.bytes, {
 			contentType: upload.contentType,
 			sha256,
@@ -152,7 +153,7 @@ export class AttachmentService {
 			statements: this.deps.repo.softDeleteStatements(
 				attachmentId,
 				memory.space_id,
-				this.actor(key),
+				principalActor(key),
 				this.now(),
 			),
 			value: undefined,

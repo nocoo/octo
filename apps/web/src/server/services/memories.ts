@@ -5,6 +5,7 @@ import {
 	type AuthzOp,
 	type AuthzTarget,
 	authorize,
+	principalActor,
 	visibleSpaceIds,
 } from "../auth/authorize";
 import { ApiError } from "../lib/errors";
@@ -29,7 +30,7 @@ export function authzFrom(principal: ApiPrincipal): Authz {
 	const key: ApiPrincipal & { ownedSpaceIds: string[] } = { ...principal, ownedSpaceIds };
 	return {
 		principal: key,
-		actor: `key:${key.id}`,
+		actor: principalActor(key),
 		denyUnless(op, target) {
 			const result = authorize(key, op, target);
 			if (result.allow) {

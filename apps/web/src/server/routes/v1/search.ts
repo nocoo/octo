@@ -16,8 +16,11 @@ async function readJsonBody(c: { req: { json: () => Promise<unknown> } }): Promi
 	}
 }
 
-export function mountV1SearchRoutes(app: Hono<{ Bindings: Env; Variables: AppVars }>): void {
-	app.post("/api/v1/search", async (c) => {
+export function mountV1SearchRoutes(
+	app: Hono<{ Bindings: Env; Variables: AppVars }>,
+	prefix = "/api/v1",
+): void {
+	app.post(`${prefix}/search`, async (c) => {
 		const principal = c.get("apiKey");
 		requireSearchRead(principal);
 		const authz = searchAuthzFromPrincipal(principal);
@@ -26,7 +29,7 @@ export function mountV1SearchRoutes(app: Hono<{ Bindings: Env; Variables: AppVar
 		return jsonOk(result);
 	});
 
-	app.post("/api/v1/memories:batchGet", async (c) => {
+	app.post(`${prefix}/memories:batchGet`, async (c) => {
 		const principal = c.get("apiKey");
 		requireSearchRead(principal);
 		const authz = searchAuthzFromPrincipal(principal);

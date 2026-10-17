@@ -18,12 +18,13 @@ export async function currentMemoryAuthz(context: Context<{ Bindings: Env; Varia
 export async function authorizeMemoryRequest(
 	context: Context<{ Bindings: Env; Variables: AppVars }>,
 	outcome?: { status: number; body: string },
+	prefix = "/api/v1",
 ): Promise<void> {
-	const path = context.req.path.replace(/\/$/, "");
+	const path = context.req.path.slice(prefix.length).replace(/\/$/, "");
 	const method = context.req.method;
-	const create = method === "POST" && path === "/api/v1/memories";
-	const memory = /^\/api\/v1\/memories\/([^/]+)(\/rollback)?$/.exec(path);
-	const restore = method === "POST" && /^\/api\/v1\/trash\/([^/]+)\/restore$/.exec(path);
+	const create = method === "POST" && path === "/memories";
+	const memory = /^\/memories\/([^/]+)(\/rollback)?$/.exec(path);
+	const restore = method === "POST" && /^\/trash\/([^/]+)\/restore$/.exec(path);
 	const update = memory && ((method === "PATCH" && !memory[2]) || (method === "POST" && memory[2]));
 	const remove = memory && method === "DELETE" && !memory[2];
 	if (!create && !update && !remove && !restore) return;

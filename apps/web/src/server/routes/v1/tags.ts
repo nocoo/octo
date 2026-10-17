@@ -1,6 +1,6 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { authorize, visibleSpaceIds } from "../../auth/authorize";
+import { authorize, principalActor, visibleSpaceIds } from "../../auth/authorize";
 import type { AppVars, Env } from "../../env";
 import { ApiError, jsonOk } from "../../lib/errors";
 import { listEnvelope, serializeTag } from "../../lib/http";
@@ -38,7 +38,7 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		const write = await new TagRepo(c.env.DB).rename(
 			c.req.param("name"),
 			body.new_name,
-			`key:${key.id}`,
+			principalActor(key),
 		);
 		c.get("writeStatements").push(...write.statements);
 		c.set("writeError", write.mapError);
@@ -51,7 +51,7 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		const write = await new TagRepo(c.env.DB).merge(
 			c.req.param("name"),
 			body.into,
-			`key:${key.id}`,
+			principalActor(key),
 		);
 		c.get("writeStatements").push(...write.statements);
 		c.set("writeError", write.mapError);
