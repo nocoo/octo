@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { L2_JWKS_PORT } from "./ports";
 
 export const L2_ACCESS_AUD = "octo-e2e";
@@ -146,7 +147,7 @@ export function startJwksStub(port: number, state: JwksState): Promise<JwksStub>
 		});
 		server.listen(port, "127.0.0.1", () => {
 			resolve({
-				url: l2JwksUrl(port),
+				url: l2JwksUrl((server.address() as AddressInfo).port),
 				close: () =>
 					new Promise((done) => {
 						server.close(() => done());

@@ -35,6 +35,16 @@ function get(url: string): Promise<{ status: number; body: string }> {
 }
 
 describe("jwks stub", () => {
+	it("reports the allocated loopback port when requested port is zero", async () => {
+		const state = await generateJwksPair("ephemeral");
+		const stub = await startJwksStub(0, state);
+		try {
+			expect(Number(new URL(stub.url).port)).toBeGreaterThan(0);
+			expect((await get(stub.url)).status).toBe(200);
+		} finally {
+			await stub.close();
+		}
+	});
 	it("serves JWKS and signs RS256 tokens", async () => {
 		expect(L2_ACCESS_AUD).toBe("octo-e2e");
 		expect(l2AccessIss()).toBe(`http://127.0.0.1:${L2_JWKS_PORT}`);
