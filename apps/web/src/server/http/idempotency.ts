@@ -2,21 +2,13 @@ import type { MiddlewareHandler } from "hono";
 import type { AppVars, Env } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseIdempotencyKey } from "./idempotency-key";
-import {
-	claimIdempotencyKey,
-	completeIdempotencyRecord,
-	releaseIdempotencyClaim,
-	waitForIdempotencyReplay,
-} from "./idempotency-repo";
+import { commitIdempotencyOutcome, readIdempotencyResponse } from "./idempotency-repo";
 import { requestHash } from "./request-hash";
 
-function replayResponse(status: number, body: string): Response {
-	return new Response(body, {
-		status,
-		headers: {
-			"content-type": "application/json; charset=utf-8",
-			"Idempotent-Replayed": "true",
-		},
+function replayResponse(outcome: { status: number; body: string }): Response {
+	return new Response(outcome.body, {
+		status: outcome.status,
+		headers: { "content-type": "application/json; charset=utf-8", "Idempotent-Replayed": "true" },
 	});
 }
 
@@ -26,46 +18,53 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 			await next();
 			return;
 		}
-		const idemKey = parseIdempotencyKey(c.req.header("Idempotency-Key"));
-		if (!idemKey) {
+		const writes: D1PreparedStatement[] = [];
+		c.set("writeStatements", writes);
+		const key = parseIdempotencyKey(c.req.header("Idempotency-Key"));
+		if (key === null) {
 			await next();
+			if (c.res.status < 400 && writes.length > 0) {
+				try {
+					await c.env.DB.batch(writes);
+				} catch {
+					throw new ApiError("unavailable", "write transaction failed");
+				}
+			}
 			return;
 		}
 		const keyId = c.get("apiKey")?.id;
-		if (!keyId) {
-			throw new ApiError("unauthenticated", "unauthenticated");
-		}
-		const rawBody = await c.req.raw.clone().text();
-		const hash = await requestHash(c.req.method, c.req.path, rawBody);
-		const now = Date.now();
-		let claim = await claimIdempotencyKey(c.env.DB, keyId, idemKey, hash, now);
-		if (claim.kind === "replay") {
-			return replayResponse(claim.status, claim.body);
-		}
-		if (claim.kind !== "claimed") {
-			claim = await waitForIdempotencyReplay(c.env.DB, keyId, idemKey, hash);
-			if (claim.kind === "replay") {
-				return replayResponse(claim.status, claim.body);
-			}
-			if (claim.kind === "in_progress") {
-				throw new ApiError("unavailable", "idempotent request still processing");
-			}
-			throw new ApiError("idempotency_conflict", "idempotency key reused with different request");
-		}
+		if (!keyId) throw new ApiError("unauthenticated", "unauthenticated");
+		const hash = await requestHash(c.req.method, c.req.path, await c.req.raw.clone().text());
 		try {
-			await next();
+			const existing = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
+			if (existing) return replayResponse(existing);
 		} catch (err) {
-			await releaseIdempotencyClaim(c.env.DB, keyId, idemKey, hash);
-			throw err;
+			if (err instanceof ApiError) throw err;
+			throw new ApiError("unavailable", "idempotency store unavailable");
 		}
-		const bodyText = await c.res.clone().text();
+		await next();
+		const body = await c.res.clone().text();
 		try {
-			await completeIdempotencyRecord(c.env.DB, keyId, idemKey, hash, c.res.status, bodyText, now);
-		} catch (storeErr) {
-			if (storeErr instanceof ApiError) {
-				throw storeErr;
+			await commitIdempotencyOutcome(
+				c.env.DB,
+				keyId,
+				key,
+				hash,
+				c.res.status,
+				body,
+				c.res.status < 400 ? writes : [],
+			);
+		} catch {
+			try {
+				const outcome = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
+				if (outcome) {
+					c.res = replayResponse(outcome);
+					return;
+				}
+			} catch (err) {
+				if (err instanceof ApiError) throw err;
 			}
-			throw new ApiError("internal", "idempotency store failed");
+			throw new ApiError("unavailable", "write transaction unavailable; retry with the same key");
 		}
 	};
 }

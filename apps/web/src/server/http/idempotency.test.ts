@@ -1,288 +1,94 @@
 import { Hono } from "hono";
-import { describe, expect, it } from "vitest";
-import { APP_VERSION } from "../../lib/version";
+import { describe, expect, it, vi } from "vitest";
+import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import type { AppVars, Env } from "../env";
-import { toErrorResponse } from "../lib/errors";
-import { newRequestId, withOctoHeaders } from "../lib/request";
+import { ApiError, toErrorResponse } from "../lib/errors";
 import { testApiPrincipal } from "../test-principal";
 import { idempotencyMiddleware } from "./idempotency";
-import type { IdempotencyRecord } from "./idempotency-repo";
-import { IDEMPOTENCY_PENDING_STATUS } from "./idempotency-storage";
-import { requestHash } from "./request-hash";
 
-function mockEnv(records: Map<string, IdempotencyRecord>): Env {
-	return {
-		DB: {
-			prepare: (sql: string) => {
-				if (sql.startsWith("SELECT") && sql.includes("idempotency_records")) {
-					return {
-						bind: (keyId: string, idemKey: string) => ({
-							first: async () => records.get(`${keyId}:${idemKey}`) ?? null,
-						}),
-					};
-				}
-				if (sql.startsWith("INSERT") && sql.includes("idempotency_records")) {
-					return {
-						bind: (
-							keyId: string,
-							idemKey: string,
-							hash: string,
-							status: number,
-							createdAt: number,
-						) => ({
-							run: async () => {
-								const key = `${keyId}:${idemKey}`;
-								if (records.has(key)) {
-									return { success: false, meta: { changes: 0 } };
-								}
-								records.set(key, {
-									key_id: keyId,
-									idem_key: idemKey,
-									request_hash: hash,
-									status,
-									response_json: "",
-									created_at: createdAt,
-								});
-								return { success: true, meta: { changes: 1 } };
-							},
-						}),
-					};
-				}
-				if (sql.startsWith("UPDATE") && sql.includes("idempotency_records")) {
-					return {
-						bind: (
-							status: number,
-							responseJson: string,
-							keyId: string,
-							idemKey: string,
-							hash: string,
-							pendingStatus: number,
-						) => ({
-							run: async () => {
-								const key = `${keyId}:${idemKey}`;
-								const row = records.get(key);
-								if (
-									!row ||
-									row.request_hash !== hash ||
-									row.status !== pendingStatus ||
-									pendingStatus !== IDEMPOTENCY_PENDING_STATUS
-								) {
-									return { success: true, meta: { changes: 0 } };
-								}
-								records.set(key, {
-									...row,
-									status,
-									response_json: responseJson,
-								});
-								return { success: true, meta: { changes: 1 } };
-							},
-						}),
-					};
-				}
-				if (sql.startsWith("DELETE") && sql.includes("idempotency_records")) {
-					return {
-						bind: (keyId: string, idemKey: string, hash: string, pendingStatus: number) => ({
-							run: async () => {
-								const key = `${keyId}:${idemKey}`;
-								const row = records.get(key);
-								if (row?.request_hash === hash && row.status === pendingStatus) {
-									records.delete(key);
-								}
-								return { success: true, meta: { changes: 1 } };
-							},
-						}),
-					};
-				}
-				throw new Error(`unexpected sql: ${sql}`);
-			},
-			batch: async (statements: Array<{ run: () => Promise<{ meta: { changes?: number } }> }>) => {
-				const results = [];
-				for (const statement of statements) {
-					results.push(await statement.run());
-				}
-				return results;
-			},
-		} as unknown as D1Database,
-		FILES: {} as R2Bucket,
-		ASSETS: { fetch: () => Promise.resolve(new Response("spa")) } as unknown as Fetcher,
-		API_KEY_PEPPER: "pepper",
-	};
-}
-
-function withPrincipal(app: Hono<{ Bindings: Env; Variables: AppVars }>) {
-	app.use("*", async (c, next) => {
-		c.set("apiKey", testApiPrincipal());
-		c.set("adminEmail", "");
-		await next();
-	});
-}
-
-function testApp(_records: Map<string, IdempotencyRecord>) {
+function fixture(principal = true) {
+	const { db, sqlite } = sqliteD1();
+	sqlite.exec("CREATE TABLE effects (id INTEGER)");
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
+	app.onError((err) => toErrorResponse(err, "test"));
 	app.use("*", async (c, next) => {
-		const requestId = newRequestId(c.req.raw);
-		c.set("requestId", requestId);
+		if (principal)
+			c.set("apiKey", { ...testApiPrincipal(), id: c.req.header("Test-Key") ?? "kid" });
 		await next();
-		c.res = withOctoHeaders(c.res, requestId, APP_VERSION);
 	});
-	app.onError((err, c) => toErrorResponse(err, c.get("requestId")));
-	withPrincipal(app);
 	app.use("*", idempotencyMiddleware());
-	let hits = 0;
-	app.post("/api/v1/echo", (c) => {
-		hits += 1;
-		return c.json({ hits }, 201);
+	app.post("/api/v1/write", (c) => {
+		c.get("writeStatements").push(db.prepare("INSERT INTO effects VALUES (1)"));
+		return c.json({ ok: true }, 201);
 	});
-	return { app, hits: () => hits };
+	app.post("/api/v1/error", (c) => {
+		c.get("writeStatements").push(db.prepare("INSERT INTO effects VALUES (1)"));
+		throw new ApiError("validation_failed", "invalid");
+	});
+	app.get("/api/v1/read", (c) => c.json({ ok: true }));
+	app.post("/other", (c) => c.json({ ok: true }));
+	const req = (
+		path = "/api/v1/write",
+		headers: Record<string, string> = { "Idempotency-Key": "key" },
+		method = "POST",
+	) => app.request(path, { method, headers }, { DB: db } as Env);
+	return { db, sqlite, req };
 }
 
-describe("idempotencyMiddleware", () => {
-	it("skips non-v1 paths", async () => {
-		const records = new Map<string, IdempotencyRecord>();
-		const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
-		app.use("*", idempotencyMiddleware());
-		app.post("/api/live", (c) => c.json({ ok: true }));
-		const res = await app.request(
-			"/api/live",
-			{ method: "POST", headers: { "Idempotency-Key": "k" }, body: "{}" },
-			mockEnv(records),
-		);
-		expect(res.status).toBe(200);
+describe("idempotency middleware", () => {
+	it("bypasses reads and non-v1 requests", async () => {
+		const f = fixture();
+		expect((await f.req("/api/v1/read", {}, "GET")).status).toBe(200);
+		expect((await f.req("/other")).status).toBe(200);
+		f.sqlite.close();
 	});
-
-	it("replays identical write responses", async () => {
-		const records = new Map<string, IdempotencyRecord>();
-		const { app, hits } = testApp(records);
-		const env = mockEnv(records);
-		const headers = {
-			"Idempotency-Key": "k1",
-			"Content-Type": "application/json",
-		};
-		const body = '{"x":1}';
-		const res1 = await app.request("/api/v1/echo", { method: "POST", headers, body }, env);
-		expect(res1.status).toBe(201);
-		expect(await res1.json()).toEqual({ hits: 1 });
-		const res2 = await app.request("/api/v1/echo", { method: "POST", headers, body }, env);
-		expect(res2.status).toBe(201);
-		expect(res2.headers.get("Idempotent-Replayed")).toBe("true");
-		expect(await res2.json()).toEqual({ hits: 1 });
-		expect(hits()).toBe(1);
+	it("commits unkeyed writes but never commits an errored request's staged writes", async () => {
+		const f = fixture();
+		expect((await f.req("/api/v1/write", {})).status).toBe(201);
+		expect((await f.req("/api/v1/error", {})).status).toBe(400);
+		expect((await f.req("/api/v1/error")).status).toBe(400);
+		expect((await f.req("/api/v1/error")).headers.get("Idempotent-Replayed")).toBe("true");
+		expect(f.sqlite.prepare("SELECT * FROM effects").all()).toHaveLength(1);
+		f.sqlite.close();
 	});
-
-	it("returns conflict when the key is reused with a different body", async () => {
-		const records = new Map<string, IdempotencyRecord>();
-		const hash = await requestHash("POST", "/api/v1/echo", '{"x":1}');
-		records.set("kid:k1", {
-			key_id: "kid",
-			idem_key: "k1",
-			request_hash: hash,
-			status: 201,
-			response_json: '{"hits":1}',
-			created_at: 1,
+	it("isolates the same client key across api keys", async () => {
+		const f = fixture();
+		for (const key of ["one", "two"])
+			expect((await f.req(undefined, { "Idempotency-Key": "same", "Test-Key": key })).status).toBe(
+				201,
+			);
+		expect(f.sqlite.prepare("SELECT * FROM effects").all()).toHaveLength(2);
+		f.sqlite.close();
+	});
+	it("rejects missing auth and explicitly empty keys", async () => {
+		const f = fixture(false);
+		expect((await f.req()).status).toBe(401);
+		expect((await f.req(undefined, { "Idempotency-Key": "" })).status).toBe(400);
+		f.sqlite.close();
+	});
+	it("maps unavailable reads and commits to 503 without leaking details", async () => {
+		const f = fixture();
+		vi.spyOn(f.db, "prepare").mockImplementationOnce(() => {
+			throw new Error("secret");
 		});
-		const { app } = testApp(records);
-		const res = await app.request(
-			"/api/v1/echo",
-			{
-				method: "POST",
-				headers: {
-					"Idempotency-Key": "k1",
-					"Content-Type": "application/json",
-				},
-				body: '{"x":2}',
-			},
-			mockEnv(records),
-		);
-		expect(res.status).toBe(409);
+		expect((await f.req()).status).toBe(503);
+		vi.spyOn(f.db, "batch").mockRejectedValue(new Error("secret"));
+		expect((await f.req(undefined, {})).status).toBe(503);
+		const res = await f.req();
+		expect(res.status).toBe(503);
+		expect(await res.text()).not.toContain("secret");
+		f.sqlite.close();
 	});
-
-	it("allows writes without an idempotency key", async () => {
-		const records = new Map<string, IdempotencyRecord>();
-		const { app, hits } = testApp(records);
-		const env = mockEnv(records);
-		const postRes = await app.request(
-			"/api/v1/echo",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: "{}",
-			},
-			env,
-		);
-		expect(postRes.status).toBe(201);
-		expect(hits()).toBe(1);
-	});
-
-	it("conflicts after a lost insert race with a different hash", async () => {
-		const records = new Map<string, IdempotencyRecord>();
-		records.set("kid:race", {
-			key_id: "kid",
-			idem_key: "race",
-			request_hash: "other",
-			status: 201,
-			response_json: "{}",
-			created_at: 1,
+	it("does not reinterpret storage read failures as conflicts", async () => {
+		const f = fixture();
+		const prepare = f.db.prepare.bind(f.db);
+		let reads = 0;
+		vi.spyOn(f.db, "prepare").mockImplementation((sql) => {
+			if (sql.startsWith("SELECT request_hash") && ++reads === 2) throw new Error("unavailable");
+			return prepare(sql);
 		});
-		let firstFind = true;
-		const env: Env = {
-			...mockEnv(records),
-			DB: {
-				prepare: (sql: string) => {
-					if (sql.startsWith("SELECT") && sql.includes("idempotency_records")) {
-						return {
-							bind: () => ({
-								first: async () => {
-									if (firstFind) {
-										firstFind = false;
-										return null;
-									}
-									return records.get("kid:race") ?? null;
-								},
-							}),
-						};
-					}
-					if (sql.startsWith("INSERT")) {
-						return {
-							bind: () => ({
-								run: async () => ({ success: false, meta: { changes: 0 } }),
-							}),
-						};
-					}
-					throw new Error(sql);
-				},
-			} as unknown as D1Database,
-		};
-		const { app } = testApp(records);
-		const res = await app.request(
-			"/api/v1/echo",
-			{
-				method: "POST",
-				headers: {
-					"Idempotency-Key": "race",
-					"Content-Type": "application/json",
-				},
-				body: '{"x":1}',
-			},
-			env,
-		);
-		expect(res.status).toBe(409);
-	});
-
-	it("requires an api key when Idempotency-Key is set", async () => {
-		const records = new Map<string, IdempotencyRecord>();
-		const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
-		app.onError((err, c) => toErrorResponse(err, c.get("requestId") ?? "r"));
-		app.use("*", idempotencyMiddleware());
-		app.post("/api/v1/echo", (c) => c.json({ ok: true }));
-		const res = await app.request(
-			"/api/v1/echo",
-			{
-				method: "POST",
-				headers: { "Idempotency-Key": "k1", "Content-Type": "application/json" },
-				body: "{}",
-			},
-			mockEnv(records),
-		);
-		expect(res.status).toBe(401);
+		vi.spyOn(f.db, "batch").mockRejectedValue(new Error("unavailable"));
+		expect((await f.req()).status).toBe(503);
+		f.sqlite.close();
 	});
 });

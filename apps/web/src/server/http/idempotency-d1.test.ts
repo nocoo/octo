@@ -1,217 +1,105 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it } from "vitest";
-import { migrationSqlForNode } from "../../../../../scripts/sqlite-test";
-import {
-	claimIdempotencyKey,
-	completeIdempotencyRecord,
-	releaseIdempotencyClaim,
-	waitForIdempotencyReplay,
-} from "./idempotency-repo";
-import {
-	IDEMPOTENCY_CHUNK_MARKER_PREFIX,
-	IDEMPOTENCY_CHUNK_STATUS,
-	IDEMPOTENCY_PENDING_STATUS,
-	isChunkRowIdemKey,
-} from "./idempotency-storage";
+import { Hono } from "hono";
+import { describe, expect, it, vi } from "vitest";
+import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
+import type { AppVars, Env } from "../env";
+import { toErrorResponse } from "../lib/errors";
+import { testApiPrincipal } from "../test-principal";
+import { idempotencyMiddleware } from "./idempotency";
 
-function sqliteD1(db: DatabaseSync): D1Database {
-	const prepare = (sql: string) => {
-		const stmt = db.prepare(sql);
-		return {
-			bind: (...params: Array<string | number | null>) => ({
-				run: async () => {
-					try {
-						const info = stmt.run(...params);
-						return { success: true, meta: { changes: info.changes } };
-					} catch {
-						return { success: false, meta: { changes: 0 } };
-					}
-				},
-				first: async () => (stmt.get(...params) as Record<string, unknown> | undefined) ?? null,
-			}),
-		};
-	};
-	return {
-		prepare,
-		batch: async (statements: Array<{ run: () => Promise<{ meta: { changes?: number } }> }>) => {
-			const results = [];
-			for (const statement of statements) {
-				results.push(await statement.run());
-			}
-			return results;
-		},
-	} as unknown as D1Database;
-}
-
-function idempotencyTableOnly(db: DatabaseSync): void {
-	const core = readFileSync(join(process.cwd(), "migrations/0001_core.sql"), "utf8");
-	const sql = migrationSqlForNode(core);
-	const match = /CREATE TABLE idempotency_records[\s\S]*?;/u.exec(sql);
-	if (!match) {
-		throw new Error("idempotency_records migration missing");
-	}
-	db.exec(match[0]);
-}
-
-describe("idempotency repo on sqlite", () => {
-	it("allows only one concurrent claim for the same key", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		const claims = await Promise.all(
-			Array.from({ length: 16 }, () =>
-				claimIdempotencyKey(d1, "key-a", "idem-1", "hash-same", 1_000),
-			),
+function fixture(body = '{"ok":true}') {
+	const { db, sqlite } = sqliteD1();
+	sqlite.exec("CREATE TABLE effects (id TEXT PRIMARY KEY)");
+	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
+	app.onError((err, c) => toErrorResponse(err, c.get("requestId") ?? "test"));
+	app.use("*", async (c, next) => {
+		c.set("apiKey", testApiPrincipal());
+		await next();
+	});
+	app.use("*", idempotencyMiddleware());
+	app.post("/api/v1/write", async (c) => {
+		const statements = c.get("writeStatements");
+		statements.push(db.prepare("INSERT INTO effects VALUES (?)").bind(crypto.randomUUID()));
+		await Promise.resolve();
+		return c.body(body, 201, { "content-type": "application/json" });
+	});
+	const post = (raw = "{}", key = "same") =>
+		app.request(
+			"/api/v1/write",
+			{ method: "POST", headers: { "Idempotency-Key": key }, body: raw },
+			{ DB: db } as Env,
 		);
-		const winners = claims.filter((c) => c.kind === "claimed");
-		const waiters = claims.filter((c) => c.kind === "in_progress");
-		expect(winners).toHaveLength(1);
-		expect(waiters).toHaveLength(15);
-		db.close();
-	});
+	const count = () =>
+		(sqlite.prepare("SELECT count(*) AS n FROM effects").get() as { n: number }).n;
+	return { db, sqlite, app, post, count };
+}
 
-	it("replays after the winner completes and rejects hash mismatch", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		const first = await claimIdempotencyKey(d1, "key-a", "idem-2", "hash-a", 2_000);
-		expect(first.kind).toBe("claimed");
-		const mismatch = await claimIdempotencyKey(d1, "key-a", "idem-2", "hash-b", 2_001);
-		expect(mismatch.kind).toBe("conflict");
-		await completeIdempotencyRecord(d1, "key-a", "idem-2", "hash-a", 201, '{"ok":true}', 2_000);
-		const replay = await claimIdempotencyKey(d1, "key-a", "idem-2", "hash-a", 2_002);
-		expect(replay).toEqual({ kind: "replay", status: 201, body: '{"ok":true}' });
-		const stillConflict = await claimIdempotencyKey(d1, "key-a", "idem-2", "hash-b", 2_003);
-		expect(stillConflict.kind).toBe("conflict");
-		db.close();
+describe("atomic idempotency on sqlite", () => {
+	it("commits exactly one effect across concurrent requests", async () => {
+		const f = fixture();
+		const responses = await Promise.all(Array.from({ length: 16 }, () => f.post()));
+		expect(responses.map((r) => r.status)).toEqual(Array(16).fill(201));
+		expect(f.count()).toBe(1);
+		expect(responses.filter((r) => r.headers.get("Idempotent-Replayed") === "true")).toHaveLength(
+			15,
+		);
+		f.sqlite.close();
 	});
-
-	it("waitForIdempotencyReplay resolves when a pending claim completes", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		expect(await claimIdempotencyKey(d1, "key-a", "idem-3", "hash", 3_000)).toEqual({
-			kind: "claimed",
-		});
-		const waiter = waitForIdempotencyReplay(d1, "key-a", "idem-3", "hash");
-		await new Promise((resolve) => setTimeout(resolve, 40));
-		await completeIdempotencyRecord(d1, "key-a", "idem-3", "hash", 200, '{"hits":1}', 3_000);
-		expect(await waiter).toEqual({ kind: "replay", status: 200, body: '{"hits":1}' });
-		db.close();
+	it("rolls back all effects if response persistence fails, then recovers", async () => {
+		const f = fixture();
+		f.sqlite.exec(
+			"CREATE TRIGGER fail_chunks BEFORE INSERT ON idempotency_response_chunks BEGIN SELECT RAISE(ABORT, 'storage failure'); END;",
+		);
+		expect((await f.post()).status).toBe(503);
+		expect(f.count()).toBe(0);
+		expect(f.sqlite.prepare("SELECT * FROM idempotency_records").all()).toEqual([]);
+		f.sqlite.exec("DROP TRIGGER fail_chunks");
+		expect((await f.post()).status).toBe(201);
+		expect(f.count()).toBe(1);
+		expect((await f.post()).headers.get("Idempotent-Replayed")).toBe("true");
+		expect(f.count()).toBe(1);
+		f.sqlite.close();
 	});
-
-	it("isolates idempotency keys across api keys", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		expect(await claimIdempotencyKey(d1, "key-1", "shared", "hash", 4_000)).toEqual({
-			kind: "claimed",
+	it("replays complete multi-megabyte unicode JSON from separate rows", async () => {
+		const body = JSON.stringify({
+			results: Array.from({ length: 3 }, () => ({
+				ok: true,
+				item: { body: "漢😀".repeat(114_000) },
+			})),
 		});
-		expect(await claimIdempotencyKey(d1, "key-2", "shared", "hash", 4_001)).toEqual({
-			kind: "claimed",
-		});
-		const row = db
-			.prepare("SELECT COUNT(*) AS n FROM idempotency_records WHERE idem_key = 'shared'")
-			.get() as { n: number };
-		expect(row.n).toBe(2);
-		db.close();
+		const f = fixture(body);
+		expect(await (await f.post()).text()).toBe(body);
+		const rows = f.sqlite
+			.prepare("SELECT body FROM idempotency_response_chunks ORDER BY chunk_index")
+			.all() as Array<{ body: string }>;
+		expect(rows.length).toBeGreaterThan(3);
+		expect(rows.every((r) => new TextEncoder().encode(r.body).length <= 250_000)).toBe(true);
+		const replay = await f.post();
+		expect(replay.status).toBe(201);
+		expect(await replay.text()).toBe(body);
+		expect(f.count()).toBe(1);
+		f.sqlite.close();
 	});
-
-	it("stores chunked responses across multiple rows and replays them", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		const body = "x".repeat(1_600_000);
-		expect(await claimIdempotencyKey(d1, "key-a", "big", "hash", 5_000)).toEqual({
-			kind: "claimed",
-		});
-		await completeIdempotencyRecord(d1, "key-a", "big", "hash", 200, body, 5_000);
-		const main = db
-			.prepare(
-				"SELECT status, response_json FROM idempotency_records WHERE key_id = 'key-a' AND idem_key = 'big'",
-			)
-			.get() as { status: number; response_json: string };
-		expect(main.status).toBe(200);
-		expect(main.response_json.startsWith(IDEMPOTENCY_CHUNK_MARKER_PREFIX)).toBe(true);
-		const chunkRows = db
-			.prepare("SELECT idem_key, status FROM idempotency_records WHERE key_id = 'key-a'")
-			.all() as Array<{ idem_key: string; status: number }>;
-		const chunks = chunkRows.filter((row) => isChunkRowIdemKey(row.idem_key));
-		expect(chunks.length).toBeGreaterThan(1);
-		expect(chunks.every((row) => row.status === IDEMPOTENCY_CHUNK_STATUS)).toBe(true);
-		const replay = await claimIdempotencyKey(d1, "key-a", "big", "hash", 5_001);
-		expect(replay).toEqual({ kind: "replay", status: 200, body });
-		db.close();
+	it("distinguishes hash conflicts and isolates api keys", async () => {
+		const f = fixture();
+		const responses = await Promise.all([f.post('{"x":1}'), f.post('{"x":2}')]);
+		expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+		expect(f.count()).toBe(1);
+		for (const key of ["__proto__", "constructor", "prototype"]) {
+			expect((await f.post(`{"x":1,"${key}":1}`)).status).toBe(409);
+		}
+		f.sqlite.close();
 	});
-
-	it("stops waiting when the stored hash does not match", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		expect(await claimIdempotencyKey(d1, "key-a", "idem-4", "hash-a", 4_000)).toEqual({
-			kind: "claimed",
+	it("can retry after an ambiguous acknowledgement without reexecuting effects", async () => {
+		const f = fixture();
+		const batch = f.db.batch.bind(f.db);
+		vi.spyOn(f.db, "batch").mockImplementationOnce(async (s) => {
+			await batch(s);
+			throw new Error("lost acknowledgement");
 		});
-		await completeIdempotencyRecord(d1, "key-a", "idem-4", "hash-a", 200, "{}", 4_000);
-		expect(await waitForIdempotencyReplay(d1, "key-a", "idem-4", "hash-b", 200, 10)).toEqual({
-			kind: "conflict",
-		});
-		db.close();
-	});
-
-	it("returns in_progress when wait times out on a pending claim", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		expect(await claimIdempotencyKey(d1, "key-a", "slow", "hash", 7_000)).toEqual({
-			kind: "claimed",
-		});
-		expect(await waitForIdempotencyReplay(d1, "key-a", "slow", "hash", 60, 10)).toEqual({
-			kind: "in_progress",
-		});
-		db.close();
-	});
-
-	it("treats incomplete non-pending rows as conflict", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		db.prepare(
-			`INSERT INTO idempotency_records (key_id, idem_key, request_hash, status, response_json, created_at)
-       VALUES ('key-a', 'broken', 'hash', 200, '', 1)`,
-		).run();
-		expect(await claimIdempotencyKey(d1, "key-a", "broken", "hash", 2)).toEqual({
-			kind: "conflict",
-		});
-		db.close();
-	});
-
-	it("releases a pending claim without touching completed rows", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		expect(await claimIdempotencyKey(d1, "key-a", "rel", "hash", 8_000)).toEqual({
-			kind: "claimed",
-		});
-		await releaseIdempotencyClaim(d1, "key-a", "rel", "hash");
-		const count = db
-			.prepare("SELECT COUNT(*) AS n FROM idempotency_records WHERE idem_key = 'rel'")
-			.get() as { n: number };
-		expect(count.n).toBe(0);
-		db.close();
-	});
-
-	it("uses pending status while in flight", async () => {
-		const db = new DatabaseSync(":memory:");
-		idempotencyTableOnly(db);
-		const d1 = sqliteD1(db);
-		await claimIdempotencyKey(d1, "key-a", "pending", "hash", 6_000);
-		const row = db
-			.prepare("SELECT status, response_json FROM idempotency_records WHERE idem_key = 'pending'")
-			.get() as { status: number; response_json: string };
-		expect(row.status).toBe(IDEMPOTENCY_PENDING_STATUS);
-		expect(row.response_json).toBe("");
-		db.close();
+		expect((await f.post()).status).toBe(201);
+		expect(f.count()).toBe(1);
+		expect((await f.post()).status).toBe(201);
+		expect(f.count()).toBe(1);
+		f.sqlite.close();
 	});
 });

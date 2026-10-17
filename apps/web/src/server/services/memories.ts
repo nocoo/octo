@@ -18,6 +18,8 @@ export type MemoryRecord = {
 export type MemoryServiceContext = {
 	keyId: string;
 	actor: string;
+	db: D1Database;
+	statements: D1PreparedStatement[];
 };
 
 export type MemoryServiceError = {
@@ -26,6 +28,7 @@ export type MemoryServiceError = {
 	details?: Record<string, unknown>;
 };
 
+// Mutations prepare SQL only; the HTTP boundary owns the sole D1 batch commit.
 export interface MemoryService {
 	resolveSpace(slug: string, ctx: MemoryServiceContext): Promise<string>;
 	get(id: string, ctx: MemoryServiceContext): Promise<MemoryRecord | null>;

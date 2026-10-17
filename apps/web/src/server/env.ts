@@ -2,6 +2,7 @@ import type { ApiPrincipal } from "./auth/authorize";
 
 export type AppVars = {
 	requestId: string;
+	writeStatements: D1PreparedStatement[];
 	apiKey: ApiPrincipal;
 	adminEmail: string;
 };

@@ -1,158 +1,92 @@
-import { Hono } from "hono";
-import { describe, expect, it } from "vitest";
-import { APP_VERSION } from "../../../lib/version";
-import type { AppVars, Env } from "../../env";
-import { ApiError, toErrorResponse } from "../../lib/errors";
-import { newRequestId, withOctoHeaders } from "../../lib/request";
-import type { MemoryService } from "../../services/memories";
-import { testApiPrincipal } from "../../test-principal";
-import { createBatchRoutes } from "./batch";
+import { describe, expect, it, vi } from "vitest";
+import {
+	type BatchResponse,
+	batchFixture,
+	memoryInput,
+} from "../../../../../../tests/fixtures/batch-app";
+import { TestMemoryService } from "../../../../../../tests/fixtures/memories";
+import { ApiError } from "../../lib/errors";
 
-function envWithKey(): Env {
-	return {
-		DB: {} as D1Database,
-		FILES: {} as R2Bucket,
-		ASSETS: { fetch: () => Promise.resolve(new Response("spa")) } as unknown as Fetcher,
-		API_KEY_PEPPER: "pepper",
-	};
-}
-
-function appWith(service: MemoryService) {
-	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
-	app.use("*", async (c, next) => {
-		const requestId = newRequestId(c.req.raw);
-		c.set("requestId", requestId);
-		await next();
-		c.res = withOctoHeaders(c.res, requestId, APP_VERSION);
+describe("batch item isolation", () => {
+	it("reports an unresolved space per item and still creates the next item", async () => {
+		const f = batchFixture();
+		const response = await f.post("Create", {
+			items: [{ ...memoryInput, space: "missing" }, memoryInput],
+		});
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as BatchResponse;
+		expect(body.results[0]).toMatchObject({ ok: false, error: { code: "not_found" } });
+		expect(body.results[1]?.ok).toBe(true);
+		expect(f.sqlite.prepare("SELECT * FROM _m6_memories").all()).toHaveLength(1);
+		f.sqlite.close();
 	});
-	app.onError((err, c) => toErrorResponse(err, c.get("requestId")));
-	app.use("*", async (c, next) => {
-		c.set("apiKey", testApiPrincipal());
-		c.set("adminEmail", "");
-		await next();
+	it("atomically stores and replays a legitimate multi-megabyte batch", async () => {
+		const f = batchFixture();
+		const items = Array.from({ length: 3 }, () => ({ ...memoryInput, body: "x".repeat(800_000) }));
+		const headers = { "Idempotency-Key": "large" };
+		const first = await f.post("Create", { items }, headers);
+		expect(first.status).toBe(200);
+		const original = await first.text();
+		expect((JSON.parse(original) as BatchResponse).results.every((r) => r.ok)).toBe(true);
+		const replay = await f.post("Create", { items }, headers);
+		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await replay.text()).toBe(original);
+		expect(f.sqlite.prepare("SELECT * FROM _m6_memories").all()).toHaveLength(3);
+		f.sqlite.close();
 	});
-	app.route("/api/v1", createBatchRoutes(service));
-	return app;
-}
-
-describe("batch routes edge cases", () => {
-	it("returns payload_too_large and maps service failures", async () => {
-		const service: MemoryService = {
-			resolveSpace: async (slug) => `space:${slug}`,
-			get: async (id) =>
-				id === "m1"
-					? {
-							id: "m1",
-							space: "kb",
-							space_id: "space:kb",
-							source_key_id: "kid",
-							title: "t",
-							body: "b",
-							type: "note",
-							tags: [],
-							importance: 0.5,
-							version: 1,
-							created_at: "t",
-							updated_at: "t",
-						}
-					: null,
-			create: async () => {
-				throw new ApiError("validation_failed", "bad", { issues: [] });
-			},
-			update: async () => {
-				throw new Error("boom");
-			},
-			delete: async (id) => {
-				if (id === "m2") {
-					throw new ApiError("not_found", "missing");
-				}
-				return { trashed_at: "t" };
-			},
-		};
-		const app = appWith(service);
-		const items = Array.from({ length: 101 }, () => ({
-			space: "kb",
-			title: "x",
-			body: "b",
-			type: "note",
-			tags: [],
-		}));
-		const tooLarge = await app.request(
-			"/api/v1/memories:batchCreate",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ items }),
-			},
-			envWithKey(),
+	it.each(["Create", "Update", "Delete"])("rejects oversized %s batches", async (action) => {
+		const f = batchFixture();
+		const items = Array.from({ length: 101 }, () =>
+			action === "Create" ? memoryInput : { id: "missing", title: "t", expected_version: 1 },
 		);
-		expect(tooLarge.status).toBe(413);
-		const created = await app.request(
-			"/api/v1/memories:batchCreate",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-				}),
-			},
-			envWithKey(),
-		);
-		const createdBody = (await created.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string; details?: Record<string, unknown> } }>;
-		};
-		expect(createdBody.results[0]?.ok).toBe(false);
-		expect(createdBody.results[0]?.error?.code).toBe("validation_failed");
-		expect(createdBody.results[0]?.error?.details).toEqual({ issues: [] });
-		const updated = await app.request(
-			"/api/v1/memories:batchUpdate",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					items: [{ id: "m1", title: "y", expected_version: 1 }],
-				}),
-			},
-			envWithKey(),
-		);
-		const updatedBody = (await updated.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(updatedBody.results[0]?.error?.code).toBe("internal");
-		const deleted = await app.request(
-			"/api/v1/memories:batchDelete",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ ids: ["m1", "m2"] }),
-			},
-			envWithKey(),
-		);
-		expect(deleted.status).toBe(200);
-		const deletedBody = (await deleted.json()) as { results: unknown[] };
-		expect(deletedBody.results).toHaveLength(2);
-		const tooManyIds = Array.from({ length: 101 }, (_, i) => `id-${i}`);
-		const tooManyUpdate = await app.request(
-			"/api/v1/memories:batchUpdate",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					items: tooManyIds.map((id) => ({ id, title: "t", expected_version: 1 })),
-				}),
-			},
-			envWithKey(),
-		);
-		expect(tooManyUpdate.status).toBe(413);
-		const tooManyDelete = await app.request(
-			"/api/v1/memories:batchDelete",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ ids: tooManyIds }),
-			},
-			envWithKey(),
-		);
-		expect(tooManyDelete.status).toBe(413);
+		expect(
+			(await f.post(action, action === "Delete" ? { ids: Array(101).fill("id") } : { items }))
+				.status,
+		).toBe(413);
+		expect((await f.post(action, { unknown: true })).status).toBe(400);
+		f.sqlite.close();
+	});
+	it("returns details and discards SQL staged by a failing item", async () => {
+		const svc = new TestMemoryService();
+		const f = batchFixture(svc);
+		vi.spyOn(svc, "create").mockImplementationOnce(async (_input, ctx) => {
+			ctx.statements.push(ctx.db.prepare("INSERT INTO _m6_memories VALUES ('bad', '{}', NULL)"));
+			throw new ApiError("validation_failed", "invalid", { issues: [] });
+		});
+		const body = (await (
+			await f.post("Create", { items: [memoryInput, memoryInput] })
+		).json()) as BatchResponse;
+		expect(body.results[0]).toMatchObject({
+			ok: false,
+			error: { code: "validation_failed", details: { issues: [] } },
+		});
+		expect(body.results[1]?.ok).toBe(true);
+		expect(f.sqlite.prepare("SELECT * FROM _m6_memories").all()).toHaveLength(1);
+		f.sqlite.close();
+	});
+	it("returns per-item not_found, version_conflict and successful state changes", async () => {
+		const f = batchFixture();
+		const created = (await (
+			await f.post("Create", { items: [memoryInput] })
+		).json()) as BatchResponse;
+		const id = created.results[0]?.item?.id;
+		const updated = (await (
+			await f.post("Update", {
+				items: [
+					{ id, title: "changed", expected_version: 1 },
+					{ id, title: "stale", expected_version: 1 },
+					{ id: "missing", title: "x", expected_version: 1 },
+				],
+			})
+		).json()) as BatchResponse;
+		expect(updated.results[0]).toMatchObject({ ok: true, item: { title: "changed", version: 2 } });
+		expect(updated.results[1]).toMatchObject({ ok: false, error: { code: "version_conflict" } });
+		expect(updated.results[2]).toMatchObject({ ok: false, error: { code: "not_found" } });
+		const deleted = (await (
+			await f.post("Delete", { ids: [id, id, "missing"] })
+		).json()) as BatchResponse;
+		expect(deleted.results[0]?.ok).toBe(true);
+		expect(deleted.results.slice(1).map((r) => r.error?.code)).toEqual(["not_found", "not_found"]);
+		f.sqlite.close();
 	});
 });

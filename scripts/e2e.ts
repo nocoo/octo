@@ -280,7 +280,7 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 		rootToml,
 		port,
 		join(tmp, "dist/client"),
-		join(root, "apps/web/src/server/index.ts"),
+		join(root, "tests/fixtures/worker.ts"),
 	);
 	assertWranglerConfigLocal(rootToml);
 	assertWranglerConfigLocal(rewritten);

@@ -1,103 +1,50 @@
-import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
-import type { ApiPrincipal } from "../../auth/authorize";
-import type { AppVars, Env } from "../../env";
-import { StubMemoryService } from "../../services/stub-memories";
-import { createBatchRoutes } from "./batch";
+import {
+	type BatchResponse,
+	batchFixture,
+	memoryInput,
+} from "../../../../../../tests/fixtures/batch-app";
+import { testApiPrincipal } from "../../test-principal";
 
-function envWithKey(): Env {
-	return {
-		DB: {} as D1Database,
-		FILES: {} as R2Bucket,
-		ASSETS: { fetch: () => Promise.resolve(new Response("spa")) } as unknown as Fetcher,
-		API_KEY_PEPPER: "pepper",
-	};
-}
-
-function readonlyPrincipal(): ApiPrincipal {
-	return {
-		id: "ro",
-		name: "read-only",
-		role: "readonly",
-		ops: new Set(["r"]),
-		scope: "all",
-		spaceIds: [],
-		ownedSpaceIds: [],
-		ownEntriesOnly: false,
-		autoOwnSpace: false,
-		expiresAt: null,
-	};
-}
-
-describe("batch route authorization", () => {
-	it("returns per-item forbidden for read-only keys", async () => {
-		const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
-		app.use("*", async (c, next) => {
-			c.set("apiKey", readonlyPrincipal());
-			c.set("adminEmail", "");
-			await next();
-		});
-		app.route("/api/v1", createBatchRoutes(new StubMemoryService()));
-		const res = await app.request(
-			"/api/v1/memories:batchCreate",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-				}),
-			},
-			envWithKey(),
-		);
-		expect(res.status).toBe(200);
-		const body = (await res.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(body.results[0]?.ok).toBe(false);
-		expect(body.results[0]?.error?.code).toBe("forbidden");
+describe("batch authorization", () => {
+	it.each(["Create", "Update", "Delete"])("denies %s for readonly keys", async (action) => {
+		const f = batchFixture(undefined, { ...testApiPrincipal(), ops: new Set(["r"]) });
+		const ctx = f.ctx();
+		const row = await f.service.create(memoryInput, ctx);
+		await f.db.batch(ctx.statements);
+		const payload =
+			action === "Create"
+				? { items: [memoryInput] }
+				: action === "Update"
+					? { items: [{ id: row.id, title: "new", expected_version: 1 }] }
+					: { ids: [row.id] };
+		const body = (await (await f.post(action, payload)).json()) as BatchResponse;
+		expect(body.results[0]).toMatchObject({ ok: false, error: { code: "forbidden" } });
+		expect(await f.service.get(row.id, f.ctx())).toEqual(row);
+		f.sqlite.close();
 	});
-
-	it("rejects cross-space moves without visibility", async () => {
-		const svc = new StubMemoryService();
-		const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
-		const principal: ApiPrincipal = {
-			id: "sp",
-			name: "space-only",
-			role: "drop",
-			ops: new Set(["r", "w", "u", "d"]),
+	it("hides invisible records and denies cross-space moves", async () => {
+		const f = batchFixture(undefined, {
+			...testApiPrincipal(),
 			scope: "spaces",
 			spaceIds: ["space:kb"],
-			ownedSpaceIds: [],
-			ownEntriesOnly: false,
-			autoOwnSpace: false,
-			expiresAt: null,
-		};
-		app.use("*", async (c, next) => {
-			c.set("apiKey", principal);
-			c.set("adminEmail", "");
-			await next();
 		});
-		app.route("/api/v1", createBatchRoutes(svc));
-		const ctx = { keyId: "sp", actor: "key:sp" };
-		const created = await svc.create(
-			{ space: "kb", title: "t", body: "b", type: "note", tags: [] },
-			ctx,
-		);
-		const res = await app.request(
-			"/api/v1/memories:batchUpdate",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					items: [{ id: created.id, space: "other", expected_version: created.version }],
-				}),
-			},
-			envWithKey(),
-		);
-		const body = (await res.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(body.results[0]?.ok).toBe(false);
-		expect(body.results[0]?.error?.code).toBe("not_found");
+		const ctx = f.ctx();
+		const own = await f.service.create(memoryInput, ctx);
+		const hidden = await f.service.create({ ...memoryInput, space: "other" }, ctx);
+		await f.db.batch(ctx.statements);
+		for (const action of ["Update", "Delete"]) {
+			const payload =
+				action === "Update"
+					? { items: [own, hidden].map((r) => ({ id: r.id, space: "other", expected_version: 1 })) }
+					: { ids: [hidden.id] };
+			const body = (await (await f.post(action, payload)).json()) as BatchResponse;
+			expect(body.results.every((r) => !r.ok && r.error?.code === "not_found")).toBe(true);
+		}
+		const create = (await (
+			await f.post("Create", { items: [{ ...memoryInput, space: "other" }] })
+		).json()) as BatchResponse;
+		expect(create.results[0]).toMatchObject({ ok: false, error: { code: "not_found" } });
+		f.sqlite.close();
 	});
 });

@@ -3,7 +3,6 @@ import { APP_VERSION } from "../lib/version";
 import { bearerMiddleware } from "./auth/bearer";
 import { adminWriteOriginMiddleware } from "./auth/origin";
 import type { AppVars, Env } from "./env";
-import { resourceEnv } from "./env";
 import { runScheduledTasks } from "./http/cron";
 import { idempotencyMiddleware } from "./http/idempotency";
 import { jsonError, toErrorResponse } from "./lib/errors";
@@ -16,7 +15,6 @@ import { meResponse } from "./routes/v1/me";
 import { spacesRoutes } from "./routes/v1/spaces";
 import { tagsRoutes } from "./routes/v1/tags";
 import type { MemoryService } from "./services/memories";
-import { StubMemoryService } from "./services/stub-memories";
 
 export function createApp(memoryService?: MemoryService): Hono<{
 	Bindings: Env;
@@ -60,19 +58,9 @@ export function createApp(memoryService?: MemoryService): Hono<{
 }
 
 const productionApp = createApp();
-let testBatchApp: ReturnType<typeof createApp> | null = null;
-
-function appForEnv(env: Env) {
-	if (resourceEnv(env.RESOURCE_ENV) === "test") {
-		testBatchApp ??= createApp(new StubMemoryService());
-		return testBatchApp;
-	}
-	return productionApp;
-}
-
 export const worker = {
 	fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
-		return appForEnv(env).fetch(request, env, ctx);
+		return productionApp.fetch(request, env, ctx);
 	},
 	scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
 		ctx.waitUntil(runScheduledTasks(env));
