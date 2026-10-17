@@ -292,12 +292,19 @@ export function SettingsPage() {
 		return () => model.dispose();
 	}, [model]);
 	const columns: DataTableColumn<EmbeddingProfile>[] = [
-		{ id: "id", header: "配置", accessor: (profile) => profile.id },
-		{ id: "model", header: "模型", accessor: (profile) => profile.model },
-		{ id: "dims", header: "维度", textAlign: "end", accessor: (profile) => profile.dims },
+		{ id: "id", header: "配置", width: "22ch", accessor: (profile) => profile.id },
+		{ id: "model", header: "模型", width: "28ch", accessor: (profile) => profile.model },
+		{
+			id: "dims",
+			header: "维度",
+			width: "10ch",
+			textAlign: "end",
+			accessor: (profile) => profile.dims,
+		},
 		{
 			id: "metric",
 			header: "距离度量",
+			width: "16ch",
 			accessor: (profile) =>
 				({ cosine: "余弦相似度", euclidean: "欧氏距离", "dot-product": "点积" })[profile.metric] ??
 				"未知度量",
@@ -305,12 +312,14 @@ export function SettingsPage() {
 		{
 			id: "created_at",
 			header: "创建时间",
+			width: "26ch",
 			sortValue: (profile) => Date.parse(profile.created_at),
 			accessor: (profile) => new Date(profile.created_at).toLocaleString("zh-CN"),
 		},
 		{
 			id: "active",
 			header: "状态",
+			width: "12ch",
 			sortValue: (profile) => (profile.active ? "已启用" : "未启用"),
 			accessor: (profile) => (
 				<Badge variant={profile.active ? "success" : "secondary"}>

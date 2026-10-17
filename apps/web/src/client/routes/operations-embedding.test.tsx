@@ -56,6 +56,35 @@ describe("profile read states", () => {
 			</MemoryRouter>,
 		);
 	}
+	it("gives profile columns minimum readable widths without a second scroll container", () => {
+		fixture.settings = {
+			loaded: true,
+			profiles: [
+				{
+					id: "te3-small-1536",
+					model: "text-embedding-3-small",
+					dims: 1536,
+					metric: "cosine",
+					active: true,
+					created_at: "2026-10-01T00:00:00.000Z",
+				},
+			],
+		};
+		const html = render();
+		const widths = ["22ch", "28ch", "10ch", "16ch", "26ch", "12ch"];
+		const headers = [...html.matchAll(/<th\b[^>]*>/g)].map((match) => match[0]);
+		const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
+		expect(headers).toHaveLength(widths.length);
+		expect(cells).toHaveLength(widths.length);
+		for (const [index, width] of widths.entries()) {
+			expect(headers[index]).toContain(`style="width:${width};min-width:${width}"`);
+			expect(cells[index]).toContain(`style="min-width:${width}"`);
+			expect(cells[index]).toContain("whitespace-nowrap");
+		}
+		expect(html.match(/aria-label="嵌入配置 scroll area"/g)).toHaveLength(1);
+		expect(html).toContain("relative min-w-0 overflow-auto");
+	});
+
 	it.each(["asc", "desc"] as const)("sorts active profile status %s through Basalt", (dir) => {
 		fixture.settings = {
 			loaded: true,

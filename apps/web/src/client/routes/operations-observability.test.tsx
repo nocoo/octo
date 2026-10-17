@@ -70,6 +70,23 @@ beforeEach(() => {
 });
 
 describe("usage table sorting", () => {
+	it("keeps readable minimum column widths inside the installed Basalt scroll region", () => {
+		fixture.usage = { loaded: true, items: [base] };
+		const html = render("usage");
+		const widths = ["16ch", "18ch", "14ch", "14ch", "12ch", "14ch", "14ch", "14ch"];
+		const headers = [...html.matchAll(/<th\b[^>]*>/g)].map((match) => match[0]);
+		const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
+		expect(headers).toHaveLength(widths.length);
+		expect(cells).toHaveLength(widths.length);
+		for (const [index, width] of widths.entries()) {
+			expect(headers[index]).toContain(`style="width:${width};min-width:${width}"`);
+			expect(cells[index]).toContain(`style="min-width:${width}"`);
+			expect(cells[index]).toContain("whitespace-nowrap");
+		}
+		expect(html.match(/aria-label="每日用量表 scroll area"/g)).toHaveLength(1);
+		expect(html).toContain("relative min-w-0 overflow-auto");
+	});
+
 	it.each([
 		["calls", "calls"],
 		["errors", "errors"],

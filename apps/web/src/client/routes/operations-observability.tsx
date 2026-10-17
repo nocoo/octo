@@ -53,13 +53,15 @@ export function UsagePage() {
 		{
 			id: "day",
 			header: "日期",
+			width: "16ch",
 			sortValue: (row) => Date.parse(row.day),
 			accessor: (row) => row.day,
 		},
-		{ id: "key", header: "密钥", accessor: (row) => row.key_id },
+		{ id: "key", header: "密钥", width: "18ch", accessor: (row) => row.key_id },
 		{
 			id: "calls",
 			header: "调用次数",
+			width: "14ch",
 			sortValue: (row) => row.calls,
 			textAlign: "end",
 			accessor: (row) => row.calls.toLocaleString("zh-CN"),
@@ -67,6 +69,7 @@ export function UsagePage() {
 		{
 			id: "errors",
 			header: "错误次数",
+			width: "14ch",
 			sortValue: (row) => row.errors,
 			textAlign: "end",
 			accessor: (row) => row.errors.toLocaleString("zh-CN"),
@@ -74,6 +77,7 @@ export function UsagePage() {
 		{
 			id: "rate",
 			header: "错误率",
+			width: "12ch",
 			sortValue: (row) => row.error_rate,
 			textAlign: "end",
 			accessor: (row) => `${row.error_rate.toFixed(2)}%`,
@@ -81,6 +85,7 @@ export function UsagePage() {
 		{
 			id: "writes",
 			header: "写入次数",
+			width: "14ch",
 			sortValue: (row) => row.writes,
 			textAlign: "end",
 			accessor: (row) => row.writes.toLocaleString("zh-CN"),
@@ -88,6 +93,7 @@ export function UsagePage() {
 		{
 			id: "bytes_in",
 			header: "输入字节",
+			width: "14ch",
 			sortValue: (row) => row.bytes_in,
 			textAlign: "end",
 			accessor: (row) => row.bytes_in.toLocaleString("zh-CN"),
@@ -95,6 +101,7 @@ export function UsagePage() {
 		{
 			id: "bytes_out",
 			header: "输出字节",
+			width: "14ch",
 			sortValue: (row) => row.bytes_out,
 			textAlign: "end",
 			accessor: (row) => row.bytes_out.toLocaleString("zh-CN"),
