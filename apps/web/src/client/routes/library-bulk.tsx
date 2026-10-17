@@ -1,9 +1,10 @@
 import { Button, ConfirmDialog, Field, Input, toast } from "@nocoo/basalt";
+import { Grid } from "@nocoo/basalt/components/grid";
+import { FolderInput, Tags, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useModel } from "../components/layout/use-model";
 import type { LibraryMemory } from "../viewmodels/library";
 import { type BulkAction, BulkModel } from "../viewmodels/library-bulk";
-import "./library.css";
 
 export function LibraryBulkActions({
 	memories,
@@ -22,24 +23,30 @@ export function LibraryBulkActions({
 	async function apply(action: BulkAction) {
 		if (!(await model.apply(memories, selected, action))) return;
 		setDeleting(false);
-		const message = `${model.state.succeeded.length} of ${selected.length} memories updated`;
+		const message = `已更新 ${model.state.succeeded.length} / ${selected.length} 条记忆`;
 		if (model.state.failures.length) toast.error(message);
 		else toast.success(message);
 		await onComplete(model.state.succeeded);
 	}
 	if (!selected.length) return null;
 	return (
-		<section className="library-stack" aria-label="Bulk memory actions">
-			<p className="library-muted" role="status">
-				{selected.length} selected. Maximum 100 memories per operation.
+		<Grid columns={1} role="region" aria-label="批量操作记忆">
+			<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
+				已选择 {selected.length} 条记忆，每次最多操作 100 条。
 			</p>
-			<div className="library-actions">
-				<Field label="Add tags" htmlFor="bulk-tags">
+			<Grid
+				gap="sm"
+				style={{
+					gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
+					alignItems: "end",
+				}}
+			>
+				<Field label="添加标签" htmlFor="bulk-tags">
 					<Input
 						id="bulk-tags"
 						value={tags}
 						onChange={(event) => setTags(event.target.value)}
-						placeholder="tag-one, tag-two"
+						placeholder="标签一, 标签二"
 						disabled={state.busy}
 					/>
 				</Field>
@@ -56,14 +63,15 @@ export function LibraryBulkActions({
 						})
 					}
 				>
-					Add tags
+					<Tags size={16} aria-hidden="true" />
+					添加标签
 				</Button>
-				<Field label="Move to space" htmlFor="bulk-space">
+				<Field label="移至空间" htmlFor="bulk-space">
 					<Input
 						id="bulk-space"
 						value={space}
 						onChange={(event) => setSpace(event.target.value)}
-						placeholder="Space slug"
+						placeholder="空间标识"
 						disabled={state.busy}
 					/>
 				</Field>
@@ -72,16 +80,18 @@ export function LibraryBulkActions({
 					disabled={state.busy || selected.length > 100 || !space.trim()}
 					onClick={() => void apply({ kind: "move", space })}
 				>
-					Move
+					<FolderInput size={16} aria-hidden="true" />
+					移动
 				</Button>
 				<Button
 					variant="destructive"
 					disabled={state.busy || selected.length > 100}
 					onClick={() => setDeleting(true)}
 				>
-					Move to trash
+					<Trash2 size={16} aria-hidden="true" />
+					移入回收站
 				</Button>
-			</div>
+			</Grid>
 			{state.error && <p role="alert">{state.error}</p>}
 			{state.failures.map((failure) => (
 				<p key={failure.id} role="alert">
@@ -89,20 +99,18 @@ export function LibraryBulkActions({
 				</p>
 			))}
 			<ConfirmDialog
+				cancelLabel="取消"
 				open={deleting}
 				onOpenChange={setDeleting}
-				title={`Move ${selected.length} memories to trash?`}
+				title={`将 ${selected.length} 条记忆移入回收站？`}
 				description={
-					<>
-						They remain recoverable in Trash.{" "}
-						{state.error && <span role="alert">{state.error}</span>}
-					</>
+					<>移入回收站后仍可恢复。 {state.error && <span role="alert">{state.error}</span>}</>
 				}
 				variant="destructive"
-				confirmLabel="Move to trash"
+				confirmLabel="移入回收站"
 				loading={state.busy}
 				onConfirm={() => apply({ kind: "delete" })}
 			/>
-		</section>
+		</Grid>
 	);
 }

@@ -29,18 +29,18 @@ describe("trash pagination view", () => {
 			...new LibraryModel("trash").state,
 			ready: true,
 			nextCursor: "older",
-			failures: [{ id: "failed", message: "conflict" }],
+			failures: [{ id: "failed", message: "内容已被修改，请刷新后重试。" }],
 		};
 		const html = render();
-		expect(html).toContain("Load more");
-		expect(html).toContain("No loaded memories match these filters");
-		expect(html).toContain("Restore selected (1)");
+		expect(html).toContain("加载更多");
+		expect(html).toContain("已加载的记忆中没有符合条件的内容");
+		expect(html).toContain("恢复所选记忆（1）");
 		expect(html).toContain("failed");
-		expect(html).toContain("conflict");
-		expect(html).not.toContain("represent this sample");
+		expect(html).toContain("内容已被修改，请刷新后重试。");
+		expect(html).not.toContain("仅代表这些样本");
 	});
 	it("hides server load-more at the end of the cursor sequence", () => {
 		snapshot.state = { ...new LibraryModel("trash").state, ready: true };
-		expect(render()).not.toContain("Load more");
+		expect(render()).not.toContain("加载更多");
 	});
 });

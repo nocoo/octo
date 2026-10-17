@@ -92,6 +92,11 @@ describe("graph projection", () => {
 			expect(graph.nodes.length).toBeLessThanOrEqual(10);
 			expect(graph.clustered).toBeGreaterThan(0);
 			expect(graph.nodes.some((node) => node.kind === "cluster")).toBe(true);
+			expect(
+				graph.nodes
+					.filter((node) => node.kind === "cluster")
+					.every((node) => /^\d+ 个(?:标签|记忆)节点$/.test(node.label)),
+			).toBe(true);
 			const ids = new Set(graph.nodes.map((node) => node.id));
 			expect(
 				graph.links.every(

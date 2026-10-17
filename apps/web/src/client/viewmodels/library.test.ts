@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AdminClient } from "../lib/api";
-import { type LibraryMemory, LibraryModel, selectedIds, setSelection } from "./library";
+import { type AdminClient, ApiError } from "../lib/api";
+import {
+	type LibraryMemory,
+	LibraryModel,
+	libraryError,
+	selectedIds,
+	setSelection,
+} from "./library";
 
 export const memory = (id = "m1", patch: Partial<LibraryMemory> = {}): LibraryMemory => ({
 	id,
@@ -33,6 +39,20 @@ describe("library URL selection", () => {
 });
 
 describe("library data", () => {
+	it("localizes known API errors and never exposes arbitrary server or network messages", () => {
+		expect(libraryError(new ApiError(403, "access_denied"))).toBe(
+			"没有访问权限，请重新登录或联系管理员。",
+		);
+		expect(libraryError(new ApiError(409, "version_conflict"))).toBe(
+			"内容已被修改，请刷新后重试。",
+		);
+		expect(libraryError(new Error("Failed to fetch https://private.example"))).toBe(
+			"请求失败，请稍后重试。",
+		);
+		expect(libraryError(new ApiError(500, "未知服务端内容"))).toBe("请求失败，请稍后重试。");
+		expect(libraryError(new ApiError(500, "__proto__"))).toBe("请求失败，请稍后重试。");
+		expect(libraryError(new Error("constructor"))).toBe("请求失败，请稍后重试。");
+	});
 	it.each(["graph", "timeline"] as const)(
 		"loads paginated %s data without dropping old data on failure",
 		async (kind) => {
@@ -47,7 +67,11 @@ describe("library data", () => {
 			expect(request).toHaveBeenNthCalledWith(2, "/memories?limit=200&cursor=next");
 			expect(model.state.memories).toHaveLength(2);
 			expect(await model.load()).toBe(false);
-			expect(model.state).toMatchObject({ busy: false, error: "offline", ready: true });
+			expect(model.state).toMatchObject({
+				busy: false,
+				error: "请求失败，请稍后重试。",
+				ready: true,
+			});
 			expect(model.state.memories).toHaveLength(2);
 		},
 	);
@@ -66,7 +90,7 @@ describe("library data", () => {
 		const { api } = fake([envelope([], "same"), envelope([], "same")]);
 		const model = new LibraryModel("timeline", api);
 		expect(await model.load()).toBe(false);
-		expect(model.state.error).toContain("cursor");
+		expect(model.state.error).toContain("分页游标重复");
 	});
 	it("ignores overlapping actions and handles unknown errors", async () => {
 		let finish!: (data: unknown) => void;
@@ -89,7 +113,7 @@ describe("library data", () => {
 			},
 		});
 		await broken.load();
-		expect(broken.state.error).toBe("Request failed");
+		expect(broken.state.error).toBe("请求失败，请稍后重试。");
 	});
 	it("loads tags and their cooccurrence source", async () => {
 		const { api } = fake([
@@ -168,8 +192,8 @@ describe("library data", () => {
 		const model = new LibraryModel("tags", api);
 		await model.load();
 		expect(await model.changeTag("rename", "alpha", "new")).toBe(true);
-		expect(model.state.notice).toBe("Renamed tag affecting 2 memories");
-		expect(model.state.error).toBe("Saved, but refresh failed: offline");
+		expect(model.state.notice).toBe("已重命名标签，影响 2 条记忆");
+		expect(model.state.error).toBe("已保存，但刷新失败：请求失败，请稍后重试。");
 		expect(model.state.tags[0]?.name).toBe("alpha");
 		expect(request.mock.calls).toHaveLength(4);
 	});
@@ -178,8 +202,8 @@ describe("library data", () => {
 		const model = new LibraryModel("spaces", api);
 		expect(await model.createSpace({ slug: "work", name: "Work", description: "" })).toBe(true);
 		expect(model.state).toMatchObject({
-			notice: "Space created",
-			error: "Saved, but refresh failed: unavailable",
+			notice: "空间已创建",
+			error: "已保存，但刷新失败：服务暂时不可用，请稍后重试。",
 			busy: false,
 		});
 		expect(request.mock.calls).toHaveLength(2);
@@ -188,7 +212,7 @@ describe("library data", () => {
 		const { api, request } = fake([
 			envelope([memory("m1"), memory("m2")]),
 			{},
-			new Error("conflict"),
+			new ApiError(409, "version_conflict"),
 			{},
 		]);
 		const model = new LibraryModel("trash", api);
@@ -198,8 +222,8 @@ describe("library data", () => {
 		expect(await model.restore(["missing"])).toBe(false);
 		expect(await model.restore(["m1", "m2"])).toBe(true);
 		expect(model.state.memories.map((item) => item.id)).toEqual(["m2"]);
-		expect(model.state.failures).toEqual([{ id: "m2", message: "conflict" }]);
-		expect(model.state.notice).toBe("Restored 1 of 2 memories");
+		expect(model.state.failures).toEqual([{ id: "m2", message: "内容已被修改，请刷新后重试。" }]);
+		expect(model.state.notice).toBe("已恢复 1 / 2 条记忆");
 		expect(await model.purge()).toBe(false);
 		model.beginPurge("missing");
 		expect(model.state.purge).toBeNull();
@@ -222,7 +246,7 @@ describe("library data", () => {
 			throw null;
 		};
 		await model.restore(["m1"]);
-		expect(model.state.failures[0]?.message).toBe("Request failed");
+		expect(model.state.failures[0]?.message).toBe("请求失败，请稍后重试。");
 		model.beginPurge("m1");
 		model.confirmPurgeTitle("m1");
 		let release!: () => void;

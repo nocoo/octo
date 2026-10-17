@@ -1,4 +1,6 @@
 import { Button } from "@nocoo/basalt";
+import { Grid, GridItem } from "@nocoo/basalt/components/grid";
+import { Maximize2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
 import { useSearchParams } from "react-router";
@@ -34,8 +36,17 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 		const element = host.current;
 		if (!element) return;
 		const measure = () => {
-			setWidth(element.clientWidth);
-			setHeight(element.clientHeight);
+			const style = getComputedStyle(element);
+			setWidth(
+				element.clientWidth -
+					Number.parseFloat(style.paddingLeft) -
+					Number.parseFloat(style.paddingRight),
+			);
+			setHeight(
+				element.clientHeight -
+					Number.parseFloat(style.paddingTop) -
+					Number.parseFloat(style.paddingBottom),
+			);
 		};
 		const palette = () => {
 			const style = getComputedStyle(element);
@@ -71,20 +82,21 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 		};
 	}, []);
 	return (
-		<div className="library-stack">
-			<div className="library-actions">
+		<Grid columns={1}>
+			<Grid gap="sm" style={{ gridTemplateColumns: "auto minmax(0, 1fr)", alignItems: "center" }}>
 				<Button size="sm" variant="outline" onClick={() => force.current?.zoomToFit(0, 24)}>
-					Fit graph
+					<Maximize2 size={16} aria-hidden="true" />
+					适应画布
 				</Button>
-				<span className="library-muted">
-					Drag to pan. Scroll to zoom. Use the node table for keyboard navigation.
+				<span className="text-basalt-sm text-basalt-muted-foreground">
+					拖动平移，滚动缩放。也可通过节点表格使用键盘浏览。
 				</span>
-			</div>
-			<div
-				ref={host}
-				className="library-graph"
+			</Grid>
+			<GridItem
+				{...{ ref: host }}
+				className="h-basalt-80 w-full overflow-hidden"
 				role="img"
-				aria-label="Force-directed relationship graph. Equivalent node and relationship tables follow."
+				aria-label="力导向关系图。下方提供内容相同的节点与关系表格。"
 			>
 				{width > 0 && height > 0 && colors.tag && (
 					<ForceGraph2D<GraphNode>
@@ -116,10 +128,10 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 						}}
 					/>
 				)}
-			</div>
-			<p className="library-muted" aria-live="polite">
-				{hover || "Blue: tags. Green: memories. Gray: clustered nodes."}
+			</GridItem>
+			<p className="text-basalt-sm text-basalt-muted-foreground" aria-live="polite">
+				{hover || "蓝色：标签；绿色：记忆；灰色：聚合节点。"}
 			</p>
-		</div>
+		</Grid>
 	);
 }

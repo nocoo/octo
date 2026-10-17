@@ -1,5 +1,6 @@
 import { type AdminClient, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
+import { libraryError } from "./library";
 import type { UsageResponse } from "./operations-observability";
 
 export function activitySeries(daily: { day: string; key_id: string; calls: number }[]) {
@@ -58,8 +59,8 @@ export class OverviewModel extends Store<OverviewState> {
 				usage,
 				recent: memories.items,
 			});
-		} catch {
-			this.set({ error: "无法刷新总览，请重试。" });
+		} catch (error) {
+			this.set({ error: `无法刷新总览：${libraryError(error)}` });
 		} finally {
 			this.set({ loading: false });
 		}

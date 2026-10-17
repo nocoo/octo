@@ -8,6 +8,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@nocoo/basalt/components/collapsible";
+import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
@@ -18,7 +19,16 @@ import {
 	TableHeader,
 	TableRow,
 } from "@nocoo/basalt/components/table";
-import { ArrowUpRight, RefreshCw } from "lucide-react";
+import {
+	Activity,
+	AlertCircle,
+	ArrowUpRight,
+	BookOpen,
+	KeyRound,
+	Network,
+	RefreshCw,
+	Search,
+} from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useModel } from "../components/layout/use-model";
@@ -51,11 +61,11 @@ export function OverviewPage() {
 			).size
 		: "—";
 	const table = (
-		<Table aria-label="按日与 Agent 的调用量">
+		<Table aria-label="按日期和智能体统计的调用量">
 			<TableHeader>
 				<TableRow>
 					<TableHead>日期</TableHead>
-					<TableHead>Agent</TableHead>
+					<TableHead>智能体</TableHead>
 					<TableHead>调用</TableHead>
 					<TableHead>错误</TableHead>
 				</TableRow>
@@ -73,10 +83,9 @@ export function OverviewPage() {
 		</Table>
 	);
 	return (
-		<div className="octo-page">
+		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="总览"
-				description="每一条记忆，都有迹可循。"
 				actions={
 					<Button variant="secondary" disabled={state.loading} onClick={() => void model.load()}>
 						<RefreshCw size={16} />
@@ -84,122 +93,207 @@ export function OverviewPage() {
 					</Button>
 				}
 			/>
-			{state.error && <Banner variant="error" role="alert" description={state.error} />}
+			{state.error && (
+				<Banner
+					variant="error"
+					role="alert"
+					icon={<AlertCircle aria-hidden="true" />}
+					description={state.error}
+					action={
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={state.loading}
+							onClick={() => void model.load()}
+						>
+							<RefreshCw size={16} aria-hidden="true" />
+							重试
+						</Button>
+					}
+				/>
+			)}
 			<StatStrip
 				items={[
 					{ label: "记忆总数", value: state.memoryCount ?? "—" },
-					{ label: "今日活跃 Agent · UTC", value: active },
+					{ label: "今日活跃智能体 · UTC", value: active },
 					{ label: "待同步向量", value: state.usage?.health.vector_backlog ?? "—" },
 				]}
 			/>
 			<LayerCard>
 				<LayerCard.Header>
-					<h2>Agent 活动</h2>
+					<h2>智能体活动</h2>
 				</LayerCard.Header>
-				<LayerCard.Body>
-					{state.usage ? (
-						<HeatmapCalendar
-							data={activity.heatmap}
-							year={new Date().getUTCFullYear()}
-							locale="zh-CN"
-							ariaLabel="全年 Agent 调用活动"
-							metricLabel="次调用"
-							lessLabel="少"
-							moreLabel="多"
-						/>
-					) : (
-						<p className="octo-muted" role="status">
-							{state.loading ? "正在读取活动记录…" : "活动数据尚未加载"}
-						</p>
-					)}
-				</LayerCard.Body>
+				<LayerCard.Well>
+					<Grid columns={1}>
+						{state.usage && !activity.heatmap.length ? (
+							<LayerCard.Empty
+								icon={<Activity aria-hidden="true" />}
+								title="暂无调用记录"
+								description="智能体开始使用后，这里会显示每日活动。"
+								action={
+									<Button asChild>
+										<Link to="/keys">
+											<KeyRound size={16} aria-hidden="true" />
+											管理密钥
+										</Link>
+									</Button>
+								}
+							/>
+						) : state.usage ? (
+							<HeatmapCalendar
+								data={activity.heatmap}
+								year={new Date().getUTCFullYear()}
+								locale="zh-CN"
+								ariaLabel="全年智能体调用活动"
+								metricLabel="次调用"
+								lessLabel="少"
+								moreLabel="多"
+							/>
+						) : (
+							<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
+								{state.loading ? "正在读取活动记录…" : "活动数据尚未加载"}
+							</p>
+						)}
+					</Grid>
+				</LayerCard.Well>
 			</LayerCard>
-			<div className="octo-grid">
+			<Grid
+				style={{
+					gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, var(--basalt-space-80)), 1fr))",
+				}}
+			>
 				<LayerCard>
 					<LayerCard.Header>
 						<h2>调用趋势</h2>
 					</LayerCard.Header>
-					<LayerCard.Body>
-						{activity.rows.length ? (
-							<AreaChart
-								data={activity.rows}
-								series={activityChartSeries(activity)}
-								stacked
-								showAxes
-								showLegend
-								className="octo-chart"
-								ariaLabel="按 Agent 堆叠的每日调用量"
-								summary="每日 API 调用次数，纵轴从零开始。"
-							/>
-						) : (
-							<p className="octo-muted">调用记录会显示在这里。</p>
-						)}
-						<Collapsible>
-							<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
-							<CollapsibleContent unstyled>{table}</CollapsibleContent>
-						</Collapsible>
-					</LayerCard.Body>
+					<LayerCard.Well>
+						<Grid columns={1}>
+							{activity.rows.length ? (
+								<AreaChart
+									data={activity.rows}
+									series={activityChartSeries(activity)}
+									stacked
+									showAxes
+									showLegend
+									className="h-basalt-80 w-full"
+									ariaLabel="按智能体堆叠的每日调用量"
+									summary="每日接口调用次数，纵轴从零开始。"
+								/>
+							) : state.usage ? (
+								<LayerCard.Empty
+									icon={<Activity aria-hidden="true" />}
+									title="暂无调用趋势"
+									action={
+										<Button asChild>
+											<Link to="/keys">
+												<KeyRound size={16} aria-hidden="true" />
+												管理密钥
+											</Link>
+										</Button>
+									}
+								/>
+							) : (
+								<p className="text-basalt-sm text-basalt-muted-foreground">
+									{state.loading ? "正在读取调用记录…" : "调用数据尚未加载"}
+								</p>
+							)}
+							<Collapsible>
+								<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
+								<CollapsibleContent unstyled>{table}</CollapsibleContent>
+							</Collapsible>
+						</Grid>
+					</LayerCard.Well>
 				</LayerCard>
 				<LayerCard>
 					<LayerCard.Header>
 						<h2>知识入口</h2>
 					</LayerCard.Header>
 					<LayerCard.Body>
-						<div className="octo-actions">
-							<Button asChild>
-								<Link to="/memories">
-									浏览记忆 <ArrowUpRight size={16} />
-								</Link>
-							</Button>
-							<Button variant="secondary" asChild>
-								<Link to="/search">混合搜索</Link>
-							</Button>
-							<Button variant="secondary" asChild>
-								<Link to="/graph">探索关系</Link>
-							</Button>
-						</div>
-						<p className="octo-muted">
-							使用 ⌘ K 快速跳转，按 / 开始搜索。内容、版本与访问记录都保留在你的工作台。
-						</p>
+						<Grid columns={1}>
+							<Grid
+								gap="sm"
+								style={{
+									gridTemplateColumns:
+										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), 1fr))",
+								}}
+							>
+								<Button asChild>
+									<Link to="/memories">
+										浏览记忆 <ArrowUpRight size={16} />
+									</Link>
+								</Button>
+								<Button variant="secondary" asChild>
+									<Link to="/search">
+										<Search size={16} aria-hidden="true" />
+										混合搜索
+									</Link>
+								</Button>
+								<Button variant="secondary" asChild>
+									<Link to="/graph">
+										<Network size={16} aria-hidden="true" />
+										探索关系
+									</Link>
+								</Button>
+							</Grid>
+							<p className="text-basalt-sm text-basalt-muted-foreground">
+								⌘ K 快速跳转，/ 开始搜索。
+							</p>
+						</Grid>
 					</LayerCard.Body>
 				</LayerCard>
-			</div>
-			<SectionRule title="最近更新的记忆" />
-			<LayerCard>
-				<LayerCard.Body>
-					<Table aria-label="最近更新的记忆">
-						<TableHeader>
-							<TableRow>
-								<TableHead>记忆</TableHead>
-								<TableHead>Space</TableHead>
-								<TableHead>更新时间</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{state.recent.map((memory) => (
-								<TableRow key={memory.id}>
-									<TableCell>
-										<Link to={`/memories/${encodeURIComponent(memory.id)}`}>{memory.title}</Link>
-									</TableCell>
-									<TableCell>
-										<Badge variant="secondary">{memory.space}</Badge>
-									</TableCell>
-									<TableCell>{new Date(memory.updated_at).toLocaleString("zh-CN")}</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-					{!state.recent.length && (
-						<p className="octo-muted">
-							{state.loading
-								? "正在读取记忆…"
-								: state.error
-									? "记忆数据尚未加载。"
-									: "还没有记忆。"}
-						</p>
-					)}
-				</LayerCard.Body>
-			</LayerCard>
-		</div>
+			</Grid>
+			<SectionRule title="最近更新的记忆">
+				<LayerCard>
+					<LayerCard.Body>
+						<Grid columns={1}>
+							<Table aria-label="最近更新的记忆">
+								<TableHeader>
+									<TableRow>
+										<TableHead>记忆</TableHead>
+										<TableHead>空间</TableHead>
+										<TableHead>更新时间</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{state.recent.map((memory) => (
+										<TableRow key={memory.id}>
+											<TableCell>
+												<Link to={`/memories/${encodeURIComponent(memory.id)}`}>
+													{memory.title}
+												</Link>
+											</TableCell>
+											<TableCell>
+												<Badge variant="secondary">{memory.space}</Badge>
+											</TableCell>
+											<TableCell>{new Date(memory.updated_at).toLocaleString("zh-CN")}</TableCell>
+										</TableRow>
+									))}
+								</TableBody>
+							</Table>
+							{!state.recent.length &&
+								(state.memoryCount !== null ? (
+									<LayerCard.Empty
+										icon={<BookOpen aria-hidden="true" />}
+										title="还没有记忆"
+										description="从第一条记忆开始整理知识。"
+										action={
+											<Button asChild>
+												<Link to="/memories">
+													<ArrowUpRight size={16} aria-hidden="true" />
+													浏览记忆
+												</Link>
+											</Button>
+										}
+									/>
+								) : (
+									<p className="text-basalt-sm text-basalt-muted-foreground">
+										{state.loading ? "正在读取记忆…" : "记忆数据尚未加载。"}
+									</p>
+								))}
+						</Grid>
+					</LayerCard.Body>
+				</LayerCard>
+			</SectionRule>
+		</Grid>
 	);
 }

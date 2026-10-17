@@ -105,8 +105,15 @@ export function buildGraph(memories: LibraryMemory[], mode: GraphMode, cap: numb
 		const group = kept.find((item) => item.id === id);
 		if (group) {
 			group.count += 1;
-			group.label = `${group.count} ${node.kind} nodes`;
-		} else kept.push({ id, kind: "cluster", label: `1 ${node.kind} nodes`, count: 1, href: null });
+			group.label = `${group.count} 个${node.kind === "tag" ? "标签" : "记忆"}节点`;
+		} else
+			kept.push({
+				id,
+				kind: "cluster",
+				label: `1 个${node.kind === "tag" ? "标签" : "记忆"}节点`,
+				count: 1,
+				href: null,
+			});
 	}
 	const grouped = new Map<string, GraphLink>();
 	for (const link of edges.values()) {

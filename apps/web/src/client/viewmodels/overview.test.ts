@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { AdminClient } from "../lib/api";
+import { type AdminClient, ApiError } from "../lib/api";
 import { activitySeries, OverviewModel } from "./overview";
 
 describe("overview aggregation", () => {
+	it("explains known API failures in Chinese without exposing arbitrary service details", async () => {
+		const model = new OverviewModel({
+			request: async () => {
+				throw new ApiError(403, "access_denied");
+			},
+		});
+		await model.load();
+		expect(model.state.error).toBe("无法刷新总览：没有访问权限，请重新登录或联系管理员。");
+	});
 	it("aggregates stable key series and daily activity", () => {
 		const daily = [
 			{ day: "2026-10-17", key_id: "b", calls: 3 },
@@ -55,7 +64,7 @@ describe("overview aggregation", () => {
 		fail = true;
 		await model.load();
 		expect(model.state.memoryCount).toBe(12);
-		expect(model.state.error).toBe("无法刷新总览，请重试。");
+		expect(model.state.error).toBe("无法刷新总览：请求失败，请稍后重试。");
 		expect(model.state.loading).toBe(false);
 	});
 });

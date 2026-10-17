@@ -31,7 +31,7 @@ describe("library bulk actions", () => {
 	it("appends tags per item with OCC and reports partial failures", async () => {
 		const { api, request } = client([
 			{ ok: true, item: items[0] },
-			{ ok: false, error: { message: "version conflict" } },
+			{ ok: false, error: { code: "version_conflict", message: "private backend details" } },
 		]);
 		const model = new BulkModel(api);
 		expect(await model.apply(items, ["a", "b", "a"], { kind: "tag", tags: ["one", "two"] })).toBe(
@@ -47,7 +47,7 @@ describe("library bulk actions", () => {
 			},
 		});
 		expect(model.state.succeeded).toEqual(["a"]);
-		expect(model.state.failures).toEqual([{ id: "b", message: "version conflict" }]);
+		expect(model.state.failures).toEqual([{ id: "b", message: "内容已被修改，请刷新后重试。" }]);
 	});
 	it("moves memories and soft deletes selected IDs", async () => {
 		const { api, request } = client([{ ok: true, item: items[0] }]);
@@ -81,12 +81,12 @@ describe("library bulk actions", () => {
 		const { api } = client([]);
 		const model = new BulkModel(api);
 		await model.apply(items, ["a"], { kind: "delete" });
-		expect(model.state.failures).toEqual([{ id: "a", message: "Missing batch result" }]);
+		expect(model.state.failures).toEqual([{ id: "a", message: "未收到这条记忆的处理结果。" }]);
 		api.request = async () => {
 			throw new Error("offline");
 		};
 		expect(await model.apply(items, ["a"], { kind: "delete" })).toBe(false);
-		expect(model.state.error).toBe("offline");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 	});
 	it("blocks duplicate submission", async () => {
 		let resolve!: (value: unknown) => void;
@@ -101,7 +101,7 @@ describe("library bulk actions", () => {
 		const model = new BulkModel(api);
 		const pending = model.apply(items, ["a"], { kind: "delete" });
 		expect(await model.apply(items, ["a"], { kind: "delete" })).toBe(false);
-		resolve({ results: [{ ok: false, error: { message: "denied" } }] });
+		resolve({ results: [{ ok: false, error: { code: "forbidden" } }] });
 		await pending;
 		expect(model.state.busy).toBe(false);
 	});

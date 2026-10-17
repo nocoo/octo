@@ -21,11 +21,11 @@ function render(Page: () => React.JSX.Element, url: string) {
 	);
 }
 const pages = [
-	["/tags", TagsPage, "No tags match your search."],
-	["/spaces", SpacesPage, "No spaces found."],
-	["/trash", TrashPage, "Trash is empty for these filters."],
-	["/graph", GraphPage, "0 nodes"],
-	["/timeline", TimelinePage, "No dated memories"],
+	["/tags", TagsPage, "没有符合搜索条件的标签。"],
+	["/spaces", SpacesPage, "还没有空间。"],
+	["/trash", TrashPage, "当前筛选条件下，回收站为空。"],
+	["/graph", GraphPage, "暂无关系数据"],
+	["/timeline", TimelinePage, "没有带有效时间的记忆"],
 ] as const;
 
 afterEach(() => {
@@ -36,9 +36,9 @@ describe("library unknown, failed and empty states", () => {
 		"does not claim an empty %s library before the initial request starts",
 		(url, Page, empty) => {
 			const html = render(Page, url);
-			expect(html).toContain("Loading library...");
+			expect(html).toContain("正在加载资料库");
 			expect(html).not.toContain(empty);
-			expect(html).not.toContain("0 memories loaded");
+			expect(html).not.toContain("已加载 0 条记忆");
 		},
 	);
 	it.each(pages)(
@@ -46,36 +46,39 @@ describe("library unknown, failed and empty states", () => {
 		(url, Page, empty) => {
 			snapshot.state = { ...new LibraryModel("graph").state, busy: true };
 			const html = render(Page, url);
-			expect(html).toContain("Loading library...");
+			expect(html).toContain("正在加载资料库");
 			expect(html).not.toContain(empty);
-			expect(html).not.toContain("0 memories loaded");
+			expect(html).not.toContain("已加载 0 条记忆");
 		},
 	);
 	it.each(pages)(
 		"shows first-load failure and retry instead of false-empty %s data",
 		(url, Page, empty) => {
-			snapshot.state = { ...new LibraryModel("graph").state, error: "request_failed" };
+			snapshot.state = { ...new LibraryModel("graph").state, error: "请求失败，请稍后重试。" };
 			const html = render(Page, url);
 			expect(html).toContain('role="alert"');
-			expect(html).toContain("request_failed");
-			expect(html).toContain("Retry");
-			expect(html).not.toContain("Loading library...");
+			expect(html).toContain("请求失败，请稍后重试。");
+			expect(html).toContain("重试");
+			expect(html).not.toContain("正在加载资料库");
 			expect(html).not.toContain(empty);
-			expect(html).not.toContain("0 memories loaded");
+			expect(html).not.toContain("已加载 0 条记忆");
 		},
 	);
 	it.each(pages)(
 		"shows legitimately empty %s data only after a successful read",
 		(url, Page, empty) => {
 			snapshot.state = { ...new LibraryModel("graph").state, ready: true };
-			expect(render(Page, url)).toContain(empty);
+			const html = render(Page, url);
+			expect(html).toContain(empty);
+			expect(html).toMatch(/size-basalt-8[^>]*><svg/);
+			expect(html).toContain(Page === SpacesPage ? "创建空间" : "浏览记忆");
 		},
 	);
 	it.each(pages)("keeps cached %s content visible when a refresh fails", (url, Page) => {
 		snapshot.state = {
 			...new LibraryModel("graph").state,
 			ready: true,
-			error: "offline",
+			error: "请求失败，请稍后重试。",
 			memories: [
 				{
 					id: "memory-1",
@@ -100,12 +103,12 @@ describe("library unknown, failed and empty states", () => {
 			],
 		};
 		const html = render(Page, url);
-		expect(html).toContain("offline");
-		expect(html).toContain("Retry");
+		expect(html).toContain("请求失败，请稍后重试。");
+		expect(html).toContain("重试");
 		expect(html).toContain("Cached");
 		if (Page === GraphPage) {
-			expect(html).toContain("2 nodes");
-			expect(html).not.toContain("0 nodes");
+			expect(html).toContain("2 个节点");
+			expect(html).not.toContain("0 个节点");
 		}
 	});
 });

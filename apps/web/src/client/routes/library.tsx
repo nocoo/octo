@@ -16,7 +16,13 @@ import {
 	toast,
 } from "@nocoo/basalt";
 import { Timeline } from "@nocoo/basalt/charts/timeline";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@nocoo/basalt/components/collapsible";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
+import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
@@ -26,6 +32,21 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
+import {
+	AlertCircle,
+	ArrowDown,
+	ArrowUpRight,
+	CalendarDays,
+	Check,
+	FolderPlus,
+	Network,
+	Pencil,
+	RefreshCw,
+	RotateCcw,
+	SlidersHorizontal,
+	Tags,
+	Trash2,
+} from "lucide-react";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
@@ -49,7 +70,6 @@ import {
 	timelineOptions,
 	updateLibraryUrl,
 } from "../viewmodels/library-visualizations";
-import "./library.css";
 
 const GraphCanvas = lazy(() => import("./library-graph"));
 
@@ -68,24 +88,24 @@ function useLibrary(kind: LibraryKind) {
 function LibraryStatus({ state, onRetry }: { state: LibraryState; onRetry: () => void }) {
 	return (
 		<>
-			{!state.ready && !state.error && <p role="status">Loading library...</p>}
+			{!state.ready && !state.error && <p role="status">正在加载资料库…</p>}
 			{state.error && (
 				<p role="alert">
-					{state.error}{" "}
+					<AlertCircle className="inline" size={16} aria-hidden="true" /> {state.error}{" "}
 					<Button size="sm" variant="outline" onClick={onRetry} disabled={state.busy}>
-						Retry
+						<RefreshCw size={16} aria-hidden="true" />
+						重试
 					</Button>
 				</p>
 			)}
 			{state.notice && (
-				<p role="status" className="library-muted">
-					{state.notice}
+				<p role="status" className="text-basalt-sm text-basalt-muted-foreground">
+					<Check className="inline" size={16} aria-hidden="true" /> {state.notice}
 				</p>
 			)}
 			{state.truncated && (
 				<p role="status">
-					Showing the first {state.memories.length} memories. Graphs and timelines represent this
-					sample, not the entire library.
+					当前展示前 {state.memories.length} 条记忆。图谱和时间线仅代表这些样本，而非整个资料库。
 				</p>
 			)}
 		</>
@@ -107,11 +127,11 @@ function SpaceFilter({
 			value={value || "__all__"}
 			onValueChange={(next) => onChange(next === "__all__" ? "" : next)}
 		>
-			<SelectTrigger aria-label="Filter by space">
-				<SelectValue placeholder="All spaces" />
+			<SelectTrigger aria-label="按空间筛选" className="w-basalt-36 max-w-full">
+				<SelectValue placeholder="全部空间" />
 			</SelectTrigger>
 			<SelectContent>
-				<SelectItem value="__all__">All spaces</SelectItem>
+				<SelectItem value="__all__">全部空间</SelectItem>
 				{spaces.map((space) => (
 					<SelectItem key={space} value={space}>
 						{space}
@@ -135,59 +155,76 @@ function GraphTables({
 	const columns: DataTableColumn<GraphNode>[] = [
 		{
 			id: "label",
-			header: "Node",
+			header: "节点",
 			accessor: (node) => (node.href ? <Link href={node.href}>{node.label}</Link> : node.label),
 			sortValue: (node) => node.label,
 			wrap: true,
 		},
 		{
 			id: "kind",
-			header: "Kind",
-			accessor: (node) => <Badge variant="secondary">{node.kind}</Badge>,
+			header: "类型",
+			accessor: (node) => (
+				<Badge variant="secondary">
+					{{ tag: "标签", memory: "记忆", cluster: "聚合节点" }[node.kind]}
+				</Badge>
+			),
 			sortValue: (node) => node.kind,
 		},
 		{
 			id: "count",
-			header: "Count",
+			header: "数量",
 			accessor: (node) => node.count,
 			sortValue: (node) => node.count,
 			textAlign: "end",
-			cellClassName: "library-numeric",
+			cellClassName: "tabular-nums",
 		},
 	];
 	return (
-		<div className="library-stack">
+		<Grid columns={1}>
 			<DataTable
-				aria-label="Graph nodes"
+				aria-label="图谱节点"
 				data={graph.nodes}
 				columns={columns}
 				getRowId={(node) => node.id}
 				selected={selected}
 				onSelectedChange={onSelected}
 				pageSize={20}
-				empty="No nodes match these filters."
+				empty={
+					<LayerCard.Empty
+						icon={<Network aria-hidden="true" />}
+						title="没有符合筛选条件的节点。"
+						action={
+							<Button asChild>
+								<Link href="/memories">
+									<ArrowUpRight size={16} aria-hidden="true" />
+									浏览记忆
+								</Link>
+							</Button>
+						}
+					/>
+				}
 			/>
 			<DataTable
-				aria-label="Graph relationships"
+				aria-label="图谱关系"
 				data={graph.links}
 				columns={[
 					{
 						id: "source",
-						header: "From",
+						header: "起点",
 						accessor: (link) => labels.get(link.source),
 						sortValue: (link) => labels.get(link.source) ?? link.source,
 						wrap: true,
 					},
 					{
 						id: "target",
-						header: "To",
+						header: "终点",
 						accessor: (link) => labels.get(link.target),
 						sortValue: (link) => labels.get(link.target) ?? link.target,
 						wrap: true,
 					},
 					{
 						id: "value",
-						header: "Weight",
+						header: "关联强度",
 						accessor: (link) => link.value,
 						sortValue: (link) => link.value,
 						textAlign: "end",
@@ -195,9 +232,22 @@ function GraphTables({
 				]}
 				getRowId={(link) => JSON.stringify([link.source, link.target])}
 				pageSize={20}
-				empty="No relationships in this sample."
+				empty={
+					<LayerCard.Empty
+						icon={<Network aria-hidden="true" />}
+						title="当前样本中没有关联。"
+						action={
+							<Button asChild>
+								<Link href="/memories">
+									<ArrowUpRight size={16} aria-hidden="true" />
+									浏览记忆
+								</Link>
+							</Button>
+						}
+					/>
+				}
 			/>
-		</div>
+		</Grid>
 	);
 }
 
@@ -216,7 +266,7 @@ export function TagsPage() {
 	const columns: DataTableColumn<LibraryTag>[] = [
 		{
 			id: "name",
-			header: "Tag",
+			header: "标签",
 			accessor: (tag) => (
 				<Link href={`/memories?${new URLSearchParams({ tags_all: tag.name })}`}>
 					{tag.display_name}
@@ -226,18 +276,18 @@ export function TagsPage() {
 		},
 		{
 			id: "count",
-			header: "Memories",
+			header: "记忆数",
 			accessor: (tag) => tag.use_count,
 			sortValue: (tag) => tag.use_count,
 			textAlign: "end",
-			cellClassName: "library-numeric",
+			cellClassName: "tabular-nums",
 		},
 		{
 			id: "actions",
-			header: "Actions",
+			header: "操作",
 			sortable: false,
 			accessor: (tag) => (
-				<div className="library-actions">
+				<Grid columns={2} gap="sm">
 					{(["rename", "merge"] as const).map((action) => (
 						<Button
 							key={action}
@@ -249,12 +299,17 @@ export function TagsPage() {
 								setOperation(action);
 								setTarget("");
 							}}
-							aria-label={`${action} ${tag.display_name}`}
+							aria-label={`${action === "rename" ? "重命名" : "合并"} ${tag.display_name}`}
 						>
-							{action === "rename" ? "Rename" : "Merge"}
+							{action === "rename" ? (
+								<Pencil size={16} aria-hidden="true" />
+							) : (
+								<Tags size={16} aria-hidden="true" />
+							)}
+							{action === "rename" ? "重命名" : "合并"}
 						</Button>
 					))}
-				</div>
+				</Grid>
 			),
 		},
 	];
@@ -263,21 +318,21 @@ export function TagsPage() {
 		setParams(updateLibraryUrl(params, "tag", ""));
 	}
 	return (
-		<div className="library-page">
+		<Grid columns={1} gap="lg">
 			<PageHeader
-				title="Tags"
-				description="Shared vocabulary, usage and relationships across spaces."
+				title="标签"
 				actions={
 					<>
 						<Input
-							className="library-search"
-							aria-label="Filter tags"
-							placeholder="Find a tag"
+							className="w-basalt-56 max-w-full"
+							aria-label="筛选标签"
+							placeholder="查找标签"
 							value={query}
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
 						/>
 						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-							Refresh
+							<RefreshCw size={16} aria-hidden="true" />
+							刷新
 						</Button>
 					</>
 				}
@@ -285,9 +340,9 @@ export function TagsPage() {
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
 			{state.ready && (
 				<>
-					<LayerCard>
+					<LayerCard padding="none">
 						<DataTable
-							aria-label="Tags"
+							aria-label="标签"
 							data={state.tags}
 							columns={columns}
 							filter={query}
@@ -295,29 +350,52 @@ export function TagsPage() {
 							pageSize={25}
 							edge="attached"
 							loading={state.busy && !state.ready}
-							empty="No tags match your search."
+							empty={
+								<LayerCard.Empty
+									icon={<Tags aria-hidden="true" />}
+									title="没有符合搜索条件的标签。"
+									action={
+										query ? (
+											<Button onClick={() => setParams(updateLibraryUrl(params, "q", ""))}>
+												<RotateCcw size={16} aria-hidden="true" />
+												清除筛选
+											</Button>
+										) : (
+											<Button asChild>
+												<Link href="/memories">
+													<ArrowUpRight size={16} aria-hidden="true" />
+													浏览记忆
+												</Link>
+											</Button>
+										)
+									}
+								/>
+							}
 						/>
 					</LayerCard>
-					<SectionRule
-						title="Tag cooccurrence"
-						hint="Each edge counts memories carrying both tags."
-					>
-						<LayerCard>
-							<LayerCard.Header>
-								Vocabulary connections <Link href="/graph?mode=cooccurrence">Explore graph</Link>
-							</LayerCard.Header>
-							<LayerCard.Body>
-								<Suspense fallback={<p role="status">Loading graph...</p>}>
-									<GraphCanvas graph={graph} />
-								</Suspense>
-								<GraphTables
-									graph={graph}
-									selected={params.get("node") ? [params.get("node") as string] : []}
-									onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
-								/>
-							</LayerCard.Body>
-						</LayerCard>
-					</SectionRule>
+					{graph.nodes.length > 0 && (
+						<SectionRule title="标签共现" hint="每条连线表示同时包含这两个标签的记忆数。">
+							<LayerCard>
+								<LayerCard.Header>
+									标签之间的联系 <Link href="/graph?mode=cooccurrence">探索图谱</Link>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									<Grid columns={1}>
+										<Suspense fallback={<p role="status">正在加载图谱…</p>}>
+											<GraphCanvas graph={graph} />
+										</Suspense>
+										<GraphTables
+											graph={graph}
+											selected={params.get("node") ? [params.get("node") as string] : []}
+											onSelected={(ids) =>
+												setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))
+											}
+										/>
+									</Grid>
+								</LayerCard.Body>
+							</LayerCard>
+						</SectionRule>
+					)}
 				</>
 			)}
 			<Dialog
@@ -333,80 +411,82 @@ export function TagsPage() {
 				>
 					<DialogHeader>
 						<DialogTitle>
-							{operation === "rename" ? "Rename" : "Merge"} {source?.display_name}
+							{operation === "rename" ? "重命名" : "合并"} {source?.display_name}
 						</DialogTitle>
-						<DialogDescription>This changes a global tag across every space.</DialogDescription>
+						<DialogDescription>此操作会修改所有空间中的同名标签。</DialogDescription>
 					</DialogHeader>
 					<form
-						className="library-stack"
 						onSubmit={(event) => {
 							event.preventDefault();
 							setConfirming(true);
 						}}
 					>
-						{operation === "rename" ? (
-							<Field label="New tag name" htmlFor="tag-target" required>
-								<Input
-									id="tag-target"
-									value={target}
-									onChange={(event) => setTarget(event.target.value)}
-									required
-									maxLength={64}
-									disabled={state.busy}
-								/>
-							</Field>
-						) : (
-							<Field label="Merge into" htmlFor="tag-target" required>
-								<Select value={target} onValueChange={setTarget} disabled={state.busy}>
-									<SelectTrigger id="tag-target">
-										<SelectValue placeholder="Choose an existing tag" />
-									</SelectTrigger>
-									<SelectContent>
-										{state.tags
-											.filter((tag) => tag.name !== source?.name)
-											.map((tag) => (
-												<SelectItem key={tag.id} value={tag.name}>
-													{tag.display_name} ({tag.use_count})
-												</SelectItem>
-											))}
-									</SelectContent>
-								</Select>
-							</Field>
-						)}
-						<p role="status">
-							Affects {source?.use_count ?? 0} memories.{" "}
-							{operation === "merge" && "Duplicate tag assignments collapse into one."}
-						</p>
-						<DialogFooter>
-							<Button variant="outline" disabled={state.busy} onClick={close}>
-								Cancel
-							</Button>
-							<Button type="submit" disabled={!target.trim() || target.trim() === source?.name}>
-								Review changes
-							</Button>
-						</DialogFooter>
+						<Grid columns={1}>
+							{operation === "rename" ? (
+								<Field label="新标签名称" htmlFor="tag-target" required>
+									<Input
+										id="tag-target"
+										value={target}
+										onChange={(event) => setTarget(event.target.value)}
+										required
+										maxLength={64}
+										disabled={state.busy}
+									/>
+								</Field>
+							) : (
+								<Field label="合并到" htmlFor="tag-target" required>
+									<Select value={target} onValueChange={setTarget} disabled={state.busy}>
+										<SelectTrigger id="tag-target">
+											<SelectValue placeholder="选择已有标签" />
+										</SelectTrigger>
+										<SelectContent>
+											{state.tags
+												.filter((tag) => tag.name !== source?.name)
+												.map((tag) => (
+													<SelectItem key={tag.id} value={tag.name}>
+														{tag.display_name} ({tag.use_count})
+													</SelectItem>
+												))}
+										</SelectContent>
+									</Select>
+								</Field>
+							)}
+							<p role="status">
+								影响 {source?.use_count ?? 0} 条记忆。{" "}
+								{operation === "merge" && "重复标签会合并为一个。"}
+							</p>
+							<DialogFooter>
+								<Button variant="outline" disabled={state.busy} onClick={close}>
+									取消
+								</Button>
+								<Button type="submit" disabled={!target.trim() || target.trim() === source?.name}>
+									确认修改内容
+								</Button>
+							</DialogFooter>
+						</Grid>
 					</form>
 				</DialogContent>
 			</Dialog>
 			<ConfirmDialog
+				cancelLabel="取消"
 				open={confirming && Boolean(source)}
 				onOpenChange={(open) => {
 					if (!open) close();
 				}}
-				title={`${operation === "rename" ? "Rename" : "Merge"} tag across all spaces?`}
+				title={`${operation === "rename" ? "重命名" : "合并"}所有空间中的标签？`}
 				description={
 					<>
-						This affects {source?.use_count ?? 0} memories: {source?.display_name} → {target}.
+						影响 {source?.use_count ?? 0} 条记忆：{source?.display_name} → {target}。
 						{state.error && <span role="alert">{state.error}</span>}
 					</>
 				}
 				loading={state.busy}
-				confirmLabel={operation === "rename" ? "Rename tag" : "Merge tags"}
+				confirmLabel={operation === "rename" ? "重命名标签" : "合并标签"}
 				onConfirm={async () => {
 					if (source && (await model.changeTag(operation, source.name, target))) close();
 				}}
 			/>
-		</div>
+		</Grid>
 	);
 }
 
@@ -417,69 +497,70 @@ export function SpacesPage() {
 	const columns: DataTableColumn<LibrarySpace>[] = [
 		{
 			id: "name",
-			header: "Space",
+			header: "空间",
 			accessor: (space) => (
 				<Link href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}>{space.name}</Link>
 			),
 			sortValue: (space) => space.name,
 		},
-		{ id: "slug", header: "Slug", accessor: (space) => space.slug },
+		{ id: "slug", header: "标识", accessor: (space) => space.slug },
 		{
 			id: "description",
-			header: "Description",
+			header: "说明",
 			accessor: (space) => space.description,
 			wrap: true,
 		},
 		{
 			id: "owner",
-			header: "Owner key",
+			header: "所属密钥",
 			accessor: (space) =>
 				space.owner_key_id ? (
 					<Link href="/keys">
 						{state.keys.find((key) => key.id === space.owner_key_id)?.name ?? space.owner_key_id}
 					</Link>
 				) : (
-					"Not assigned"
+					"未指定"
 				),
 			sortValue: (space) => space.owner_key_id ?? "",
 		},
 		{
 			id: "count",
-			header: "Memories",
+			header: "记忆数",
 			accessor: (space) => space.memory_count,
 			sortValue: (space) => space.memory_count,
 			textAlign: "end",
-			cellClassName: "library-numeric",
+			cellClassName: "tabular-nums",
 		},
 	];
 	return (
-		<div className="library-page">
+		<Grid columns={1} gap="lg">
 			<PageHeader
-				title="Spaces"
-				description="Boundaries for knowledge and the agents responsible for it."
+				title="空间"
 				actions={
 					<>
 						<Input
-							className="library-search"
-							aria-label="Filter spaces"
+							className="w-basalt-56 max-w-full"
+							aria-label="筛选空间"
 							value={params.get("q") ?? ""}
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
-							placeholder="Find a space"
+							placeholder="查找空间"
 						/>
 						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-							Refresh
+							<RefreshCw size={16} aria-hidden="true" />
+							刷新
 						</Button>
 						<Button disabled={state.busy} onClick={() => setCreating(true)}>
-							Create space
+							<FolderPlus size={16} aria-hidden="true" />
+							创建空间
 						</Button>
 					</>
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
 			{state.ready && (
-				<LayerCard>
+				<LayerCard padding="none">
 					<DataTable
-						aria-label="Spaces"
+						aria-label="空间"
 						data={state.spaces}
 						columns={columns}
 						filter={params.get("q") ?? ""}
@@ -487,7 +568,19 @@ export function SpacesPage() {
 						pageSize={25}
 						edge="attached"
 						loading={state.busy && !state.ready}
-						empty="No spaces found. Create a space to organize memories."
+						empty={
+							<LayerCard.Empty
+								icon={<FolderPlus aria-hidden="true" />}
+								title={params.get("q") ? "没有符合筛选条件的空间" : "还没有空间。"}
+								description="创建空间，整理你的记忆。"
+								action={
+									<Button onClick={() => setCreating(true)}>
+										<FolderPlus size={16} aria-hidden="true" />
+										创建空间
+									</Button>
+								}
+							/>
+						}
 					/>
 				</LayerCard>
 			)}
@@ -499,13 +592,12 @@ export function SpacesPage() {
 			>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Create space</DialogTitle>
+						<DialogTitle>创建空间</DialogTitle>
 						<DialogDescription>
-							Spaces keep knowledge organized. Key ownership is managed through API key permissions.
+							空间用于分类整理知识。所属密钥通过接口密钥权限管理。
 						</DialogDescription>
 					</DialogHeader>
 					<form
-						className="library-stack"
 						onSubmit={async (event) => {
 							event.preventDefault();
 							const form = new FormData(event.currentTarget);
@@ -519,35 +611,37 @@ export function SpacesPage() {
 								setCreating(false);
 						}}
 					>
-						<Field label="Slug" htmlFor="space-slug" required>
-							<Input
-								id="space-slug"
-								name="slug"
-								required
-								maxLength={64}
-								disabled={state.busy}
-								autoComplete="off"
-							/>
-						</Field>
-						<Field label="Name" htmlFor="space-name" required>
-							<Input id="space-name" name="name" required disabled={state.busy} />
-						</Field>
-						<Field label="Description" htmlFor="space-description">
-							<Input id="space-description" name="description" disabled={state.busy} />
-						</Field>
-						{state.error && <p role="alert">{state.error}</p>}
-						<DialogFooter>
-							<Button variant="outline" disabled={state.busy} onClick={() => setCreating(false)}>
-								Cancel
-							</Button>
-							<Button type="submit" loading={state.busy}>
-								Create space
-							</Button>
-						</DialogFooter>
+						<Grid columns={1}>
+							<Field label="空间标识" htmlFor="space-slug" required>
+								<Input
+									id="space-slug"
+									name="slug"
+									required
+									maxLength={64}
+									disabled={state.busy}
+									autoComplete="off"
+								/>
+							</Field>
+							<Field label="名称" htmlFor="space-name" required>
+								<Input id="space-name" name="name" required disabled={state.busy} />
+							</Field>
+							<Field label="说明" htmlFor="space-description">
+								<Input id="space-description" name="description" disabled={state.busy} />
+							</Field>
+							{state.error && <p role="alert">{state.error}</p>}
+							<DialogFooter>
+								<Button variant="outline" disabled={state.busy} onClick={() => setCreating(false)}>
+									取消
+								</Button>
+								<Button type="submit" loading={state.busy}>
+									创建空间
+								</Button>
+							</DialogFooter>
+						</Grid>
 					</form>
 				</DialogContent>
 			</Dialog>
-		</div>
+		</Grid>
 	);
 }
 
@@ -559,44 +653,58 @@ export function TrashPage() {
 	const selected = selectedIds(params);
 	const visible = filterMemories(state.memories, params);
 	const columns: DataTableColumn<LibraryMemory>[] = [
-		{ id: "title", header: "Memory", accessor: (item) => item.title, wrap: true },
-		{ id: "space", header: "Space", accessor: (item) => item.space },
+		{ id: "title", header: "记忆", accessor: (item) => item.title, wrap: true },
+		{ id: "space", header: "空间", accessor: (item) => item.space },
 		{
 			id: "deleted",
-			header: "Trashed at",
+			header: "移入时间",
 			accessor: (item) =>
-				item.deleted_at ? new Date(item.deleted_at).toLocaleString() : "Unknown",
+				item.deleted_at ? new Date(item.deleted_at).toLocaleString("zh-CN") : "未知",
 			sortValue: (item) => item.deleted_at ?? "",
 		},
 		{
 			id: "purge",
-			header: "Permanent deletion",
+			header: "永久删除",
 			sortable: false,
 			accessor: (item) => (
 				<Button
 					size="sm"
 					variant="destructive"
 					disabled={state.busy}
-					aria-label={`Permanently delete ${item.title}`}
+					aria-label={`永久删除 ${item.title}`}
 					onClick={() => {
 						setTitle("");
 						model.beginPurge(item.id);
 					}}
 				>
-					Permanently delete
+					<Trash2 size={16} aria-hidden="true" />
+					永久删除
 				</Button>
 			),
 		},
 	];
 	return (
-		<div className="library-page" ref={region} tabIndex={-1}>
+		<Grid columns={1} gap="lg" {...{ ref: region }} tabIndex={-1}>
 			<PageHeader
-				title="Trash"
-				description="Nothing is automatically purged. Restore memories, or permanently delete with two confirmations."
+				title="回收站"
+				description="回收站不会自动清空。可恢复记忆；永久删除需要两次确认。"
 				actions={
 					<>
+						<Input
+							className="w-basalt-56 max-w-full"
+							aria-label="筛选回收站"
+							placeholder="查找已删除的记忆"
+							value={params.get("q") ?? ""}
+							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
+						/>
+						<SpaceFilter
+							memories={state.memories}
+							value={params.get("space") ?? ""}
+							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
+						/>
 						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-							Refresh
+							<RefreshCw size={16} aria-hidden="true" />
+							刷新
 						</Button>
 						<Button
 							loading={state.busy}
@@ -611,25 +719,10 @@ export function TrashPage() {
 									);
 							}}
 						>
-							Restore selected ({selected.length})
+							<RotateCcw size={16} aria-hidden="true" />
+							恢复所选记忆（{selected.length}）
 						</Button>
 					</>
-				}
-				filters={
-					<div className="library-actions">
-						<Input
-							className="library-search"
-							aria-label="Filter trash"
-							placeholder="Find a trashed memory"
-							value={params.get("q") ?? ""}
-							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
-						/>
-						<SpaceFilter
-							memories={state.memories}
-							value={params.get("space") ?? ""}
-							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
-						/>
-					</div>
 				}
 			/>
 			<LibraryStatus
@@ -644,7 +737,7 @@ export function TrashPage() {
 			{state.ready && (
 				<LayerCard>
 					<DataTable
-						aria-label="Trashed memories"
+						aria-label="回收站中的记忆"
 						data={visible}
 						columns={columns}
 						selected={selected}
@@ -655,26 +748,55 @@ export function TrashPage() {
 						edge="attached"
 						loading={state.busy && !state.ready}
 						empty={
-							state.nextCursor
-								? "No loaded memories match these filters. Load more to search older trash."
-								: "Trash is empty for these filters."
+							<LayerCard.Empty
+								icon={<Trash2 aria-hidden="true" />}
+								title={
+									state.nextCursor
+										? "已加载的记忆中没有符合条件的内容"
+										: "当前筛选条件下，回收站为空。"
+								}
+								action={
+									state.nextCursor ? (
+										<Button loading={state.busy} onClick={() => void model.loadMore()}>
+											<ArrowDown size={16} aria-hidden="true" />
+											加载更多
+										</Button>
+									) : (
+										<Button asChild>
+											<Link href="/memories">
+												<ArrowUpRight size={16} aria-hidden="true" />
+												浏览记忆
+											</Link>
+										</Button>
+									)
+								}
+							/>
 						}
 					/>
 					<LayerCard.Footer>
-						<div className="library-actions">
-							<p className="library-muted" role="status">
-								{state.memories.length} memories loaded. Filters apply to loaded memories.
+						<Grid
+							gap="sm"
+							className="w-full"
+							style={{
+								gridTemplateColumns:
+									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
+								alignItems: "end",
+							}}
+						>
+							<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
+								已加载 {state.memories.length} 条记忆，筛选仅作用于已加载的内容。
 							</p>
-							{state.nextCursor && (
+							{state.nextCursor && visible.length > 0 && (
 								<Button
 									variant="outline"
 									loading={state.busy}
 									onClick={() => void model.loadMore()}
 								>
-									Load more
+									<ArrowDown size={16} aria-hidden="true" />
+									加载更多
 								</Button>
 							)}
-						</div>
+						</Grid>
 					</LayerCard.Footer>
 				</LayerCard>
 			)}
@@ -691,40 +813,42 @@ export function TrashPage() {
 					}}
 				>
 					<DialogHeader>
-						<DialogTitle>Type the memory title</DialogTitle>
+						<DialogTitle>输入记忆标题</DialogTitle>
 						<DialogDescription>
-							Permanent deletion removes this memory and its versions and attachments. Type the
-							exact title: <strong>{state.purge?.title}</strong>
+							永久删除会移除这条记忆、所有版本及附件。请输入完整标题：{" "}
+							<strong>{state.purge?.title}</strong>
 						</DialogDescription>
 					</DialogHeader>
 					<form
-						className="library-stack"
 						onSubmit={(event) => {
 							event.preventDefault();
 							model.confirmPurgeTitle(title);
 						}}
 					>
-						<Field label="Confirm title" htmlFor="purge-title" required>
-							<Input
-								id="purge-title"
-								value={title}
-								onChange={(event) => setTitle(event.target.value)}
-								autoComplete="off"
-								required
-							/>
-						</Field>
-						<DialogFooter>
-							<Button variant="outline" onClick={() => model.cancelPurge()}>
-								Cancel
-							</Button>
-							<Button type="submit" variant="destructive" disabled={title !== state.purge?.title}>
-								Continue
-							</Button>
-						</DialogFooter>
+						<Grid columns={1}>
+							<Field label="确认标题" htmlFor="purge-title" required>
+								<Input
+									id="purge-title"
+									value={title}
+									onChange={(event) => setTitle(event.target.value)}
+									autoComplete="off"
+									required
+								/>
+							</Field>
+							<DialogFooter>
+								<Button variant="outline" onClick={() => model.cancelPurge()}>
+									取消
+								</Button>
+								<Button type="submit" variant="destructive" disabled={title !== state.purge?.title}>
+									继续
+								</Button>
+							</DialogFooter>
+						</Grid>
 					</form>
 				</DialogContent>
 			</Dialog>
 			<ConfirmDialog
+				cancelLabel="取消"
 				open={state.purge?.stage === "confirm"}
 				onOpenChange={(open) => {
 					if (!open) model.cancelPurge();
@@ -733,14 +857,14 @@ export function TrashPage() {
 					event.preventDefault();
 					region.current?.focus();
 				}}
-				title="Delete permanently?"
+				title="确认永久删除？"
 				description={
 					<>
-						Final confirmation: {state.purge?.title} cannot be restored after this operation.
+						最后确认：删除后将无法恢复「{state.purge?.title}」。
 						{state.error && <span role="alert">{state.error}</span>}
 					</>
 				}
-				confirmLabel="Delete permanently"
+				confirmLabel="永久删除"
 				variant="destructive"
 				loading={state.busy}
 				onConfirm={async () => {
@@ -754,7 +878,7 @@ export function TrashPage() {
 						);
 				}}
 			/>
-		</div>
+		</Grid>
 	);
 }
 
@@ -767,24 +891,18 @@ export function GraphPage() {
 		[state.memories, params, options.mode, options.cap],
 	);
 	return (
-		<div className="library-page">
+		<Grid columns={1} gap="lg">
 			<PageHeader
-				title="Relationship graph"
-				description="Explore tag-to-memory links or shared vocabulary. Large graphs cluster their least-used nodes."
+				title="关系图"
 				actions={
-					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-						Refresh
-					</Button>
-				}
-				filters={
-					<div className="library-actions">
+					<>
 						<SegmentControl
-							legend="Relationships"
+							legend="关系类型"
 							value={options.mode}
 							onValueChange={(value) => setParams(updateLibraryUrl(params, "mode", value))}
 							options={[
-								{ value: "bipartite", label: "Tags and memories" },
-								{ value: "cooccurrence", label: "Tag cooccurrence" },
+								{ value: "bipartite", label: "标签与记忆" },
+								{ value: "cooccurrence", label: "标签共现" },
 							]}
 						/>
 						<SpaceFilter
@@ -792,7 +910,7 @@ export function GraphPage() {
 							value={params.get("space") ?? ""}
 							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
 						/>
-						<Field label="Node limit" htmlFor="graph-cap">
+						<Field className="w-basalt-28" label="节点上限" htmlFor="graph-cap">
 							<Input
 								id="graph-cap"
 								type="number"
@@ -802,44 +920,66 @@ export function GraphPage() {
 								onChange={(event) => setParams(updateLibraryUrl(params, "cap", event.target.value))}
 							/>
 						</Field>
-					</div>
+						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
+							<RefreshCw size={16} aria-hidden="true" />
+							刷新
+						</Button>
+					</>
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
-			{state.ready && (
+			{state.ready && graph.nodes.length === 0 && (
+				<LayerCard>
+					<LayerCard.Empty
+						icon={<Network aria-hidden="true" />}
+						title="暂无关系数据"
+						description="添加记忆和标签后，可在这里查看关联。"
+						action={
+							<Button asChild>
+								<Link href="/memories">
+									<ArrowUpRight size={16} aria-hidden="true" />
+									浏览记忆
+								</Link>
+							</Button>
+						}
+					/>
+				</LayerCard>
+			)}
+			{state.ready && graph.nodes.length > 0 && (
 				<>
 					<LayerCard>
 						<LayerCard.Header>
 							<span>
-								{graph.nodes.length} nodes · {graph.links.length} relationships
+								{graph.nodes.length} 个节点 · {graph.links.length} 条关联
 							</span>
 							{graph.clustered > 0 && (
-								<Badge variant="secondary">{graph.clustered} nodes clustered</Badge>
+								<Badge variant="secondary">已聚合 {graph.clustered} 个节点</Badge>
 							)}
 						</LayerCard.Header>
 						<LayerCard.Body>
-							<Suspense fallback={<p role="status">Loading graph...</p>}>
-								<GraphCanvas graph={graph} />
-							</Suspense>
+							<Grid columns={1}>
+								<Suspense fallback={<p role="status">正在加载图谱…</p>}>
+									<GraphCanvas graph={graph} />
+								</Suspense>
+							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
-					<SectionRule
-						title="Accessible graph data"
-						hint="Select a node here or on the canvas; selection is stored in the URL."
-					>
+					<SectionRule title="图谱数据表" hint="可在表格或图谱中选择节点，所选节点会保存在网址中。">
 						<LayerCard>
 							<LayerCard.Body>
-								<GraphTables
-									graph={graph}
-									selected={params.get("node") ? [params.get("node") as string] : []}
-									onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
-								/>
+								<Grid columns={1}>
+									<GraphTables
+										graph={graph}
+										selected={params.get("node") ? [params.get("node") as string] : []}
+										onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
+									/>
+								</Grid>
 							</LayerCard.Body>
 						</LayerCard>
 					</SectionRule>
 				</>
 			)}
-		</div>
+		</Grid>
 	);
 }
 
@@ -851,27 +991,23 @@ export function TimelinePage() {
 	const columns: DataTableColumn<LibraryMemory & { timestamp: number }>[] = [
 		{
 			id: "time",
-			header: "Time (UTC)",
+			header: "时间（UTC）",
 			accessor: (item) => new Date(item.timestamp).toISOString(),
 			sortValue: (item) => item.timestamp,
 		},
 		{
 			id: "memory",
-			header: "Memory",
+			header: "记忆",
 			accessor: (item) => (
 				<Link href={`/memories/${encodeURIComponent(item.id)}`}>{item.title}</Link>
 			),
 			sortValue: (item) => item.title,
 			wrap: true,
 		},
-		{ id: "space", header: "Space", accessor: (item) => item.space },
+		{ id: "space", header: "空间", accessor: (item) => item.space },
 	];
 	const rangeField = (name: "from" | "to", label: string): ReactNode => (
-		<Field
-			label={label}
-			htmlFor={`timeline-${name}`}
-			hint="Inclusive UTC timestamp, for example 2026-10-17T00:00:00Z."
-		>
+		<Field label={label} htmlFor={`timeline-${name}`} hint="包含边界时刻的 UTC 时间。">
 			<Input
 				id={`timeline-${name}`}
 				type="text"
@@ -882,58 +1018,90 @@ export function TimelinePage() {
 		</Field>
 	);
 	return (
-		<div className="library-page">
-			<PageHeader
-				title="Timeline"
-				description="Event time describes when something happened; creation time describes when Octo received it. All buckets use UTC."
-				actions={
-					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-						Refresh
-					</Button>
-				}
-				filters={
-					<div className="library-actions">
-						<SegmentControl
-							legend="Time field"
-							value={options.field}
-							onValueChange={(value) => setParams(updateLibraryUrl(params, "field", value))}
-							options={[
-								{ value: "event_time", label: "Event time" },
-								{ value: "created_at", label: "Created at" },
-							]}
-						/>
-						<SegmentControl
-							legend="Zoom"
-							value={options.zoom}
-							onValueChange={(value) => setParams(updateLibraryUrl(params, "zoom", value))}
-							options={[
-								{ value: "hour", label: "Hour" },
-								{ value: "day", label: "Day" },
-								{ value: "month", label: "Month" },
-							]}
-						/>
-						<SpaceFilter
-							memories={state.memories}
-							value={params.get("space") ?? ""}
-							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
-						/>
-						{rangeField("from", "From (UTC)")}
-						{rangeField("to", "To (UTC)")}
-					</div>
-				}
-			/>
+		<Grid columns={1} gap="lg">
+			<Collapsible
+				asChild
+				defaultOpen={Boolean(params.get("space") || params.get("from") || params.get("to"))}
+			>
+				<Grid columns={1} gap="sm">
+					<PageHeader
+						title="时间线"
+						actions={
+							<>
+								<SegmentControl
+									legend="时间依据"
+									value={options.field}
+									onValueChange={(value) => setParams(updateLibraryUrl(params, "field", value))}
+									options={[
+										{ value: "event_time", label: "事件时间" },
+										{ value: "created_at", label: "创建时间" },
+									]}
+								/>
+								<SegmentControl
+									legend="时间粒度"
+									value={options.zoom}
+									onValueChange={(value) => setParams(updateLibraryUrl(params, "zoom", value))}
+									options={[
+										{ value: "hour", label: "小时" },
+										{ value: "day", label: "天" },
+										{ value: "month", label: "月" },
+									]}
+								/>
+								<CollapsibleTrigger asChild>
+									<Button variant="outline">
+										<SlidersHorizontal size={16} aria-hidden="true" />
+										筛选
+									</Button>
+								</CollapsibleTrigger>
+								<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
+									<RefreshCw size={16} aria-hidden="true" />
+									刷新
+								</Button>
+							</>
+						}
+					/>
+					<CollapsibleContent unstyled>
+						<Grid
+							gap="sm"
+							style={{
+								gridTemplateColumns:
+									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
+								alignItems: "end",
+							}}
+						>
+							<SpaceFilter
+								memories={state.memories}
+								value={params.get("space") ?? ""}
+								onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
+							/>
+							{rangeField("from", "开始时间（UTC）")}
+							{rangeField("to", "结束时间（UTC）")}
+						</Grid>
+					</CollapsibleContent>
+				</Grid>
+			</Collapsible>
+
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
 			{state.ready && timeline.undated > 0 && (
-				<p className="library-muted">
-					{timeline.undated} memories have no valid {options.field}; no creation-time fallback is
-					applied.
+				<p className="text-basalt-sm text-basalt-muted-foreground">
+					{timeline.undated} 条记忆缺少有效的
+					{options.field === "event_time" ? "事件时间" : "创建时间"}，不会使用其他时间替代。
 				</p>
 			)}
 			{state.ready && timeline.groups.length === 0 && (
 				<LayerCard>
 					<LayerCard.Empty
-						title="No dated memories"
-						description="Try another time field, range or space."
+						icon={<CalendarDays aria-hidden="true" />}
+						title="没有带有效时间的记忆"
+						description="试试其他时间依据、范围或空间。"
+						action={
+							<Button asChild>
+								<Link href="/memories">
+									<ArrowUpRight size={16} aria-hidden="true" />
+									浏览记忆
+								</Link>
+							</Button>
+						}
 					/>
 				</LayerCard>
 			)}
@@ -941,30 +1109,32 @@ export function TimelinePage() {
 				timeline.groups.map((group) => (
 					<LayerCard key={group.label}>
 						<LayerCard.Header>
-							{group.label} <Badge variant="secondary">{group.items.length} memories</Badge>
+							{group.label} <Badge variant="secondary">{group.items.length} 条记忆</Badge>
 						</LayerCard.Header>
 						<LayerCard.Body>
-							<Timeline
-								ariaLabel={`Memories in ${group.label}`}
-								events={group.items.map((item) => ({
-									id: item.id,
-									time: new Date(item.timestamp).toISOString(),
-									title: item.title,
-									subtitle: item.space,
-								}))}
-							/>
-							<DataTable
-								aria-label={`Timeline data ${group.label}`}
-								data={group.items}
-								columns={columns}
-								getRowId={(item) => item.id}
-								selected={selectedIds(params)}
-								onSelectedChange={(ids) => setParams(setSelection(params, ids))}
-								pageSize={20}
-							/>
+							<Grid columns={1}>
+								<Timeline
+									ariaLabel={`${group.label} 的记忆`}
+									events={group.items.map((item) => ({
+										id: item.id,
+										time: new Date(item.timestamp).toISOString(),
+										title: item.title,
+										subtitle: item.space,
+									}))}
+								/>
+								<DataTable
+									aria-label={`${group.label} 的时间线数据`}
+									data={group.items}
+									columns={columns}
+									getRowId={(item) => item.id}
+									selected={selectedIds(params)}
+									onSelectedChange={(ids) => setParams(setSelection(params, ids))}
+									pageSize={20}
+								/>
+							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
 				))}
-		</div>
+		</Grid>
 	);
 }

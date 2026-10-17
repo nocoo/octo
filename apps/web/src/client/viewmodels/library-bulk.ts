@@ -1,4 +1,4 @@
-import { type AdminClient, adminApi } from "../lib/api";
+import { type AdminClient, ApiError, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
 import { type LibraryMemory, libraryError } from "./library";
 
@@ -12,7 +12,7 @@ interface BulkState {
 	succeeded: string[];
 	failures: { id: string; message: string }[];
 }
-type BatchResult = { ok: true; item: unknown } | { ok: false; error: { message: string } };
+type BatchResult = { ok: true; item: unknown } | { ok: false; error: { code: string } };
 
 export class BulkModel extends Store<BulkState> {
 	constructor(private readonly api: AdminClient = adminApi) {
@@ -25,11 +25,10 @@ export class BulkModel extends Store<BulkState> {
 			const unique = [...new Set(ids)];
 			const available = new Map(memories.map((item) => [item.id, item]));
 			if (!unique.length || unique.length > 100 || unique.some((id) => !available.has(id)))
-				throw new Error("Select 1 to 100 available memories");
-			if (action.kind === "move" && !action.space.trim())
-				throw new Error("Choose a destination space");
+				throw new Error("请选择 1 至 100 条可用的记忆。");
+			if (action.kind === "move" && !action.space.trim()) throw new Error("请选择目标空间。");
 			if (action.kind === "tag" && (!action.tags.length || action.tags.some((tag) => !tag.trim())))
-				throw new Error("Provide non-empty tags");
+				throw new Error("请输入非空标签。");
 			const items = unique.map((id) => {
 				const item = available.get(id) as LibraryMemory;
 				return {
@@ -51,7 +50,13 @@ export class BulkModel extends Store<BulkState> {
 			unique.forEach((id, index) => {
 				const result = response.results[index];
 				if (result?.ok) succeeded.push(id);
-				else failures.push({ id, message: result ? result.error.message : "Missing batch result" });
+				else
+					failures.push({
+						id,
+						message: result
+							? libraryError(new ApiError(0, result.error.code))
+							: "未收到这条记忆的处理结果。",
+					});
 			});
 			this.set({ succeeded, failures });
 			return true;

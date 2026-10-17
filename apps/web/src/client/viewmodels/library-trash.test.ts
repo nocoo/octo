@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AdminClient } from "../lib/api";
+import { type AdminClient, ApiError } from "../lib/api";
 import { type LibraryMemory, LibraryModel, selectedIds } from "./library";
 
 const memory = (id: string): LibraryMemory => ({
@@ -54,7 +54,7 @@ describe("trash server pagination", () => {
 		const { api } = fake([
 			page([memory("a"), memory("b")], "next"),
 			{},
-			new Error("conflict"),
+			new ApiError(409, "version_conflict"),
 			page([memory("b"), memory("c")]),
 		]);
 		const model = new LibraryModel("trash", api);
@@ -64,8 +64,8 @@ describe("trash server pagination", () => {
 		expect(await model.loadMore()).toBe(true);
 		expect(selectedIds(params)).toEqual(["b"]);
 		expect(model.state.memories.map((item) => item.id)).toEqual(["b", "c"]);
-		expect(model.state.failures).toEqual([{ id: "b", message: "conflict" }]);
-		expect(model.state.notice).toBe("Restored 1 of 2 memories");
+		expect(model.state.failures).toEqual([{ id: "b", message: "内容已被修改，请刷新后重试。" }]);
+		expect(model.state.notice).toBe("已恢复 1 / 2 条记忆");
 	});
 	it("keeps the failed page cursor and cached rows available for an explicit retry", async () => {
 		const { api, request } = fake([
@@ -76,7 +76,11 @@ describe("trash server pagination", () => {
 		const model = new LibraryModel("trash", api);
 		await model.load();
 		expect(await model.loadMore()).toBe(false);
-		expect(model.state).toMatchObject({ nextCursor: "a/b+c", error: "offline", busy: false });
+		expect(model.state).toMatchObject({
+			nextCursor: "a/b+c",
+			error: "请求失败，请稍后重试。",
+			busy: false,
+		});
 		expect(model.state.memories.map((item) => item.id)).toEqual(["a"]);
 		expect(await model.loadMore()).toBe(true);
 		expect(request).toHaveBeenNthCalledWith(3, "/trash?limit=200&cursor=a%2Fb%2Bc");
@@ -112,7 +116,7 @@ describe("trash server pagination", () => {
 		const model = new LibraryModel("trash", api);
 		await model.load();
 		expect(await model.loadMore()).toBe(false);
-		expect(model.state.error).toContain("cursor");
+		expect(model.state.error).toContain("分页游标重复");
 		expect(model.state.memories.map((item) => item.id)).toEqual(["a"]);
 		expect(await model.load()).toBe(true);
 		expect(model.state.memories.map((item) => item.id)).toEqual(["fresh"]);
