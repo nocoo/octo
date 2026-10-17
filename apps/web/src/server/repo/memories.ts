@@ -1,5 +1,6 @@
 import type { MemoryFilters } from "../../lib/schema/filters";
 import type { VisibleSpaces } from "../auth/authorize";
+import { isUniqueConstraint } from "../lib/d1";
 import { ApiError } from "../lib/errors";
 import { encodeCursor, type MemoryCursor } from "./memories-cursor";
 import type { VectorWrite } from "./memories-vector";
@@ -203,8 +204,8 @@ export class MemoryRepo {
 				.bind(input.spaceId)
 				.first<{ slug: string }>();
 			if (!space) throw new ApiError("not_found", "not found");
-			this.stage(stmts, () =>
-				this.conflict(input.id, input.expectedVersion, input.op === "restore"),
+			this.stage(stmts, (error) =>
+				this.conflict(input.id, input.expectedVersion, input.op === "restore", error),
 			);
 			return {
 				id: input.id,
@@ -229,7 +230,9 @@ export class MemoryRepo {
 		try {
 			results = await this.db.batch(stmts);
 		} catch (err) {
-			throw (await this.conflict(input.id, input.expectedVersion, input.op === "restore")) ?? err;
+			throw (
+				(await this.conflict(input.id, input.expectedVersion, input.op === "restore", err)) ?? err
+			);
 		}
 		if (firstChanges(results[0]) === 0) {
 			const current = await this.get(input.id);
@@ -304,7 +307,14 @@ export class MemoryRepo {
 		id: string,
 		version: number | undefined,
 		restore: boolean,
+		error?: unknown,
 	): Promise<ApiError | undefined> {
+		if (
+			isUniqueConstraint(error, "tags.name") ||
+			String(error).includes("NOT NULL constraint failed: memory_tags.tag_id")
+		) {
+			return new ApiError("tag_conflict", "tags changed before memory commit");
+		}
 		if (version === undefined) return undefined;
 		const current = await this.get(id);
 		if (!current || (!restore && current.deleted_at !== null))
@@ -441,11 +451,11 @@ export class MemoryRepo {
 			del,
 			this.db
 				.prepare(
-					"INSERT INTO memory_tags (memory_id, tag_id) SELECT ?, value FROM json_each(?) WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)",
+					"INSERT INTO memory_tags (memory_id, tag_id) SELECT ?, CASE WHEN EXISTS (SELECT 1 FROM tags WHERE id = json_extract(value, '$.id') AND name = json_extract(value, '$.name') AND merged_into IS NULL) THEN json_extract(value, '$.id') ELSE NULL END FROM json_each(?) WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)",
 				)
 				.bind(
 					input.id,
-					JSON.stringify(input.tags.map((tag) => tag.id)),
+					JSON.stringify(input.tags.map(({ id, name }) => ({ id, name }))),
 					input.id,
 					version,
 					input.now,

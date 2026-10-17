@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Tag resolution crossed memory transaction boundaries
+
+MAX review demonstrated orphan global tags after rejected memory input and resurrection of a merged tag when a title-only PATCH rebuilt stale associations. HTTP tag resolution now stages new rows into the same request batch; pending-name reuse tracks statement ownership so a failed batch item cannot retain nonexistent tags. Association insertion validates the resolved canonical ID and name at commit, rejecting concurrent rename/merge with `tag_conflict` and rolling back the memory mutation. Regressions verify invalid-input and replay-persistence rollback, pending-tag reuse/rollback, existing aliases, and a real merge interleaved before PATCH commit. Memory version CAS alone cannot protect related entities whose mutations deliberately do not increment that version.
+
 ## 2026-10-17 — History reads escaped the authorized snapshot
 
 MAX review reproduced a move between loading the authorized memory and selecting its new hidden version. Version list/get/diff queries now bind the authorized space and current version and require a live memory in the same SELECT. Interleaving regression tests prove that moved content cannot escape. The same review found that `include=trashed` applied only a delete-operation flag, not delete ownership. Its SQL now excludes foreign deleted entries while preserving ordinary live read visibility. Equivalent resource representations must share the full authorization predicate, not only permission flags.

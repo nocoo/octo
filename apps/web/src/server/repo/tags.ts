@@ -47,10 +47,13 @@ export type TagWrite<T> = {
 };
 
 export class TagRepo {
+	private readonly pending = new Map<string, { row: TagRow; statement: D1PreparedStatement }>();
+
 	constructor(
 		private readonly db: D1Database,
 		private readonly now: () => number = Date.now,
 		private readonly id: () => string = newUlid,
+		private readonly statements?: D1PreparedStatement[],
 	) {}
 
 	async getByName(name: string): Promise<TagRow | null> {
@@ -84,6 +87,35 @@ export class TagRepo {
 		for (const raw of rawNames) {
 			const name = normalizeTag(raw);
 			const display = tagDisplayName(raw);
+			if (this.statements) {
+				let row = await this.getByName(name);
+				const pending = this.pending.get(name);
+				if (!row && pending && this.statements.includes(pending.statement)) row = pending.row;
+				if (!row) {
+					const now = this.now();
+					row = {
+						id: this.id(),
+						name,
+						display_name: display,
+						merged_into: null,
+						created_at: now,
+						updated_at: now,
+					};
+					const statement = this.db
+						.prepare(
+							"INSERT INTO tags (id, name, display_name, merged_into, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
+						)
+						.bind(row.id, name, display, now, now);
+					this.statements.push(statement);
+					this.pending.set(name, { row, statement });
+				}
+				const canonical = await this.follow(row);
+				if (!seen.has(canonical.id)) {
+					seen.add(canonical.id);
+					resolved.push(canonical);
+				}
+				continue;
+			}
 			const id = this.id();
 			const ts = this.now();
 			await this.db
