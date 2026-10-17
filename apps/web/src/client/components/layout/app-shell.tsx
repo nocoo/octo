@@ -75,6 +75,8 @@ const icons = {
 export function AppShell() {
 	const model = useMemo(() => new ShellModel(), []);
 	const identity = useModel(model);
+	const identityLabel =
+		identity.email ?? (identity.error ? "Access 身份未知" : "Access 身份验证中");
 	const location = useLocation();
 	const navigate = useNavigate();
 	const [collapsed, setCollapsed] = useState(false);
@@ -112,7 +114,7 @@ export function AppShell() {
 			else {
 				const search = document.querySelector<HTMLInputElement>("[data-search-input]");
 				if (search) search.focus();
-				else void navigate("/search");
+				else void navigate("/search", { state: { focusSearch: true } });
 			}
 		};
 		document.addEventListener("keydown", handleKey);
@@ -215,12 +217,12 @@ export function AppShell() {
 									</Avatar>
 								</span>
 							</TooltipTrigger>
-							<TooltipContent side="right">{identity.email ?? "Access 身份验证中"}</TooltipContent>
+							<TooltipContent side="right">{identityLabel}</TooltipContent>
 						</Tooltip>
 					) : (
 						<SidebarUser
 							name="私人知识工作台"
-							email={identity.email ?? "Access 身份验证中"}
+							email={identityLabel}
 							avatar={
 								<Avatar>
 									<AvatarFallback>

@@ -1,5 +1,16 @@
 import { capture, expect, test } from "./fixtures";
 
+test("slash focuses search on its first lazy navigation", async ({ page }) => {
+	await page.goto("/");
+	await expect(page.getByRole("heading", { name: "总览", exact: true })).toBeVisible();
+	await page.keyboard.press("/");
+	await expect(page).toHaveURL(/\/search$/);
+	const search = page.getByRole("textbox", { name: "Search memories", exact: true });
+	await expect(search).toBeFocused();
+	await page.keyboard.type("first search");
+	await expect(search).toHaveValue("first search");
+});
+
 test("mobile navigation restores focus to its opener", async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto("/search");

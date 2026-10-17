@@ -5,11 +5,19 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
 
-afterEach(() => vi.unstubAllGlobals());
+const identity = vi.hoisted(() => ({ error: null as string | null }));
+vi.mock("./use-model", () => ({
+	useModel: () => ({ email: null, error: identity.error }),
+}));
 
-it("leaves the single page heading to PageHeader", () => {
+afterEach(() => {
+	vi.unstubAllGlobals();
+	identity.error = null;
+});
+
+function renderShell() {
 	vi.stubGlobal("matchMedia", () => ({ matches: false }));
-	const html = renderToStaticMarkup(
+	return renderToStaticMarkup(
 		<ThemeProvider persist={false}>
 			<TooltipProvider>
 				<MemoryRouter>
@@ -22,6 +30,17 @@ it("leaves the single page heading to PageHeader", () => {
 			</TooltipProvider>
 		</ThemeProvider>,
 	);
+}
+
+it("does not describe failed Access verification as still pending", () => {
+	identity.error = "Unable to verify Access";
+	const html = renderShell();
+	expect(html).not.toContain("Access 身份验证中");
+	expect(html).toContain("Access 身份未知");
+});
+
+it("leaves the single page heading to PageHeader", () => {
+	const html = renderShell();
 	expect(html.match(/<h1\b/g)).toHaveLength(1);
 	expect(html).toContain("Overview");
 	expect(html).toContain("总览");

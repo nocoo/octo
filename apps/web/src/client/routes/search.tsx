@@ -1,18 +1,31 @@
 import { Badge, Button, Field, Input, LayerCard, Meter } from "@nocoo/basalt";
 import { Banner } from "@nocoo/basalt/components/banner";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@nocoo/basalt/components/collapsible";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
-import { useEffect, useMemo } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
 import { SearchModel, scoreBars, snippetParts } from "../viewmodels/search";
 import { Choice, MemoryFilters } from "./memories-filters";
 import { MemoryLink } from "./memories-navigation";
+import "./search.css";
 
 export function SearchPage() {
 	const [params, setParams] = useSearchParams();
+	const location = useLocation();
+	const focusIntent = location.state as { focusSearch?: boolean } | null;
+	const queryInput = useRef<HTMLInputElement>(null);
+	const [advancedOpen, setAdvancedOpen] = useState(false);
 	const model = useMemo(() => new SearchModel(), []);
 	const state = useModel(model);
 	const query = params.toString();
+	useLayoutEffect(() => {
+		if (focusIntent?.focusSearch === true) queryInput.current?.focus();
+	}, [focusIntent]);
 	useEffect(() => {
 		void model.load(new URLSearchParams(query));
 	}, [model, query]);
@@ -37,9 +50,15 @@ export function SearchPage() {
 					setParams(next);
 				}}
 			>
-				<div className="octo-actions">
-					<Field label="Search memories" htmlFor="search-query" required>
+				<div className="octo-search-query">
+					<Field
+						label="Search memories"
+						htmlFor="search-query"
+						className="octo-search-query-field"
+						required
+					>
 						<Input
+							ref={queryInput}
 							id="search-query"
 							name="q"
 							data-search-input
@@ -52,62 +71,80 @@ export function SearchPage() {
 						Search
 					</Button>
 				</div>
-				<div className="octo-memory-fields">
-					<Choice
-						label="Search mode"
-						name="mode"
-						value={params.get("mode") ?? "hybrid"}
-						options={["hybrid", "fts", "vector"]}
-					/>
-					<Choice
-						label="Fusion method"
-						name="fusion"
-						value={params.get("fusion") ?? "rrf"}
-						options={["rrf", "weighted"]}
-					/>
-					<Field label="RRF k" htmlFor="search-k">
-						<Input
-							id="search-k"
-							name="k"
-							type="number"
-							min={1}
-							max={200}
-							step={1}
-							defaultValue={params.get("k") ?? "60"}
-						/>
-					</Field>
-					<Field label="Full-text weight" htmlFor="search-fts-weight">
-						<Input
-							id="search-fts-weight"
-							name="fts_weight"
-							type="number"
-							min={0}
-							step={0.1}
-							defaultValue={params.get("fts_weight") ?? "1"}
-						/>
-					</Field>
-					<Field label="Vector weight" htmlFor="search-vector-weight">
-						<Input
-							id="search-vector-weight"
-							name="vector_weight"
-							type="number"
-							min={0}
-							step={0.1}
-							defaultValue={params.get("vector_weight") ?? "1"}
-						/>
-					</Field>
-					<Field label="Result limit" htmlFor="search-limit">
-						<Input
-							id="search-limit"
-							name="limit"
-							type="number"
-							min={1}
-							max={200}
-							step={1}
-							defaultValue={params.get("limit") ?? "50"}
-						/>
-					</Field>
-				</div>
+				<Collapsible
+					open={advancedOpen}
+					onOpenChange={setAdvancedOpen}
+					className="octo-memory-stack"
+				>
+					<CollapsibleTrigger asChild>
+						<Button type="button" variant="outline" aria-label="Advanced fusion options">
+							Advanced fusion options
+						</Button>
+					</CollapsibleTrigger>
+					<CollapsibleContent
+						unstyled
+						forceMount
+						hidden={!advancedOpen}
+						data-search-advanced="true"
+					>
+						<div className="octo-memory-fields">
+							<Choice
+								label="Search mode"
+								name="mode"
+								value={params.get("mode") ?? "hybrid"}
+								options={["hybrid", "fts", "vector"]}
+							/>
+							<Choice
+								label="Fusion method"
+								name="fusion"
+								value={params.get("fusion") ?? "rrf"}
+								options={["rrf", "weighted"]}
+							/>
+							<Field label="RRF k" htmlFor="search-k">
+								<Input
+									id="search-k"
+									name="k"
+									type="number"
+									min={1}
+									max={200}
+									step={1}
+									defaultValue={params.get("k") ?? "60"}
+								/>
+							</Field>
+							<Field label="Full-text weight" htmlFor="search-fts-weight">
+								<Input
+									id="search-fts-weight"
+									name="fts_weight"
+									type="number"
+									min={0}
+									step={0.1}
+									defaultValue={params.get("fts_weight") ?? "1"}
+								/>
+							</Field>
+							<Field label="Vector weight" htmlFor="search-vector-weight">
+								<Input
+									id="search-vector-weight"
+									name="vector_weight"
+									type="number"
+									min={0}
+									step={0.1}
+									defaultValue={params.get("vector_weight") ?? "1"}
+								/>
+							</Field>
+							<Field label="Result limit" htmlFor="search-limit">
+								<Input
+									id="search-limit"
+									name="limit"
+									type="number"
+									min={1}
+									max={200}
+									step={1}
+									defaultValue={params.get("limit") ?? "50"}
+								/>
+							</Field>
+						</div>
+					</CollapsibleContent>
+				</Collapsible>
 			</form>
 			<MemoryFilters params={params} onChange={setParams} />
 			{state.error && (
