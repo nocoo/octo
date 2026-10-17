@@ -11,6 +11,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
 done
 export GITLEAKS_LOG_OPTS="${RANGES:-origin/main..HEAD}"
 
+bun run gate:no-remote || exit $?
 bun run test:e2e:api &
 PID_L2=$!
 bun run gate:security &

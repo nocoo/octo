@@ -16,7 +16,7 @@
 | 维度 | 命令 | 触发时机 | 时限 | 要求 |
 |---|---|---|---|---|
 | L1 | `bun run typecheck && bun run lint && bun run gate:* && bun run test:coverage` | pre-commit（index 快照） | <30s | Vitest + V8，statements / branches / functions / lines **四项都 ≥95%**；没有 skip / only；Biome `--error-on-warnings`；三个 tsconfig 都要 strict |
-| L2 | `bun run test:e2e:api` | pre-push、CI | <3min（和 G2 并行） | 真实本地 HTTP（wrangler dev + 本地 D1 / R2 + 本地向量 store），覆盖 **100% 的端点 × 方法**，包括成功、失败、鉴权；Access suite 用 JWKS stub |
+| L2 | `bun run test:e2e:api` | pre-push、CI | <3min（和 G2 并行） | Real local HTTP on direct Miniflare/workerd, local D1/R2 and vector store; **100% endpoint × method**, success, failure and authentication; Access uses the local JWKS stub |
 | L3 | `bun run test:e2e:bdd` | CI / 手动 | — | 阶段 2 起：Playwright Chromium 跑关键用户路径 |
 | G2 | `bun run gate:security` | pre-push、CI | 同上 | gitleaks（按 pre-push stdin 给出的提交范围）+ osv-scanner（`bun.lock`）；缺少工具也算失败 |
 | D1 隔离 | runner 内置 | L2 / L3 | — | 每次运行用独立的 `persist-to` 目录和端口；必须断言是本地模式，拒绝 `--remote` / `remote: true`；用 `_test_marker(key,value)` 的 `env=test` 证明归属后才能 seed / reset / 清理；**不建任何远程 `-test` 资源** |
@@ -30,7 +30,7 @@
 | 通道 | 地址 / 端口 | 持久化 |
 |---|---|---|
 | 日常开发 | `https://octo.dev.hexly.ai` → Vite `127.0.0.1:7059`（HMR），`/api` 和 `/mcp` 反代到 wrangler sidecar `127.0.0.1:37059` | `.wrangler/state` |
-| L2 | Worker `17059`；JWKS stub 在 L2 范围内另外分配 | `.wrangler/e2e/<run-id>` |
+| L2 | Direct Miniflare Worker `17059`; local JWKS stub `17057` | `.wrangler/e2e/<run-id>/v3` |
 | L3 | Worker `27059` | `.wrangler/e2e-pw/<run-id>` |
 
 - **端口 7059 系列已获 Zheng 批准（2026-10-17）**，nmem 记录 `octo-local-ports`。`octo.dev.hexly.ai` 的映射写在本机 `/opt/homebrew/etc/Caddyfile`（照 `system0-dev-machine-caddy` 的模板：HTTP → HTTPS 跳转 + mkcert 证书 + `reverse_proxy localhost:7059`）；`workflow/caddy/Caddyfile` 副本由 workflow 维护 bot 同步，本仓库不改 workflow。
@@ -44,7 +44,7 @@
 | Hook | 内容 |
 |---|---|
 | pre-commit | L1（对 index 快照：用 `git stash --keep-index` 或者导出到临时 worktree 后再检查），目标 <30s |
-| pre-push | 从 stdin 读出推送的 ref 范围 → 并行跑 L2 和 G2；新分支也要正确处理 |
+| pre-push | Read pushed ref ranges from stdin, require `gate:no-remote`, then run direct-Miniflare L2 and G2 in parallel; either failure blocks the push, including new branches |
 
 `bun install` 时通过 `prepare: husky` 恢复 hooks。
 
@@ -63,10 +63,12 @@
 
 ## 7. Attachment early-response proof
 
-Local dev and L2 child processes set `WRANGLER_DISABLE_REQUEST_BODY_DRAINING=true`. Wrangler's development-only draining middleware otherwise reads unused bodies before returning authentication or declared-length errors, unlike the production Worker.
+L2 bundles `tests/fixtures/worker.ts` with Bun and starts the pinned Miniflare API directly. Real requests reach workerd on `127.0.0.1:17059` without Wrangler's development ProxyWorker or request-draining middleware. Static assets live in a separate local assets-only Worker bound as `ASSETS`: the application still calls `env.ASSETS.fetch`, but API ingress never traverses Miniflare's assets router/RPC proxy. No draining flag, request retry, sleep or client abort is needed for oversize assertions. Daily development remains Vite plus the Wrangler sidecar; its ports and Caddy configuration are unchanged.
+
+Each run exclusively creates `.wrangler/e2e/<run-id>`. Local-only Wrangler D1 commands create and verify `_test_marker env=test` before applying migrations; the direct runtime and fixture SQL session share that run's `v3` storage. Fixture SQL still uses `getPlatformProxy` with `remoteBindings: false` and `envFiles: []`, not an HTTP proxy. It verifies matching canonical run paths, rejects symlinks/hardlinks and checks the marker before every mutation. Only the configured local D1/R2, static assets and explicit test bindings enter the runtime; Vectorize and routes are removed, remote bindings are rejected, and Miniflare telemetry, CF lookup and dev-registry registration are disabled. The fixture Worker checks the marker before seeding. Runtime disposal and JWKS shutdown run after success or failure.
 
 The application stops at the byte limit and releases its reader without cancelling the incoming transport before the error response. In the pinned workerd `1.20260930.2`, the native incoming-stream owner terminates the stream after the response proxy task completes, or on disconnect. See [the pinned runtime source](https://github.com/cloudflare/workerd/blob/v1.20260930.2/src/workerd/api/global-scope.c%2B%2B).
 
 `tests/api/attachments-early-abort.test.ts` sends exactly the applicable limit plus one byte over raw HTTP, then holds the remaining tail and EOF behind an event latch. Declared oversize and unauthenticated probes send no body bytes. The complete error envelope must arrive with the latch still held. The test-only Worker counts application reads and starts one pending native observation read after the application returns; it must receive zero bytes and fail with the runtime's exact `SENT_RESPONSE` message. Two subsequent observations must show unchanged application counts before the client releases the tail for orderly transport cleanup. There is no test-side cancellation, timed sleep, or Worker shutdown in this proof. The observer is not production cancellation logic, and native stream termination is not claimed to be peer TCP closure.
 
-Keep exactly-50-MiB raw/multipart acceptance, non-oversize validation and all seven native-owner proofs enabled. On 2026-10-17 Zheng expanded the local-proxy exception to all finite extreme-oversize attachment HTTP cases; no L1 tests, skips, retries or gates change. A passing gated probe does not establish safe connection reuse for omitted finite uploads. See the scope, retained Miniflare/proxy evidence and restoration criteria in [known issues](99-open-questions.md#known-issues).
+All finite oversize assertions removed by `d849105` and `c891bf3` are restored verbatim: raw and multipart 50 MiB + 1 byte, keyed and unkeyed chunked bodies, keyed declared size, multipart envelope and oversized extra fields. Exactly-50-MiB acceptance and all seven native-owner proofs remain unchanged. The local-proxy acceptance exception is retired for L2; this is evidence for the direct local runtime, not a claim that Wrangler's proxy or production transport was fixed.

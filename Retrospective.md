@@ -1,5 +1,13 @@
 # Retrospective
 
+## 2026-10-18 — Replace the L2 proxy, not the API assertions
+
+M5 accepted a local Wrangler ProxyWorker exception after early responses to finite oversized uploads produced a non-JSON 500 or broke the next request. Removing those cases made the local suite green but left the 50 MiB boundary and multipart envelope contract unproved over HTTP. M7 encountered the same proxy failure. A standalone comparison already showed direct Miniflare/workerd handling the same early responses correctly.
+
+The L2 runner now bundles the real fixture Worker and serves it through the pinned Miniflare API directly, keeping local D1/R2 storage, marker checks, fixture isolation and the daily Vite/Wrangler workflow. The deleted attachment file is restored byte-for-byte from the pre-exception revision; all seven gated native-owner probes are unchanged. A focused run against the old runner reproduces the failure before the direct-runtime validation. The first Miniflare attempt still placed its assets router/RPC proxy before the application and passed 135/136 cases, with an EPIPE on the oversized extra field. Binding a separate local assets-only Worker keeps static serving without proxying API ingress; all 136 cases then pass. The pre-push hook explicitly checks no-remote mode before running L2 and security checks.
+
+For future transport failures, compare the application runtime with development middleware before relaxing acceptance coverage. Keep rejected assertions as the migration's regression proof, distinguish local evidence from production guarantees, and retire an exception only after the original assertions pass on the replacement path.
+
 Incident narratives and lessons for octo, newest first.
 
 ## 2026-10-17 — A literal idempotency fixture triggered secret scanning

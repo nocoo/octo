@@ -7,7 +7,6 @@ import { dirname, join } from "node:path";
 import { parse } from "smol-toml";
 import { describe, expect, it, vi } from "vitest";
 import {
-	assertLocalMode,
 	assertPortFree,
 	assertWranglerConfigLocal,
 	createExclusiveDir,
@@ -24,16 +23,15 @@ import {
 	stopChild,
 	stopProcessGroup,
 	waitLive,
-	wranglerDevArgs,
 } from "./e2e";
 
 describe("e2e helpers", () => {
-	it("forbids remote wrangler and requires local mode", () => {
-		expect(() => assertLocalMode(["dev", "--local"])).not.toThrow();
-		expect(() => assertLocalMode(["dev"])).toThrow("--local");
-		expect(() => assertLocalMode(["dev", "--local", `${"--"}remote`])).toThrow("forbidden");
-	});
-
+	it.each(["", "..", "../state", "/tmp/shared", "run/nested"])(
+		"rejects unsafe run id %s",
+		(runId) => {
+			expect(() => persistDir(runId, "/repo")).toThrow("run id");
+		},
+	);
 	it("builds persist paths and rewrites wrangler config", () => {
 		expect(persistDir("abc", "/repo")).toBe("/repo/.wrangler/e2e/abc");
 		const rewritten = rewriteWranglerConfig(
@@ -55,17 +53,6 @@ describe("e2e helpers", () => {
 		expect(rewritten).toContain("port = 17059");
 		expect(rewritten).toContain("/tmp/assets");
 		expect(rewritten).not.toContain("octo.hexly.ai");
-		expect(wranglerDevArgs(17059, "p", "c", "e")).toEqual(
-			expect.arrayContaining([
-				"--local",
-				"--ip",
-				"127.0.0.1",
-				"--host",
-				"127.0.0.1",
-				"--local-upstream",
-				"127.0.0.1",
-			]),
-		);
 		expect(e2eEnvContents(17057)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:17059");
 		expect(e2eEnvContents(17057, 18059)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:18059");
 		expect(e2eEnvContents(17057)).toContain("RESOURCE_ENV=test");
@@ -174,7 +161,58 @@ describe("e2e helpers", () => {
 });
 
 describe("runE2eApi", () => {
-	it("starts local wrangler, runs vitest, and stops the child", async () => {
+	it.each(["bundle", "construct", "ready", "live", "vitest", "dispose", "signal"])(
+		"closes owned resources on %s failure",
+		async (stage) => {
+			const close = vi.fn(async () => undefined);
+			const dispose = vi.fn(async () => {
+				if (stage === "dispose") throw new Error("dispose failed");
+			});
+			const vitest = vi.fn(async () => {
+				if (stage === "vitest") throw new Error("vitest failed");
+			});
+			const create = vi.fn(() => {
+				if (stage === "construct") throw new Error("construct failed");
+				return {
+					ready:
+						stage === "ready"
+							? Promise.reject(new Error("ready failed"))
+							: Promise.resolve(new URL("http://127.0.0.1")),
+					dispose,
+				};
+			});
+			const beforeSignals = process.listenerCount("SIGTERM");
+			await expect(
+				runE2eApi({
+					prepareDb: async () => undefined,
+					assertFree: async () => undefined,
+					generateJwks: async () => ({
+						kid: "e2e",
+						publicJwk: { kty: "RSA", kid: "e2e" },
+						privateJwk: { kty: "RSA" },
+					}),
+					startJwks: async () => ({ url: "http://127.0.0.1", close }),
+					bundle: async () => {
+						if (stage === "bundle") throw new Error("bundle failed");
+						if (stage === "signal") process.emit("SIGTERM");
+						return "export default {}";
+					},
+					createRuntime: create,
+					wait: async () => {
+						if (stage === "live") throw new Error("live failed");
+					},
+					spawnVitest: vitest,
+				}),
+			).rejects.toThrow(stage === "signal" ? "interrupted" : `${stage} failed`);
+			expect(close).toHaveBeenCalledTimes(1);
+			expect(dispose).toHaveBeenCalledTimes(
+				["bundle", "construct", "signal"].includes(stage) ? 0 : 1,
+			);
+			expect(process.listenerCount("SIGTERM")).toBe(beforeSignals);
+			if (stage === "signal") expect(create).not.toHaveBeenCalled();
+		},
+	);
+	it("starts direct Miniflare, runs vitest, and disposes the runtime", async () => {
 		const child = new EventEmitter() as ChildProcess & EventEmitter & { exitCode: number | null };
 		Object.defineProperty(child, "exitCode", { writable: true, value: null });
 		child.stdout = new EventEmitter() as ChildProcess["stdout"];
@@ -189,7 +227,9 @@ describe("runE2eApi", () => {
 		}) as ChildProcess["kill"];
 		const vitest = vi.fn<(env: Record<string, string>) => Promise<void>>(async () => undefined);
 		const jwksClosed: boolean[] = [];
+		const dispose = vi.fn(async () => undefined);
 		const code = await runE2eApi({
+			bundle: async () => "export default {}",
 			port: 18059,
 			prepareDb: async () => undefined,
 			assertFree: async () => undefined,
@@ -205,13 +245,11 @@ describe("runE2eApi", () => {
 					jwksClosed.push(true);
 				},
 			}),
-			spawnWrangler: (_args, childEnv) => {
-				expect(childEnv).toMatchObject({ WRANGLER_DISABLE_REQUEST_BODY_DRAINING: "true" });
-				queueMicrotask(() => {
-					child.stdout?.emit("data", Buffer.from("out"));
-					child.stderr?.emit("data", Buffer.from("err"));
-				});
-				return child;
+			createRuntime: (options) => {
+				expect(options.port).toBe(18059);
+				expect(options.host).toBe("127.0.0.1");
+				expect(options.resourcePersistencePath).toContain(".wrangler/e2e/");
+				return { ready: Promise.resolve(new URL("http://127.0.0.1:18059")), dispose };
 			},
 			spawnVitest: vitest,
 		});
@@ -241,6 +279,7 @@ describe("runE2eApi", () => {
 		);
 		expect(vitest.mock.calls[0]?.[0].OCTO_E2E).toBe("http://127.0.0.1:18059");
 		expect(jwksClosed).toEqual([true]);
+		expect(dispose).toHaveBeenCalledTimes(1);
 		const livePort = await new Promise<number>((resolve, reject) => {
 			const server = createServer();
 			server.listen(0, "127.0.0.1", () => {
@@ -254,26 +293,14 @@ describe("runE2eApi", () => {
 				});
 			});
 		});
-		const realChild = new EventEmitter() as ChildProcess &
-			EventEmitter & { exitCode: number | null };
-		Object.defineProperty(realChild, "exitCode", { writable: true, value: null });
-		realChild.stdout = new EventEmitter() as ChildProcess["stdout"];
-		realChild.stderr = new EventEmitter() as ChildProcess["stderr"];
-		realChild.kill = ((signal?: NodeJS.Signals) => {
-			Object.defineProperty(realChild, "exitCode", {
-				writable: true,
-				value: signal === "SIGKILL" ? 1 : 0,
-			});
-			realChild.emit("exit", realChild.exitCode);
-			return true;
-		}) as ChildProcess["kill"];
 		expect(
 			await runE2eApi({
+				bundle: async () => "export default {}",
 				jwksPort: livePort,
 				prepareDb: async () => undefined,
 				assertFree: async () => undefined,
 				wait: async () => undefined,
-				spawnWrangler: () => realChild,
+				createRuntime: () => ({ ready: Promise.resolve(new URL("http://127.0.0.1")), dispose }),
 				spawnVitest: async () => undefined,
 			}),
 		).toBe(0);
@@ -319,6 +346,7 @@ describe("runE2eApi", () => {
 		child.stderr = new EventEmitter() as ChildProcess["stderr"];
 		child.kill = (() => true) as ChildProcess["kill"];
 		await runE2eApi({
+			bundle: async () => "export default {}",
 			prepareDb: async () => undefined,
 			assertFree: async () => undefined,
 			wait: async () => undefined,
@@ -331,7 +359,10 @@ describe("runE2eApi", () => {
 				url: "http://127.0.0.1:17057/cdn-cgi/access/certs",
 				close: async () => undefined,
 			}),
-			spawnWrangler: () => child,
+			createRuntime: () => ({
+				ready: Promise.resolve(new URL("http://127.0.0.1")),
+				dispose: async () => undefined,
+			}),
 			spawnVitest: async () => undefined,
 		});
 		expect(killed).toEqual([]);

@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { MAX_ATTACHMENT_BYTES } from "../../apps/web/src/server/attachments/content-type";
+import { MAX_MULTIPART_OVERHEAD_BYTES } from "../../apps/web/src/server/attachments/upload";
 import { signAttachmentUrl } from "../../apps/web/src/server/attachments/url-sign";
 import { seedAttachmentKey } from "../../scripts/attachment-fixtures";
 import { e2eFetch as fetch } from "../../scripts/e2e-fetch";
@@ -269,11 +270,39 @@ describe("attachments API", { sequential: true }, () => {
 		);
 	});
 
-	it("accepts raw files at 50 mib", async () => {
+	it("accepts raw files at 50 mib and rejects one byte more", async () => {
 		const { header } = await setup();
 		const exact = await rawUpload(header, new Uint8Array(MAX_ATTACHMENT_BYTES));
 		expect(exact.status).toBe(201);
 		expect(await exact.json()).toMatchObject({ size_bytes: MAX_ATTACHMENT_BYTES });
+		await expectError(
+			await rawUpload(header, new Uint8Array(MAX_ATTACHMENT_BYTES + 1)),
+			413,
+			"payload_too_large",
+		);
+	});
+
+	it.each(["raw", "multipart"])("rejects chunked oversize %s requests", async (kind) => {
+		const { header } = await setup();
+		const type = kind === "raw" ? "image/png" : "multipart/form-data; boundary=x";
+		let sent = 0;
+		const chunk = new Uint8Array(1024 * 1024);
+		const response = await fetch(`${base}${memoryPath}`, {
+			method: "POST",
+			headers: { Authorization: header, "Content-Type": type, "X-Filename": "big.png" },
+			body: new ReadableStream({
+				pull(controller) {
+					if (sent > MAX_ATTACHMENT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES) {
+						controller.close();
+						return;
+					}
+					controller.enqueue(chunk);
+					sent += chunk.byteLength;
+				},
+			}),
+			duplex: "half",
+		} as RequestInit);
+		await expectError(response, 413, "payload_too_large");
 	});
 
 	it("accepts a 50 mib multipart file without counting its envelope", async () => {
@@ -292,6 +321,18 @@ describe("attachments API", { sequential: true }, () => {
 			filename: "max.pdf",
 			content_type: "application/pdf",
 		});
+	});
+
+	it("rejects multipart file bytes over 50 mib", async () => {
+		const { header } = await setup();
+		const form = new FormData();
+		form.append(
+			"file",
+			new File([new Uint8Array(MAX_ATTACHMENT_BYTES + 1)], "big.pdf", {
+				type: "application/pdf",
+			}),
+		);
+		await expectError(await multipartUpload(header, form), 413, "payload_too_large");
 	});
 
 	it("rejects multipart extra parts, missing files, and malformed bodies", async () => {
@@ -353,7 +394,7 @@ describe("attachments API", { sequential: true }, () => {
 		).toEqual([{ n: 2 }]);
 	});
 
-	it("rejects binary replay conflicts", async () => {
+	it("rejects binary replay conflicts and keyed declared oversize", async () => {
 		const { header } = await setup();
 		const first = await rawUpload(header, new Uint8Array([255]), "image/png", "m5-binary");
 		expect(first.status).toBe(201);
@@ -363,5 +404,67 @@ describe("attachments API", { sequential: true }, () => {
 			409,
 			"idempotency_conflict",
 		);
+		await expectError(
+			await rawUpload(header, new Uint8Array(MAX_ATTACHMENT_BYTES + 1), "image/png", "m5-large"),
+			413,
+			"payload_too_large",
+		);
+	});
+
+	it.each(["raw", "multipart"])("bounds keyed chunked %s uploads before hashing", async (kind) => {
+		const { header } = await setup();
+		let sent = 0;
+		const chunk = new Uint8Array(1024 * 1024);
+		const response = await fetch(`${base}${memoryPath}`, {
+			method: "POST",
+			headers: {
+				Authorization: header,
+				"Content-Type": kind === "raw" ? "image/png" : "multipart/form-data; boundary=x",
+				"X-Filename": "big.png",
+				"Idempotency-Key": `m5-chunked-${kind}`,
+			},
+			body: new ReadableStream({
+				pull(controller) {
+					if (sent > MAX_ATTACHMENT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES) {
+						controller.close();
+						return;
+					}
+					controller.enqueue(chunk);
+					sent += chunk.byteLength;
+				},
+			}),
+			duplex: "half",
+		} as RequestInit);
+		await expectError(response, 413, "payload_too_large");
+	});
+
+	it("bounds multipart envelope and extra-field bytes", async () => {
+		const { header } = await setup();
+		const form = new FormData();
+		form.append("file", new File(["x"], "a.pdf", { type: "application/pdf" }));
+		const encoded = new Request(`${base}${memoryPath}`, { method: "POST", body: form });
+		const bytes = new Uint8Array(await encoded.arrayBuffer());
+		const padded = new Uint8Array(bytes.length + MAX_MULTIPART_OVERHEAD_BYTES);
+		padded.set(bytes);
+		await expectError(
+			await fetch(`${base}${memoryPath}`, {
+				method: "POST",
+				headers: {
+					Authorization: header,
+					"Content-Type": encoded.headers.get("Content-Type") ?? "",
+				},
+				body: padded,
+			}),
+			413,
+			"payload_too_large",
+		);
+		const extra = new FormData();
+		extra.append("file", new File(["x"], "a.pdf", { type: "application/pdf" }));
+		extra.append(
+			"note",
+			new Blob([new Uint8Array(MAX_ATTACHMENT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES)]),
+			"extra.bin",
+		);
+		await expectError(await multipartUpload(header, extra), 413, "payload_too_large");
 	});
 });

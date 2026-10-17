@@ -3,7 +3,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ensureClientAssets, ensureDevVars } from "./ensure-dev-vars";
+import { parseEnv } from "node:util";
+import { Miniflare, type MiniflareOptions } from "miniflare";
+import { ensureClientAssets } from "./ensure-dev-vars";
 import { tomlHasRemoteBinding } from "./gate-no-remote";
 import {
 	generateJwksPair,
@@ -16,49 +18,14 @@ import {
 } from "./jwks-stub";
 import { localWranglerConfig } from "./local-config";
 import { applyMigrations, assertTestMarker, createD1Exec, writeTestMarker } from "./local-d1";
+import { bundleWorker, miniflareOptions } from "./miniflare";
 import { L2_JWKS_PORT, L2_WORKER_PORT } from "./ports";
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const localFlag = `--${"local"}`;
-const remoteFlag = `--${"remote"}`;
-
-export function assertLocalMode(args: string[]): void {
-	if (args.includes(remoteFlag) || args.some((arg) => arg.startsWith(`${remoteFlag}=`))) {
-		throw new Error("remote wrangler is forbidden");
-	}
-	if (!args.includes(localFlag)) {
-		throw new Error("wrangler must run with --local");
-	}
-}
-
 export function persistDir(runId: string, base = root): string {
+	if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(runId)) throw new Error("invalid L2 run id");
 	return join(base, ".wrangler/e2e", runId);
-}
-
-export function wranglerDevArgs(
-	port: number,
-	persistTo: string,
-	config: string,
-	envFile: string,
-): string[] {
-	const args = [
-		"dev",
-		localFlag,
-		"--ip",
-		"127.0.0.1",
-		"--host",
-		"127.0.0.1",
-		"--local-upstream",
-		"127.0.0.1",
-		"--port",
-		String(port),
-		`--persist-to=${persistTo}`,
-		`--config=${config}`,
-		`--env-file=${envFile}`,
-	];
-	assertLocalMode(args);
-	return args;
 }
 
 export function assertWranglerConfigLocal(toml: string): void {
@@ -152,9 +119,16 @@ export function spawnVitestProcess(
 		const child = spawnFn(
 			join(root, "node_modules/.bin/vitest"),
 			["run", "tests/api", "--config", "vitest.e2e.config.ts"],
-			{ cwd: root, env: { ...process.env, ...env }, stdio: "inherit" },
+			{ cwd: root, env: { ...process.env, ...env }, stdio: "inherit", detached: true },
 		);
+		const onSignal = (): void => {
+			void stopChild(child);
+		};
+		process.on("SIGINT", onSignal);
+		process.on("SIGTERM", onSignal);
 		child.on("exit", (code) => {
+			process.off("SIGINT", onSignal);
+			process.off("SIGTERM", onSignal);
 			if (code === 0) {
 				resolve();
 			} else {
@@ -262,7 +236,8 @@ export type RunE2eOptions = {
 	port?: number;
 	jwksPort?: number;
 	spawnVitest?: (env: Record<string, string>) => Promise<void>;
-	spawnWrangler?: (args: string[], env: NodeJS.ProcessEnv) => ChildProcess;
+	createRuntime?: (options: MiniflareOptions) => Pick<Miniflare, "ready" | "dispose">;
+	bundle?: typeof bundleWorker;
 	prepareDb?: (persistTo: string, config: string) => Promise<void>;
 	wait?: (base: string, timeoutMs: number) => Promise<void>;
 	assertFree?: (port: number) => Promise<void>;
@@ -276,7 +251,6 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	const persistTo = persistDir(runId);
 	const tmp = join(root, ".wrangler/e2e-run", runId);
 	await mkdir(join(tmp, "dist/client"), { recursive: true });
-	ensureDevVars(root);
 	ensureClientAssets(join(tmp));
 	const configPath = join(tmp, "wrangler.toml");
 	const rootToml = await readFile(join(root, "wrangler.toml"), "utf8");
@@ -300,32 +274,41 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	await assertFree(port);
 	await assertFree(jwksPort);
 	const jwks = await (options.startJwks ?? startJwksStub)(jwksPort, state);
-	const wranglerBin = join(root, "node_modules/.bin/wrangler");
-	const args = wranglerDevArgs(port, persistTo, configPath, envFile);
-	const childEnv = { ...process.env, WRANGLER_DISABLE_REQUEST_BODY_DRAINING: "true" };
-	const wrangler =
-		options.spawnWrangler?.(args, childEnv) ??
-		spawn(wranglerBin, args, {
-			cwd: root,
-			stdio: ["ignore", "pipe", "pipe"],
-			detached: true,
-			env: childEnv,
-		});
-	wrangler.stdout?.on("data", (chunk) => process.stdout.write(chunk as Buffer));
-	wrangler.stderr?.on("data", (chunk) => process.stderr.write(chunk as Buffer));
 	const base = `http://127.0.0.1:${port}`;
+	let runtime: Pick<Miniflare, "ready" | "dispose"> | undefined;
 	let stopping: Promise<void> | undefined;
+	let interrupted = false;
 	const cleanup = (): Promise<void> => {
-		stopping ??= stopChild(wrangler);
+		stopping ??= (async () => {
+			try {
+				await runtime?.dispose();
+			} finally {
+				await jwks.close();
+			}
+		})();
 		return stopping;
 	};
 	const onSignal = (): void => {
-		void cleanup();
+		interrupted = true;
+		void cleanup().catch(() => {
+			process.exitCode = 1;
+		});
 	};
 	process.on("SIGINT", onSignal);
 	process.on("SIGTERM", onSignal);
 	try {
+		const script = await (options.bundle ?? bundleWorker)(join(root, "tests/fixtures/worker.ts"));
+		if (interrupted) throw new Error("L2 interrupted");
+		const config = miniflareOptions(
+			rewritten,
+			persistTo,
+			script,
+			parseEnv(e2eEnvContents(jwksPort, port)),
+		);
+		runtime = (options.createRuntime ?? ((config) => new Miniflare(config)))(config);
+		await runtime.ready;
 		await (options.wait ?? waitLive)(base, 60_000);
+		if (interrupted) throw new Error("L2 interrupted");
 		const env = {
 			OCTO_E2E: base,
 			OCTO_PERSIST: persistTo,
@@ -334,11 +317,11 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 			OCTO_JWKS_PORT: String(jwksPort),
 		};
 		await (options.spawnVitest ?? spawnVitestProcess)(env);
+		if (interrupted) throw new Error("L2 interrupted");
 		return 0;
 	} finally {
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
 		await cleanup();
-		await jwks.close();
 	}
 }
