@@ -1,65 +1,31 @@
-import { describe, expect, it } from "vitest";
-import { memoryPassesTagFilters, revalidateVectorHits } from "./service";
-
-describe("memoryPassesTagFilters", () => {
-	it("checks tags_all and tags_any", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: (arg: string) => ({
-					all: async () => ({
-						results: sql.includes("memory_tags") ? [{ id: "t1", name: "infra" }] : [],
-					}),
-					first: async () => {
-						if (!sql.includes("FROM tags WHERE name")) {
-							return null;
-						}
-						return arg === "infra"
-							? { id: "t1", merged_into: null }
-							: { id: "t2", merged_into: null };
-					},
-				}),
-			}),
-		} as never;
-		expect(await memoryPassesTagFilters(db, "m1", { tags_all: ["infra"] })).toBe(true);
-		expect(await memoryPassesTagFilters(db, "m1", { tags_all: ["other"] })).toBe(false);
-		expect(await memoryPassesTagFilters(db, "m1", { tags_any: ["infra"] })).toBe(true);
-		expect(await memoryPassesTagFilters(db, "m1", { tags_any: ["missing"] })).toBe(false);
-		expect(await memoryPassesTagFilters(db, "m1", undefined)).toBe(true);
-	});
-});
+import { describe, expect, it, vi } from "vitest";
+import { revalidateVectorHits } from "./service";
 
 describe("revalidateVectorHits", () => {
-	it("drops rows that fail sql or tag filters", async () => {
-		const db = {
-			prepare: () => ({
-				bind: (...binds: unknown[]) => ({
-					first: async () => (binds.at(-1) === "bad" ? null : { id: binds.at(-1) }),
-					all: async () => ({ results: [{ id: "t1", name: "infra" }] }),
-				}),
+	it("filters in one SQL and preserves raw vector rank order", async () => {
+		const bind = vi.fn(() => ({ all: async () => ({ results: [{ id: "a" }, { id: "b" }] }) }));
+		const prepare = vi.fn((_sql: string) => ({ bind }));
+		const hits = [
+			{ id: "b", score: 1 },
+			{ id: "ghost", score: 0.9 },
+			{ id: "a", score: 0.8 },
+		];
+		expect(
+			await revalidateVectorHits({ prepare } as never, hits, {
+				clauses: ["m.space_id = ?"],
+				binds: ["s1"],
 			}),
-		} as never;
-		const hits = await revalidateVectorHits(
-			db,
-			[
-				{ id: "bad", score: 1 },
-				{ id: "m1", score: 0.5 },
-			],
-			["s1"],
-			{ tags_any: ["missing"] },
-		);
-		expect(hits).toEqual([]);
+		).toEqual([hits[0], hits[2]]);
+		expect(prepare).toHaveBeenCalledOnce();
+		expect(prepare.mock.calls[0]?.[0]).toContain("json_each(?)");
+		expect(bind).toHaveBeenCalledWith("s1", '["b","ghost","a"]');
 	});
 
-	it("keeps valid vector hits", async () => {
-		const db = {
-			prepare: (_sql: string) => ({
-				bind: (...binds: unknown[]) => ({
-					first: async () => ({ id: binds.at(-1) }),
-					all: async () => ({ results: [] }),
-				}),
-			}),
-		} as never;
-		const hits = await revalidateVectorHits(db, [{ id: "m1", score: 1 }], ["s1"], undefined);
-		expect(hits).toEqual([{ id: "m1", score: 1 }]);
+	it("does not query when no vector ids exist", async () => {
+		const prepare = vi.fn();
+		expect(
+			await revalidateVectorHits({ prepare } as never, [], { clauses: [], binds: [] }),
+		).toEqual([]);
+		expect(prepare).not.toHaveBeenCalled();
 	});
 });

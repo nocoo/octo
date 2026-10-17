@@ -87,6 +87,34 @@ describe("bounded search SQL", () => {
 		},
 	);
 
+	it("resolves maximal tag filters once rather than once per vector hit", async () => {
+		let queryCount = 0;
+		const { db, sqlite } = fixture(() => {
+			queryCount++;
+		});
+		const names = Array.from({ length: 50 }, (_, i) => `t${i}`);
+		for (const name of names)
+			sqlite.prepare("INSERT INTO tags VALUES (?,?,?,NULL,1,1)").run(name, name, name);
+		const ids = Array.from({ length: 100 }, (_, i) => `v${i}`);
+		for (const id of ids) {
+			addMemory(sqlite, id, "cloudflare", 1);
+			for (const name of names)
+				sqlite.prepare("INSERT INTO memory_tags VALUES (?,?)").run(id, name);
+		}
+		const result = await searchMemories(
+			authz,
+			{
+				vector: { profile: "te3-small-1536", values: [1, ...Array<number>(1535).fill(0)] },
+				mode: "vector",
+				filters: { tags_all: names, tags_any: names },
+				limit: 100,
+			},
+			{ db, vectorStore: { query: async () => ids.map((id, i) => ({ id, score: 1 - i / 100 })) } },
+		);
+		expect(result.items.map((item) => item.id)).toEqual(ids);
+		expect(queryCount).toBeLessThanOrEqual(110);
+	});
+
 	it("reads 200 hybrid candidates and tags, plus a 100-id batch, within the bind budget", async () => {
 		const { db, sqlite } = fixture();
 		sqlite.exec("UPDATE memories SET deleted_at=1 WHERE id='m1'");

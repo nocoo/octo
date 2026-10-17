@@ -6,7 +6,7 @@ import { buildVectorMetadataFilter } from "../ports/vector/filter";
 import type { VectorStore } from "../ports/vector/types";
 import type { AuthzContext } from "./authz";
 import { intersectRequestedSpaces } from "./authz";
-import { buildMemoryFilterSql, resolveMemoryFilterSql } from "./filters-sql";
+import { buildMemoryFilterSql, resolveMemoryFilterSql, type SqlFilter } from "./filters-sql";
 import { runFtsChannel } from "./fts-channel";
 import { DEFAULT_FUSION, fuseChannels, type RankedChannel } from "./fusion";
 import { inferSearchMode } from "./infer-mode";
@@ -20,7 +20,7 @@ import {
 } from "./memory-read";
 import { channelScore } from "./scores";
 import { highlightSnippet } from "./snippet";
-import { resolveCanonicalTagIds, resolveRequiredTagIds } from "./tag-resolve";
+import { sqlInClause } from "./sql-in";
 import { tokenizeQuery } from "./tokenizer";
 import { createSearchVectorStore } from "./vector-store-factory";
 import { assertVectorValues, loadEmbeddingProfile } from "./vector-write";
@@ -36,62 +36,22 @@ function bm25ToNormalized(hits: Array<{ id: string; bm25: number }>): Map<string
 	return minMaxNormalize(scores);
 }
 
-export async function memoryPassesTagFilters(
-	db: D1Database,
-	memoryId: string,
-	filters: SearchRequest["filters"],
-): Promise<boolean> {
-	if (!filters?.tags_all?.length && !filters?.tags_any?.length) {
-		return true;
-	}
-	const rows = await db
-		.prepare(
-			`SELECT t.id, t.name FROM memory_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id = ?`,
-		)
-		.bind(memoryId)
-		.all<{ id: string; name: string }>();
-	const have = new Set(d1Results(rows).map((r) => r.id));
-	if (filters.tags_all?.length) {
-		const need = await resolveRequiredTagIds(db, filters.tags_all);
-		if (need === null) {
-			return false;
-		}
-		if (!need.every((id) => have.has(id))) {
-			return false;
-		}
-	}
-	if (filters.tags_any?.length) {
-		const any = await resolveCanonicalTagIds(db, filters.tags_any);
-		if (!any.some((id) => have.has(id))) {
-			return false;
-		}
-	}
-	return true;
-}
-
 export async function revalidateVectorHits(
 	db: D1Database,
 	hits: Array<{ id: string; score: number }>,
-	spaceIds: string[],
-	filters: SearchRequest["filters"],
+	filter: SqlFilter,
 ): Promise<Array<{ id: string; score: number }>> {
-	const out: Array<{ id: string; score: number }> = [];
-	for (const hit of hits) {
-		const base = buildMemoryFilterSql(filters, spaceIds);
-		const clauses = [...base.clauses, "m.id = ?"];
-		const row = await db
-			.prepare(`SELECT m.id FROM memories m WHERE ${clauses.join(" AND ")} LIMIT 1`)
-			.bind(...base.binds, hit.id)
-			.first<{ id: string }>();
-		if (!row) {
-			continue;
-		}
-		if (!(await memoryPassesTagFilters(db, hit.id, filters))) {
-			continue;
-		}
-		out.push(hit);
-	}
-	return out;
+	if (!hits.length) return [];
+	const ids = sqlInClause(
+		"m.id",
+		hits.map((hit) => hit.id),
+	);
+	const rows = await db
+		.prepare(`SELECT m.id FROM memories m WHERE ${[...filter.clauses, ids.sql].join(" AND ")}`)
+		.bind(...filter.binds, ...ids.binds)
+		.all<{ id: string }>();
+	const allowed = new Set(d1Results(rows).map((row) => row.id));
+	return hits.filter((hit) => allowed.has(hit.id));
 }
 
 function normalizeQueryVector(
@@ -142,6 +102,7 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 		ftsPartial = fts.partial;
 	}
 
+	const contentFilter = await resolveMemoryFilterSql(deps.db, req.filters, spaceIds);
 	let vectorHits: Array<{ id: string; score: number }> = [];
 	let vectorTruncated = false;
 	const profile = req.vector?.profile ?? "te3-small-1536";
@@ -166,7 +127,7 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 		vectorTruncated =
 			Boolean(req.filters?.tags_all?.length || req.filters?.tags_any?.length) &&
 			raw.length >= candidateK;
-		vectorHits = await revalidateVectorHits(deps.db, raw, spaceIds, req.filters);
+		vectorHits = await revalidateVectorHits(deps.db, raw, contentFilter);
 	}
 
 	const ftsRanked: RankedChannel[] = ftsHits.map((h, i) => ({
@@ -187,7 +148,6 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 				: fuseChannels(ftsRanked, vecRanked, fusion);
 
 	let ordered = [...fusedScores.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
-	const contentFilter = await resolveMemoryFilterSql(deps.db, req.filters, spaceIds);
 	const memories = await loadMemoriesByIds(deps.db, ordered, contentFilter);
 	ftsHits = ftsHits.filter((hit) => memories.has(hit.id));
 	vectorHits = vectorHits.filter((hit) => memories.has(hit.id));
