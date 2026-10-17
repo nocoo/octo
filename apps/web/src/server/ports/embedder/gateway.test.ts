@@ -27,7 +27,33 @@ describe("GatewayEmbedder", () => {
 			"fetch",
 			vi.fn(async () => Response.json({ data: [{}] })),
 		);
-		await expect(new GatewayEmbedder(config).embed(["x"])).rejects.toThrow("dimension mismatch");
+		await expect(new GatewayEmbedder(config).embed(["x"])).rejects.toThrow("invalid embedding");
+	});
+
+	it.each([
+		{ name: "object with malicious length", embedding: { length: { credential: "fake" } } },
+		{ name: "array-like object", embedding: { 0: 1, 1: 0, length: 2 } },
+		{ name: "string", embedding: "fake-credential" },
+		{ name: "null", embedding: null },
+		{ name: "number", embedding: 2 },
+	])("rejects $name before reading dimension metadata", async ({ embedding }) => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ data: [{ embedding }] })),
+		);
+		await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toEqual(
+			new Error("invalid embedding"),
+		);
+	});
+
+	it("rejects a null embedding row with the same static error", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ data: [null] })),
+		);
+		await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toEqual(
+			new Error("invalid embedding"),
+		);
 	});
 
 	it.each([

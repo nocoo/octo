@@ -242,6 +242,29 @@ describe("embedding settings", () => {
 			code: "validation_failed",
 		});
 	});
+
+	it.each([
+		{ name: "object with malicious length", embedding: { length: { credential: SECRET } } },
+		{ name: "array-like object", embedding: { 0: 1, 1: 0, 2: 0, length: 3 } },
+		{ name: "string", embedding: SECRET },
+		{ name: "null", embedding: null },
+		{ name: "missing", embedding: undefined },
+	])("never exposes $name as connection-test dimensions", async ({ embedding }) => {
+		const { env, raw } = fixture();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ data: [{ embedding }] })),
+		);
+		const result = await testEmbeddingSettings(env, SETTINGS);
+		expect(result).toEqual({
+			latency_ms: expect.any(Number),
+			dims: null,
+			match: false,
+			error_code: "embedder_unavailable",
+		});
+		expect(JSON.stringify(result)).not.toContain(SECRET);
+		expect(raw.prepare("SELECT COUNT(*) AS n FROM settings").get()?.n).toBe(0);
+	});
 });
 
 it("guards profile changes between validation and the atomic save", async () => {

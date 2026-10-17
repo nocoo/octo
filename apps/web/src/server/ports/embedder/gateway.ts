@@ -32,13 +32,14 @@ export class GatewayEmbedder implements QueryEmbedder {
 				throw new Error(`embedder status ${res.status}`);
 			}
 			const body = (await res.json()) as {
-				data?: Array<{ embedding?: number[] }>;
+				data?: Array<{ embedding?: unknown } | null>;
 			};
 			if (!Array.isArray(body.data) || body.data.length !== texts.length) {
 				throw new Error("embedding count mismatch");
 			}
 			return body.data.map((row) => {
-				const values = row.embedding ?? [];
+				const values = row?.embedding;
+				if (!Array.isArray(values)) throw new Error("invalid embedding");
 				if (values.length !== this.config.dims) throw new EmbeddingDimensionError(values.length);
 				return assertVectorValues(values, this.config.dims);
 			});
