@@ -783,25 +783,19 @@ export function HistoryPage() {
 	const from = Number(params.get("from"));
 	const to = Number(params.get("to"));
 	useEffect(() => {
-		void model
-			.load(params.has("from") ? from : undefined, params.has("to") ? to : undefined)
-			.then(() => {
-				if (
-					!model.state.error &&
-					model.state.current &&
-					(!params.has("from") || !params.has("to"))
-				) {
-					const next = new URLSearchParams(params);
-					if (!params.has("from"))
-						next.set(
-							"from",
-							String(model.state.versions.at(-2)?.version ?? model.state.current.version),
-						);
-					if (!params.has("to")) next.set("to", String(model.state.current.version));
-					setParams(next, { replace: true });
-				}
-			});
-	}, [model, from, to, params, setParams]);
+		void model.loadFromUrl(params).then(() => {
+			if (!model.state.error && model.state.current && (!params.has("from") || !params.has("to"))) {
+				const next = new URLSearchParams(params);
+				if (!params.has("from"))
+					next.set(
+						"from",
+						String(model.state.versions.at(-2)?.version ?? model.state.current.version),
+					);
+				if (!params.has("to")) next.set("to", String(model.state.current.version));
+				setParams(next, { replace: true });
+			}
+		});
+	}, [model, params, setParams]);
 	useEffect(() => {
 		if (state.notice) toast.success(state.notice);
 	}, [state.notice]);
@@ -816,7 +810,11 @@ export function HistoryPage() {
 					</Button>
 				}
 			/>
-			<Feedback error={state.error} loading={state.loading} retry={() => void model.load()} />
+			<Feedback
+				error={state.error}
+				loading={state.loading}
+				retry={() => void model.loadFromUrl(params)}
+			/>
 			<div className="octo-actions">
 				<Choice
 					label="From version"

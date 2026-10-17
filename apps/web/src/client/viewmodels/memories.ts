@@ -263,6 +263,12 @@ export class HistoryModel extends Store<{
 			notice: null,
 		});
 	}
+	loadFromUrl(params: URLSearchParams): Promise<void> {
+		return this.load(
+			params.has("from") ? Number(params.get("from")) : undefined,
+			params.has("to") ? Number(params.get("to")) : undefined,
+		);
+	}
 	async load(from?: number, to?: number): Promise<void> {
 		const generation = ++this.generation;
 		++this.comparison;

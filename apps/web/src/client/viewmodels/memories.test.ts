@@ -187,6 +187,39 @@ describe("MemoryModel", () => {
 });
 
 describe("HistoryModel", () => {
+	it("retries a rejected diff with the same URL comparison instead of clearing the selection", async () => {
+		const api = client();
+		const model = new HistoryModel("m1", api.api);
+		const params = new URLSearchParams("from=1&to=2&diff=split");
+		const diff = {
+			from: 1,
+			to: 2,
+			fields: [{ field: "title", from: "Old", to: "Title" }],
+			body: { unified: "-old\n+new", hunks: [] },
+		};
+		api.request
+			.mockResolvedValueOnce(memory)
+			.mockResolvedValueOnce({ items: [{ version: 1 }, { version: 2 }] })
+			.mockRejectedValueOnce(new Error("diff unavailable"));
+		await model.loadFromUrl(params);
+		expect(model.state.error).toBe("diff unavailable");
+		expect(model.state.diff).toBeNull();
+		api.request
+			.mockResolvedValueOnce(memory)
+			.mockResolvedValueOnce({ items: [{ version: 1 }, { version: 2 }] })
+			.mockResolvedValueOnce(diff);
+		await model.loadFromUrl(params);
+		expect(model.state.error).toBeNull();
+		expect(model.state.diff).toEqual(diff);
+		expect(params.toString()).toBe("from=1&to=2&diff=split");
+		expect(api.request.mock.calls.filter(([path]) => path.includes("/diff?"))).toEqual([
+			["/memories/m1/diff?from=1&to=2"],
+			["/memories/m1/diff?from=1&to=2"],
+		]);
+		api.request.mockResolvedValueOnce(memory).mockResolvedValueOnce({ items: [] });
+		await model.loadFromUrl(new URLSearchParams());
+		expect(model.state.diff).toBeNull();
+	});
 	it("ignores stale loads and comparisons after a newer URL selection", async () => {
 		const api = client();
 		const model = new HistoryModel("m1", api.api);
