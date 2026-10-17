@@ -86,11 +86,12 @@ describe("VersionRepo", () => {
 			now: 1,
 		});
 		const repo = new VersionRepo(db);
-		const listed = await repo.list("m1");
+		const access = { space_id: "s1", version: 1 };
+		const listed = await repo.list("m1", access);
 		expect(listed).toHaveLength(1);
 		expect(listed[0]).not.toHaveProperty("body");
-		const snap = await repo.get("m1", 1);
+		const snap = await repo.get("m1", 1, access);
 		expect(snap?.body).toBe("b");
-		expect(await repo.get("m1", 9)).toBeNull();
+		expect(await repo.get("m1", 9, access)).toBeNull();
 	});
 });

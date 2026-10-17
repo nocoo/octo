@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { type ApiPrincipal, parseOps } from "../auth/authorize";
 import { insertSpace, openTestD1 } from "../repo/__tests__/sqlite-d1";
+import { MemoryRepo } from "../repo/memories";
 import { TagRepo } from "../repo/tags";
 import { authzFrom, MemoryService } from "./memories";
 
@@ -46,6 +47,48 @@ async function state(db: D1Database) {
 }
 
 describe("memory permission and rollback regressions", () => {
+	it("applies delete ownership to include=trashed without hiding live reads", async () => {
+		const { service, admin, id } = await boot();
+		const reader = key({ id: "other", ownEntriesOnly: true });
+		expect(
+			(await service.list(reader, { filters: {}, include: new Set(["trashed"]), limit: 50 })).items,
+		).toHaveLength(1);
+		await service.remove(admin, id);
+		expect(
+			(await service.list(reader, { filters: {}, include: new Set(["trashed"]), limit: 50 })).items,
+		).toEqual([]);
+	});
+
+	it.each(["get", "list", "diff"])(
+		"binds %s history to its authorized current snapshot",
+		async (operation) => {
+			const { db, service, admin, id } = await boot();
+			const repo = new MemoryRepo(db);
+			const read = repo.get.bind(repo);
+			vi.spyOn(repo, "get").mockImplementationOnce(async (memoryId) => {
+				const authorized = await read(memoryId);
+				await service.patch(
+					admin,
+					id,
+					{ space: "b", body: "hidden body", title: "hidden title" },
+					"1",
+				);
+				return authorized;
+			});
+			const restricted = new MemoryService(db, undefined, undefined, undefined, repo);
+			const authz = key({ scope: "spaces", spaceIds: ["a"] });
+			if (operation === "get")
+				await expect(restricted.getVersion(authz, id, 2)).rejects.toMatchObject({
+					code: "not_found",
+				});
+			if (operation === "list") expect(await restricted.listVersions(authz, id)).toEqual([]);
+			if (operation === "diff")
+				await expect(restricted.diff(authz, id, 1, 2)).rejects.toMatchObject({
+					code: "unprocessable",
+				});
+		},
+	);
+
 	it("authorizes both spaces before rollback and preserves hidden scope", async () => {
 		const { db, service, admin, id } = await boot();
 		await service.patch(admin, id, { space: "b" }, "1");

@@ -17,6 +17,7 @@ export type VersionRow = {
 };
 
 export type VersionMeta = Omit<VersionRow, "body">;
+export type VersionAccess = { space_id: string; version: number };
 
 export type FieldDiff = {
 	field: string;
@@ -43,20 +44,22 @@ export type VersionDiff = {
 export class VersionRepo {
 	constructor(private readonly db: D1Database) {}
 
-	async list(memoryId: string): Promise<VersionMeta[]> {
+	async list(memoryId: string, access: VersionAccess): Promise<VersionMeta[]> {
 		const { results } = await this.db
 			.prepare(
-				"SELECT memory_id, version, title, type, importance, tags_json, event_time, space_id, actor, op, rollback_of, created_at FROM memory_versions WHERE memory_id = ? ORDER BY version",
+				"SELECT memory_id, version, title, type, importance, tags_json, event_time, space_id, actor, op, rollback_of, created_at FROM memory_versions WHERE memory_id = ? AND EXISTS (SELECT 1 FROM memories WHERE id = memory_id AND space_id = ? AND version = ? AND deleted_at IS NULL) ORDER BY version",
 			)
-			.bind(memoryId)
+			.bind(memoryId, access.space_id, access.version)
 			.all<VersionMeta>();
 		return results;
 	}
 
-	async get(memoryId: string, version: number): Promise<VersionRow | null> {
+	async get(memoryId: string, version: number, access: VersionAccess): Promise<VersionRow | null> {
 		return this.db
-			.prepare("SELECT * FROM memory_versions WHERE memory_id = ? AND version = ?")
-			.bind(memoryId, version)
+			.prepare(
+				"SELECT * FROM memory_versions WHERE memory_id = ? AND version = ? AND EXISTS (SELECT 1 FROM memories WHERE id = memory_id AND space_id = ? AND version = ? AND deleted_at IS NULL)",
+			)
+			.bind(memoryId, version, access.space_id, access.version)
 			.first<VersionRow>();
 	}
 }

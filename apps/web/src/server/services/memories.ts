@@ -278,7 +278,9 @@ export class MemoryService {
 			includeTrashed: opts.include.has("trashed"),
 			trashedOnly: opts.trashedOnly,
 			ownSourceKeyId:
-				opts.trashedOnly && authz.principal.ownEntriesOnly ? authz.principal.id : undefined,
+				(opts.trashedOnly || opts.include.has("trashed")) && authz.principal.ownEntriesOnly
+					? authz.principal.id
+					: undefined,
 			cursor: opts.cursor ? parseMemoryCursor(opts.cursor) : undefined,
 			limit: opts.limit,
 		});
@@ -395,14 +397,14 @@ export class MemoryService {
 	}
 
 	async listVersions(authz: Authz, id: string): Promise<Record<string, unknown>[]> {
-		await this.loadVisible(authz, id, "read", false);
-		const rows = await this.versions.list(id);
+		const current = await this.loadVisible(authz, id, "read", false);
+		const rows = await this.versions.list(id, current);
 		return rows.map((row) => publicVersion(row, false));
 	}
 
 	async getVersion(authz: Authz, id: string, version: number): Promise<Record<string, unknown>> {
-		await this.loadVisible(authz, id, "read", false);
-		const row = await this.versions.get(id, version);
+		const current = await this.loadVisible(authz, id, "read", false);
+		const row = await this.versions.get(id, version, current);
 		if (!row) {
 			throw new ApiError("not_found", "not found");
 		}
@@ -410,9 +412,9 @@ export class MemoryService {
 	}
 
 	async diff(authz: Authz, id: string, from: number, to: number): Promise<unknown> {
-		await this.loadVisible(authz, id, "read", false);
-		const left = await this.versions.get(id, from);
-		const right = await this.versions.get(id, to);
+		const current = await this.loadVisible(authz, id, "read", false);
+		const left = await this.versions.get(id, from, current);
+		const right = await this.versions.get(id, to, current);
 		if (!left || !right) {
 			throw new ApiError("unprocessable", "version does not exist");
 		}
@@ -428,7 +430,7 @@ export class MemoryService {
 	): Promise<Record<string, unknown>> {
 		const current = await this.loadVisible(authz, id, "update", false);
 		const version = requireCurrentVersion(current, expectedVersion(ifMatch, bodyVersion));
-		const snapshot = await this.versions.get(id, toVersion);
+		const snapshot = await this.versions.get(id, toVersion, current);
 		if (!snapshot) {
 			throw new ApiError("unprocessable", "version does not exist");
 		}

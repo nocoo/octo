@@ -568,7 +568,9 @@ export class MemoryRepo {
 			binds.push(JSON.stringify(query.spaceIds));
 		}
 		if (query.ownSourceKeyId) {
-			where.push("m.source_key_id = ?");
+			where.push(
+				query.trashedOnly ? "m.source_key_id = ?" : "(m.deleted_at IS NULL OR m.source_key_id = ?)",
+			);
 			binds.push(query.ownSourceKeyId);
 		}
 		const types = query.filters.types;

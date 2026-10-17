@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — History reads escaped the authorized snapshot
+
+MAX review reproduced a move between loading the authorized memory and selecting its new hidden version. Version list/get/diff queries now bind the authorized space and current version and require a live memory in the same SELECT. Interleaving regression tests prove that moved content cannot escape. The same review found that `include=trashed` applied only a delete-operation flag, not delete ownership. Its SQL now excludes foreign deleted entries while preserving ordinary live read visibility. Equivalent resource representations must share the full authorization predicate, not only permission flags.
+
 ## 2026-10-17 — Memory writes preceded their replay transaction
 
 After integrating M6, M2 still committed its own D1 batch before the middleware saved the idempotent outcome. A forced replay-storage failure returned 503 while the new memory remained. HTTP mutations now stage their full memory transaction for the middleware's sole batch; a guarded version snapshot or trash event aborts the batch if the authorized CAS changes no row. Tests cover every mutation's single commit and effect-free replay, persistence failure rollback, and concurrent moves before PATCH/DELETE commit. Unit setup initially omitted the replay-chunk migration and then reused an existing fixture slug; the corrected tests use the shared fully migrated database. Check the actual schema and fixture identities before attributing a harness failure to production behavior.
