@@ -104,6 +104,10 @@ During the regression-test rewrite, a lookup-error spy also intercepted the
 verification reads. Verify persisted state through the unmocked reader so fault
 injection remains limited to the operation under test.
 
+## 2026-10-17 — Divergent search tag normalization
+
+M4 retained an ASCII-only normalizer after rebasing onto M3's Latin-aware tag repository. A tag renamed to `CAFÉ` was stored as `café` but disappeared from uppercase tag searches in every channel. Search now imports the repository normalizer directly; resolver tests preserve unknown-tag and redirect semantics, and real HTTP tests rename a tag before exercising both tag filters across FTS, vector and hybrid. Integration review must compare shared domain transformations, not merely preserve both modules during conflict resolution.
+
 ## 2026-10-17 — Unsupported local Vectorize initialization
 
 The M4 binding change incorrectly treated `remote=false` as sufficient for local operation after inspecting the remote-proxy configuration. Independent L2 at `d4413e9` disproved that assumption: Wrangler 4.145.0 initializes the unsupported Vectorize binding before application code selects D1, so the Worker failed before any HTTP tests ran. Blocking remote access and supporting local initialization are separate guarantees.

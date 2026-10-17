@@ -174,6 +174,30 @@ describe("POST /api/v1/search", () => {
 		},
 	);
 
+	it("searches a tag renamed through the API using shared Latin normalization", async () => {
+		const renamed = await post("tags/search-infra/rename", { new_name: "CAFÉ" }, "admin");
+		expect(renamed.status).toBe(200);
+		try {
+			for (const mode of ["fts", "vector", "hybrid"]) {
+				for (const field of ["tags_all", "tags_any"]) {
+					const res = await post("search", {
+						query: "cloudflare",
+						vector,
+						mode,
+						filters: { [field]: ["CAFÉ"] },
+					});
+					expect(res.status).toBe(200);
+					const body = (await res.json()) as SearchBody;
+					expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
+					expect(body.items[0]?.tags).toEqual(["café"]);
+				}
+			}
+		} finally {
+			const restored = await post("tags/café/rename", { new_name: "search-infra" }, "admin");
+			expect(restored.status).toBe(200);
+		}
+	});
+
 	it.each(["fts", "vector", "hybrid"])(
 		"returns empty results for a zero-space read key in %s mode",
 		async (mode) => {

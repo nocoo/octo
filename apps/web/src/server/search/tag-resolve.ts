@@ -1,7 +1,7 @@
-import { normalizeTagName } from "./tags";
+import { normalizeTag } from "../repo/tags";
 
 async function resolveOneCanonicalTagId(db: D1Database, raw: string): Promise<string | null> {
-	const name = normalizeTagName(raw);
+	const name = normalizeTag(raw);
 	const row = await db
 		.prepare("SELECT id, merged_into FROM tags WHERE name = ?")
 		.bind(name)
