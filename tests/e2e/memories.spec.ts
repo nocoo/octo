@@ -62,6 +62,74 @@ test("search, read, edit, resolve a real stale-version conflict, and rollback", 
 	await expect(page.getByText("My local revision.", { exact: true })).toHaveCount(0);
 });
 
+for (const navigation of [
+	"Read memory link",
+	"sidebar",
+	"command palette",
+	"browser Back",
+] as const) {
+	test(`dirty editor guards ${navigation} without saving the draft`, async ({ page, admin }) => {
+		const memory = await admin.memory();
+		const path = `/memories/${encodeURIComponent(memory.id)}`;
+		await page.goto(path);
+		await page.getByRole("link", { name: "Edit memory", exact: true }).click();
+		await expect(page).toHaveURL(new RegExp(`${path}/edit$`));
+		const editURL = page.url();
+		const body = page.getByRole("textbox", { name: "Markdown body", exact: true });
+		await expect(body).toHaveValue(memory.body);
+		const draft = `${memory.body}\nAn unsaved navigation draft.`;
+		await body.fill(draft);
+		async function leaveEditor() {
+			switch (navigation) {
+				case "Read memory link":
+					await page.getByRole("link", { name: "Read memory", exact: true }).click();
+					break;
+				case "sidebar":
+					await page
+						.getByRole("navigation", { name: "主导航", exact: true })
+						.getByRole("button", { name: "设置", exact: true })
+						.click();
+					break;
+				case "command palette":
+					await page.getByRole("button", { name: "搜索与命令", exact: true }).click();
+					await page.getByRole("combobox", { name: "搜索页面或记忆", exact: true }).fill("设置");
+					await page.getByRole("option", { name: "设置", exact: true }).click();
+					break;
+				case "browser Back":
+					await page.goBack();
+					break;
+			}
+		}
+		const confirmation = page.getByRole("alertdialog", {
+			name: "Discard unsaved changes?",
+			exact: true,
+		});
+		await leaveEditor();
+		await expect(confirmation).toBeVisible();
+		await confirmation.getByRole("button", { name: "Keep editing", exact: true }).click();
+		await expect(confirmation).not.toBeVisible();
+		await expect(page).toHaveURL(editURL);
+		await expect(body).toHaveValue(draft);
+		expect(await admin.json<TestMemory>(path)).toMatchObject({
+			body: memory.body,
+			version: memory.version,
+		});
+		await leaveEditor();
+		await expect(confirmation).toBeVisible();
+		await confirmation.getByRole("button", { name: "Discard changes", exact: true }).click();
+		await expect(confirmation).not.toBeVisible();
+		const toSettings = navigation === "sidebar" || navigation === "command palette";
+		await expect(page).toHaveURL(new RegExp(`${toSettings ? "/settings" : path}$`));
+		await expect(
+			page.getByRole("heading", { name: toSettings ? "Settings" : memory.title, exact: true }),
+		).toBeVisible();
+		expect(await admin.json<TestMemory>(path)).toMatchObject({
+			body: memory.body,
+			version: memory.version,
+		});
+	});
+}
+
 test("mobile reader keeps content and TOC usable without horizontal overflow", async ({
 	page,
 	admin,
