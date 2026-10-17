@@ -73,19 +73,29 @@ describe("tags api", () => {
 		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg1')`);
 		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm2', 'tg1')`);
 		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg2')`);
-		const anon = await fetch(`${base}/api/v1/tags`);
-		expect(anon.status).toBe(401);
-
 		const drop = await mint({ ops: "w" });
-		const dropRes = await fetch(`${base}/api/v1/tags`, { headers: drop.headers });
-		expect(dropRes.status).toBe(403);
-
 		const reader = await mint({
 			ops: "r",
 			scope: "spaces",
 			space_ids_json: '["sp1"]',
 			role: "project",
 		});
+		const readerAll = await mint({ ops: "r", scope: "all" });
+		const scoped = await mint({
+			ops: "u",
+			scope: "spaces",
+			space_ids_json: '["sp1"]',
+			role: "project",
+		});
+		const admin = await mint({});
+		const jsonHeaders = { ...admin.headers, "content-type": "application/json" };
+
+		const anon = await fetch(`${base}/api/v1/tags`);
+		expect(anon.status).toBe(401);
+
+		const dropRes = await fetch(`${base}/api/v1/tags`, { headers: drop.headers });
+		expect(dropRes.status).toBe(403);
+
 		const listed = await fetch(`${base}/api/v1/tags`, { headers: reader.headers });
 		expect(listed.status).toBe(200);
 		const listBody = (await listed.json()) as {
@@ -96,7 +106,6 @@ describe("tags api", () => {
 		const alpha = listBody.items.find((t) => t.name === "alpha");
 		expect(alpha?.use_count).toBe(1);
 
-		const readerAll = await mint({ ops: "r", scope: "all" });
 		const readerRename = await fetch(`${base}/api/v1/tags/alpha/rename`, {
 			method: "POST",
 			headers: { ...readerAll.headers, "content-type": "application/json" },
@@ -104,21 +113,12 @@ describe("tags api", () => {
 		});
 		expect(readerRename.status).toBe(403);
 
-		const scoped = await mint({
-			ops: "u",
-			scope: "spaces",
-			space_ids_json: '["sp1"]',
-			role: "project",
-		});
 		const scopedMerge = await fetch(`${base}/api/v1/tags/alpha/merge`, {
 			method: "POST",
 			headers: { ...scoped.headers, "content-type": "application/json" },
 			body: JSON.stringify({ into: "beta" }),
 		});
 		expect(scopedMerge.status).toBe(403);
-
-		const admin = await mint({});
-		const jsonHeaders = { ...admin.headers, "content-type": "application/json" };
 
 		const conflict = await fetch(`${base}/api/v1/tags/alpha/rename`, {
 			method: "POST",
