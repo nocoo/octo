@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
 	dispose: vi.fn(async () => {}),
 }));
 vi.mock("../../../../../scripts/fixture-d1", () => ({
+	waitForFixtureBackground: async () => {},
 	openFixtureD1: (...args: string[]) => state.create(...args),
 }));
 let f: ReturnType<typeof sqliteD1>;

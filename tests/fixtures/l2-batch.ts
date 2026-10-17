@@ -1,6 +1,10 @@
 import { afterAll } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
-import { type FixtureD1Session, openFixtureD1 } from "../../scripts/fixture-d1";
+import {
+	type FixtureD1Session,
+	openFixtureD1,
+	waitForFixtureBackground,
+} from "../../scripts/fixture-d1";
 import { type AsyncD1Exec, assertAsyncTestMarker } from "../../scripts/local-d1";
 
 export const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
@@ -33,10 +37,15 @@ export async function e2eD1(): Promise<AsyncD1Exec> {
 	if (session && (session.persist !== persist || session.config !== config)) {
 		throw new Error("fixture D1 cannot change isolated runs before disposal");
 	}
+	await waitForFixtureBackground(base);
 	session ??= { persist, config, opened: openFixtureD1(persist, config) };
 	const runtime = await session.opened;
-	await assertAsyncTestMarker(runtime.exec);
-	return runtime.exec;
+	const exec: AsyncD1Exec = async (args) => {
+		await waitForFixtureBackground(base);
+		return runtime.exec(args);
+	};
+	await assertAsyncTestMarker(exec);
+	return exec;
 }
 export function sqlText(value: string): string {
 	return `'${value.replaceAll("'", "''")}'`;

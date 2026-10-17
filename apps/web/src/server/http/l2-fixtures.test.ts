@@ -13,14 +13,17 @@ const state = vi.hoisted(() => ({
 	exec: vi.fn<(args: string[]) => Promise<string>>(),
 	create: vi.fn(),
 	dispose: vi.fn(async () => {}),
+	drain: vi.fn(async () => {}),
 }));
 vi.mock("../../../../../scripts/fixture-d1", () => ({
+	waitForFixtureBackground: () => state.drain(),
 	openFixtureD1: (...args: string[]) => state.create(...args),
 }));
 beforeEach(() => {
 	state.exec.mockReset();
 	state.create.mockReset().mockResolvedValue({ exec: state.exec, dispose: state.dispose });
 	state.dispose.mockClear();
+	state.drain.mockReset().mockResolvedValue(undefined);
 	vi.stubEnv("OCTO_PERSIST", "isolated-run");
 	vi.stubEnv("OCTO_CONFIG", "isolated.toml");
 });
@@ -46,6 +49,25 @@ async function remainsPending(promise: Promise<unknown>) {
 }
 
 describe("L2 async fixture call sites", () => {
+	it("does not open shared storage or execute SQL until background writes finish", async () => {
+		state.exec.mockResolvedValue('[{"results":[{"value":"test"}]}]');
+		const opening = Promise.withResolvers<void>();
+		state.drain.mockReturnValueOnce(opening.promise);
+		const pending = e2eD1();
+		await remainsPending(pending);
+		expect(state.create).not.toHaveBeenCalled();
+		opening.resolve();
+		const execute = await pending;
+		const writing = Promise.withResolvers<void>();
+		state.drain.mockReturnValueOnce(writing.promise);
+		const query = execute(["--command", "SELECT 1"]);
+		await remainsPending(query);
+		expect(state.exec).toHaveBeenCalledTimes(1);
+		writing.resolve();
+		await query;
+		expect(state.exec).toHaveBeenCalledTimes(2);
+	});
+
 	it("reuses one local runtime for repeated fixture access in an isolated process", async () => {
 		state.exec.mockResolvedValue('[{"results":[{"value":"test"}]}]');
 		await e2eD1();

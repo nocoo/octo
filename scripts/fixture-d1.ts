@@ -7,6 +7,15 @@ import type { AsyncD1Exec } from "./local-d1";
 
 export type FixtureD1Session = { exec: AsyncD1Exec; dispose: () => Promise<void> };
 
+export async function waitForFixtureBackground(
+	base: string,
+	request: (url: string, init: RequestInit) => Promise<Response> = fetch,
+): Promise<void> {
+	const response = await request(`${base}/api/__test/background`, { method: "POST" });
+	if (!response.ok) throw new Error("fixture background barrier failed");
+	await response.arrayBuffer();
+}
+
 function assertRunPaths(persist: string, config: string): void {
 	if (
 		!isAbsolute(persist) ||

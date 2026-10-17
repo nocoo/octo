@@ -15,6 +15,7 @@ vi.mock("../../../../../scripts/local-d1", async (importOriginal) => ({
 	},
 }));
 vi.mock("../../../../../scripts/fixture-d1", () => ({
+	waitForFixtureBackground: async () => {},
 	openFixtureD1: async () => ({
 		exec: async (args: string[]) => {
 			await new Promise<void>((resolve) => setImmediate(resolve));

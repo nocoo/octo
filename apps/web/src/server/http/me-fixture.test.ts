@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
 	},
 }));
 vi.mock("../../../../../scripts/fixture-d1", () => ({
+	waitForFixtureBackground: async () => {},
 	openFixtureD1: async () => ({
 		exec: async (args: string[]) => state.exec(args),
 		dispose: async () => {},

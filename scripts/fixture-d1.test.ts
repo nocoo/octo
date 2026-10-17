@@ -2,7 +2,7 @@ import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openFixtureD1 } from "./fixture-d1";
+import { openFixtureD1, waitForFixtureBackground } from "./fixture-d1";
 
 const platform = vi.hoisted(() => ({ open: vi.fn(), split: vi.fn<(sql: string) => string[]>() }));
 vi.mock("wrangler", () => ({
@@ -45,6 +45,21 @@ function binding() {
 }
 
 describe("official local fixture D1 runtime", () => {
+	it("awaits the worker background barrier before using shared local storage", async () => {
+		const request = vi.fn(async () => Response.json({ drained: true }));
+		await waitForFixtureBackground("http://127.0.0.1:17059", request);
+		expect(request).toHaveBeenCalledExactlyOnceWith(
+			"http://127.0.0.1:17059/api/__test/background",
+			{ method: "POST" },
+		);
+		await expect(
+			waitForFixtureBackground(
+				"http://127.0.0.1:17059",
+				async () => new Response("missing", { status: 404 }),
+			),
+		).rejects.toThrow("background barrier failed");
+	});
+
 	it("shares CLI v3 persistence with explicit local-only options and uses the official SQL splitter", async () => {
 		const f = await layout();
 		const b = binding();
