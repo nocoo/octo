@@ -13,7 +13,7 @@ export function parityFixture() {
 	app.onError((error) => toErrorResponse(error, "parity-test"));
 	app.use("/api/admin/*", accessMiddleware, adminWriteOriginMiddleware);
 	app.route("/api/admin", createAdminParityRoutes());
-	app.post("/api/admin/keys", (c) => c.json({ plaintext: "must-not-persist" }));
+	app.post("/api/admin/keys", (context) => context.json({ plaintext: "must-not-persist" }));
 	const files = { put: vi.fn(), delete: vi.fn() };
 	const env = {
 		DB: db,

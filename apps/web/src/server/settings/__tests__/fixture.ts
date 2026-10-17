@@ -17,7 +17,7 @@ export const SETTINGS = {
 export function fixture() {
 	const raw = new DatabaseSync(":memory:");
 	for (const file of readdirSync("migrations")
-		.filter((f) => f.endsWith(".sql"))
+		.filter((filename) => filename.endsWith(".sql"))
 		.sort()) {
 		raw.exec(migrationSqlForNode(readFileSync(`migrations/${file}`, "utf8")));
 	}
