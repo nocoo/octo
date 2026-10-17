@@ -390,6 +390,12 @@ key names retain their longer limit.
 
 ## M7 blocked by the local Wrangler proxy
 
+A final cleanup inspection accidentally named its zsh loop variable `path`,
+which shadows zsh's special executable-search array and made command lookup
+fail within that one shell invocation. No configuration or worktree was changed.
+The inspection was rerun with `worktreeDir`; avoid shell-special parameter names
+in administrative loops.
+
 After the integration fixes, the complete real-HTTP suite passes 205 of 206
 tests. The remaining case sends an unauthenticated vector PUT, a readonly-key
 vector PUT, then a writeonly-key vector PUT with the same complete 3,132-byte
