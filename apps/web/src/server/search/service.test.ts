@@ -19,9 +19,6 @@ describe("searchMemories", () => {
 			if (sql.includes("memories_fts")) {
 				return { results: [{ id: "m1", score: -3 }] };
 			}
-			if (sql.includes("memory_tags")) {
-				return { results: [] };
-			}
 			return {
 				results: [
 					{
@@ -30,6 +27,7 @@ describe("searchMemories", () => {
 						space_slug: "kb",
 						title: "t",
 						body: "cloudflare",
+						tags_json: "[]",
 						type: "note",
 						importance: 0.5,
 						created_at: 1,
@@ -64,6 +62,7 @@ describe("searchMemories", () => {
 			space_slug: "kb",
 			title: "t",
 			body: "cloudflare notes",
+			tags_json: "[]",
 			type: "note",
 			importance: 0.5,
 			created_at: 1,
@@ -126,6 +125,7 @@ describe("searchMemories", () => {
 			importance: 0.5,
 			created_at: 1,
 			updated_at: 5,
+			tags_json: "[]",
 			event_time: null,
 		};
 		const query = async (sql: string) => {
@@ -175,6 +175,7 @@ describe("searchMemories", () => {
 						space_slug: "kb",
 						title: "t",
 						body: "b",
+						tags_json: "[]",
 						type: "note",
 						importance: 0.5,
 						created_at: 1,

@@ -19,6 +19,7 @@ describe("batchGetMemories visibility", () => {
 								created_at: 1,
 								updated_at: 2,
 								event_time: null,
+								tags_json: "[]",
 							},
 						],
 					}),

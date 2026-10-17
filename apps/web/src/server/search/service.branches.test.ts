@@ -12,6 +12,7 @@ const memory = {
 	created_at: 1,
 	updated_at: 2,
 	event_time: null,
+	tags_json: "[]",
 };
 
 function dbFrom(handler: (sql: string) => Promise<{ results: unknown[] }>) {

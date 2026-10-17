@@ -14,6 +14,7 @@ export type MemoryRow = {
 	created_at: number;
 	updated_at: number;
 	event_time: number | null;
+	tags_json: string;
 };
 
 export async function loadSpaceSlugMap(db: D1Database): Promise<Map<string, string>> {
@@ -37,7 +38,11 @@ export async function loadMemoriesByIds(
 	const rows = await db
 		.prepare(
 			`SELECT m.id, m.space_id, s.slug AS space_slug, m.title, m.body, m.type, m.importance,
-        m.created_at, m.updated_at, m.event_time
+        m.created_at, m.updated_at, m.event_time,
+        (SELECT json_group_array(name) FROM (
+          SELECT t.name FROM memory_tags mt JOIN tags t ON t.id = mt.tag_id
+          WHERE mt.memory_id = m.id ORDER BY t.name
+        )) AS tags_json
        FROM memories m
        JOIN spaces s ON s.id = m.space_id
        WHERE ${idIn.sql} AND ${filter.clauses.join(" AND ")}`,
@@ -51,40 +56,14 @@ export async function loadMemoriesByIds(
 	return map;
 }
 
-export async function loadTagsForMemories(
-	db: D1Database,
-	memoryIds: string[],
-): Promise<Map<string, string[]>> {
-	if (memoryIds.length === 0) {
-		return new Map();
-	}
-	const idIn = sqlInClause("mt.memory_id", memoryIds);
-	const rows = await db
-		.prepare(
-			`SELECT mt.memory_id, t.name
-       FROM memory_tags mt
-       JOIN tags t ON t.id = mt.tag_id
-       WHERE ${idIn.sql}`,
-		)
-		.bind(...idIn.binds)
-		.all<{ memory_id: string; name: string }>();
-	const map = new Map<string, string[]>();
-	for (const row of d1Results(rows)) {
-		const list = map.get(row.memory_id) ?? [];
-		list.push(row.name);
-		map.set(row.memory_id, list);
-	}
-	return map;
-}
-
-export function memoryToApi(row: MemoryRow, tags: string[]) {
+export function memoryToApi(row: MemoryRow) {
 	return {
 		id: row.id,
 		space: row.space_slug,
 		title: row.title,
 		body: row.body,
 		type: row.type,
-		tags,
+		tags: JSON.parse(row.tags_json) as string[],
 		importance: row.importance,
 		created_at: msToIso(row.created_at),
 		updated_at: msToIso(row.updated_at),

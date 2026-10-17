@@ -11,13 +11,7 @@ import { runFtsChannel } from "./fts-channel";
 import { DEFAULT_FUSION, fuseChannels, type RankedChannel } from "./fusion";
 import { inferSearchMode } from "./infer-mode";
 import { minMaxNormalize } from "./math";
-import {
-	loadMemoriesByIds,
-	loadSpaceSlugMap,
-	loadTagsForMemories,
-	type MemoryRow,
-	memoryToApi,
-} from "./memory-read";
+import { loadMemoriesByIds, loadSpaceSlugMap, type MemoryRow, memoryToApi } from "./memory-read";
 import { channelScore } from "./scores";
 import { highlightSnippet } from "./snippet";
 import { sqlInClause } from "./sql-in";
@@ -162,7 +156,6 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 			return (memories.get(b)?.updated_at ?? 0) - (memories.get(a)?.updated_at ?? 0);
 		})
 		.slice(0, limit);
-	const tags = await loadTagsForMemories(deps.db, ordered);
 	const ftsNorm = bm25ToNormalized(ftsHits);
 	const vecNorm = minMaxNormalize(new Map(vectorHits.map((h) => [h.id, h.score])));
 	const terms = req.query
@@ -174,7 +167,7 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 		const ftsRank = ftsRanked.find((r) => r.id === id);
 		const vecRank = vecRanked.find((r) => r.id === id);
 		const item = {
-			...memoryToApi(row, tags.get(id) ?? []),
+			...memoryToApi(row),
 			scores: {
 				fused: fusedScores.get(id) ?? 0,
 				fts: channelScore(

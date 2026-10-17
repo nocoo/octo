@@ -1,7 +1,7 @@
 import type { AuthzContext } from "./authz";
 import { canReadSpace } from "./authz";
 import { buildMemoryFilterSql } from "./filters-sql";
-import { loadMemoriesByIds, loadTagsForMemories, memoryToApi } from "./memory-read";
+import { loadMemoriesByIds, memoryToApi } from "./memory-read";
 
 export async function batchGetMemories(db: D1Database, authz: AuthzContext, ids: string[]) {
 	const unique = [...new Set(ids)];
@@ -10,7 +10,6 @@ export async function batchGetMemories(db: D1Database, authz: AuthzContext, ids:
 			? { clauses: ["m.deleted_at IS NULL"], binds: [] }
 			: buildMemoryFilterSql(undefined, authz.visibleSpaceIds);
 	const rows = await loadMemoriesByIds(db, unique, filter);
-	const tags = await loadTagsForMemories(db, [...rows.keys()]);
 	const items = [];
 	const found = new Set<string>();
 	for (const id of unique) {
@@ -19,7 +18,7 @@ export async function batchGetMemories(db: D1Database, authz: AuthzContext, ids:
 			continue;
 		}
 		found.add(id);
-		items.push(memoryToApi(row, tags.get(id) ?? []));
+		items.push(memoryToApi(row));
 	}
 	const missing = unique.filter((id) => !found.has(id));
 	return { items, missing };

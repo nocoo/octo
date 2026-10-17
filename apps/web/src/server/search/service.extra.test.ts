@@ -13,6 +13,7 @@ function memory(id: string, updated = 1) {
 		created_at: 1,
 		updated_at: updated,
 		event_time: null,
+		tags_json: "[]",
 	};
 }
 

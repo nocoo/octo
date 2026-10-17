@@ -12,7 +12,10 @@ afterEach(() => {
 	for (const db of databases.splice(0)) db.close();
 });
 
-function fixture(beforeQuery: (sql: string) => void = () => {}) {
+function fixture(
+	beforeQuery: (sql: string) => void = () => {},
+	afterQuery: (sql: string) => void = () => {},
+) {
 	const sqlite = new DatabaseSync(":memory:");
 	databases.push(sqlite);
 	sqlite.exec(migrationSqlForNode(readFileSync("migrations/0001_core.sql", "utf8")));
@@ -26,7 +29,9 @@ function fixture(beforeQuery: (sql: string) => void = () => {}) {
 			const execute = (binds: SQLInputValue[]) => {
 				expect(binds.length).toBeLessThanOrEqual(100);
 				beforeQuery(sql);
-				return sqlite.prepare(sql).all(...binds);
+				const rows = sqlite.prepare(sql).all(...binds);
+				afterQuery(sql);
+				return rows;
 			};
 			return {
 				all: async () => ({ results: execute([]) }),
@@ -139,6 +144,31 @@ describe("bounded search SQL", () => {
 });
 
 describe("same-statement memory visibility", () => {
+	it.each(["search", "batchGet"])(
+		"%s never mixes authorized content with newly hidden tags",
+		async (operation) => {
+			const { db, sqlite } = fixture(undefined, (sql) => {
+				if (sql.includes("m.body, m.type"))
+					sqlite.exec(`
+				UPDATE memories SET space_id='s2' WHERE id='m1';
+				DELETE FROM memory_tags WHERE memory_id='m1';
+				INSERT INTO memory_tags VALUES ('m1','secret');`);
+			});
+			sqlite.exec(
+				"INSERT INTO tags VALUES ('public','public','Public',NULL,1,1), ('secret','secret','Secret',NULL,1,1); INSERT INTO memory_tags VALUES ('m1','public')",
+			);
+			const result =
+				operation === "search"
+					? await searchMemories(authz, { query: "cloudflare" }, { db })
+					: await batchGetMemories(db, authz, ["m1"]);
+			expect(result.items).toHaveLength(1);
+			expect(result.items[0]?.tags).toEqual(["public"]);
+			expect(sqlite.prepare("SELECT space_id FROM memories WHERE id='m1'").get()?.space_id).toBe(
+				"s2",
+			);
+		},
+	);
+
 	it("does not return content moved to a hidden space after candidate validation", async () => {
 		const { db, sqlite } = fixture((sql) => {
 			if (sql.includes("m.body, m.type")) {
