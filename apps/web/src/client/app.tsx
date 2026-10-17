@@ -4,6 +4,7 @@ import { AccentProvider } from "@nocoo/basalt/providers/accent";
 import type { ReactNode } from "react";
 import { BrowserRouter, Link, Route, Routes } from "react-router";
 import { AppShell } from "./components/layout/app-shell";
+import { OverviewPage } from "./routes/overview";
 
 function RouterLink({
 	href,
@@ -31,10 +32,7 @@ export function App() {
 							<Toaster />
 							<Routes>
 								<Route element={<AppShell />}>
-									<Route
-										index
-										element={<PageHeader title="总览" description="每一条记忆，都有迹可循。" />}
-									/>
+									<Route index element={<OverviewPage />} />
 									<Route
 										path="*"
 										element={<PageHeader title="页面不存在" description="请从主导航选择页面。" />}
