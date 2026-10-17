@@ -104,6 +104,10 @@ During the regression-test rewrite, a lookup-error spy also intercepted the
 verification reads. Verify persisted state through the unmocked reader so fault
 injection remains limited to the operation under test.
 
+## 2026-10-17 — FTS effective characters and decomposed accents
+
+Counting Unicode code points still misclassified `e\u0301t`: local D1's trigram tokenizer removes the acute mark, leaving only two effective characters. The same-body HTTP query missed, and a mixed query incorrectly retained a plain `et` distractor because no short-term post-filter ran. An isolated local D1 vocabulary probe established the exact removable combining-mark subset; marks such as U+0345, U+0363 and U+1AB0 remain effective characters. Classification now subtracts only that verified subset without normalizing returned terms, composing Jamo or decomposing Hangul. A permanent D1 vocabulary regression checks all U+0300–U+036F marks plus extended marks, accents, Hangul and supplementary CJK against the application's classification; HTTP tests protect both bounded LIKE and original-term instr semantics.
+
 ## 2026-10-17 — Cartesian Vectorize query amplification
 
 The byte-budget fix bounded individual payloads but not the partition tree: 8 spaces × 100 sources × 50 types with 900-character membership entries expanded to 20,000 queries. Sequential execution did not bound total work. Planning now permits at most 64 leaves, incrementing the projected leaf count before each split and rejecting the 65th before any outbound query. This fixed per-request budget keeps vector calls below 1% of the paid Worker's default 10,000-subrequest ceiling, reserves substantial headroom for authentication, D1 revalidation and auditing, and bounds planning to at most 127 visited nodes and 64 materialized filters. It is an internal work budget, not configurable rate limiting. Tests protect exact-budget success, one-over failure, early termination of the original Cartesian reproduction, and production-route 503 without Vectorize calls; ordinary large-filter and global-topK regressions remain enabled.

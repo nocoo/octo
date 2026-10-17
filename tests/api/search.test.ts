@@ -11,8 +11,10 @@ const pepper = "change-me-api-key-pepper";
 const VISIBLE = "mem_srch_l2_vis";
 const HIDDEN = "mem_srch_l2_hid";
 const TRASHED = "mem_srch_l2_trash";
+const ACCENT = "mem_srch_l2_accent";
+const PLAIN = "mem_srch_l2_plain";
 const memoryIds = [VISIBLE, HIDDEN, TRASHED];
-const quotedIds = memoryIds.map((id) => `'${id}'`).join(",");
+const quotedIds = [...memoryIds, ACCENT, PLAIN].map((id) => `'${id}'`).join(",");
 const vector = { profile: "te3-small-1536", values: [3, 4, ...Array<number>(1534).fill(0)] };
 const tokens: Record<string, string> = {};
 
@@ -78,6 +80,15 @@ INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM mem
 INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
 VALUES ('${id}','te3-small-1536','text-embedding-3-small',1536,X'${blob}','hash',${now});
 INSERT INTO memory_tags VALUES ('${id}','tag_srch_infra');`);
+	}
+	for (const [id, body] of [
+		[ACCENT, "e\u0301t"],
+		[PLAIN, "et"],
+	]) {
+		commands.push(`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
+VALUES ('${id}','sp_srch_l2_vis','Accent fixture','${body}','note','${source}','hash',${now},${now});
+INSERT INTO memories_fts(title,body,tags) VALUES ('Accent fixture','${body}','');
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;`);
 	}
 	await d1(["--command", commands.join("\n")]);
 });
@@ -146,6 +157,21 @@ describe("POST /api/v1/search", () => {
 		const body = (await res.json()) as SearchBody;
 		expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
 		expect(body.channels.fts).toEqual({ candidates: 1, partial: true });
+	});
+
+	it.each([
+		{ query: "e\u0301t", id: ACCENT, partial: true },
+		{ query: "fixture e\u0301t", id: ACCENT, partial: false },
+		{ query: "fixture et", id: PLAIN, partial: false },
+	])("preserves original short terms in $query", async ({ query, id, partial }) => {
+		const batch = await post("memories:batchGet", { ids: [ACCENT] });
+		expect(batch.status).toBe(200);
+		expect(await batch.json()).toMatchObject({ items: [{ id: ACCENT, body: "e\u0301t" }] });
+		const res = await post("search", { query, mode: "fts" });
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as SearchBody;
+		expect(body.items.map((item) => item.id)).toEqual([id]);
+		expect(body.channels.fts).toEqual({ candidates: 1, partial });
 	});
 
 	it.each(["fts", "vector", "hybrid"])(

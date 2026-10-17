@@ -1,7 +1,58 @@
 import { describe, expect, it } from "vitest";
+import { tokenizeQuery } from "../../apps/web/src/server/search/tokenizer";
+import { assertAsyncTestMarker } from "../../scripts/local-d1";
 import { e2eD1, query } from "../fixtures/l2-batch";
 
 describe("FTS5 trigram on local D1", () => {
+	it("classifies effective term length like the actual remove_diacritics tokenizer", async () => {
+		const d1 = await e2eD1();
+		const terms = [
+			"e\u0301t",
+			"e\u0301ta",
+			"e\u0301\u0323t",
+			"ét",
+			"étab",
+			"가나",
+			"가나다",
+			"가ᄂ",
+			"𠮷野",
+			"𠮷野家",
+			"e\u1ab0t",
+			"e\u1dc0t",
+			"e\u20d0t",
+			"e\ufe20t",
+			"किता",
+			...Array.from({ length: 112 }, (_, i) => `a${String.fromCodePoint(0x300 + i)}b`),
+		];
+		await d1([
+			"--command",
+			`CREATE VIRTUAL TABLE m4_term_probe USING fts5(body, tokenize='trigram remove_diacritics 1');
+CREATE VIRTUAL TABLE m4_term_vocab USING fts5vocab(m4_term_probe, 'instance');`,
+		]);
+		try {
+			await d1([
+				"--command",
+				terms
+					.map((term, i) => `INSERT INTO m4_term_probe(rowid,body) VALUES (${i + 1},'${term}');`)
+					.join("\n"),
+			]);
+			const tokens = await query<{ doc: number; term: string }>(
+				d1,
+				"SELECT doc,term FROM m4_term_vocab ORDER BY doc;",
+			);
+			const indexed = new Set(tokens.map((token) => token.doc));
+			for (const [i, term] of terms.entries()) {
+				expect(tokenizeQuery(term).longTerms.length > 0, JSON.stringify(term)).toBe(
+					indexed.has(i + 1),
+				);
+			}
+			expect(tokens.filter((token) => token.doc === 2).map((token) => token.term)).toEqual(["eta"]);
+		} finally {
+			await assertAsyncTestMarker(d1);
+			await d1(["--command", "DROP TABLE m4_term_vocab; DROP TABLE m4_term_probe;"]);
+		}
+	});
+
 	it("matches Chinese ≥3 chars, English substrings, and records 2-char + bm25 behaviour", async () => {
 		const d1 = await e2eD1();
 		await d1([

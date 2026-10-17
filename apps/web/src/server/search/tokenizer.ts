@@ -7,6 +7,9 @@ export type TokenizedQuery = {
 };
 
 const SPLIT_RE = /[\s\p{P}\p{S}]+/u;
+// SQLite FTS5 remove_diacritics=1 removes this subset, not all Unicode marks.
+const FTS_DIACRITICS_RE =
+	/[\u0300-\u0304\u0306-\u030c\u030f\u0311\u031b\u0323-\u0328\u032d\u032e\u0330\u0331]/gu;
 
 export function tokenizeQuery(query: string): TokenizedQuery {
 	const raw = query.trim();
@@ -17,7 +20,7 @@ export function tokenizeQuery(query: string): TokenizedQuery {
 	const longTerms: string[] = [];
 	const shortTerms: string[] = [];
 	for (const part of parts) {
-		if ([...part].length >= 3) {
+		if ([...part.replace(FTS_DIACRITICS_RE, "")].length >= 3) {
 			longTerms.push(part);
 		} else if (part.length > 0) {
 			shortTerms.push(part);
