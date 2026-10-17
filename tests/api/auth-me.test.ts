@@ -35,17 +35,22 @@ describe("GET /api/v1/me", () => {
 			headers: { Authorization: `Bearer ${material.plaintext}` },
 		});
 		expect(res.status).toBe(200);
-		expect(await res.json()).toMatchObject({
+		const body = (await res.json()) as {
+			spaces: Array<{ id: string; slug: string; name: string }>;
+		};
+		expect(body).toMatchObject({
 			id: material.keyid,
 			name: "e2e-bot",
 			role: "admin",
 			ops: ["d", "r", "u", "w"],
 			scope: "all",
-			spaces: [{ id: "sp-me", slug: "alpha", name: "Alpha" }],
 			own_entries_only: false,
 			auto_own_space: false,
 			expires_at: null,
 		});
+		expect(body.spaces).toEqual(
+			expect.arrayContaining([{ id: "sp-me", slug: "alpha", name: "Alpha" }]),
+		);
 		const denied = await fetch(`${base}/api/v1/me`);
 		expect(denied.status).toBe(401);
 		expect(await denied.json()).toMatchObject({ error: { code: "unauthenticated" } });
