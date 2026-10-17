@@ -50,7 +50,11 @@ describe("GET /api/admin/whoami", () => {
 			{ iss, aud: L2_ACCESS_AUD, exp: now + 3600, email: "e2e@local" },
 			"missing",
 		);
-		for (const jwt of [wrongAud, wrongIss, expired, unknownKid, undefined]) {
+		const parts = valid.split(".");
+		const sig = parts[2] ?? "";
+		const flipped = `${sig.slice(0, -1)}${sig.endsWith("A") ? "B" : "A"}`;
+		const badSig = `${parts[0]}.${parts[1]}.${flipped}`;
+		for (const jwt of [wrongAud, wrongIss, expired, unknownKid, badSig, undefined]) {
 			const res = await whoami(jwt);
 			expect(res.status).toBe(401);
 			expect(await res.json()).toMatchObject({ error: { code: "unauthenticated" } });
