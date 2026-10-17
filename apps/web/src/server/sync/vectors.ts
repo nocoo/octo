@@ -11,6 +11,7 @@ type SyncOptions = {
 	store?: Pick<VectorStore, "upsert" | "delete">;
 	now?: number;
 	limit?: number;
+	beforeSync?: (memoryId: string) => Promise<unknown>;
 };
 
 type SourceVector = {
@@ -66,69 +67,77 @@ export async function synchronizeVectors(
 		WHERE due_at <= ? AND lease_until <= ? ORDER BY due_at, memory_id LIMIT ?`)
 		.bind(now, now, limit)
 		.all<{ memory_id: string }>();
-	for (const job of jobs.results) {
-		const token = crypto.randomUUID();
-		const claim =
-			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?
+	await Promise.all(
+		jobs.results.map(async (job) => {
+			const token = crypto.randomUUID();
+			const claim =
+				await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?
 			WHERE memory_id = ? AND lease_until <= ? AND due_at <= ? RETURNING generation`)
-				.bind(token, now + SYNC_LEASE_MS, now, job.memory_id, now, now)
-				.first<{ generation: number }>();
-		if (!claim) continue;
-		try {
-			const source =
-				await env.DB.prepare(`SELECT m.id, s.slug AS space, m.type, m.source_key_id AS source,
+					.bind(token, now + SYNC_LEASE_MS, now, job.memory_id, now, now)
+					.first<{ generation: number }>();
+			if (!claim) return;
+			try {
+				await options.beforeSync?.(job.memory_id);
+				const current = await env.DB.prepare(`SELECT generation FROM vector_sync_jobs
+				WHERE memory_id = ? AND lease_token = ?`)
+					.bind(job.memory_id, token)
+					.first<{ generation: number }>();
+				if (!current) return;
+				const source =
+					await env.DB.prepare(`SELECT m.id, s.slug AS space, m.type, m.source_key_id AS source,
 				m.importance, m.created_at AS created, m.updated_at AS updated, m.event_time AS event,
 				mv.dim, mv.vector FROM memories m JOIN spaces s ON s.id = m.space_id
 				JOIN memory_vectors mv ON mv.memory_id = m.id
 				WHERE m.id = ? AND m.deleted_at IS NULL AND mv.profile_id = ?`)
-					.bind(job.memory_id, profileId)
-					.first<SourceVector>();
-			if (source) {
-				await store.upsert([
-					{
-						id: source.id,
-						values: decodeFloat32Vector(source.vector, source.dim),
-						metadata: {
-							space: source.space,
-							type: source.type,
-							source: source.source,
-							importance: source.importance,
-							created: source.created,
-							updated: source.updated,
-							...(source.event === null ? {} : { event: source.event }),
+						.bind(job.memory_id, profileId)
+						.first<SourceVector>();
+				if (source) {
+					await store.upsert([
+						{
+							id: source.id,
+							values: decodeFloat32Vector(source.vector, source.dim),
+							metadata: {
+								space: source.space,
+								type: source.type,
+								source: source.source,
+								importance: source.importance,
+								created: source.created,
+								updated: source.updated,
+								...(source.event === null ? {} : { event: source.event }),
+							},
 						},
-					},
-				]);
-			} else {
-				await store.delete([job.memory_id]);
-			}
-			const results = await env.DB.batch([
-				env.DB.prepare(`UPDATE memory_vectors SET indexed_at = ? WHERE memory_id = ? AND profile_id = ?
+					]);
+				} else {
+					await store.delete([job.memory_id]);
+				}
+				const results = await env.DB.batch([
+					env.DB.prepare(`UPDATE memory_vectors SET indexed_at = ? WHERE memory_id = ? AND profile_id = ?
 					AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND lease_token = ?)
 					AND EXISTS (SELECT 1 FROM memories WHERE id = ? AND deleted_at IS NULL)`).bind(
-					now,
-					job.memory_id,
-					profileId,
-					job.memory_id,
-					claim.generation,
-					token,
-					job.memory_id,
-				),
-				env.DB.prepare(`UPDATE vector_sync_jobs SET synced_generation = generation, lease_token = NULL,
+						now,
+						job.memory_id,
+						profileId,
+						job.memory_id,
+						current.generation,
+						token,
+						job.memory_id,
+					),
+					env.DB.prepare(`UPDATE vector_sync_jobs SET synced_generation = generation, lease_token = NULL,
 					lease_until = 0, due_at = ? WHERE memory_id = ? AND generation = ? AND lease_token = ?`).bind(
-					now + RECONCILE_INTERVAL_MS,
-					job.memory_id,
-					claim.generation,
-					token,
-				),
-			]);
-			if (results[1]?.meta.changes === 1) totals.synced++;
-			else await invalidate(env.DB, job.memory_id, token, now);
-		} catch {
-			totals.failed++;
-			console.error("vector_sync_failed");
-			await invalidate(env.DB, job.memory_id, token, now);
-		}
-	}
+						now + RECONCILE_INTERVAL_MS,
+						job.memory_id,
+						current.generation,
+						token,
+					),
+				]);
+				if (results[1]?.meta.changes === 1) totals.synced++;
+				else await invalidate(env.DB, job.memory_id, token, now);
+			} catch {
+				totals.failed++;
+				console.error("vector_sync_failed");
+				await invalidate(env.DB, job.memory_id, token, now);
+			}
+		}),
+	);
 	return totals;
 }

@@ -188,6 +188,11 @@ anti-entropy interval. Failed work is moved behind untouched due work, so a
 persistently failing prefix cannot starve later updates or purge tombstones.
 Claiming a lease also advances its queue position before the external call;
 an abandoned or hung call therefore cannot reclaim the queue head forever.
+The same claim covers embedding backfill before any gateway call. Up to 50
+claimed jobs run concurrently; another drain skips their live leases and can
+reach untouched deletion tombstones. After backfill, synchronization rechecks
+lease ownership and reads the current generation before reading the vector;
+an expired owner's completion cannot acknowledge a newer owner's work.
 Completed rows and tombstones are intentionally retained; this is the durable
 recovery cost of a destination without conditional/fenced writes.
 

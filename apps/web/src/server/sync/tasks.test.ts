@@ -1,36 +1,129 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
-import type { Env } from "../env";
-import { backfillMemory } from "../settings/backfill";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { encodeFloat32Vector } from "../search/math";
+import { fixture, SETTINGS } from "../settings/__tests__/fixture";
+import { saveEmbeddingSettings } from "../settings/config";
 import { runDerivedTasks } from "./tasks";
-import { synchronizeVectors } from "./vectors";
+import { SYNC_LEASE_MS } from "./vectors";
 
-vi.mock("../settings/backfill", () => ({ backfillMemory: vi.fn(async () => false) }));
-vi.mock("./vectors", () => ({ synchronizeVectors: vi.fn(async () => ({ synced: 1, failed: 0 })) }));
+async function setup(count: number) {
+	const { env, raw } = fixture();
+	raw.exec("INSERT INTO spaces (id, slug, name, created_at, updated_at) VALUES ('s','s','s',1,1)");
+	for (let index = 0; index < count; index++)
+		raw
+			.prepare(`INSERT INTO memories
+			(id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
+			VALUES (?,'s','Title','Body','note','client','hash',1,1)`)
+			.run(`memory-${String(index).padStart(2, "0")}`);
+	await saveEmbeddingSettings(env, SETTINGS, "admin:e@local");
+	return { env, raw };
+}
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+});
 
 describe("derived work coordination", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
-	it("bounds concurrent embedding work then synchronizes explicit and backfilled vectors", async () => {
-		const { db, sqlite } = sqliteD1();
-		for (let index = 0; index < 58; index++)
-			sqlite.prepare("INSERT INTO vector_sync_jobs (memory_id) VALUES (?)").run(`memory-${index}`);
-		const env = { DB: db } as Env;
-		expect(await runDerivedTasks(env, 100)).toEqual({ synced: 1, failed: 0 });
-		expect(backfillMemory).toHaveBeenCalledTimes(50);
-		expect(backfillMemory).toHaveBeenCalledWith(env, "memory-0");
-		expect(synchronizeVectors).toHaveBeenCalledWith(env, { now: 100 });
-		expect(vi.mocked(synchronizeVectors).mock.invocationCallOrder[0]).toBeGreaterThan(
-			vi.mocked(backfillMemory).mock.invocationCallOrder[49] as number,
+	it("leases and advances backfill before calls, preserving concurrent and interrupted drain fairness", async () => {
+		const { env, raw } = await setup(50);
+		raw.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-purge-tombstone')");
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let calls = 0;
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => {
+				calls++;
+				const held = calls <= 50;
+				if (calls === 50) entered.resolve();
+				if (held) await release.promise;
+				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+			}),
 		);
+		const abandoned = runDerivedTasks(env, 100);
+		await entered.promise;
+		try {
+			expect(
+				raw
+					.prepare(`SELECT count(*) AS count FROM vector_sync_jobs
+				WHERE lease_token IS NOT NULL AND lease_until = ? AND due_at = 100`)
+					.get(100 + SYNC_LEASE_MS)?.count,
+			).toBe(50);
+			expect(await runDerivedTasks(env, 101)).toEqual({ synced: 1, failed: 0 });
+			expect(calls).toBe(50);
+			expect(
+				raw
+					.prepare(
+						"SELECT synced_generation FROM vector_sync_jobs WHERE memory_id = 'z-purge-tombstone'",
+					)
+					.get()?.synced_generation,
+			).toBe(1);
+			const recoveredAt = 101 + SYNC_LEASE_MS;
+			expect(await runDerivedTasks(env, recoveredAt)).toEqual({ synced: 50, failed: 0 });
+			expect(calls).toBe(100);
+			expect(
+				raw
+					.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at = ?")
+					.get(recoveredAt)?.count,
+			).toBe(50);
+			release.resolve();
+			expect(await abandoned).toEqual({ synced: 0, failed: 0 });
+			expect(
+				raw
+					.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at = ?")
+					.get(recoveredAt)?.count,
+			).toBe(50);
+		} finally {
+			release.resolve();
+			await abandoned;
+			raw.close();
+		}
 	});
 
-	it("still syncs when no backfill jobs are due", async () => {
-		const { db } = sqliteD1();
-		await runDerivedTasks({ DB: db } as Env);
-		expect(backfillMemory).not.toHaveBeenCalled();
-		expect(synchronizeVectors).toHaveBeenCalledTimes(1);
+	it("acknowledges the generation created by backfill in the same drain", async () => {
+		const { env, raw } = await setup(1);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] })),
+		);
+		try {
+			expect(await runDerivedTasks(env, 100)).toEqual({ synced: 1, failed: 0 });
+			expect(raw.prepare("SELECT indexed_at FROM memory_vectors").get()?.indexed_at).toBe(100);
+			expect(
+				raw.prepare("SELECT generation = synced_generation AS synced FROM vector_sync_jobs").get()
+					?.synced,
+			).toBe(1);
+		} finally {
+			raw.close();
+		}
+	});
+
+	it("preserves and syncs current client vectors without a gateway call", async () => {
+		const { env, raw } = await setup(1);
+		raw
+			.prepare(`INSERT INTO memory_vectors
+			(memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
+			VALUES ('memory-00','tiny','tiny',3,?,'hash',1)`)
+			.run(encodeFloat32Vector([0, 1, 0]));
+		const gateway = vi.fn();
+		vi.stubGlobal("fetch", gateway);
+		try {
+			expect(await runDerivedTasks(env, 100)).toEqual({ synced: 1, failed: 0 });
+			expect(gateway).not.toHaveBeenCalled();
+			expect(raw.prepare("SELECT indexed_at FROM memory_vectors").get()?.indexed_at).toBe(100);
+			expect(await runDerivedTasks(env)).toEqual({ synced: 1, failed: 0 });
+			expect(raw.prepare("SELECT source_key_id FROM memories").get()?.source_key_id).toBe("client");
+		} finally {
+			raw.close();
+		}
+	});
+
+	it("does no work for an empty queue", async () => {
+		const { env, raw } = await setup(0);
+		try {
+			expect(await runDerivedTasks(env)).toEqual({ synced: 0, failed: 0 });
+		} finally {
+			raw.close();
+		}
 	});
 });

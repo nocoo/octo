@@ -455,3 +455,21 @@ production body handling, hook, or resource-isolation rule was relaxed.
 An initial preparation-failure test bound the original database method after installing its spy. The bound spy consumed the next injected failure during the initial lookup, so the test passed without exercising SQL preparation. Capturing the original method before installing the spy exposed an uncaught preparation failure. Purge now maps preparation and commit failures through the same safe 503 boundary, while its transactional guard rejects changed trash snapshots. Fault-injection tests must verify the failing phase, not merely the final status.
 
 The first full-suite run also exposed that the local migration loader reapplies every additive migration. The cleanup table migration now uses `IF NOT EXISTS`, matching the existing migration contract; isolated service tests alone did not establish that contract.
+
+## 2026-10-18 — Include backfill in the durable claim
+
+Fresh post-rebase MAX review found that the integrated derived-task coordinator
+awaited its whole backfill batch before entering the leased synchronizer. The
+earlier interruption-fairness fix therefore protected Vectorize calls but not
+embedding calls. A paused-gateway probe sent 100 calls for the same 50 memories
+across two drains while every lease and queue position remained unchanged;
+the following purge tombstone could starve after repeated interruptions.
+
+Backfill now runs inside each durable claim, after advancing its queue position,
+with the same bounded concurrency as before. Synchronization rechecks ownership
+and generation after backfill before writing the derived index or acknowledging
+it. A real-coordinator regression first failed with zero claimed jobs instead of
+50; it now covers paused backfill, a concurrent drain reaching the tombstone,
+expired-lease recovery, and stale-owner completion without overwriting the newer
+acknowledgement. Mocking the synchronizer in coordinator tests hid this boundary;
+interruption tests must exercise the complete path before every external call.
