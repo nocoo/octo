@@ -34,8 +34,10 @@
       "dependencies": {
         "@nocoo/basalt": "3.1.0",
         "diff": "^9.0.0",
+        "github-slugger": "^2.0.0",
         "hono": "^4.13.12",
         "lucide-react": "^1.49.0",
+        "mdast-util-to-string": "^4.0.0",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
         "react-force-graph-2d": "^1.29.0",
@@ -44,6 +46,8 @@
         "recharts": "^3.10.1",
         "rehype-highlight": "^7.0.2",
         "remark-gfm": "^4.0.1",
+        "remark-parse": "^11.0.0",
+        "unified": "^11.0.5",
         "zod": "^4.5.0-canary.20260825T041357",
       },
     },
@@ -741,6 +745,8 @@
     "hasown": ["hasown@2.0.4", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha1-jGLYy5C+sqrV0KW2dYGtmFTD8AM="],
 
     "get-nonce": ["get-nonce@1.0.1", "", {}, "sha512-FJhYRoDaiatfEkUK8HKlicmu/3SGFD51q3itKDGoSTysQJBnfOcxU5GxnhE1E6soB76MbT0MBtnKJuXyAx+96Q=="],
+
+    "github-slugger": ["github-slugger@2.0.0", "", {}, "sha512-IaOQ9puYtjrkq7Y0Ygl9KDZnrf/aiUJYUpVf89y8kyaxbRG7Y1SrX/jaumrv81vc61+kiMempujsM3Yw7w5qcw=="],
 
     "hast-util-is-element": ["hast-util-is-element@3.0.0", "", { "dependencies": { "@types/hast": "^3.0.0" } }, "sha512-Val9mnv2IWpLbNPqc/pUem+a7Ipj2aHacCwgNfTiK0vJKl0LF+4Ba4+v1oPHFpf3bLYmreq0/l3Gud9S5OH42g=="],
 
