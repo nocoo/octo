@@ -148,6 +148,38 @@ describe("admin keys", () => {
 		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM changes").get()).toMatchObject({ n: 0 });
 	});
 
+	it.each(["rotate", "revoke"] as const)(
+		"rejects stale %s without rolling back the permission revision",
+		async (operation) => {
+			vi.spyOn(Date, "now").mockReturnValue(1000);
+			const { key } = await mint({ role: "custom", ops: "r,w,u,d", scope: "all" });
+			const original = await loadKey(store.d1, key.id);
+			expect((await request(`/${key.id}`, "PATCH", { name: "first" })).status).toBe(200);
+			const stalePatch = await loadKey(store.d1, key.id);
+			expect((await request(`/${key.id}`, "PATCH", { ops: "r" })).status).toBe(200);
+			const current = await loadKey(store.d1, key.id);
+			expect(current.updated_at).toBe(1002);
+			await expect(
+				operation === "rotate"
+					? rotateKey(store.d1, pepper, original, 0)
+					: revokeKey(store.d1, original),
+			).rejects.toMatchObject({ code: "version_conflict" });
+			expect(await loadKey(store.d1, key.id)).toEqual(current);
+			await expect(
+				updateKey(store.d1, stalePatch, {
+					name: "stale",
+					role: "custom",
+					ops: "r,w,u,d",
+					scope: "all",
+					spaceIds: [],
+					ownEntriesOnly: false,
+					autoOwnSpace: false,
+					expiresAt: null,
+				}),
+			).rejects.toMatchObject({ code: "version_conflict" });
+		},
+	);
+
 	it("never publishes key mint, patch, rotation, revoke or delete to all-scope changes", async () => {
 		store.raw.exec(
 			"INSERT INTO changes (entity, entity_id, space_id, op, actor, at) VALUES ('space', 'room', 'room', 'created', 'admin:owner@local', 1)",

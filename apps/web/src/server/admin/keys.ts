@@ -114,9 +114,9 @@ export async function rotateKey(
 	await commitKeyMutation(
 		db
 			.prepare(
-				"UPDATE api_keys SET secret_hash = ?, prev_secret_hash = secret_hash, prev_valid_until = ?, updated_at = ? WHERE id = ? AND revoked_at IS NULL AND secret_hash = ?",
+				"UPDATE api_keys SET secret_hash = ?, prev_secret_hash = secret_hash, prev_valid_until = ?, updated_at = ? WHERE id = ? AND revoked_at IS NULL AND secret_hash = ? AND updated_at = ?",
 			)
-			.bind(hash, now + graceMs, updatedAt, row.id, row.secret_hash),
+			.bind(hash, now + graceMs, updatedAt, row.id, row.secret_hash, row.updated_at),
 	);
 	return {
 		key: publicKey(await loadKey(db, row.id)),
@@ -130,9 +130,9 @@ export async function revokeKey(db: D1Database, row: ApiKeyRow) {
 	await commitKeyMutation(
 		db
 			.prepare(
-				"UPDATE api_keys SET revoked_at = ?, prev_secret_hash = NULL, prev_valid_until = NULL, updated_at = ? WHERE id = ? AND revoked_at IS NULL",
+				"UPDATE api_keys SET revoked_at = ?, prev_secret_hash = NULL, prev_valid_until = NULL, updated_at = ? WHERE id = ? AND revoked_at IS NULL AND updated_at = ?",
 			)
-			.bind(now, now, row.id),
+			.bind(now, now, row.id, row.updated_at),
 	);
 	return publicKey(await loadKey(db, row.id));
 }
