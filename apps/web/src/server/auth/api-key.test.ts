@@ -30,6 +30,19 @@ function keyDb(): { db: D1Database; rows: Map<string, Stored> } {
 					return stmt;
 				},
 				async first<T>() {
+					if (sql.includes("RETURNING") && sql.includes("prev_secret_hash = secret_hash")) {
+						const id = String(stmt.binds[3]);
+						const row = rows.get(id);
+						if (!row) {
+							return null;
+						}
+						const prev = row.secret_hash;
+						row.secret_hash = String(stmt.binds[0]);
+						row.prev_secret_hash = prev;
+						row.prev_valid_until = Number(stmt.binds[1]);
+						row.updated_at = Number(stmt.binds[2]);
+						return { ...row } as T;
+					}
 					const id = String(stmt.binds[0]);
 					return (rows.get(id) as T | undefined) ?? null;
 				},
@@ -54,15 +67,6 @@ function keyDb(): { db: D1Database; rows: Map<string, Stored> } {
 							created_at: Number(stmt.binds[10]),
 							updated_at: Number(stmt.binds[11]),
 						});
-					} else if (sql.includes("prev_secret_hash")) {
-						const id = String(stmt.binds[4]);
-						const row = rows.get(id);
-						if (row) {
-							row.secret_hash = String(stmt.binds[0]);
-							row.prev_secret_hash = String(stmt.binds[1]);
-							row.prev_valid_until = Number(stmt.binds[2]);
-							row.updated_at = Number(stmt.binds[3]);
-						}
 					} else if (sql.includes("revoked_at")) {
 						const id = String(stmt.binds[2]);
 						const row = rows.get(id);
@@ -238,6 +242,20 @@ describe("rotateApiKey", () => {
 		await expect(rotateApiKey(db, pepper, "missing")).rejects.toThrow("not found");
 		await expect(rotateApiKey(db, pepper, "x", -1)).rejects.toThrow("grace");
 		await expect(rotateApiKey(db, pepper, "x", MAX_GRACE_MS + 1)).rejects.toThrow("grace");
+	});
+
+	it("does not revive a stale secret when two rotations interleave", async () => {
+		const { db, rows } = keyDb();
+		const minted = await mintApiKey(db, pepper, mintBase, 1_000);
+		const s0 = minted.row.secret_hash;
+		await Promise.all([
+			rotateApiKey(db, pepper, minted.row.id, 0, 3_000),
+			rotateApiKey(db, pepper, minted.row.id, 50, 3_001),
+		]);
+		const stored = rows.get(minted.row.id);
+		expect(stored?.secret_hash).not.toBe(s0);
+		expect(stored?.prev_secret_hash).not.toBe(s0);
+		expect(await lookupApiKey(db, pepper, minted.plaintext, 3_010)).toBeNull();
 	});
 });
 

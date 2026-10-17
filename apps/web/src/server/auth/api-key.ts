@@ -180,27 +180,18 @@ export async function rotateApiKey(
 	if (graceMs < 0 || graceMs > MAX_GRACE_MS) {
 		throw new Error("grace window must be between 0 and 7 days");
 	}
-	const existing = await loadRow(db, id);
-	if (!existing) {
-		throw new Error("api key not found");
-	}
 	const material = generateApiKeyMaterial();
 	const secretHash = await hashSecret(pepper, material.secret);
 	const prevValidUntil = now + graceMs;
-	await db
+	const row = await db
 		.prepare(
-			"UPDATE api_keys SET secret_hash = ?, prev_secret_hash = ?, prev_valid_until = ?, updated_at = ? WHERE id = ?",
+			"UPDATE api_keys SET secret_hash = ?, prev_secret_hash = secret_hash, prev_valid_until = ?, updated_at = ? WHERE id = ? RETURNING *",
 		)
-		.bind(secretHash, existing.secret_hash, prevValidUntil, now, id)
-		.run();
-	const row: ApiKeyRow = {
-		...existing,
-		id,
-		secret_hash: secretHash,
-		prev_secret_hash: existing.secret_hash,
-		prev_valid_until: prevValidUntil,
-		updated_at: now,
-	};
+		.bind(secretHash, prevValidUntil, now, id)
+		.first<ApiKeyRow>();
+	if (!row) {
+		throw new Error("api key not found");
+	}
 	return { plaintext: `octo_${id}_${material.secret}`, row };
 }
 
