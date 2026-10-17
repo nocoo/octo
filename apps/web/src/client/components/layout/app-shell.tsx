@@ -49,7 +49,7 @@ import {
 	Tags,
 	Trash2,
 } from "lucide-react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
@@ -82,6 +82,7 @@ export function AppShell() {
 	const [drawer, setDrawer] = useState(false);
 	const [palette, setPalette] = useState(false);
 	const [query, setQuery] = useState("");
+	const menuButton = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
 		void model.load();
 	}, [model]);
@@ -238,7 +239,14 @@ export function AppShell() {
 			<AppSkipLink>跳到主内容</AppSkipLink>
 			{mobile ? (
 				<Sheet open={drawer} onOpenChange={setDrawer}>
-					<SheetContent side="left" className="octo-mobile-rail">
+					<SheetContent
+						side="left"
+						className="octo-mobile-rail"
+						onCloseAutoFocus={(event) => {
+							event.preventDefault();
+							menuButton.current?.focus();
+						}}
+					>
 						<SheetTitle className="sr-only">主导航</SheetTitle>
 						<SheetDescription className="sr-only">选择工作台页面</SheetDescription>
 						{rail(false)}
@@ -257,6 +265,7 @@ export function AppShell() {
 					leading={
 						mobile ? (
 							<Button
+								ref={menuButton}
 								variant="ghost"
 								size="icon"
 								aria-label="打开导航"

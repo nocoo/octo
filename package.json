@@ -13,6 +13,7 @@
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
 		"test:e2e:api": "bun run scripts/run-e2e.ts",
+		"test:e2e:bdd": "bun run scripts/run-e2e-bdd.ts",
 		"gate:test-skip": "bun run scripts/gate-test-skip.ts",
 		"gate:no-remote": "bun run scripts/gate-no-remote.ts",
 		"gate:wrangler-vars": "bun run scripts/gate-wrangler-vars.ts",
