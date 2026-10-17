@@ -103,9 +103,10 @@ describe("memory permission and rollback regressions", () => {
 	});
 
 	it("matches tags_all aliases and their shared canonical target", async () => {
-		const { tags, service, admin, id } = await boot();
+		const { db, tags, service, admin, id } = await boot();
 		await tags.resolveMany(["target"]);
-		await tags.merge("old", "target", admin.actor);
+		const merge = await tags.merge("old", "target", admin.actor);
+		await db.batch(merge.statements);
 		const listed = await service.list(admin, {
 			filters: { tags_all: ["old", "target"] },
 			include: new Set(),
