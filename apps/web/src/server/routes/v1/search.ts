@@ -7,6 +7,7 @@ import { parseStrict } from "../../lib/validate";
 import { requireSearchRead, searchAuthzFromPrincipal } from "../../search/authz";
 import { batchGetMemories } from "../../search/batch-get";
 import { searchMemories } from "../../search/service";
+import { searchAdminMemories } from "../../settings/admin-search";
 
 async function readJsonBody(c: { req: { json: () => Promise<unknown> } }): Promise<unknown> {
 	try {
@@ -25,7 +26,9 @@ export function mountV1SearchRoutes(
 		requireSearchRead(principal);
 		const authz = searchAuthzFromPrincipal(principal);
 		const body = parseStrict(searchRequestSchema, await readJsonBody(c));
-		const result = await searchMemories(authz, body, { db: c.env.DB, env: c.env });
+		const result = principal.actor
+			? await searchAdminMemories(c.env, authz, body)
+			: await searchMemories(authz, body, { db: c.env.DB, env: c.env });
 		return jsonOk(result);
 	});
 

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { APP_VERSION } from "../lib/version";
+import { auditMiddleware } from "./audit/middleware";
 import { bearerMiddleware } from "./auth/bearer";
 import { adminWriteOriginMiddleware } from "./auth/origin";
 import type { AppVars, Env } from "./env";
@@ -8,6 +9,13 @@ import { idempotencyMiddleware } from "./http/idempotency";
 import { jsonError, toErrorResponse } from "./lib/errors";
 import { newRequestId, withOctoHeaders } from "./lib/request";
 import { accessMiddleware } from "./middleware/access";
+import { adminAuditRoutes } from "./routes/admin/audit";
+import { keysRoutes } from "./routes/admin/keys";
+import { createAdminParityRoutes } from "./routes/admin/parity";
+import { createAdminPurgeRoutes } from "./routes/admin/purge";
+import { settingsRoutes } from "./routes/admin/settings";
+import { adminSpacesRoutes } from "./routes/admin/spaces";
+import { adminUsageRoutes } from "./routes/admin/usage";
 import { whoamiResponse } from "./routes/admin/whoami";
 import { createFilesRoutes } from "./routes/files";
 import { liveResponse } from "./routes/live";
@@ -18,12 +26,16 @@ import {
 	createAttachmentsRoutes,
 } from "./routes/v1/attachments";
 import { changesRoutes } from "./routes/v1/changes";
+import { embeddingProfilesRoutes } from "./routes/v1/embedding-profiles";
 import { meResponse } from "./routes/v1/me";
 import { memoriesRoutes } from "./routes/v1/memories";
 import { mountV1SearchRoutes } from "./routes/v1/search";
 import { spacesRoutes } from "./routes/v1/spaces";
 import { tagsRoutes, tagWriteAuthorization } from "./routes/v1/tags";
 import { trashRoutes } from "./routes/v1/trash";
+import { usageRoutes } from "./routes/v1/usage";
+import { postCommitMiddleware } from "./sync/post-commit";
+import { runDerivedTasks } from "./sync/tasks";
 
 export function createApp(): Hono<{
 	Bindings: Env;
@@ -36,6 +48,7 @@ export function createApp(): Hono<{
 		await next();
 		c.res = withOctoHeaders(c.res, requestId, APP_VERSION);
 	});
+	app.use("*", auditMiddleware);
 	app.onError((err, c) => {
 		const requestId = c.get("requestId");
 		return withOctoHeaders(toErrorResponse(err, requestId), requestId, APP_VERSION);
@@ -52,6 +65,8 @@ export function createApp(): Hono<{
 		return c.env.ASSETS.fetch(c.req.raw);
 	});
 	app.get("/api/live", (c) => liveResponse(c.env));
+	app.use("/api/v1/*", postCommitMiddleware(runDerivedTasks));
+	app.use("/api/admin/*", postCommitMiddleware(runDerivedTasks));
 	app.use("/api/v1/*", bearerMiddleware);
 	app.use("/api/v1/tags/:name/rename", tagWriteAuthorization);
 	app.use("/api/v1/tags/:name/merge", tagWriteAuthorization);
@@ -67,6 +82,15 @@ export function createApp(): Hono<{
 	app.route("/api/v1/trash", trashRoutes());
 	app.route("/api/v1/changes", changesRoutes());
 	app.get("/api/admin/whoami", (c) => whoamiResponse(c));
+	app.route("/api/admin/keys", keysRoutes());
+	app.route("/api/admin/spaces", adminSpacesRoutes());
+	app.route("/api/admin/audit", adminAuditRoutes());
+	app.route("/api/admin/usage", adminUsageRoutes());
+	app.route("/api/admin/settings", settingsRoutes());
+	app.route("/api/admin", createAdminPurgeRoutes());
+	app.route("/api/admin", createAdminParityRoutes());
+	app.route("/api/v1/usage", usageRoutes());
+	app.route("/api/v1/embedding-profiles", embeddingProfilesRoutes());
 	app.route("/api/v1/tags", tagsRoutes());
 	app.route("/api/v1/spaces", spacesRoutes());
 	app.route("/api/v1", createAttachmentsRoutes());

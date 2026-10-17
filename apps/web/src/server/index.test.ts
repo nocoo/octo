@@ -46,7 +46,7 @@ describe("createApp", () => {
 
 	it("mounts batch reads and real writes in the production app", () => {
 		const paths = createApp()
-			.routes.filter((route) => route.path.includes("batch"))
+			.routes.filter((route) => route.path.startsWith("/api/v1/") && route.path.includes("batch"))
 			.map((route) => route.path);
 		expect(paths).toEqual([
 			"/api/v1/memories:batchCreate",

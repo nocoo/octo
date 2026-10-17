@@ -9,19 +9,20 @@ import {
 } from "../v1/attachments";
 import { createBatchRoutes } from "../v1/batch";
 import { changesRoutes } from "../v1/changes";
+import { embeddingProfilesRoutes } from "../v1/embedding-profiles";
 import { memoriesRoutes } from "../v1/memories";
 import { mountV1SearchRoutes } from "../v1/search";
 import { tagsRoutes, tagWriteAuthorization } from "../v1/tags";
 import { trashRoutes } from "../v1/trash";
 
 const adminPrincipal: MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> = async (
-	c,
+	context,
 	next,
 ) => {
-	const email = c.get("adminEmail");
+	const email = context.get("adminEmail");
 	if (!email) throw new ApiError("unauthenticated", "unauthenticated");
 	const actor = `admin:${email}` as const;
-	c.set("apiKey", {
+	context.set("apiKey", {
 		id: actor,
 		actor,
 		name: email,
@@ -43,6 +44,7 @@ export function createAdminParityRoutes(): Hono<{ Bindings: Env; Variables: AppV
 	routes.route("/memories", memoriesRoutes());
 	routes.route("/trash", trashRoutes());
 	routes.route("/changes", changesRoutes());
+	routes.route("/embedding-profiles", embeddingProfilesRoutes());
 	routes.route("/tags", tagsRoutes());
 	routes.route("/", createAttachmentsRoutes());
 	mountV1SearchRoutes(routes, "");
