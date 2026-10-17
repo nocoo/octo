@@ -10,15 +10,6 @@ import { TagRepo } from "../../repo/tags";
 const renameSchema = z.strictObject({ new_name: z.string().min(1) });
 const mergeSchema = z.strictObject({ into: z.string().min(1) });
 
-async function listedIds(db: D1Database, key: AppVars["apiKey"]): Promise<string[]> {
-	const vis = visibleSpaceIds(key);
-	if (vis.kind === "ids") {
-		return [...vis.ids];
-	}
-	const { results } = await db.prepare("SELECT id FROM spaces").all<{ id: string }>();
-	return results.map((row) => row.id);
-}
-
 export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
 
@@ -27,7 +18,7 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		if (!key.ops.has("r")) {
 			throw new ApiError("forbidden", "forbidden");
 		}
-		const tags = await new TagRepo(c.env.DB).listWithCounts(await listedIds(c.env.DB, key));
+		const tags = await new TagRepo(c.env.DB).listWithCounts(visibleSpaceIds(key));
 		return jsonOk(listEnvelope(tags.map(serializeTag)));
 	});
 

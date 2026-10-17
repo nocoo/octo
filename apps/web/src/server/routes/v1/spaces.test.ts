@@ -93,6 +93,36 @@ describe("spaces routes", () => {
 		expect(denied.status).toBe(403);
 	});
 
+	it("lists 101 spaces for an all-scope key", async () => {
+		const db = new FakeD1();
+		const admin = await seedKey(db, {
+			role: "admin",
+			ops: "r",
+			scope: "all",
+			space_ids_json: "[]",
+		});
+		for (let i = 0; i < 101; i++) {
+			const id = `sp${i}`;
+			db.spaces.set(id, {
+				id,
+				slug: id,
+				name: id,
+				description: "",
+				owner_key_id: null,
+				created_at: 1,
+				updated_at: 1,
+			});
+		}
+		const listed = await createApp().request(
+			"/api/v1/spaces",
+			{ headers: { Authorization: `Bearer ${admin.token}` } },
+			envFor(db),
+		);
+		expect(listed.status).toBe(200);
+		const body = (await listed.json()) as { items: unknown[] };
+		expect(body.items).toHaveLength(101);
+	});
+
 	it("returns 401 without authz on the sub-app", async () => {
 		const res = await spacesRoutes().request("/missing", {}, envFor(new FakeD1()));
 		expect([401, 500]).toContain(res.status);

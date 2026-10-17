@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isUniqueConstraint, probeD1, readTestMarker } from "./d1";
+import {
+	chunkBoundParams,
+	D1_MAX_BOUND_PARAMS,
+	isUniqueConstraint,
+	probeD1,
+	readTestMarker,
+} from "./d1";
 
 function stubD1(first: unknown | (() => never)): D1Database {
 	return {
@@ -21,6 +27,19 @@ function stubD1(first: unknown | (() => never)): D1Database {
 		}),
 	} as unknown as D1Database;
 }
+
+describe("chunkBoundParams", () => {
+	it("splits at the D1 bind limit", () => {
+		expect(D1_MAX_BOUND_PARAMS).toBe(100);
+		expect(chunkBoundParams([])).toEqual([]);
+		expect(chunkBoundParams(["a"])).toEqual([["a"]]);
+		const ids = Array.from({ length: 101 }, (_, i) => String(i));
+		const chunks = chunkBoundParams(ids);
+		expect(chunks).toHaveLength(2);
+		expect(chunks[0]).toHaveLength(100);
+		expect(chunks[1]).toEqual(["100"]);
+	});
+});
 
 describe("isUniqueConstraint", () => {
 	it("detects sqlite unique failures for a table", () => {

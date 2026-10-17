@@ -1,3 +1,13 @@
+export const D1_MAX_BOUND_PARAMS = 100;
+
+export function chunkBoundParams<T>(items: readonly T[]): T[][] {
+	const chunks: T[][] = [];
+	for (let i = 0; i < items.length; i += D1_MAX_BOUND_PARAMS) {
+		chunks.push(items.slice(i, i + D1_MAX_BOUND_PARAMS));
+	}
+	return chunks;
+}
+
 export async function probeD1(db: D1Database): Promise<boolean> {
 	try {
 		const row = await db.prepare("SELECT 1 AS n").first<{ n: number }>();

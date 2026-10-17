@@ -66,6 +66,9 @@ export class FakeD1 {
 			sql,
 			binds: [],
 			bind(...args: unknown[]) {
+				if (args.length > 100) {
+					throw new Error("D1 bind parameter limit is 100");
+				}
 				this.binds = args;
 				return this;
 			},
@@ -164,11 +167,15 @@ export class FakeD1 {
 				.map((t) => ({ id: t.id, name: t.name, display_name: t.display_name }));
 		}
 		if (sql.includes("FROM memory_tags mt INNER JOIN memories m") && sql.includes("GROUP BY")) {
+			const filterSpaces = sql.includes("space_id IN");
 			const visible = new Set(binds.map(String));
 			const counts = new Map<string, number>();
 			for (const link of this.memoryTags) {
 				const mem = this.memories.get(link.memory_id);
-				if (!mem || mem.deleted_at !== null || !visible.has(mem.space_id)) {
+				if (!mem || mem.deleted_at !== null) {
+					continue;
+				}
+				if (filterSpaces && !visible.has(mem.space_id)) {
 					continue;
 				}
 				counts.set(link.tag_id, (counts.get(link.tag_id) ?? 0) + 1);
@@ -368,8 +375,20 @@ export class FakeD1 {
 				.filter((s) => ids.has(s.id))
 				.sort((a, b) => a.slug.localeCompare(b.slug));
 		}
+		if (sql.includes("SELECT * FROM spaces ORDER BY slug")) {
+			return [...this.spaces.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+		}
 		if (sql.includes("SELECT id FROM spaces")) {
 			return [...this.spaces.values()].map((s) => ({ id: s.id }));
+		}
+		if (sql.includes("FROM memories WHERE deleted_at IS NULL GROUP BY space_id")) {
+			const counts = new Map<string, number>();
+			for (const mem of this.memories.values()) {
+				if (mem.deleted_at === null) {
+					counts.set(mem.space_id, (counts.get(mem.space_id) ?? 0) + 1);
+				}
+			}
+			return [...counts.entries()].map(([space_id, n]) => ({ space_id, n }));
 		}
 		if (sql.includes("FROM memories WHERE deleted_at IS NULL AND space_id IN")) {
 			const ids = new Set(binds.map(String));

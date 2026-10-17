@@ -1,4 +1,5 @@
-import { isUniqueConstraint } from "../lib/d1";
+import type { VisibleSpaces } from "../auth/authorize";
+import { chunkBoundParams, isUniqueConstraint } from "../lib/d1";
 import { ApiError } from "../lib/errors";
 import { newUlid } from "../lib/ulid";
 
@@ -98,22 +99,38 @@ export class TagRepo {
 		return resolved;
 	}
 
-	async listWithCounts(visibleSpaceIds: string[]): Promise<TagCount[]> {
+	async listWithCounts(visible: VisibleSpaces): Promise<TagCount[]> {
 		const { results } = await this.db
 			.prepare("SELECT id, name, display_name FROM tags WHERE merged_into IS NULL ORDER BY name")
 			.all<{ id: string; name: string; display_name: string }>();
 		const tags = results;
-		if (visibleSpaceIds.length === 0) {
+		if (visible.kind === "ids" && visible.ids.length === 0) {
 			return tags.map((tag) => ({ ...tag, use_count: 0 }));
 		}
-		const placeholders = visibleSpaceIds.map(() => "?").join(",");
-		const { results: counts } = await this.db
-			.prepare(
-				`SELECT mt.tag_id AS tag_id, COUNT(*) AS n FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE m.deleted_at IS NULL AND m.space_id IN (${placeholders}) GROUP BY mt.tag_id`,
-			)
-			.bind(...visibleSpaceIds)
-			.all<{ tag_id: string; n: number }>();
-		const map = new Map(counts.map((row) => [row.tag_id, Number(row.n)]));
+		const map = new Map<string, number>();
+		if (visible.kind === "all") {
+			const { results: counts } = await this.db
+				.prepare(
+					"SELECT mt.tag_id AS tag_id, COUNT(*) AS n FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE m.deleted_at IS NULL GROUP BY mt.tag_id",
+				)
+				.all<{ tag_id: string; n: number }>();
+			for (const row of counts) {
+				map.set(row.tag_id, Number(row.n));
+			}
+		} else {
+			for (const ids of chunkBoundParams(visible.ids)) {
+				const placeholders = ids.map(() => "?").join(",");
+				const { results: counts } = await this.db
+					.prepare(
+						`SELECT mt.tag_id AS tag_id, COUNT(*) AS n FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE m.deleted_at IS NULL AND m.space_id IN (${placeholders}) GROUP BY mt.tag_id`,
+					)
+					.bind(...ids)
+					.all<{ tag_id: string; n: number }>();
+				for (const row of counts) {
+					map.set(row.tag_id, (map.get(row.tag_id) ?? 0) + Number(row.n));
+				}
+			}
+		}
 		return tags.map((tag) => ({ ...tag, use_count: map.get(tag.id) ?? 0 }));
 	}
 

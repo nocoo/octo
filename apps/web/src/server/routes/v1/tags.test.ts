@@ -71,6 +71,40 @@ describe("tags routes", () => {
 		});
 	});
 
+	it("lists tags when 101 spaces are visible", async () => {
+		const db = new FakeD1();
+		db.tags.set("t1", {
+			id: "t1",
+			name: "infra",
+			display_name: "infra",
+			merged_into: null,
+			created_at: 1,
+			updated_at: 1,
+		});
+		for (let i = 0; i < 101; i++) {
+			const id = `sp${i}`;
+			db.spaces.set(id, {
+				id,
+				slug: id,
+				name: id,
+				description: "",
+				owner_key_id: null,
+				created_at: 1,
+				updated_at: 1,
+			});
+		}
+		const token = await seedKey(db, { ops: "r", scope: "all" });
+		const res = await createApp().request(
+			"/api/v1/tags",
+			{ headers: { Authorization: `Bearer ${token}` } },
+			envFor(db),
+		);
+		expect(res.status).toBe(200);
+		expect(await res.json()).toMatchObject({
+			items: [{ id: "t1", name: "infra", display_name: "infra", use_count: 0 }],
+		});
+	});
+
 	it("renames and merges with global update, else forbids", async () => {
 		const db = new FakeD1();
 		db.tags.set("a", {

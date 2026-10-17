@@ -91,10 +91,35 @@ describe("TagRepo", () => {
 			{ memory_id: "m3", tag_id: "t1" },
 		);
 		const repo = new TagRepo(asD1(db));
-		expect(await repo.listWithCounts([])).toEqual([
+		expect(await repo.listWithCounts({ kind: "ids", ids: [] })).toEqual([
 			{ id: "t1", name: "infra", display_name: "infra", use_count: 0 },
 		]);
-		expect(await repo.listWithCounts(["s1"])).toEqual([
+		expect(await repo.listWithCounts({ kind: "ids", ids: ["s1"] })).toEqual([
+			{ id: "t1", name: "infra", display_name: "infra", use_count: 1 },
+		]);
+		expect(await repo.listWithCounts({ kind: "all" })).toEqual([
+			{ id: "t1", name: "infra", display_name: "infra", use_count: 2 },
+		]);
+		const many = new FakeD1();
+		many.tags.set("t1", db.tags.get("t1") as never);
+		const ids = Array.from({ length: 101 }, (_, i) => `sp${i}`);
+		for (const id of ids) {
+			many.spaces.set(id, {
+				id,
+				slug: id,
+				name: id,
+				description: "",
+				owner_key_id: null,
+				created_at: 1,
+				updated_at: 1,
+			});
+		}
+		many.memories.set("m1", { id: "m1", space_id: "sp0", deleted_at: null });
+		many.memoryTags.push({ memory_id: "m1", tag_id: "t1" });
+		expect(await new TagRepo(asD1(many)).listWithCounts({ kind: "all" })).toEqual([
+			{ id: "t1", name: "infra", display_name: "infra", use_count: 1 },
+		]);
+		expect(await new TagRepo(asD1(many)).listWithCounts({ kind: "ids", ids })).toEqual([
 			{ id: "t1", name: "infra", display_name: "infra", use_count: 1 },
 		]);
 	});

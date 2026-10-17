@@ -5,15 +5,6 @@ import { ApiError, jsonOk } from "../../lib/errors";
 import { listEnvelope, serializeSpace } from "../../lib/http";
 import { SpaceRepo } from "../../repo/spaces";
 
-async function listedIds(db: D1Database, key: AppVars["apiKey"]): Promise<string[]> {
-	const vis = visibleSpaceIds(key);
-	if (vis.kind === "ids") {
-		return [...vis.ids];
-	}
-	const { results } = await db.prepare("SELECT id FROM spaces").all<{ id: string }>();
-	return results.map((row) => row.id);
-}
-
 export function spacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
 
@@ -22,7 +13,7 @@ export function spacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		if (!key.ops.has("r")) {
 			throw new ApiError("forbidden", "forbidden");
 		}
-		const spaces = await new SpaceRepo(c.env.DB).listVisible(await listedIds(c.env.DB, key));
+		const spaces = await new SpaceRepo(c.env.DB).listVisible(visibleSpaceIds(key));
 		return jsonOk(listEnvelope(spaces.map(serializeSpace)));
 	});
 
@@ -33,7 +24,7 @@ export function spacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		}
 		const space = await new SpaceRepo(c.env.DB).getVisibleBySlug(
 			c.req.param("slug"),
-			await listedIds(c.env.DB, key),
+			visibleSpaceIds(key),
 		);
 		if (!space) {
 			throw new ApiError("not_found", "not found");

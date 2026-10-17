@@ -26,14 +26,31 @@ describe("SpaceRepo", () => {
 		db.memories.set("m1", { id: "m1", space_id: "s1", deleted_at: null });
 		db.memories.set("m2", { id: "m2", space_id: "s1", deleted_at: 4 });
 		const repo = new SpaceRepo(asD1(db));
-		expect(await repo.listVisible([])).toEqual([]);
-		const listed = await repo.listVisible(["s1"]);
+		expect(await repo.listVisible({ kind: "ids", ids: [] })).toEqual([]);
+		const listed = await repo.listVisible({ kind: "ids", ids: ["s1"] });
 		expect(listed).toHaveLength(1);
 		expect(listed[0]?.memory_count).toBe(1);
-		expect(await repo.getVisibleBySlug("hidden", ["s1"])).toBeNull();
-		expect(await repo.getVisibleBySlug("missing", ["s1"])).toBeNull();
-		expect((await repo.getVisibleBySlug("kb-bot", ["s1"]))?.memory_count).toBe(1);
-		expect((await repo.listVisible(["s2"]))[0]?.memory_count).toBe(0);
+		expect(await repo.getVisibleBySlug("hidden", { kind: "ids", ids: ["s1"] })).toBeNull();
+		expect(await repo.getVisibleBySlug("missing", { kind: "ids", ids: ["s1"] })).toBeNull();
+		expect(
+			(await repo.getVisibleBySlug("kb-bot", { kind: "ids", ids: ["s1"] }))?.memory_count,
+		).toBe(1);
+		expect((await repo.listVisible({ kind: "ids", ids: ["s2"] }))[0]?.memory_count).toBe(0);
+		const many = new FakeD1();
+		const ids = Array.from({ length: 101 }, (_, i) => `sp${i}`);
+		for (const id of ids) {
+			many.spaces.set(id, {
+				id,
+				slug: id,
+				name: id,
+				description: "",
+				owner_key_id: null,
+				created_at: 1,
+				updated_at: 1,
+			});
+		}
+		expect((await new SpaceRepo(asD1(many)).listVisible({ kind: "all" })).length).toBe(101);
+		expect((await new SpaceRepo(asD1(many)).listVisible({ kind: "ids", ids })).length).toBe(101);
 		const noCount = new FakeD1();
 		noCount.spaces.set("s1", db.spaces.get("s1") as never);
 		noCount.exec = (sql: string, binds: unknown[]) => {
@@ -43,7 +60,12 @@ describe("SpaceRepo", () => {
 			return FakeD1.prototype.exec.call(noCount, sql, binds);
 		};
 		expect(
-			(await new SpaceRepo(asD1(noCount)).getVisibleBySlug("kb-bot", ["s1"]))?.memory_count,
+			(
+				await new SpaceRepo(asD1(noCount)).getVisibleBySlug("kb-bot", {
+					kind: "ids",
+					ids: ["s1"],
+				})
+			)?.memory_count,
 		).toBe(0);
 	});
 });
