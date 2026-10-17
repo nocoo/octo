@@ -63,7 +63,7 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 		editor: [`/memories/${memory.id}`],
 		history: [`/memories/${memory.id}/versions`, `/memories/${memory.id}/diff`],
 		search: ["/search"],
-		keys: ["/keys"],
+		keys: ["/keys", "/usage"],
 		usage: ["/usage"],
 		audit: ["/audit"],
 		tags: ["/tags", "/memories"],
@@ -103,6 +103,14 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 				`${variant}/${name} document overflow`,
 			).toBe(true);
 			expect(errors).toEqual([]);
+			if (name === "keys") {
+				const trend = page.getByRole("group", {
+					name: "知识采集助手 近 30 天每日调用量",
+					exact: true,
+				});
+				await expect(trend).toContainText("1 次调用");
+				await expect(trend).toContainText(`${new Date().toISOString().slice(0, 10)}：1 次`);
+			}
 			await capture(page, info, `${variant}-${name}`);
 			if (name === "search") {
 				await info.attach(`${variant}-search-top`, {

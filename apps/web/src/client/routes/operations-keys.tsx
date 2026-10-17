@@ -15,6 +15,7 @@ import {
 	Switch,
 	toast,
 } from "@nocoo/basalt";
+import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
@@ -42,6 +43,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useModel } from "../components/layout/use-model";
+import { KeyUsageModel } from "../viewmodels/operations-key-usage";
 import {
 	type KeyDraft,
 	type KeyMetadata,
@@ -285,6 +287,8 @@ function KeyForm({
 export function KeysPage() {
 	const [model] = useState(() => new KeysModel());
 	const state = useModel(model);
+	const [usageModel] = useState(() => new KeyUsageModel());
+	const usageState = useModel(usageModel);
 	const [editor, setEditor] = useState<KeyMetadata | "create" | null>(null);
 	const [rotating, setRotating] = useState<KeyMetadata | null>(null);
 	const [revoking, setRevoking] = useState<KeyMetadata | null>(null);
@@ -303,6 +307,10 @@ export function KeysPage() {
 			model.dispose();
 		};
 	}, [model]);
+	useEffect(() => {
+		void usageModel.load();
+		return () => usageModel.dispose();
+	}, [usageModel]);
 	function reveal(value: string | null) {
 		if (!active.current || !value) return;
 		setEditor(null);
@@ -310,6 +318,7 @@ export function KeysPage() {
 		setCopied(false);
 		secretRevision.current++;
 		setSecret(value);
+		void usageModel.load();
 	}
 	function clearSecret() {
 		secretRevision.current++;
@@ -375,6 +384,34 @@ export function KeysPage() {
 			accessor: (key) => time(key.last_used_at),
 		},
 		{
+			id: "usage",
+			header: "近 30 天调用（UTC）",
+			sortable: false,
+			accessor: (key) => {
+				const usage = usageModel.usage(key.id);
+				if (!usage)
+					return usageState.loading
+						? "正在加载用量"
+						: usageState.error
+							? "用量不可用"
+							: "用量尚未加载";
+				return (
+					<Sparkline
+						data={usage.data}
+						series={[{ key: "calls", label: "调用次数" }]}
+						ariaLabel={`${key.name} 近 30 天每日调用量`}
+						summary={`${usage.total} 次调用`}
+						dataAlternative={
+							<span className="sr-only">
+								{usageState.snapshot?.from} 至 {usageState.snapshot?.to}（UTC）：
+								{usage.data.map((point) => `${point.x}：${point.calls} 次`).join("；")}
+							</span>
+						}
+					/>
+				);
+			},
+		},
+		{
 			id: "actions",
 			header: "操作",
 			sortable: false,
@@ -434,7 +471,10 @@ export function KeysPage() {
 						<Button
 							icon={<RefreshCw aria-hidden="true" />}
 							variant="outline"
-							onClick={() => void model.load()}
+							onClick={() => {
+								void model.load();
+								void usageModel.load();
+							}}
 							disabled={state.loading}
 						>
 							刷新
@@ -458,7 +498,21 @@ export function KeysPage() {
 					</Button>
 				</p>
 			)}
+			{usageState.error && (
+				<p role="alert">
+					{usageState.error} {usageState.snapshot && "用量刷新失败；当前图表为上次成功数据。"}
+					<Button variant="ghost" size="sm" onClick={() => void usageModel.load()}>
+						重试用量
+					</Button>
+				</p>
+			)}
+			{usageState.loading && usageState.snapshot && (
+				<p role="status">用量刷新中；当前图表为上次成功数据。</p>
+			)}
 			<SectionRule title="密钥列表">
+				<p className="text-basalt-sm text-basalt-muted-foreground">
+					用量统计最近 30 个 UTC 日期（含今日）；今日数据尚未结束。
+				</p>
 				<LayerCard padding="none">
 					{state.loading && state.items.length === 0 ? (
 						<LayerCard.Loading label="正在加载接口密钥" />
