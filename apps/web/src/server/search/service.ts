@@ -106,8 +106,9 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 	let vectorHits: Array<{ id: string; score: number }> = [];
 	let vectorTruncated = false;
 	const profile = req.vector?.profile ?? "te3-small-1536";
-	if (mode !== "fts" && req.vector) {
-		const queryVector = await normalizeQueryVector(deps.db, req.vector);
+	const queryVector =
+		mode !== "fts" && req.vector ? await normalizeQueryVector(deps.db, req.vector) : undefined;
+	if (queryVector && spaceIds.length > 0) {
 		const filter = buildVectorMetadataFilter(req.filters, spaceSlugs);
 		const sqlFilter = buildMemoryFilterSql(req.filters, spaceIds);
 		const store =

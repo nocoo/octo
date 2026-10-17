@@ -165,6 +165,48 @@ describe("v1 search routes", () => {
 		});
 	});
 
+	it.each(["vector", "hybrid"] as const)(
+		"does not query Vectorize for an empty visible set in %s mode",
+		async (mode) => {
+			const { db } = keyDb();
+			const { plaintext } = await mintApiKey(db, "pepper", {
+				name: "empty",
+				role: "project",
+				ops: "r",
+				scope: "own",
+			});
+			const query = vi.fn(async () => ({ matches: [] }));
+			const body = { mode, query: "cloudflare", vector: { profile: "p1", values: [3, 4] } };
+			for (const VEC of [{ query } as unknown as Vectorize, undefined]) {
+				const response = await createApp().request(
+					"/api/v1/search",
+					{
+						method: "POST",
+						headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+						body: JSON.stringify(body),
+					},
+					{ ...envFor(db), ...(VEC ? { VEC } : {}) },
+				);
+				expect(response.status).toBe(200);
+				expect(await response.json()).toMatchObject({
+					items: [],
+					channels: { fts: { candidates: 0 }, vector: { candidates: 0, truncated: false } },
+				});
+			}
+			expect(query).not.toHaveBeenCalled();
+			const invalid = await createApp().request(
+				"/api/v1/search",
+				{
+					method: "POST",
+					headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+					body: JSON.stringify({ ...body, vector: { profile: "p1", values: [1] } }),
+				},
+				envFor(db),
+			);
+			expect(invalid.status).toBe(400);
+		},
+	);
+
 	it("returns 400 for malformed json bodies", async () => {
 		const { db } = keyDb();
 		const { plaintext } = await mintApiKey(db, "pepper", {
