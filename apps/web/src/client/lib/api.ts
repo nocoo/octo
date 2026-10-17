@@ -24,8 +24,9 @@ export const adminApi: AdminClient = {
 		if (
 			!path.startsWith("/") ||
 			path.startsWith("//") ||
-			/[\\#]|%2[ef]|%5c|\.\./i.test(path.split("?")[0] ?? "") ||
-			path.includes("#")
+			/[\\#]|%5c/i.test(path.split("?")[0] ?? "") ||
+			path.includes("#") ||
+			!new URL(`/api/admin${path}`, "https://admin.invalid").pathname.startsWith("/api/admin/")
 		) {
 			throw new Error("Invalid admin path");
 		}

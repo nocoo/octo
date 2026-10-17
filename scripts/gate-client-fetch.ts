@@ -4,22 +4,26 @@ import { parseSync } from "oxc-parser";
 import { runIfMain } from "./cli";
 import { collectTsFiles } from "./fs-walk";
 
-function nodes(value: unknown, visit: (node: Record<string, unknown>) => void): void {
+function nodes(
+	value: unknown,
+	visit: (node: Record<string, unknown>, parent?: Record<string, unknown>) => void,
+	parent?: Record<string, unknown>,
+): void {
 	if (!value || typeof value !== "object") return;
 	if (Array.isArray(value)) {
-		for (const item of value) nodes(item, visit);
+		for (const item of value) nodes(item, visit, parent);
 		return;
 	}
 	const node = value as Record<string, unknown>;
-	visit(node);
-	for (const child of Object.values(node)) nodes(child, visit);
+	visit(node, parent);
+	for (const child of Object.values(node)) nodes(child, visit, node);
 }
 
 function inspect(file: string, source: string): { errors: string[]; calls: number } {
 	const parsed = parseSync(file, source);
 	const errors = parsed.errors.map(() => `${file}: invalid source`);
 	let calls = 0;
-	nodes(parsed.program, (node) => {
+	nodes(parsed.program, (node, parent) => {
 		const name = node.name ?? node.value;
 		if (
 			(node.type === "Identifier" || node.type === "Literal") &&
@@ -27,7 +31,12 @@ function inspect(file: string, source: string): { errors: string[]; calls: numbe
 				String(name),
 			)
 		) {
-			if (file !== "lib/api.ts" || name !== "fetch")
+			if (
+				file !== "lib/api.ts" ||
+				name !== "fetch" ||
+				parent?.type !== "CallExpression" ||
+				parent.callee !== node
+			)
 				errors.push(`${file}: transport is only allowed in lib/api.ts`);
 		}
 		if (node.type !== "CallExpression") return;

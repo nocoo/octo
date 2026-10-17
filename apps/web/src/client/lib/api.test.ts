@@ -47,12 +47,24 @@ describe("Access-only admin transport", () => {
 		"/%2e%2e/v1",
 		"/a\\b",
 		"/a#secret",
-		"/a%2fb",
+		"/a%5cb",
+		"/tags/%2e%2e/%2e%2e/%2e%2e/v1",
 	])("rejects path escape %s before sending", async (path) => {
 		const fetcher = vi.fn();
 		vi.stubGlobal("fetch", fetcher);
 		await expect(adminApi.request(path)).rejects.toThrow("Invalid admin path");
 		expect(fetcher).not.toHaveBeenCalled();
+	});
+	it("preserves encoded tag names without leaving the admin namespace", async () => {
+		const fetcher = vi.fn().mockImplementation(async () => Response.json({ ok: true }));
+		vi.stubGlobal("fetch", fetcher);
+		await adminApi.request("/tags/a%2Fb/rename", { method: "POST", json: { name: "c" } });
+		expect(fetcher).toHaveBeenCalledWith("/api/admin/tags/a%2Fb/rename", expect.any(Object));
+		await adminApi.request("/tags/release%2Ev2/rename");
+		expect(fetcher).toHaveBeenLastCalledWith(
+			"/api/admin/tags/release%2Ev2/rename",
+			expect.any(Object),
+		);
 	});
 	it("exposes status/code without raw error text or request secrets", async () => {
 		vi.stubGlobal(

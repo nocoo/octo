@@ -15,6 +15,13 @@ describe("client transport boundary", () => {
 	])("rejects alternate transport: %s", (source) => {
 		expect(checkClientSource("view.ts", source).length).toBeGreaterThan(0);
 	});
+	it.each([
+		"window.fetch('/external')",
+		"const request = fetch; request('/external')",
+		"globalThis['fetch']('/external')",
+	])("rejects indirect transport even in the boundary: %s", (source) => {
+		expect(checkClientSource("lib/api.ts", source).length).toBeGreaterThan(0);
+	});
 	it("requires the sole fetch to use the literal admin prefix", () => {
 		expect(checkClientSource("lib/api.ts", `fetch(\`/api/admin\${path}\`, {})`)).toEqual([]);
 		expect(checkClientSource("lib/api.ts", "fetch(url)")).toHaveLength(1);
