@@ -28,6 +28,12 @@ function principal(over: Partial<ApiPrincipal> = {}): ApiPrincipal {
 }
 
 describe("authzFrom and helpers", () => {
+	it.each(["", '"1', '1"', '"1""', "abc", "0", "9007199254740992"])(
+		"rejects invalid If-Match %s even with a body version",
+		(header) => {
+			expect(() => expectedVersion(header, 1)).toThrow(ApiError);
+		},
+	);
 	it("maps authorize denials and parses include/version headers", () => {
 		const authz = authzFrom({
 			id: "K1",

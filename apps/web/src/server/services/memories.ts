@@ -45,8 +45,12 @@ export function authzFrom(principal: ApiPrincipal): Authz {
 }
 
 export function expectedVersion(ifMatch: string | undefined, body?: number): number {
-	const trimmed = ifMatch?.trim().replaceAll('"', "");
-	const headerVer = trimmed && /^\d+$/.test(trimmed) ? Number(trimmed) : undefined;
+	const trimmed = ifMatch?.trim();
+	if (trimmed !== undefined && !/^(?:\d+|"\d+")$/.test(trimmed))
+		throw new ApiError("validation_failed", "invalid If-Match version");
+	const headerVer = trimmed === undefined ? undefined : Number(trimmed.replaceAll('"', ""));
+	if (headerVer !== undefined && (!Number.isSafeInteger(headerVer) || headerVer < 1))
+		throw new ApiError("validation_failed", "invalid If-Match version");
 	if (headerVer != null && body != null && headerVer !== body) {
 		throw new ApiError("validation_failed", "If-Match does not match expected_version");
 	}
