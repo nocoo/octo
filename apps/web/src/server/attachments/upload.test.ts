@@ -126,8 +126,10 @@ describe("attachment upload parsing", () => {
 		).rejects.toMatchObject({ code: "validation_failed" });
 	});
 
-	it("cancels multipart bodies exceeding the total byte budget", async () => {
+	it("releases oversized multipart bodies to the runtime without parsing", async () => {
 		const cancel = vi.fn();
+		let reads = 0;
+		const formData = vi.spyOn(Request.prototype, "formData");
 		const chunk = new Uint8Array(1024 * 1024);
 		const req = new Request("http://x", {
 			method: "POST",
@@ -135,6 +137,7 @@ describe("attachment upload parsing", () => {
 			body: new ReadableStream(
 				{
 					pull(controller) {
+						if (++reads > 51) throw new Error("unexpected multipart pull");
 						controller.enqueue(chunk);
 					},
 					cancel,
@@ -144,7 +147,11 @@ describe("attachment upload parsing", () => {
 			duplex: "half",
 		} as RequestInit);
 		await expect(parseMultipartUpload(req)).rejects.toMatchObject({ code: "payload_too_large" });
-		expect(cancel).toHaveBeenCalledOnce();
+		expect(reads).toBe(51);
+		expect(req.body?.locked).toBe(false);
+		expect(cancel).not.toHaveBeenCalled();
+		expect(formData).not.toHaveBeenCalled();
+		formData.mockRestore();
 	});
 
 	it("requires filename", async () => {

@@ -318,8 +318,9 @@ describe("M5 writes at the M6 transaction boundary", () => {
 		}
 	});
 
-	it("bounds and cancels a keyed stream before a full-body hash can consume it", async () => {
+	it("bounds a keyed stream before hashing and releases runtime ownership", async () => {
 		const f = await fixture();
+		const digest = vi.spyOn(crypto.subtle, "digest");
 		try {
 			let reads = 0;
 			const cancel = vi.fn();
@@ -347,10 +348,15 @@ describe("M5 writes at the M6 transaction boundary", () => {
 			expect(response.status).toBe(413);
 			expect(await response.json()).toMatchObject({ error: { code: "payload_too_large" } });
 			expect(reads).toBe(51);
-			expect(cancel).toHaveBeenCalledOnce();
+			expect(cancel).not.toHaveBeenCalled();
+			expect(request.body?.locked).toBe(false);
 			expect(f.put).not.toHaveBeenCalled();
+			expect(digest).not.toHaveBeenCalled();
+			expect(f.rows("SELECT * FROM attachments")).toEqual([]);
+			expect(f.rows("SELECT * FROM changes WHERE entity = 'attachment'")).toEqual([]);
 			expect(f.rows("SELECT * FROM idempotency_records")).toEqual([]);
 		} finally {
+			digest.mockRestore();
 			f.sqlite.close();
 		}
 	});

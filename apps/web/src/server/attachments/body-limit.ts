@@ -27,9 +27,6 @@ export async function readLimitedBody(request: Request, maxBytes: number): Promi
 			}
 			chunks.push(value);
 		}
-	} catch (err) {
-		await reader.cancel().catch(() => {});
-		throw err;
 	} finally {
 		reader.releaseLock();
 	}

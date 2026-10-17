@@ -60,3 +60,13 @@
 - 主控在 herdr 的 `octo` workspace 里调度，受控 agent 在主控 pane 右侧开；按 workflow 的「启动参数」和「调度规范」选择 agent 和 reasoning level；review 用固定组合（Codex `group/auto-gpt-6-astra` `high`）。
 - 并行用 MacBook herdr 和 Cursor cloud agents，各自领 08 里互不冲突的工作包；共享契约（02 schema、04 schema、05 判定）先合入，之后再扇出。
 - 项目的长期规则写在根目录 `AGENTS.md`；事故复盘写在 `Retrospective.md`。
+
+## 7. Attachment early-response proof
+
+Local dev and L2 child processes set `WRANGLER_DISABLE_REQUEST_BODY_DRAINING=true`. Wrangler's development-only draining middleware otherwise reads unused bodies before returning authentication or declared-length errors, unlike the production Worker.
+
+The application stops at the byte limit and releases its reader without cancelling the incoming transport before the error response. In the pinned workerd `1.20260930.2`, the native incoming-stream owner terminates the stream after the response proxy task completes, or on disconnect. See [the pinned runtime source](https://github.com/cloudflare/workerd/blob/v1.20260930.2/src/workerd/api/global-scope.c%2B%2B).
+
+`tests/api/attachments-early-abort.test.ts` sends exactly the applicable limit plus one byte over raw HTTP, then holds the remaining tail and EOF behind an event latch. Declared oversize and unauthenticated probes send no body bytes. The complete error envelope must arrive with the latch still held. The test-only Worker counts application reads and starts one pending native observation read after the application returns; it must receive zero bytes and fail with the runtime's exact `SENT_RESPONSE` message. Two subsequent observations must show unchanged application counts before the client releases the tail for orderly transport cleanup. There is no test-side cancellation, timed sleep, or Worker shutdown in this proof. The observer is not production cancellation logic, and native stream termination is not claimed to be peer TCP closure.
+
+Keep the existing finite-stream regressions as well: a passing gated probe does not establish safe connection reuse or permit ignoring a later request failure.

@@ -25,7 +25,7 @@ describe("readLimitedBody", () => {
 	});
 
 	it.each([undefined, "1", "invalid"])(
-		"cancels excess streams with declared length %s",
+		"stops at two pulls and releases runtime ownership with declared length %s",
 		async (length) => {
 			const cancel = vi.fn();
 			let reads = 0;
@@ -35,7 +35,7 @@ describe("readLimitedBody", () => {
 				body: new ReadableStream(
 					{
 						pull(controller) {
-							reads++;
+							if (++reads > 2) throw new Error("unexpected third read");
 							controller.enqueue(new Uint8Array(3));
 						},
 						cancel,
@@ -45,7 +45,7 @@ describe("readLimitedBody", () => {
 				duplex: "half",
 			} as RequestInit);
 			await expect(readLimitedBody(req, 5)).rejects.toMatchObject({ code: "payload_too_large" });
-			expect(cancel).toHaveBeenCalledOnce();
+			expect(cancel).not.toHaveBeenCalled();
 			expect(reads).toBe(2);
 			expect(req.body?.locked).toBe(false);
 		},
@@ -66,7 +66,6 @@ describe("readLimitedBody", () => {
 		expect(pull).not.toHaveBeenCalled();
 		expect(cancel).not.toHaveBeenCalled();
 		expect(req.bodyUsed).toBe(false);
-		await req.body?.cancel();
 	});
 
 	it("accepts empty bodies and the exact limit", async () => {
@@ -77,8 +76,11 @@ describe("readLimitedBody", () => {
 	});
 
 	it.each([true, false])(
-		"preserves 413 when cancellation rejects (declared=%s)",
+		"does not prematurely abort the transport (declared=%s)",
 		async (declared) => {
+			const cancel = vi.fn(() => {
+				throw new Error("premature cancel");
+			});
 			const req = new Request("http://x", {
 				method: "POST",
 				headers: declared ? { "Content-Length": "6" } : {},
@@ -87,15 +89,14 @@ describe("readLimitedBody", () => {
 						pull(controller) {
 							controller.enqueue(new Uint8Array(6));
 						},
-						cancel() {
-							throw new Error("cancel failed");
-						},
+						cancel,
 					},
 					{ highWaterMark: 0 },
 				),
 				duplex: "half",
 			} as RequestInit);
 			await expect(readLimitedBody(req, 5)).rejects.toMatchObject({ code: "payload_too_large" });
+			expect(cancel).not.toHaveBeenCalled();
 		},
 	);
 
@@ -108,6 +109,24 @@ describe("readLimitedBody", () => {
 				5,
 			),
 		).rejects.toMatchObject({ code: "payload_too_large" });
+	});
+
+	it("releases the reader without replacing a source failure", async () => {
+		const failure = new Error("source read failed");
+		const request = new Request("http://x", {
+			method: "POST",
+			body: new ReadableStream(
+				{
+					pull(controller) {
+						controller.error(failure);
+					},
+				},
+				{ highWaterMark: 0 },
+			),
+			duplex: "half",
+		} as RequestInit);
+		await expect(readLimitedBody(request, 5)).rejects.toBe(failure);
+		expect(request.body?.locked).toBe(false);
 	});
 
 	it("returns the full body when within the limit", async () => {
