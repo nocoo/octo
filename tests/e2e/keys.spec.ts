@@ -14,7 +14,8 @@ test("mint once, copy, close, refresh, and revoke a real API key", async ({
 	await create.getByRole("textbox", { name: "代理名称", exact: true }).fill(name);
 	await create.getByRole("button", { name: "创建密钥", exact: true }).click();
 	const reveal = page.getByRole("dialog", { name: "请立即复制密钥", exact: true });
-	await expect(reveal).toBeVisible();
+	// Locator matcher failures include ARIA snapshots independently of automatic snapshots.
+	await expect.poll(() => reveal.isVisible()).toBe(true);
 	const secret = await reveal.getByRole("textbox", { name: "接口密钥", exact: true }).inputValue();
 	expect(secret.startsWith("octo_")).toBe(true);
 	try {
@@ -26,7 +27,7 @@ test("mint once, copy, close, refresh, and revoke a real API key", async ({
 			),
 		).toBe(true);
 		await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
-		await expect(reveal).not.toBeVisible();
+		await expect.poll(() => reveal.isVisible()).toBe(false);
 		await page.reload();
 		await expect(page.getByRole("row").filter({ hasText: name })).toContainText("有效");
 		expect(
@@ -71,13 +72,14 @@ test("mint once, copy, close, refresh, and revoke a real API key", async ({
 		);
 		await rotate.getByRole("button", { name: "轮换密钥", exact: true }).click();
 		expect((await rotationRequest).postDataJSON()).toEqual({ grace_ms: 60000 });
-		await expect(reveal).toBeVisible();
+		await expect.poll(() => reveal.isVisible()).toBe(true);
 		const rotated = await reveal
 			.getByRole("textbox", { name: "接口密钥", exact: true })
 			.inputValue();
 		expect(rotated.startsWith("octo_")).toBe(true);
 		expect(rotated === secret).toBe(false);
 		await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+		await expect.poll(() => reveal.isVisible()).toBe(false);
 		for (const value of [secret, rotated]) {
 			const duringGrace = await page.request.get("/api/v1/me", {
 				headers: { Authorization: `Bearer ${value}` },
