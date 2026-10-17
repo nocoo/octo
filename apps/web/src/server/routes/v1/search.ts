@@ -30,7 +30,17 @@ export function mountV1SearchRoutes(app: Hono<{ Bindings: Env; Variables: AppVar
 		const principal = c.get("apiKey");
 		requireSearchRead(principal);
 		const authz = searchAuthzFromPrincipal(principal);
-		const body = parseStrict(batchGetRequestSchema, await readJsonBody(c));
+		const input = await readJsonBody(c);
+		if (
+			input &&
+			typeof input === "object" &&
+			"ids" in input &&
+			Array.isArray(input.ids) &&
+			input.ids.length > 100
+		) {
+			throw new ApiError("payload_too_large", "batchGet accepts at most 100 ids");
+		}
+		const body = parseStrict(batchGetRequestSchema, input);
 		const result = await batchGetMemories(c.env.DB, authz, body.ids);
 		return jsonOk(result);
 	});

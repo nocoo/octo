@@ -227,8 +227,8 @@ describe("POST /api/v1/memories:batchGet", () => {
 		expect(res.status).toBe(200);
 		expect(await res.json()).toMatchObject({ items: [{ id: VISIBLE }], missing: ids.slice(1) });
 		const oversized = await post("memories:batchGet", { ids: [...ids, "overflow"] });
-		expect(oversized.status).toBe(400);
-		expect(await oversized.json()).toMatchObject({ error: { code: "validation_failed" } });
+		expect(oversized.status).toBe(413);
+		expect(await oversized.json()).toMatchObject({ error: { code: "payload_too_large" } });
 	});
 
 	it("returns all missing for a zero-space read key", async () => {

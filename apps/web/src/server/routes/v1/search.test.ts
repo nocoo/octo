@@ -108,6 +108,108 @@ describe("v1 search routes", () => {
 		expect(await res.json()).toEqual({ items: [], missing: ["missing"] });
 	});
 
+	it.each([false, true])(
+		"returns 413 for 101 ids before deduplication (duplicates=%s)",
+		async (duplicates) => {
+			const { db } = keyDb();
+			const { plaintext } = await mintApiKey(db, "pepper", {
+				name: "bot",
+				role: "admin",
+				ops: "r",
+				scope: "all",
+			});
+			const ids = Array.from({ length: 101 }, (_, i) => (duplicates ? "same" : `id${i}`));
+			const response = await createApp().request(
+				"/api/v1/memories:batchGet",
+				{
+					method: "POST",
+					headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+					body: JSON.stringify({ ids }),
+				},
+				envFor(db),
+			);
+			expect(response.status).toBe(413);
+			expect(await response.json()).toMatchObject({ error: { code: "payload_too_large" } });
+		},
+	);
+
+	it("accepts exactly 100 ids", async () => {
+		const { db } = keyDb();
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "bot",
+			role: "admin",
+			ops: "r",
+			scope: "all",
+		});
+		const ids = Array.from({ length: 100 }, (_, i) => `id${i}`);
+		const response = await createApp().request(
+			"/api/v1/memories:batchGet",
+			{
+				method: "POST",
+				headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+				body: JSON.stringify({ ids }),
+			},
+			envFor(db),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ items: [], missing: ids });
+	});
+
+	it.each([
+		null,
+		1,
+		{},
+		[],
+		{ ids: [] },
+		{ ids: "invalid" },
+		{ ids: [1] },
+		{ ids: ["id"], extra: true },
+	])("keeps ordinary batch schema errors at 400: %j", async (body) => {
+		const { db } = keyDb();
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "bot",
+			role: "admin",
+			ops: "r",
+			scope: "all",
+		});
+		const response = await createApp().request(
+			"/api/v1/memories:batchGet",
+			{
+				method: "POST",
+				headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			},
+			envFor(db),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ error: { code: "validation_failed" } });
+	});
+
+	it("checks authentication and read permission before oversized batch input", async () => {
+		const { db } = keyDb();
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "write-only",
+			role: "admin",
+			ops: "w",
+			scope: "all",
+		});
+		for (const token of [undefined, plaintext]) {
+			const response = await createApp().request(
+				"/api/v1/memories:batchGet",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						...(token ? { Authorization: `Bearer ${token}` } : {}),
+					},
+					body: JSON.stringify({ ids: Array<string>(101).fill("id") }),
+				},
+				envFor(db),
+			);
+			expect(response.status).toBe(token ? 403 : 401);
+		}
+	});
+
 	it("runs search for authorized keys", async () => {
 		const { db } = keyDb();
 		const { plaintext } = await mintApiKey(db, "pepper", {
