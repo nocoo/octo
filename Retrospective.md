@@ -558,3 +558,15 @@ tool name, key, or session is stored in the marker.
 ## Dashboard fixture and mirror verification
 
 The first client-boundary commit attempt reached the index hook with lint warnings in AST fixture strings; the hook correctly rejected it. Escaped template literals fixed the fixtures before committing without bypasses. Check warnings as errors before staging. The Microsoft package mirror also lagged behind the required Basalt release; the approved Tencent mirror supplied the published 3.1.0 artifact. Preserve exact package versions and integrity, remove mirror-specific lockfile URLs, and never substitute local source or a different release to clear installation failures.
+
+## Dashboard transport and rendered component contracts
+
+The initial admin-path guard rejected encoded slashes even though valid tag names can contain slashes. A regression test now exercises an encoded tag through the real shared transport; standard URL normalization verifies that requests remain inside the admin namespace without narrowing domain grammar. Integration checks must cross the ViewModel/transport boundary, not stop at fake clients.
+
+Installed Basalt declarations permit ordinary HTML attributes: using `title` on `LayerCard.Header` set a tooltip rather than visible content, and combining `AppHeader.title` with `PageHeader` rendered two H1 headings. Real screenshots exposed the missing titles, and an actual-package SSR test reproduced the duplicate heading before the shell switched to breadcrumbs. Inspect rendered semantics as well as TypeScript signatures. Visual inspection also caught an unloaded embedding configuration being described as having no key; failed reads must remain unknown rather than being represented by editable defaults.
+
+## Dashboard navigation and installed-library review
+
+The initial editor protected browser unload but not in-app navigation, so a sidebar or reader link could discard unsaved edits. Independent review identified the gap before acceptance. The application now uses a data router and a shared pure navigation policy for dirty, saving and uploading states, with explicit discard confirmation. Browser journeys cover reader links, sidebar, command palette and Back; their execution remains blocked until the real admin API is available. Browser unload protection is not a substitute for router-level protection.
+
+The same review found that chart descriptors require `color`, sortable rendered cells require primitive `sortValue`, and TableOfContents requires direct list-item children. Tests against fake data alone did not exercise those installed-library contracts. Actual-package regressions now complement ViewModel tests, and Basalt Collapsible replaces unsupported native disclosures. Trash also incorrectly inherited the visualization sample cap; server cursor pagination now keeps old trash accessible without changing the graph sampling limit. Keep presentation sampling separate from destructive-management access.
