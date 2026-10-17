@@ -6,10 +6,12 @@
 
 | 入口 | 认证 | 身份 |
 |---|---|---|
-| `/api/v1/*`、`/mcp`（阶段 2） | `Authorization: Bearer octo_<keyid>_<secret>` | API key = agent |
+| `/api/v1/*`、`/mcp` | `Authorization: Bearer octo_<keyid>_<secret>` | API key = agent |
 | `/`（SPA）、`/api/admin/*` | Cloudflare Access JWT | Zheng（`admin:<email>`），拥有全部权限 |
 
 ## 2. Cloudflare Access（已配置）
+
+MCP 每个 HTTP 请求独立鉴权，不接受 Access JWT 代替 key。工具调用复用 v1 权限和空间可见性；HTTP 200 内的工具错误同样写入审计 error_code。带 Origin 的 MCP 请求只允许当前环境的固定同源域名，无 Origin 的 bot 请求正常接受。详细协议与审计边界见 [09](09-mcp.md)。
 
 - Team domain：`nocoo` → `https://nocoo.cloudflareaccess.com`
 - Application AUD：`9ab761cffd4ad657004e429d74e5524232d3b017775548211f5e0eb809a88d67`

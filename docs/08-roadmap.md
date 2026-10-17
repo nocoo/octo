@@ -49,4 +49,4 @@
 ## 阶段 2 预览
 
 - Dashboard 拆成：壳与导航 → 记忆库与阅读 → 编辑 / diff / 回滚 → 搜索 → key / 用量 / 审计 → 可视化（图、时间线）→ 回收站与批量操作 → 动效打磨和 Basalt 审计。
-- MCP 先于 Dashboard 交付，不用 Durable Objects：使用 MCP TypeScript SDK 的无状态 Streamable HTTP 传输（需在实现时核实 SDK 当前对无状态模式的支持），工具是 `search` / `get` / `create` / `update` / `list_changes` / `tags` 等，复用 v1 服务层和 `authorize()`。
+- MCP 先于 Dashboard 交付，不用 Durable Objects 或 session storage：官方 SDK 1.32.1 的原生 Web Standard 无状态 Streamable HTTP，每请求独立实例。工具固定为 `search`、`get_memory`、`batch_get`、`create_memory`、`update_memory`、`delete_memory`、`list_changes`、`list_tags`、`list_spaces`，复用 v1 服务层和 `authorize()`。完整输入/输出、错误映射及知识库 bot 接入见 [09](09-mcp.md)。以真实 HTTP 契约测试和独立协议/安全审查作为本地交付门；部署后的 bot 冒烟另行授权。

@@ -16,6 +16,7 @@ octo 是部署在 Zheng 个人 Cloudflare 付费账户上的私人记忆 / 知�
 | 06 | [Dashboard](06-dashboard.md) | Basalt 3.1.0、页面、可视化、动效 |
 | 07 | [开发流程与质量门](07-dev-workflow.md) | TDD、6DQ、覆盖率、Caddy、CI、部署 |
 | 08 | [路线图](08-roadmap.md) | 阶段、里程碑、并行拆分 |
+| 09 | [MCP 服务](09-mcp.md) | 无状态 Streamable HTTP、工具 schema、错误映射、bot 接入 |
 | 99 | [待决问题](99-open-questions.md) | 尚需 Zheng 决定的事项 |
 
 冲突时的优先级：质量看 07，表结构看 02，HTTP 看 04，权限看 05，页面看 06。01 是方向性摘要。
