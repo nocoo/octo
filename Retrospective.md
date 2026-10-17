@@ -554,3 +554,7 @@ runner rewrite, the additive, idempotent `mcp_audit_writes` extension table
 stores only the audit row ID and joins the audit insert's D1 batch. Existing
 REST history and schema remain intact; no compatibility fallback, request body,
 tool name, key, or session is stored in the marker.
+
+## Dashboard fixture and mirror verification
+
+The first client-boundary commit attempt reached the index hook with lint warnings in AST fixture strings; the hook correctly rejected it. Escaped template literals fixed the fixtures before committing without bypasses. Check warnings as errors before staging. The Microsoft package mirror also lagged behind the required Basalt release; the approved Tencent mirror supplied the published 3.1.0 artifact. Preserve exact package versions and integrity, remove mirror-specific lockfile URLs, and never substitute local source or a different release to clear installation failures.
