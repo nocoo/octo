@@ -33,7 +33,6 @@ export function keysRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 				context.env.DB,
 				context.env.API_KEY_PEPPER,
 				await resolveKeyInput(context.env.DB, input),
-				adminActor(context),
 			),
 			201,
 		);
@@ -45,31 +44,14 @@ export function keysRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		const row = await loadKey(context.env.DB, context.req.param("id"));
 		const input = parseStrict(keyPatchSchema, await readJsonLimited(context.req.raw));
 		return jsonOk(
-			await updateKey(
-				context.env.DB,
-				row,
-				await resolveKeyInput(context.env.DB, input, row),
-				adminActor(context),
-			),
+			await updateKey(context.env.DB, row, await resolveKeyInput(context.env.DB, input, row)),
 		);
 	});
 	app.delete("/:id", async (context) =>
-		jsonOk(
-			await revokeKey(
-				context.env.DB,
-				await loadKey(context.env.DB, context.req.param("id")),
-				adminActor(context),
-			),
-		),
+		jsonOk(await revokeKey(context.env.DB, await loadKey(context.env.DB, context.req.param("id")))),
 	);
 	app.post("/:id/revoke", async (context) =>
-		jsonOk(
-			await revokeKey(
-				context.env.DB,
-				await loadKey(context.env.DB, context.req.param("id")),
-				adminActor(context),
-			),
-		),
+		jsonOk(await revokeKey(context.env.DB, await loadKey(context.env.DB, context.req.param("id")))),
 	);
 	app.post("/:id/rotate", async (context) => {
 		const row = await loadKey(context.env.DB, context.req.param("id"));
@@ -77,15 +59,7 @@ export function keysRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			keyRotateSchema,
 			context.req.raw.body === null ? {} : await readJsonLimited(context.req.raw),
 		);
-		return jsonOk(
-			await rotateKey(
-				context.env.DB,
-				context.env.API_KEY_PEPPER,
-				row,
-				input.grace_ms,
-				adminActor(context),
-			),
-		);
+		return jsonOk(await rotateKey(context.env.DB, context.env.API_KEY_PEPPER, row, input.grace_ms));
 	});
 	return app;
 }

@@ -15,9 +15,9 @@ const fields = {
 			return new Set(flags).size === flags.length;
 		}),
 	scope: z.enum(["all", "spaces", "own"]),
-	space_ids_json: z.string(),
-	own_entries_only: z.union([z.literal(0), z.literal(1)]),
-	auto_own_space: z.union([z.literal(0), z.literal(1)]),
+	space_ids: z.array(z.string().min(1)).refine((ids) => new Set(ids).size === ids.length),
+	own_entries_only: z.boolean(),
+	auto_own_space: z.boolean(),
 	expires_at: z.iso.datetime().nullable(),
 };
 
@@ -39,12 +39,12 @@ export const keyRotateSchema = z.strictObject({
 type KeyInput = z.infer<typeof keyPatchSchema>;
 export type ResolvedKeyInput = Required<MintInput>;
 
-function spaceIds(json: string): string[] {
+function storedSpaceIds(json: string): string[] {
 	let value: unknown;
 	try {
 		value = JSON.parse(json);
 	} catch {
-		throw new ApiError("validation_failed", "space_ids_json must contain an array of space ids");
+		throw new ApiError("validation_failed", "stored space ids must contain an array of space ids");
 	}
 	return parseStrict(
 		z.array(z.string().min(1)).refine((ids) => new Set(ids).size === ids.length),
@@ -68,7 +68,7 @@ export async function resolveKeyInput(
 	}
 	const autoOwnSpace =
 		input.auto_own_space ??
-		(reset ? Number(template?.autoOwnSpace ?? false) : existing.auto_own_space);
+		(reset ? (template?.autoOwnSpace ?? false) : existing.auto_own_space === 1);
 	if (template) {
 		const permittedScope =
 			role === "drop"
@@ -76,14 +76,14 @@ export async function resolveKeyInput(
 				: role === "readonly"
 					? scope === "all" || scope === "spaces"
 					: scope === template.scope;
-		if (ops !== template.ops || !permittedScope || autoOwnSpace !== Number(template.autoOwnSpace)) {
+		if (ops !== template.ops || !permittedScope || autoOwnSpace !== template.autoOwnSpace) {
 			throw new ApiError(
 				"validation_failed",
 				"template permissions cannot be overridden; use custom",
 			);
 		}
 	}
-	const ids = spaceIds(input.space_ids_json ?? (reset ? "[]" : existing.space_ids_json));
+	const ids = input.space_ids ?? (reset ? [] : storedSpaceIds(existing.space_ids_json));
 	if (scope !== "spaces" && ids.length > 0) {
 		throw new ApiError("validation_failed", "space ids require spaces scope");
 	}
@@ -100,8 +100,8 @@ export async function resolveKeyInput(
 		ops,
 		scope,
 		spaceIds: ids,
-		ownEntriesOnly: (input.own_entries_only ?? (reset ? 0 : existing.own_entries_only)) === 1,
-		autoOwnSpace: autoOwnSpace === 1,
+		ownEntriesOnly: input.own_entries_only ?? (reset ? false : existing.own_entries_only === 1),
+		autoOwnSpace,
 		expiresAt:
 			input.expires_at === undefined
 				? (existing?.expires_at ?? null)

@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { L2_ACCESS_AUD, l2AccessIss, loadJwksState, signAccessJwt } from "../../scripts/jwks-stub";
 import { L2_JWKS_PORT } from "../../scripts/ports";
-import { e2eD1, query, sqlText } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const origin = "https://octo.hexly.ai";
@@ -36,6 +35,9 @@ type KeyMetadata = {
 	role: string;
 	ops: string;
 	scope: string;
+	space_ids: string[];
+	own_entries_only: boolean;
+	auto_own_space: boolean;
 	revoked_at: string | null;
 };
 async function mint(role = "admin") {
@@ -85,7 +87,18 @@ describe("admin resources access boundary", () => {
 
 describe("admin keys real HTTP", () => {
 	it("mints, lists, updates, rotates and revokes without exposing stored material", async () => {
+		const observer = await mint();
+		const observerHeaders = { Authorization: `Bearer ${observer.plaintext}` };
+		const headResponse = await fetch(`${base}/api/v1/changes/head`, { headers: observerHeaders });
+		expect(headResponse.status).toBe(200);
+		const head = (await headResponse.json()) as { cursor: string };
 		const minted = await mint("readonly");
+		expect(minted.key).toMatchObject({
+			space_ids: [],
+			own_entries_only: false,
+			auto_own_space: false,
+		});
+		expect(minted.key).not.toHaveProperty("space_ids_json");
 		const path = `keys/${minted.key.id}`;
 		expect(await (await admin(path)).json()).toMatchObject(minted.key);
 		expect((await me(minted.plaintext)).status).toBe(200);
@@ -101,13 +114,13 @@ describe("admin keys real HTTP", () => {
 			role: "custom",
 			ops: "r",
 			scope: "all",
-			own_entries_only: 1,
+			own_entries_only: true,
 		});
 		expect(patched.status).toBe(200);
 		expect(await patched.json()).toMatchObject({
 			id: minted.key.id,
 			role: "custom",
-			own_entries_only: 1,
+			own_entries_only: true,
 		});
 		const rotation = await admin(`${path}/rotate`, "POST", { grace_ms: 604800000 });
 		expect(rotation.status).toBe(200);
@@ -133,19 +146,65 @@ describe("admin keys real HTTP", () => {
 		expect((await admin(`keys/${deletedKey.key.id}`, "DELETE")).status).toBe(200);
 		expect((await me(deletedKey.plaintext)).status).toBe(401);
 		expect((await admin(`keys/${deletedKey.key.id}`)).status).toBe(200);
-		const d1 = await e2eD1();
-		const rows = await query<{ actor: string; op: string }>(
-			d1,
-			`SELECT actor, op FROM changes WHERE entity = 'api_key' AND entity_id = ${sqlText(minted.key.id)} ORDER BY seq`,
+		const publicChanges = await fetch(
+			`${base}/api/v1/changes?cursor=${encodeURIComponent(head.cursor)}`,
+			{ headers: observerHeaders },
 		);
-		expect(rows.map((row) => row.op)).toEqual([
-			"created",
-			"updated",
-			"rotated",
-			"rotated",
-			"revoked",
-		]);
-		expect(rows.every((row) => row.actor === `admin:${email}`)).toBe(true);
+		expect(publicChanges.status).toBe(200);
+		expect(await publicChanges.json()).toEqual({ items: [], next_cursor: null });
+		expect(
+			await (await fetch(`${base}/api/v1/changes/head`, { headers: observerHeaders })).json(),
+		).toEqual(head);
+	});
+
+	it("uses array and boolean fields without accepting D1 storage aliases", async () => {
+		const slug = `m7-${crypto.randomUUID()}`;
+		const createdSpace = await admin("spaces", "POST", { slug, name: "Scoped" });
+		expect(createdSpace.status).toBe(201);
+		const space = (await createdSpace.json()) as { id: string };
+		const created = await admin("keys", "POST", {
+			name: `m7-${crypto.randomUUID()}`,
+			role: "custom",
+			ops: "r",
+			scope: "spaces",
+			space_ids: [space.id],
+			own_entries_only: true,
+			auto_own_space: false,
+		});
+		expect(created.status).toBe(201);
+		const { key } = (await created.json()) as { key: KeyMetadata };
+		for (const metadata of [key, await (await admin(`keys/${key.id}`)).json()]) {
+			expect(metadata).toMatchObject({
+				space_ids: [space.id],
+				own_entries_only: true,
+				auto_own_space: false,
+			});
+			expect(metadata).not.toHaveProperty("space_ids_json");
+		}
+		for (const body of [
+			{ space_ids_json: "[]" },
+			{ space_ids: "[]" },
+			{ own_entries_only: 0 },
+			{ auto_own_space: 1 },
+		]) {
+			expect(
+				(await admin("keys", "POST", { name: `m7-${crypto.randomUUID()}`, role: "admin", ...body }))
+					.status,
+			).toBe(400);
+			expect((await admin(`keys/${key.id}`, "PATCH", body)).status).toBe(400);
+		}
+		const patched = await admin(`keys/${key.id}`, "PATCH", {
+			space_ids: [],
+			own_entries_only: false,
+			auto_own_space: true,
+		});
+		expect(patched.status).toBe(200);
+		expect(await patched.json()).toMatchObject({
+			space_ids: [],
+			own_entries_only: false,
+			auto_own_space: true,
+		});
+		expect((await admin(`spaces/${slug}`, "DELETE")).status).toBe(200);
 	});
 
 	it("rejects invalid permissions, unknown resources, duplicates and unbounded grace", async () => {
@@ -157,7 +216,7 @@ describe("admin keys real HTTP", () => {
 			{ role: "readonly", ops: "w" },
 			{ role: "invalid" },
 			{ role: "custom", ops: "r,invalid", scope: "all" },
-			{ role: "custom", ops: "r", scope: "spaces", space_ids_json: '["absent"]' },
+			{ role: "custom", ops: "r", scope: "spaces", space_ids: ["absent"] },
 			{ secret_hash: "injection" },
 		]) {
 			expect(

@@ -1,11 +1,20 @@
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadKey, revokeKey, rotateKey, updateKey } from "../../admin/keys";
-import { type ApiKeyRow, lookupApiKey } from "../../auth/api-key";
+import { lookupApiKey } from "../../auth/api-key";
 import type { AppVars, Env } from "../../env";
 import { toErrorResponse } from "../../lib/errors";
 import { migratedSqlite } from "../../repo/__tests__/sqlite-d1";
+import { ChangeRepo } from "../../repo/changes";
 import { keysRoutes } from "./keys";
+
+type KeyMetadata = {
+	id: string;
+	scope: string;
+	space_ids: string[];
+	own_entries_only: boolean;
+	auto_own_space: boolean;
+};
 
 describe("admin keys", () => {
 	let store: ReturnType<typeof migratedSqlite>;
@@ -37,13 +46,21 @@ describe("admin keys", () => {
 	async function mint(body: Record<string, unknown> = {}) {
 		const response = await request("", "POST", { name: "agent", role: "admin", ...body });
 		expect(response.status).toBe(201);
-		return (await response.json()) as { key: ApiKeyRow; plaintext: string };
+		return (await response.json()) as { key: KeyMetadata; plaintext: string };
 	}
 
 	it("mints a usable HMAC-only key and never returns stored hashes", async () => {
 		const { key, plaintext } = await mint();
 		expect(plaintext).toMatch(new RegExp(`^octo_${key.id}_[A-Z2-7]{52}$`));
-		expect(key).toMatchObject({ role: "admin", ops: "r,w,u,d", scope: "all" });
+		expect(key).toMatchObject({
+			role: "admin",
+			ops: "r,w,u,d",
+			scope: "all",
+			space_ids: [],
+			own_entries_only: false,
+			auto_own_space: false,
+		});
+		expect(key).not.toHaveProperty("space_ids_json");
 		expect(key).not.toHaveProperty("secret_hash");
 		expect(key).not.toHaveProperty("prev_secret_hash");
 		expect(await lookupApiKey(store.d1, pepper, plaintext)).toMatchObject({ id: key.id });
@@ -57,11 +74,7 @@ describe("admin keys", () => {
 		expect(JSON.stringify(store.raw.prepare("SELECT * FROM api_keys").all())).not.toContain(
 			plaintext,
 		);
-		expect(store.raw.prepare("SELECT entity, op, actor FROM changes").get()).toMatchObject({
-			entity: "api_key",
-			op: "created",
-			actor: "admin:owner@local",
-		});
+		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM changes").get()).toMatchObject({ n: 0 });
 	});
 
 	it("marks plaintext responses as non-cacheable and accepts omitted rotation options", async () => {
@@ -81,13 +94,15 @@ describe("admin keys", () => {
 			)
 			.run();
 		for (const role of ["drop", "readonly"]) {
-			const { key } = await mint({ name: role, role, scope: "spaces", space_ids_json: '["room"]' });
-			expect(key.space_ids_json).toBe('["room"]');
+			const { key } = await mint({ name: role, role, scope: "spaces", space_ids: ["room"] });
+			expect(key.space_ids).toEqual(["room"]);
+			expect(key).not.toHaveProperty("space_ids_json");
+			expect((await loadKey(store.d1, key.id)).space_ids_json).toBe('["room"]');
 		}
 		expect((await mint({ name: "own-drop", role: "drop", scope: "own" })).key.scope).toBe("own");
-		for (const space_ids_json of ['["room"]', '["room","room"]', "[1]", "{}"]) {
+		for (const space_ids of [["room"], ["room", "room"], [1], {}]) {
 			expect(
-				(await request("", "POST", { name: "invalid-ids", role: "admin", space_ids_json })).status,
+				(await request("", "POST", { name: "invalid-ids", role: "admin", space_ids })).status,
 			).toBe(400);
 		}
 		const { key, plaintext } = await mint({
@@ -101,41 +116,99 @@ describe("admin keys", () => {
 		});
 	});
 
-	it("keeps metadata and changes atomic and rejects stale mutations", async () => {
+	it("keeps key writes atomic and rejects stale mutations without writing changes", async () => {
 		const { key } = await mint();
 		const row = await loadKey(store.d1, key.id);
 		store.raw.exec(
-			"CREATE TRIGGER reject_changes BEFORE INSERT ON changes BEGIN SELECT RAISE(ABORT, 'change unavailable'); END",
+			"CREATE TRIGGER reject_key_update BEFORE UPDATE ON api_keys BEGIN SELECT RAISE(ABORT, 'key update unavailable'); END",
 		);
 		expect((await request(`/${key.id}`, "PATCH", { name: "rollback" })).status).toBe(500);
 		expect((await loadKey(store.d1, key.id)).name).toBe("agent");
-		store.raw.exec("DROP TRIGGER reject_changes");
+		store.raw.exec("DROP TRIGGER reject_key_update");
 		await store.d1
 			.prepare("UPDATE api_keys SET updated_at = updated_at + 1 WHERE id = ?")
 			.bind(key.id)
 			.run();
 		await expect(
-			updateKey(
-				store.d1,
-				row,
-				{
-					name: "stale",
-					role: "admin",
-					ops: "r,w,u,d",
-					scope: "all",
-					spaceIds: [],
-					ownEntriesOnly: false,
-					autoOwnSpace: false,
-					expiresAt: null,
-				},
-				"admin:owner@local",
-			),
+			updateKey(store.d1, row, {
+				name: "stale",
+				role: "admin",
+				ops: "r,w,u,d",
+				scope: "all",
+				spaceIds: [],
+				ownEntriesOnly: false,
+				autoOwnSpace: false,
+				expiresAt: null,
+			}),
 		).rejects.toMatchObject({ code: "version_conflict" });
-		await revokeKey(store.d1, await loadKey(store.d1, key.id), "admin:owner@local");
-		await expect(rotateKey(store.d1, pepper, row, 0, "admin:owner@local")).rejects.toMatchObject({
+		await revokeKey(store.d1, await loadKey(store.d1, key.id));
+		await expect(rotateKey(store.d1, pepper, row, 0)).rejects.toMatchObject({
 			code: "version_conflict",
 		});
-		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM changes").get()).toMatchObject({ n: 2 });
+		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM changes").get()).toMatchObject({ n: 0 });
+	});
+
+	it("never publishes key mint, patch, rotation, revoke or delete to all-scope changes", async () => {
+		store.raw.exec(
+			"INSERT INTO changes (entity, entity_id, space_id, op, actor, at) VALUES ('space', 'room', 'room', 'created', 'admin:owner@local', 1)",
+		);
+		const changes = new ChangeRepo(store.d1);
+		const before = await changes.list({ kind: "all" }, { limit: 200 });
+		const head = await changes.head({ kind: "all" });
+		const { key } = await mint();
+		expect((await request(`/${key.id}`, "PATCH", { name: "renamed" })).status).toBe(200);
+		expect((await request(`/${key.id}/rotate`, "POST", {})).status).toBe(200);
+		expect((await request(`/${key.id}/revoke`, "POST")).status).toBe(200);
+		const deleted = await mint({ name: "deleted" });
+		expect((await request(`/${deleted.key.id}`, "DELETE")).status).toBe(200);
+		expect(await changes.list({ kind: "all" }, { limit: 200 })).toEqual(before);
+		expect(await changes.head({ kind: "all" })).toBe(head);
+	});
+
+	it("accepts array and boolean API fields and rejects stored-format aliases", async () => {
+		const { key } = await mint({
+			role: "custom",
+			ops: "r",
+			scope: "all",
+			space_ids: [],
+			own_entries_only: true,
+			auto_own_space: false,
+		});
+		expect(key).toMatchObject({ space_ids: [], own_entries_only: true, auto_own_space: false });
+		const stored = await loadKey(store.d1, key.id);
+		expect(stored).toMatchObject({ space_ids_json: "[]", own_entries_only: 1, auto_own_space: 0 });
+		for (const body of [
+			{ space_ids_json: "[]" },
+			{ space_ids: "[]" },
+			{ space_ids: ["room", "room"] },
+			{ own_entries_only: 0 },
+			{ own_entries_only: 1 },
+			{ auto_own_space: 0 },
+			{ auto_own_space: 1 },
+		]) {
+			expect(
+				(
+					await request("", "POST", {
+						name: "legacy",
+						role: "custom",
+						ops: "r",
+						scope: "all",
+						...body,
+					})
+				).status,
+			).toBe(400);
+			expect((await request(`/${key.id}`, "PATCH", body)).status).toBe(400);
+		}
+		const updated = await request(`/${key.id}`, "PATCH", {
+			own_entries_only: false,
+			auto_own_space: true,
+		});
+		expect(updated.status).toBe(200);
+		expect(await updated.json()).toMatchObject({
+			space_ids: [],
+			own_entries_only: false,
+			auto_own_space: true,
+		});
 	});
 
 	it("does not lose same-millisecond metadata updates", async () => {
@@ -144,21 +217,16 @@ describe("admin keys", () => {
 		const row = await loadKey(store.d1, key.id);
 		expect((await request(`/${key.id}`, "PATCH", { name: "first" })).status).toBe(200);
 		await expect(
-			updateKey(
-				store.d1,
-				row,
-				{
-					name: "stale",
-					role: "admin",
-					ops: "r,w,u,d",
-					scope: "all",
-					spaceIds: [],
-					ownEntriesOnly: false,
-					autoOwnSpace: false,
-					expiresAt: null,
-				},
-				"admin:owner@local",
-			),
+			updateKey(store.d1, row, {
+				name: "stale",
+				role: "admin",
+				ops: "r,w,u,d",
+				scope: "all",
+				spaceIds: [],
+				ownEntriesOnly: false,
+				autoOwnSpace: false,
+				expiresAt: null,
+			}),
 		).rejects.toMatchObject({ code: "version_conflict" });
 	});
 
@@ -178,10 +246,10 @@ describe("admin keys", () => {
 
 	it("applies all templates and requires explicit custom permissions", async () => {
 		for (const [role, ops, scope, auto] of [
-			["project", "r,w,u,d", "own", 1],
-			["drop", "w", "spaces", 0],
-			["readonly", "r", "all", 0],
-			["custom", "w,u", "own", 0],
+			["project", "r,w,u,d", "own", true],
+			["drop", "w", "spaces", false],
+			["readonly", "r", "all", false],
+			["custom", "w,u", "own", false],
 		] as const) {
 			const { key } = await mint({
 				name: role,
@@ -198,8 +266,8 @@ describe("admin keys", () => {
 			{ role: "drop", scope: "all" },
 			{ role: "custom", scope: "all", ops: "r,x" },
 			{ role: "custom", scope: "all", ops: "r,r" },
-			{ role: "custom", scope: "spaces", ops: "r", space_ids_json: "bad" },
-			{ role: "custom", scope: "spaces", ops: "r", space_ids_json: '["missing"]' },
+			{ role: "custom", scope: "spaces", ops: "r", space_ids: "bad" },
+			{ role: "custom", scope: "spaces", ops: "r", space_ids: ["missing"] },
 			{ secret_hash: "injected" },
 			{ auto_own_space: 2 },
 			{ expires_at: "not-a-date" },
@@ -220,7 +288,7 @@ describe("admin keys", () => {
 			name: "renamed",
 			role: "project",
 			scope: "own",
-			auto_own_space: 1,
+			auto_own_space: true,
 			expires_at: "2099-01-01T00:00:00.000Z",
 		});
 		expect((await request(`/${key.id}`, "PATCH", { ops: "r" })).status).toBe(400);
@@ -233,8 +301,8 @@ describe("admin keys", () => {
 			expires_at: null,
 		});
 		expect(custom.status).toBe(200);
-		expect(await custom.json()).toMatchObject({ role: "custom", auto_own_space: 0 });
-		expect((await request(`/${key.id}`, "PATCH", { own_entries_only: 1 })).status).toBe(200);
+		expect(await custom.json()).toMatchObject({ role: "custom", auto_own_space: false });
+		expect((await request(`/${key.id}`, "PATCH", { own_entries_only: true })).status).toBe(200);
 	});
 
 	it("rotates with bounded grace and revokes without losing history", async () => {
@@ -244,7 +312,7 @@ describe("admin keys", () => {
 		}
 		const rotated = await request(`/${key.id}/rotate`, "POST", { grace_ms: 604800000 });
 		expect(rotated.status).toBe(200);
-		const fresh = (await rotated.json()) as { key: ApiKeyRow; plaintext: string };
+		const fresh = (await rotated.json()) as { key: KeyMetadata; plaintext: string };
 		expect(fresh.plaintext).not.toBe(plaintext);
 		expect(fresh.key).not.toHaveProperty("prev_secret_hash");
 		expect(await lookupApiKey(store.d1, pepper, plaintext)).not.toBeNull();

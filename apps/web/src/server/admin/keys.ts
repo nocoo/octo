@@ -1,7 +1,7 @@
 import { type ApiKeyRow, generateApiKeyMaterial, hashSecret } from "../auth/api-key";
 import { ApiError } from "../lib/errors";
 import { isoUtc } from "../lib/http";
-import { commitAdminMutation, conflict } from "./common";
+import { conflict } from "./common";
 import type { ResolvedKeyInput } from "./key-input";
 
 export function publicKey(row: ApiKeyRow): Record<string, unknown> {
@@ -11,9 +11,9 @@ export function publicKey(row: ApiKeyRow): Record<string, unknown> {
 		role: row.role,
 		ops: row.ops,
 		scope: row.scope,
-		space_ids_json: row.space_ids_json,
-		own_entries_only: row.own_entries_only,
-		auto_own_space: row.auto_own_space,
+		space_ids: JSON.parse(row.space_ids_json) as string[],
+		own_entries_only: row.own_entries_only === 1,
+		auto_own_space: row.auto_own_space === 1,
 		expires_at: row.expires_at === null ? null : isoUtc(row.expires_at),
 		revoked_at: row.revoked_at === null ? null : isoUtc(row.revoked_at),
 		last_used_at: row.last_used_at === null ? null : isoUtc(row.last_used_at),
@@ -33,17 +33,27 @@ function requirePepper(pepper: string | undefined): string {
 	return pepper;
 }
 
+async function commitKeyMutation(statement: D1PreparedStatement): Promise<void> {
+	try {
+		const result = await statement.run();
+		if (result.meta.changes === 0) throw conflict("resource changed");
+	} catch (error) {
+		if (error instanceof Error && /UNIQUE constraint failed: api_keys.name/.test(error.message)) {
+			throw conflict("name already exists");
+		}
+		throw error;
+	}
+}
+
 export async function createKey(
 	db: D1Database,
 	pepper: string | undefined,
 	input: ResolvedKeyInput,
-	actor: string,
 ) {
 	const material = generateApiKeyMaterial();
 	const hash = await hashSecret(requirePepper(pepper), material.secret);
 	const now = Date.now();
-	await commitAdminMutation(
-		db,
+	await commitKeyMutation(
 		db
 			.prepare(
 				"INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -62,20 +72,13 @@ export async function createKey(
 				now,
 				now,
 			),
-		{ entity: "api_key", id: material.keyid, op: "created", actor, at: now },
 	);
 	return { key: publicKey(await loadKey(db, material.keyid)), plaintext: material.plaintext };
 }
 
-export async function updateKey(
-	db: D1Database,
-	row: ApiKeyRow,
-	input: ResolvedKeyInput,
-	actor: string,
-) {
+export async function updateKey(db: D1Database, row: ApiKeyRow, input: ResolvedKeyInput) {
 	const now = Math.max(Date.now(), row.updated_at + 1);
-	await commitAdminMutation(
-		db,
+	await commitKeyMutation(
 		db
 			.prepare(
 				"UPDATE api_keys SET name = ?, role = ?, ops = ?, scope = ?, space_ids_json = ?, own_entries_only = ?, auto_own_space = ?, expires_at = ?, updated_at = ? WHERE id = ? AND updated_at = ?",
@@ -93,7 +96,6 @@ export async function updateKey(
 				row.id,
 				row.updated_at,
 			),
-		{ entity: "api_key", id: row.id, op: "updated", actor, at: now },
 	);
 	return publicKey(await loadKey(db, row.id));
 }
@@ -103,21 +105,18 @@ export async function rotateKey(
 	pepper: string | undefined,
 	row: ApiKeyRow,
 	graceMs: number,
-	actor: string,
 ) {
 	if (row.revoked_at !== null) throw conflict("revoked keys cannot be rotated");
 	const material = generateApiKeyMaterial();
 	const hash = await hashSecret(requirePepper(pepper), material.secret);
 	const now = Date.now();
 	const updatedAt = Math.max(now, row.updated_at + 1);
-	await commitAdminMutation(
-		db,
+	await commitKeyMutation(
 		db
 			.prepare(
 				"UPDATE api_keys SET secret_hash = ?, prev_secret_hash = secret_hash, prev_valid_until = ?, updated_at = ? WHERE id = ? AND revoked_at IS NULL AND secret_hash = ?",
 			)
 			.bind(hash, now + graceMs, updatedAt, row.id, row.secret_hash),
-		{ entity: "api_key", id: row.id, op: "rotated", actor, at: now },
 	);
 	return {
 		key: publicKey(await loadKey(db, row.id)),
@@ -125,17 +124,15 @@ export async function rotateKey(
 	};
 }
 
-export async function revokeKey(db: D1Database, row: ApiKeyRow, actor: string) {
+export async function revokeKey(db: D1Database, row: ApiKeyRow) {
 	if (row.revoked_at !== null) return publicKey(row);
 	const now = Math.max(Date.now(), row.updated_at + 1);
-	await commitAdminMutation(
-		db,
+	await commitKeyMutation(
 		db
 			.prepare(
 				"UPDATE api_keys SET revoked_at = ?, prev_secret_hash = NULL, prev_valid_until = NULL, updated_at = ? WHERE id = ? AND revoked_at IS NULL",
 			)
 			.bind(now, now, row.id),
-		{ entity: "api_key", id: row.id, op: "revoked", actor, at: now },
 	);
 	return publicKey(await loadKey(db, row.id));
 }
