@@ -22,11 +22,11 @@ export function MarkdownContents({
 	return (
 		<TableOfContents title="On this page">
 			{entries.map((entry) => (
-				<div key={entry.id} data-depth={entry.depth}>
-					<TableOfContentsItem href={`#${entry.id}`}>
+				<TableOfContentsItem key={entry.id} href={`#${entry.id}`}>
+					<span className="octo-memory-toc-indent" data-depth={entry.depth}>
 						{entry.text || "Untitled section"}
-					</TableOfContentsItem>
-				</div>
+					</span>
+				</TableOfContentsItem>
 			))}
 		</TableOfContents>
 	);
