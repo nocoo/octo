@@ -7,7 +7,10 @@ import {
 	testEmbeddingSettings,
 } from "./config";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+});
 
 describe("embedding settings", () => {
 	it("defaults to active profile, no credentials and backfill off", async () => {
@@ -70,6 +73,50 @@ describe("embedding settings", () => {
 		expect(
 			raw.prepare("SELECT * FROM settings WHERE key = 'embedding.api_key'").get(),
 		).toBeUndefined();
+	});
+
+	it.each([
+		{ name: "preserved credential", body: { dims: 3 } },
+		{ name: "replacement credential", body: { dims: 3, api_key: "stale-credential" } },
+		{ name: "cleared credential", body: { dims: 3, api_key: null } },
+	])("rejects a stale partial save with $name without mixing gateway and key", async ({ body }) => {
+		const { env, raw } = fixture();
+		await saveEmbeddingSettings(env, SETTINGS, "admin:initial@local");
+		let markPaused!: () => void;
+		let resumeSave!: () => void;
+		const paused = new Promise<void>((resolve) => {
+			markPaused = resolve;
+		});
+		const resumed = new Promise<void>((resolve) => {
+			resumeSave = resolve;
+		});
+		const batch = env.DB.batch.bind(env.DB);
+		vi.spyOn(env.DB, "batch").mockImplementationOnce(async (statements) => {
+			markPaused();
+			await resumed;
+			return batch(statements);
+		});
+		const staleSave = saveEmbeddingSettings(env, body, "admin:stale@local");
+		const rejectedSave = expect(staleSave).rejects.toMatchObject({ code: "validation_failed" });
+		await paused;
+		await saveEmbeddingSettings(
+			env,
+			{
+				base_url: "https://new-gateway.example",
+				api_key: "new-gateway-credential",
+				backfill_enabled: false,
+			},
+			"admin:new@local",
+		);
+		const committed = raw.prepare("SELECT * FROM settings ORDER BY key").all();
+		resumeSave();
+		await rejectedSave;
+		expect(raw.prepare("SELECT * FROM settings ORDER BY key").all()).toEqual(committed);
+		expect(await loadEmbeddingConfig(env)).toMatchObject({
+			baseUrl: "https://new-gateway.example",
+			apiKey: "new-gateway-credential",
+			backfillEnabled: false,
+		});
 	});
 
 	it.each([

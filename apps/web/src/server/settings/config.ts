@@ -181,38 +181,53 @@ export async function saveEmbeddingSettings(
 			? await encryptApiKey(env.OCTO_SETTINGS_KEY, input.api_key)
 			: null;
 	const now = Date.now();
-	const guard =
-		"(SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1 AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND model = ? AND dims = ? AND active = 1)";
-	const profileParams = [state.profile.id, state.profile.model, state.profile.dims];
-	const upsert = (
-		key: string,
-		value: string | null,
-		ciphertext: Uint8Array | null = null,
-		iv: Uint8Array | null = null,
-		keyVersion: number | null = null,
-	) =>
-		env.DB.prepare(
-			`INSERT INTO settings (key, value, ciphertext, iv, key_version, updated_by, updated_at) SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${guard} ON CONFLICT(key) DO UPDATE SET value = excluded.value, ciphertext = excluded.ciphertext, iv = excluded.iv, key_version = excluded.key_version, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
-		).bind(key, value, ciphertext, iv, keyVersion, actor, now, ...profileParams);
-	const statements = [
-		upsert("embedding.base_url", settings.base_url),
-		upsert("embedding.model", settings.model),
-		upsert("embedding.dims", String(settings.dims)),
-		upsert("embedding.backfill_enabled", String(settings.backfill_enabled)),
+	const guard = `(SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1 AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND model = ? AND dims = ? AND active = 1) AND ${SETTINGS_SNAPSHOT_SQL} = ?`;
+	const guardParams = [state.profile.id, state.profile.model, state.profile.dims, state.snapshot];
+	const writes: Array<
+		[
+			key: string,
+			value: string | null,
+			ciphertext?: Uint8Array,
+			iv?: Uint8Array,
+			keyVersion?: number,
+		]
+	> = [
+		["embedding.base_url", settings.base_url],
+		["embedding.model", settings.model],
+		["embedding.dims", String(settings.dims)],
+		["embedding.backfill_enabled", String(settings.backfill_enabled)],
 	];
 	if (encrypted)
-		statements.push(
-			upsert("embedding.api_key", null, encrypted.ciphertext, encrypted.iv, encrypted.key_version),
-		);
+		writes.push([
+			"embedding.api_key",
+			null,
+			encrypted.ciphertext,
+			encrypted.iv,
+			encrypted.key_version,
+		]);
+	// The first CAS gates the atomic batch; later statements inherit success through changes().
+	const statements = writes.map(
+		([key, value, ciphertext = null, iv = null, keyVersion = null], index) =>
+			env.DB.prepare(
+				`INSERT INTO settings (key, value, ciphertext, iv, key_version, updated_by, updated_at) SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${index === 0 ? guard : "changes() = 1"} ON CONFLICT(key) DO UPDATE SET value = excluded.value, ciphertext = excluded.ciphertext, iv = excluded.iv, key_version = excluded.key_version, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+			).bind(
+				key,
+				value,
+				ciphertext,
+				iv,
+				keyVersion,
+				actor,
+				now,
+				...(index === 0 ? guardParams : []),
+			),
+	);
 	if (input.api_key === null)
 		statements.push(
-			env.DB.prepare(`DELETE FROM settings WHERE key = 'embedding.api_key' AND ${guard}`).bind(
-				...profileParams,
-			),
+			env.DB.prepare("DELETE FROM settings WHERE key = 'embedding.api_key' AND changes() = 1"),
 		);
 	const results = await env.DB.batch(statements);
 	if (results[0]?.meta.changes !== 1)
-		throw new ApiError("validation_failed", "active embedding profile changed");
+		throw new ApiError("validation_failed", "embedding settings or active profile changed");
 	return publicSettings({ ...state, settings }, apiKey);
 }
 
