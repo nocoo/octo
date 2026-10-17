@@ -31,7 +31,7 @@ const pages = [
 	["/graph", "关系图", ["/memories"]],
 	["/timeline", "时间线", ["/memories"]],
 	["/keys", "接口密钥", ["/keys"]],
-	["/usage", "用量与健康状态", ["/usage"]],
+	["/usage", "每日用量", ["/usage"]],
 	["/audit", "审计日志", ["/audit"]],
 	["/trash", "回收站", ["/trash"]],
 	["/settings", "设置", ["/embedding-profiles"]],
@@ -107,7 +107,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 			page.on("pageerror", (error) => errors.push(error.message));
 			await page.getByRole("button", { name: "搜索与命令", exact: true }).click();
 			await expect(page.getByRole("listbox")).toHaveAccessibleName("搜索结果");
-			await page.getByRole("combobox", { name: "搜索页面或记忆", exact: true }).fill("设置");
+			await page.getByPlaceholder("跳转页面，或搜索记忆…", { exact: true }).fill("设置");
 			await page.getByRole("option", { name: "设置", exact: true }).click();
 			await expect(page).toHaveURL(/\/settings$/);
 			await expect(page.getByRole("heading", { name: "设置", exact: true })).toBeVisible();

@@ -10,7 +10,7 @@ export const navigation = [
 	{ href: "/tags", label: "标签", icon: "tags", group: "管理" },
 	{ href: "/spaces", label: "空间", icon: "spaces", group: "管理" },
 	{ href: "/keys", label: "接口密钥", icon: "keys", group: "管理" },
-	{ href: "/usage", label: "用量与健康", icon: "usage", group: "管理" },
+	{ href: "/usage", label: "每日用量", icon: "usage", group: "管理" },
 	{ href: "/audit", label: "审计", icon: "audit", group: "管理" },
 	{ href: "/trash", label: "回收站", icon: "trash", group: "管理" },
 	{ href: "/settings/embedding", label: "向量模型", icon: "embedding", group: "系统" },
