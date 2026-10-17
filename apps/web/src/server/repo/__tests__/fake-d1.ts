@@ -139,7 +139,7 @@ export class FakeD1 {
 			const found = [...this.tags.values()].find((t) => t.name === name);
 			return found ? [found] : [];
 		}
-		if (sql.includes("stale_tag_merge")) {
+		if (sql.includes("SELECT 1 / CASE WHEN")) {
 			const fromId = String(binds[0]);
 			const intoId = String(binds[1]);
 			const tag = this.tags.get(fromId);

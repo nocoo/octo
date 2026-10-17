@@ -182,7 +182,7 @@ export class TagRepo {
 					.bind(into.id, ts, from.id, into.id),
 				this.db
 					.prepare(
-						"SELECT CASE WHEN (SELECT merged_into FROM tags WHERE id = ?) = ? THEN 1 ELSE RAISE(ABORT, 'stale_tag_merge') END",
+						"SELECT 1 / CASE WHEN (SELECT merged_into FROM tags WHERE id = ?) = ? THEN 1 ELSE 0 END",
 					)
 					.bind(from.id, into.id),
 				this.db
@@ -201,7 +201,7 @@ export class TagRepo {
 				...this.ftsRebuildStmts(into.id, from.id),
 			]);
 		} catch (err) {
-			if (String(err).includes("stale_tag_merge")) {
+			if (/stale_tag_merge|division by zero|DIVIDE/i.test(String(err))) {
 				throw new ApiError("unprocessable", "tag merge is stale");
 			}
 			throw err;
