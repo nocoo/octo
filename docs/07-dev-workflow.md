@@ -37,6 +37,8 @@
 | L2 | Direct Miniflare Worker `17059`; local JWKS stub `17057` | `.wrangler/e2e/<run-id>/v3` |
 | L3 | Worker `27059` | `.wrangler/e2e-pw/<run-id>` |
 
+The L3-only Origin exception requires `RESOURCE_ENV=test`, request URL origin and browser Origin both exactly `http://127.0.0.1:27059`; production and development retain their fixed HTTPS origins and Access verification is never bypassed by this exception.
+
 Attachment L2 requests use `undici.request` through `scripts/e2e-fetch.ts`.
 The HTTP client preserves a delivered early error response while the server
 terminates an unfinished upload; Node Fetch can instead reject that response

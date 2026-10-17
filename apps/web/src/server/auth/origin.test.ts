@@ -19,6 +19,34 @@ function env(resource?: string): Env {
 }
 
 describe("admin origin", () => {
+	it("allows only the isolated L3 same-origin request in the test environment", () => {
+		const local = "http://127.0.0.1:27059";
+		const request = new Request(`${local}/api/admin/memories`, {
+			method: "POST",
+			headers: { Origin: local },
+		});
+		expect(() => assertAdminWriteOrigin(request, env("test"))).not.toThrow();
+		for (const resource of [undefined, "production", "development", "invalid"]) {
+			expect(() => assertAdminWriteOrigin(request, env(resource))).toThrow(ApiError);
+		}
+		for (const origin of ["http://localhost:27059", "http://127.0.0.1:7059", "null"]) {
+			expect(() =>
+				assertAdminWriteOrigin(new Request(request, { headers: { Origin: origin } }), env("test")),
+			).toThrow(ApiError);
+		}
+		expect(() =>
+			assertAdminWriteOrigin(
+				new Request(`${ADMIN_ORIGIN_PROD}/api/admin/memories`, {
+					method: "POST",
+					headers: { Origin: local },
+				}),
+				env("test"),
+			),
+		).toThrow(ApiError);
+		expect(() =>
+			assertAdminWriteOrigin(new Request(request, { headers: {} }), env("test")),
+		).toThrow(ApiError);
+	});
 	it("allows safe methods and requires the env origin on writes", () => {
 		expect(isSafeMethod("get")).toBe(true);
 		expect(isSafeMethod("POST")).toBe(false);

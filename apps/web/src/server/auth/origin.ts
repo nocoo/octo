@@ -18,6 +18,14 @@ export function assertAdminWriteOrigin(request: Request, env: Env): void {
 	if (isSafeMethod(request.method)) {
 		return;
 	}
+	const localTestOrigin = "http://127.0.0.1:27059";
+	if (
+		env.RESOURCE_ENV === "test" &&
+		new URL(request.url).origin === localTestOrigin &&
+		request.headers.get("Origin") === localTestOrigin
+	) {
+		return;
+	}
 	if (request.headers.get("Origin") !== allowedAdminOrigin(env)) {
 		throw new ApiError("forbidden", "forbidden");
 	}
