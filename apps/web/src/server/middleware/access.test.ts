@@ -82,6 +82,11 @@ describe("hosts", () => {
 			),
 		).toBe("octo.dev.hexly.ai");
 		expect(requestHostname(new Request("http://127.0.0.1:17059/api"))).toBe("127.0.0.1");
+		expect(
+			requestHostname(
+				new Request("http://127.0.0.1:37059/api", { headers: { Host: "[::1]:37059" } }),
+			),
+		).toBe("::1");
 	});
 });
 
@@ -104,6 +109,16 @@ describe("resolveAccessIdentity", () => {
 				env({ ACCESS_DEV_BYPASS_EMAIL: "dev@local" }),
 			),
 		).rejects.toMatchObject({ code: "unauthenticated" });
+		expect(
+			(
+				await resolveAccessIdentity(
+					new Request("http://127.0.0.1:37059/api/admin/whoami", {
+						headers: { Host: "[::1]:37059" },
+					}),
+					env({ RESOURCE_ENV: "development", ACCESS_DEV_BYPASS_EMAIL: "dev@local" }),
+				)
+			).email,
+		).toBe("dev@local");
 	});
 
 	it("verifies RS256 tokens, caches JWKS, and rejects bad claims", async () => {

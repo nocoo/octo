@@ -15,12 +15,24 @@ export function resetJwksCache(): void {
 	jwksCache = null;
 }
 
+function hostnameFromHostHeader(host: string): string {
+	try {
+		const hostname = new URL(`http://${host}`).hostname.toLowerCase();
+		if (hostname.startsWith("[") && hostname.endsWith("]")) {
+			return hostname.slice(1, -1);
+		}
+		return hostname;
+	} catch {
+		return host.toLowerCase();
+	}
+}
+
 export function requestHostname(request: Request): string {
 	const host = request.headers.get("Host");
 	if (host && host.length > 0) {
-		return (host.split(":")[0] ?? "").toLowerCase();
+		return hostnameFromHostHeader(host);
 	}
-	return new URL(request.url).hostname.toLowerCase();
+	return hostnameFromHostHeader(new URL(request.url).host);
 }
 
 export function isLoopbackHost(host: string): boolean {
