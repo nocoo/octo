@@ -262,7 +262,7 @@ export type RunE2eOptions = {
 	port?: number;
 	jwksPort?: number;
 	spawnVitest?: (env: Record<string, string>) => Promise<void>;
-	spawnWrangler?: (args: string[]) => ChildProcess;
+	spawnWrangler?: (args: string[], env: NodeJS.ProcessEnv) => ChildProcess;
 	prepareDb?: (persistTo: string, config: string) => Promise<void>;
 	wait?: (base: string, timeoutMs: number) => Promise<void>;
 	assertFree?: (port: number) => Promise<void>;
@@ -302,9 +302,15 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	const jwks = await (options.startJwks ?? startJwksStub)(jwksPort, state);
 	const wranglerBin = join(root, "node_modules/.bin/wrangler");
 	const args = wranglerDevArgs(port, persistTo, configPath, envFile);
+	const childEnv = { ...process.env, WRANGLER_DISABLE_REQUEST_BODY_DRAINING: "true" };
 	const wrangler =
-		options.spawnWrangler?.(args) ??
-		spawn(wranglerBin, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"], detached: true });
+		options.spawnWrangler?.(args, childEnv) ??
+		spawn(wranglerBin, args, {
+			cwd: root,
+			stdio: ["ignore", "pipe", "pipe"],
+			detached: true,
+			env: childEnv,
+		});
 	wrangler.stdout?.on("data", (chunk) => process.stdout.write(chunk as Buffer));
 	wrangler.stderr?.on("data", (chunk) => process.stderr.write(chunk as Buffer));
 	const base = `http://127.0.0.1:${port}`;

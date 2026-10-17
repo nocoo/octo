@@ -54,7 +54,11 @@ export async function runDev(cwd = root, spawn: DevSpawn, prepare = prepareDev):
 
 export function bunDevSpawn(cmd: string[], cwd: string): Spawned {
 	const [bin, ...args] = cmd;
-	const proc = spawn(bin ?? "false", args, { cwd, stdio: "inherit" });
+	const proc = spawn(bin ?? "false", args, {
+		cwd,
+		stdio: "inherit",
+		env: { ...process.env, WRANGLER_DISABLE_REQUEST_BODY_DRAINING: "true" },
+	});
 	return {
 		exited: new Promise((resolve) => {
 			proc.on("close", (code) => resolve(code ?? 1));

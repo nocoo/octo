@@ -205,7 +205,8 @@ describe("runE2eApi", () => {
 					jwksClosed.push(true);
 				},
 			}),
-			spawnWrangler: () => {
+			spawnWrangler: (_args, childEnv) => {
+				expect(childEnv).toMatchObject({ WRANGLER_DISABLE_REQUEST_BODY_DRAINING: "true" });
 				queueMicrotask(() => {
 					child.stdout?.emit("data", Buffer.from("out"));
 					child.stderr?.emit("data", Buffer.from("err"));

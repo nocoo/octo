@@ -39,6 +39,11 @@ describe("prepare helpers", () => {
 	});
 
 	it("spawns a short-lived process", async () => {
+		const nativeBody = bunDevSpawn(
+			["/bin/sh", "-c", 'test "$WRANGLER_DISABLE_REQUEST_BODY_DRAINING" = true'],
+			process.cwd(),
+		);
+		expect(await nativeBody.exited).toBe(0);
 		const child = bunDevSpawn(["/bin/echo", "ok"], process.cwd());
 		expect(await child.exited).toBe(0);
 		const missing = bunDevSpawn([], process.cwd());
