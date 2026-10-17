@@ -1,5 +1,6 @@
 import type { MemoryFilters } from "../../lib/schema/filters";
 import { sqlInClause } from "./sql-in";
+import { resolveCanonicalTagIds, resolveRequiredTagIds } from "./tag-resolve";
 import { isoToMs } from "./time";
 
 export type SqlFilter = {
@@ -62,6 +63,31 @@ export function buildMemoryFilterSql(
 		}
 	}
 	return { clauses, binds };
+}
+
+export async function resolveMemoryFilterSql(
+	db: D1Database,
+	filters: MemoryFilters | undefined,
+	spaceIds: string[],
+): Promise<SqlFilter> {
+	const base = buildMemoryFilterSql(filters, spaceIds);
+	if (filters?.tags_all?.length) {
+		const ids = await resolveRequiredTagIds(db, filters.tags_all);
+		if (ids === null) {
+			base.clauses.push("1 = 0");
+		} else {
+			const tags = tagsAllExistsSql(ids);
+			base.clauses.push(tags.sql);
+			base.binds.push(...tags.binds);
+		}
+	}
+	if (filters?.tags_any?.length) {
+		const ids = await resolveCanonicalTagIds(db, filters.tags_any);
+		const tags = tagsAnyExistsSql(ids);
+		base.clauses.push(tags.sql);
+		base.binds.push(...tags.binds);
+	}
+	return base;
 }
 
 export function tagsAllExistsSql(tagIds: string[]): { sql: string; binds: string[] } {

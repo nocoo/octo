@@ -11,7 +11,7 @@ describe("memory-read", () => {
 		const db = {
 			prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }) }) }),
 		} as never;
-		expect(await loadMemoriesByIds(db, [])).toEqual(new Map());
+		expect(await loadMemoriesByIds(db, [], { clauses: ["1 = 0"], binds: [] })).toEqual(new Map());
 		expect(await loadTagsForMemories(db, [])).toEqual(new Map());
 	});
 
@@ -60,7 +60,10 @@ describe("memory-read", () => {
 			}),
 		} as never;
 		expect(await loadSpaceSlugMap(db)).toEqual(new Map([["s1", "kb"]]));
-		const memories = await loadMemoriesByIds(db, ["m1"]);
+		const memories = await loadMemoriesByIds(db, ["m1"], {
+			clauses: ["m.space_id = ?"],
+			binds: ["s1"],
+		});
 		const tags = await loadTagsForMemories(db, ["m1"]);
 		expect(tags.get("m1")).toEqual(["infra", "ops"]);
 		const stored = memories.get("m1");

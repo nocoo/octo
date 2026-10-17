@@ -1,4 +1,6 @@
 import { d1Results } from "../lib/d1";
+import type { SqlFilter } from "./filters-sql";
+import { sqlInClause } from "./sql-in";
 import { msToIso } from "./time";
 
 export type MemoryRow = {
@@ -26,20 +28,21 @@ export async function loadSpaceSlugMap(db: D1Database): Promise<Map<string, stri
 export async function loadMemoriesByIds(
 	db: D1Database,
 	ids: string[],
+	filter: SqlFilter,
 ): Promise<Map<string, MemoryRow>> {
 	if (ids.length === 0) {
 		return new Map();
 	}
-	const placeholders = ids.map(() => "?").join(", ");
+	const idIn = sqlInClause("m.id", ids);
 	const rows = await db
 		.prepare(
 			`SELECT m.id, m.space_id, s.slug AS space_slug, m.title, m.body, m.type, m.importance,
         m.created_at, m.updated_at, m.event_time
        FROM memories m
        JOIN spaces s ON s.id = m.space_id
-       WHERE m.id IN (${placeholders}) AND m.deleted_at IS NULL`,
+       WHERE ${idIn.sql} AND ${filter.clauses.join(" AND ")}`,
 		)
-		.bind(...ids)
+		.bind(...idIn.binds, ...filter.binds)
 		.all<MemoryRow>();
 	const map = new Map<string, MemoryRow>();
 	for (const row of d1Results(rows)) {
@@ -55,15 +58,15 @@ export async function loadTagsForMemories(
 	if (memoryIds.length === 0) {
 		return new Map();
 	}
-	const placeholders = memoryIds.map(() => "?").join(", ");
+	const idIn = sqlInClause("mt.memory_id", memoryIds);
 	const rows = await db
 		.prepare(
 			`SELECT mt.memory_id, t.name
        FROM memory_tags mt
        JOIN tags t ON t.id = mt.tag_id
-       WHERE mt.memory_id IN (${placeholders})`,
+       WHERE ${idIn.sql}`,
 		)
-		.bind(...memoryIds)
+		.bind(...idIn.binds)
 		.all<{ memory_id: string; name: string }>();
 	const map = new Map<string, string[]>();
 	for (const row of d1Results(rows)) {

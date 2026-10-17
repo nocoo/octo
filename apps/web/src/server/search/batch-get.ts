@@ -1,10 +1,15 @@
 import type { AuthzContext } from "./authz";
 import { canReadSpace } from "./authz";
+import { buildMemoryFilterSql } from "./filters-sql";
 import { loadMemoriesByIds, loadTagsForMemories, memoryToApi } from "./memory-read";
 
 export async function batchGetMemories(db: D1Database, authz: AuthzContext, ids: string[]) {
 	const unique = [...new Set(ids)];
-	const rows = await loadMemoriesByIds(db, unique);
+	const filter =
+		authz.visibleSpaceIds === "all"
+			? { clauses: ["m.deleted_at IS NULL"], binds: [] }
+			: buildMemoryFilterSql(undefined, authz.visibleSpaceIds);
+	const rows = await loadMemoriesByIds(db, unique, filter);
 	const tags = await loadTagsForMemories(db, [...rows.keys()]);
 	const items = [];
 	const found = new Set<string>();

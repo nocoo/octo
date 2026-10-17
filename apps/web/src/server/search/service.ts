@@ -6,7 +6,7 @@ import { buildVectorMetadataFilter } from "../ports/vector/filter";
 import type { VectorStore } from "../ports/vector/types";
 import type { AuthzContext } from "./authz";
 import { intersectRequestedSpaces } from "./authz";
-import { buildMemoryFilterSql } from "./filters-sql";
+import { buildMemoryFilterSql, resolveMemoryFilterSql } from "./filters-sql";
 import { runFtsChannel } from "./fts-channel";
 import { DEFAULT_FUSION, fuseChannels, type RankedChannel } from "./fusion";
 import { inferSearchMode } from "./infer-mode";
@@ -187,7 +187,10 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 				: fuseChannels(ftsRanked, vecRanked, fusion);
 
 	let ordered = [...fusedScores.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
-	const memories = await loadMemoriesByIds(deps.db, ordered);
+	const contentFilter = await resolveMemoryFilterSql(deps.db, req.filters, spaceIds);
+	const memories = await loadMemoriesByIds(deps.db, ordered, contentFilter);
+	ftsHits = ftsHits.filter((hit) => memories.has(hit.id));
+	vectorHits = vectorHits.filter((hit) => memories.has(hit.id));
 	ordered = ordered
 		.filter((id) => memories.has(id))
 		.sort((a, b) => {
