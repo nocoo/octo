@@ -156,7 +156,7 @@ describe("searchMemories", () => {
 		expect(result.items[0]?.scores.vector?.similarity).toBe(0.5);
 	});
 
-	it("uses the default D1 brute-force vector store", async () => {
+	it("uses the explicitly local D1 brute-force vector store", async () => {
 		const vec = encodeFloat32Vector(l2Normalize([1, 0]));
 		const query = async (sql: string) => {
 			if (sql.includes("FROM spaces")) {
@@ -201,7 +201,7 @@ describe("searchMemories", () => {
 		const result = await searchMemories(
 			{ keyId: "k", visibleSpaceIds: "all" },
 			{ vector: { profile: "te3-small-1536", values: [1, 0] }, mode: "vector", limit: 1 },
-			{ db },
+			{ db, env: { DB: db, FILES: {} as R2Bucket, ASSETS: {} as Fetcher, RESOURCE_ENV: "test" } },
 		);
 		expect(result.items[0]?.id).toBe("m1");
 	});

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ApiKeyRow } from "../../auth/api-key";
 import { mintApiKey } from "../../auth/api-key";
 import type { Env } from "../../env";
@@ -17,6 +17,7 @@ function keyDb(owned: string[] = []): { db: D1Database; rows: Map<string, Stored
 					return stmt;
 				},
 				async first<T>() {
+					if (sql.includes("embedding_profiles")) return { id: "p1", model: "m", dims: 2 } as T;
 					if (sql.includes("FROM api_keys")) {
 						return (rows.get(String(stmt.binds[0])) as T | undefined) ?? null;
 					}
@@ -48,7 +49,7 @@ function keyDb(owned: string[] = []): { db: D1Database; rows: Map<string, Stored
 				},
 				async all<T>() {
 					if (sql.includes("FROM spaces")) {
-						return { results: owned.map((id) => ({ id })) as T[] };
+						return { results: owned.map((id) => ({ id, slug: `slug-${id}` })) as T[] };
 					}
 					return { results: [] as T[] };
 				},
@@ -128,6 +129,40 @@ describe("v1 search routes", () => {
 			envFor(db),
 		);
 		expect(res.status).toBe(200);
+	});
+
+	it("reaches the production Vectorize adapter through bearer auth", async () => {
+		const { db } = keyDb(["s1"]);
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "bot",
+			role: "admin",
+			ops: "r",
+			scope: "all",
+		});
+		const query = vi.fn(async () => ({ matches: [] }));
+		const response = await createApp().request(
+			"/api/v1/search",
+			{
+				method: "POST",
+				headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+				body: JSON.stringify({
+					mode: "vector",
+					vector: { profile: "p1", values: [3, 4] },
+					filters: { types: ["note"], importance: { min: 0.2, max: 0.8 } },
+				}),
+			},
+			{ ...envFor(db), VEC: { query } as never },
+		);
+		expect(response.status).toBe(200);
+		expect(query).toHaveBeenCalledExactlyOnceWith([0.6, 0.8], {
+			topK: 100,
+			returnMetadata: false,
+			filter: {
+				space: { $in: ["slug-s1"] },
+				type: { $in: ["note"] },
+				importance: { $gte: 0.2, $lte: 0.8 },
+			},
+		});
 	});
 
 	it("returns 400 for malformed json bodies", async () => {

@@ -1,4 +1,5 @@
-import type { Env } from "../env";
+import { type Env, resourceEnv } from "../env";
+import { ApiError } from "../lib/errors";
 import { CloudflareVectorStore } from "../ports/vector/cloudflare";
 import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import type { VectorStore } from "../ports/vector/types";
@@ -10,8 +11,9 @@ export function createSearchVectorStore(
 	profileId: string,
 	baseFilter: SqlFilter,
 ): VectorStore {
-	if (env.VEC) {
-		return new CloudflareVectorStore(env.VEC);
+	if (resourceEnv(env.RESOURCE_ENV) !== "production") {
+		return new D1BruteForceVectorStore(db, profileId, baseFilter);
 	}
-	return new D1BruteForceVectorStore(db, profileId, baseFilter);
+	if (!env.VEC) throw new ApiError("unavailable", "VEC binding is required");
+	return new CloudflareVectorStore(env.VEC);
 }

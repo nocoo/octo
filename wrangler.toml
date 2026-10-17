@@ -29,5 +29,10 @@ database_id = "11111111-1111-1111-1111-111111111111"
 binding = "FILES"
 bucket_name = "octo-files"
 
+[[vectorize]]
+binding = "VEC"
+index_name = "octo-vec-te3-small-1536"
+remote = false
+
 [triggers]
 crons = ["17 * * * *"]
