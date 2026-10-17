@@ -47,7 +47,7 @@ function makeDb(handler: (sql: string) => Promise<{ results: unknown[] }>) {
 }
 
 describe("searchMemories edge cases", () => {
-	it("drops vector ghosts and marks truncation with tag filters", async () => {
+	it("drops vector ghosts without exposing truncation through tag filters", async () => {
 		const db = makeDb(async (sql) => {
 			if (sql.includes("FROM spaces")) {
 				return { results: [{ id: "s1", slug: "kb" }] };
@@ -75,7 +75,7 @@ describe("searchMemories edge cases", () => {
 				},
 			},
 		);
-		expect(result.channels.vector.truncated).toBe(true);
+		expect(result.channels.vector.truncated).toBe(false);
 		expect(result.items).toEqual([]);
 	});
 

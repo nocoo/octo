@@ -120,6 +120,47 @@ describe("bounded search SQL", () => {
 		expect(queryCount).toBeLessThanOrEqual(110);
 	});
 
+	it("does not expose ghost hit counts via vector truncation", async () => {
+		const { db, sqlite } = fixture();
+		sqlite.exec("INSERT INTO tags VALUES ('t1','infra','Infra',NULL,1,1)");
+		const result = await searchMemories(
+			authz,
+			{
+				vector: { profile: "te3-small-1536", values: [1, ...Array<number>(1535).fill(0)] },
+				mode: "vector",
+				limit: 1,
+				filters: { tags_all: ["infra"] },
+			},
+			{
+				db,
+				vectorStore: {
+					query: async () => Array.from({ length: 5 }, (_, i) => ({ id: `ghost${i}`, score: 1 })),
+				},
+			},
+		);
+		expect(result.items).toEqual([]);
+		expect(result.channels.vector).toMatchObject({ candidates: 0, truncated: false });
+	});
+
+	it("marks tag post-filter truncation only for visible candidates", async () => {
+		const { db, sqlite } = fixture();
+		sqlite.exec("INSERT INTO tags VALUES ('t1','infra','Infra',NULL,1,1)");
+		const ids = ["m1", "m2", "m3", "m4", "m5"];
+		for (const id of ids.slice(1)) addMemory(sqlite, id, "cloudflare", 1);
+		const result = await searchMemories(
+			authz,
+			{
+				vector: { profile: "te3-small-1536", values: [1, ...Array<number>(1535).fill(0)] },
+				mode: "vector",
+				limit: 1,
+				filters: { tags_all: ["infra"] },
+			},
+			{ db, vectorStore: { query: async () => ids.map((id) => ({ id, score: 1 })) } },
+		);
+		expect(result.items).toEqual([]);
+		expect(result.channels.vector).toMatchObject({ candidates: 0, truncated: true });
+	});
+
 	it("reads 200 hybrid candidates and tags, plus a 100-id batch, within the bind budget", async () => {
 		const { db, sqlite } = fixture();
 		sqlite.exec("UPDATE memories SET deleted_at=1 WHERE id='m1'");

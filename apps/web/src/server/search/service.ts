@@ -119,15 +119,18 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 			filter,
 			returnMetadata: false,
 		});
+		const eligible = await revalidateVectorHits(deps.db, raw, sqlFilter);
+		vectorHits = await revalidateVectorHits(deps.db, eligible, contentFilter);
 		vectorTruncated =
 			Boolean(req.filters?.tags_all?.length || req.filters?.tags_any?.length) &&
-			raw.length >= candidateK;
-		vectorHits = await revalidateVectorHits(deps.db, raw, contentFilter);
+			eligible.length >= candidateK &&
+			vectorHits.length < candidateK;
 	}
 
 	const candidateIds = [...new Set([...ftsHits, ...vectorHits].map((hit) => hit.id))];
 	const memories = await loadMemoriesByIds(deps.db, candidateIds, contentFilter);
 	ftsHits = ftsHits.filter((hit) => memories.has(hit.id));
+	if (vectorHits.length && !vectorHits.some((hit) => memories.has(hit.id))) vectorTruncated = false;
 	vectorHits = vectorHits.filter((hit) => memories.has(hit.id));
 	const ftsRanked: RankedChannel[] = ftsHits.map((h, i) => ({
 		id: h.id,
