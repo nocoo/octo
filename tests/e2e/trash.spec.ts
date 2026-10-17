@@ -6,7 +6,9 @@ async function moveToTrash(page: Page, title: string): Promise<void> {
 	const row = page
 		.getByRole("row")
 		.filter({ has: page.getByRole("link", { name: title, exact: true }) });
-	await row.getByRole("checkbox").check();
+	const checkbox = row.getByRole("checkbox");
+	await checkbox.click();
+	await expect(checkbox).toBeChecked();
 	await page.getByRole("button", { name: "移入回收站", exact: true }).click();
 	await page
 		.getByRole("alertdialog")
@@ -26,7 +28,9 @@ test("delete, restore, then title-check and confirm permanent deletion", async (
 	await page.goto("/trash");
 	const row = page.getByRole("row").filter({ hasText: memory.title });
 	await expect(row).toBeVisible();
-	await row.getByRole("checkbox").check();
+	const checkbox = row.getByRole("checkbox");
+	await checkbox.click();
+	await expect(checkbox).toBeChecked();
 	await page.getByRole("button", { name: "恢复所选记忆（1）", exact: true }).click();
 	await expect(row).toHaveCount(0);
 	expect((await admin.response(endpoint)).status()).toBe(200);
