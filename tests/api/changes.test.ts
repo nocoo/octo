@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { root } from "../../scripts/e2e";
 import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
@@ -39,9 +39,17 @@ async function seed(ops = "r,w,u,d") {
 	return { token: material.plaintext, slug };
 }
 
+let main: Awaited<ReturnType<typeof seed>>;
+let writer: Awaited<ReturnType<typeof seed>>;
+
+beforeAll(async () => {
+	main = await seed();
+	writer = await seed("w");
+}, 120_000);
+
 describe("change feed", () => {
 	it("lists visible events, hides delete payloads, and returns head", async () => {
-		const { token, slug } = await seed();
+		const { token, slug } = main;
 		const created = await fetch(`${base}/api/v1/memories`, {
 			method: "POST",
 			headers: auth(token),
@@ -87,7 +95,6 @@ describe("change feed", () => {
 	it("rejects unauthenticated and write-only keys", async () => {
 		expect((await fetch(`${base}/api/v1/changes`)).status).toBe(401);
 		expect((await fetch(`${base}/api/v1/changes/head`)).status).toBe(401);
-		const writer = await seed("w");
 		expect((await fetch(`${base}/api/v1/changes`, { headers: auth(writer.token) })).status).toBe(
 			403,
 		);

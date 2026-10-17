@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { root } from "../../scripts/e2e";
 import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
@@ -44,9 +44,40 @@ async function seed(ops = "r,w,u,d") {
 	return { token: material.plaintext, slug, profile };
 }
 
+let main: Awaited<ReturnType<typeof seed>>;
+let reader: Awaited<ReturnType<typeof seed>>;
+let writer: Awaited<ReturnType<typeof seed>>;
+let admin: Awaited<ReturnType<typeof seed>>;
+let own: { token: string; slug: string; takenToken: string; takenSlug: string };
+
+beforeAll(async () => {
+	main = await seed();
+	reader = await seed("r");
+	writer = await seed("w");
+	admin = await seed();
+	const d1 = e2eD1();
+	assertTestMarker(d1);
+	const material = generateApiKeyMaterial();
+	const secretHash = await hashSecret(pepper, material.secret);
+	const taken = generateApiKeyMaterial();
+	const takenHash = await hashSecret(pepper, taken.secret);
+	const now = Date.now();
+	const slug = `alice-${material.keyid.toLowerCase()}`;
+	const takenSlug = `taken-${taken.keyid.toLowerCase()}`;
+	d1([
+		"--command",
+		`
+		INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', '${slug}', '${secretHash}', 'project', 'r,w,u,d', 'own', '[]', 0, 1, NULL, ${now}, ${now});
+		INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES ('sp-${taken.keyid}', '${takenSlug}', 'Taken', '', 'other', ${now}, ${now});
+		INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${taken.keyid}', '${takenSlug}', '${takenHash}', 'project', 'r,w,u,d', 'own', '[]', 0, 1, NULL, ${now}, ${now});
+	`,
+	]);
+	own = { token: material.plaintext, slug, takenToken: taken.plaintext, takenSlug };
+}, 120_000);
+
 describe("memory CRUD", () => {
 	it("creates, reads, lists, patches, versions, diffs, rollbacks, and trashes", async () => {
-		const { token, slug, profile } = await seed();
+		const { token, slug, profile } = main;
 		const created = await fetch(`${base}/api/v1/memories`, {
 			method: "POST",
 			headers: auth(token),
@@ -155,7 +186,6 @@ describe("memory CRUD", () => {
 	});
 
 	it("rejects unauthenticated, forbidden, unknown space, and bad payloads", async () => {
-		const reader = await seed("r");
 		const denied = await fetch(`${base}/api/v1/memories`, {
 			method: "POST",
 			headers: auth(reader.token),
@@ -169,7 +199,6 @@ describe("memory CRUD", () => {
 		});
 		expect(denied.status).toBe(403);
 
-		const writer = await seed("w");
 		const created = await fetch(`${base}/api/v1/memories`, {
 			method: "POST",
 			headers: auth(writer.token),
@@ -187,7 +216,6 @@ describe("memory CRUD", () => {
 			(await fetch(`${base}/api/v1/memories/${item.id}`, { headers: auth(writer.token) })).status,
 		).toBe(403);
 
-		const admin = await seed();
 		expect((await fetch(`${base}/api/v1/memories`)).status).toBe(401);
 		const unknown = await fetch(`${base}/api/v1/memories`, {
 			method: "POST",
@@ -242,19 +270,10 @@ describe("memory CRUD", () => {
 	});
 
 	it("creates an auto own space on first write and rejects a taken slug", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		const material = generateApiKeyMaterial();
-		const secretHash = await hashSecret(pepper, material.secret);
-		const now = Date.now();
-		const slug = `alice-${material.keyid.toLowerCase()}`;
-		d1([
-			"--command",
-			`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', '${slug}', '${secretHash}', 'project', 'r,w,u,d', 'own', '[]', 0, 1, NULL, ${now}, ${now})`,
-		]);
+		const { slug, token, takenSlug, takenToken } = own;
 		const created = await fetch(`${base}/api/v1/memories`, {
 			method: "POST",
-			headers: auth(material.plaintext),
+			headers: auth(token),
 			body: JSON.stringify({
 				space: slug,
 				title: "t",
@@ -266,20 +285,9 @@ describe("memory CRUD", () => {
 		expect(created.status).toBe(201);
 		expect(await created.json()).toMatchObject({ space: slug });
 
-		const taken = generateApiKeyMaterial();
-		const takenHash = await hashSecret(pepper, taken.secret);
-		const takenSlug = `taken-${taken.keyid.toLowerCase()}`;
-		d1([
-			"--command",
-			`INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES ('sp-${taken.keyid}', '${takenSlug}', 'Taken', '', 'other', ${now}, ${now})`,
-		]);
-		d1([
-			"--command",
-			`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${taken.keyid}', '${takenSlug}', '${takenHash}', 'project', 'r,w,u,d', 'own', '[]', 0, 1, NULL, ${now}, ${now})`,
-		]);
 		const rejected = await fetch(`${base}/api/v1/memories`, {
 			method: "POST",
-			headers: auth(taken.plaintext),
+			headers: auth(takenToken),
 			body: JSON.stringify({
 				space: takenSlug,
 				title: "t",

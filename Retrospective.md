@@ -163,6 +163,10 @@ The first M4 remediation authorized the final content SELECT but fetched tags af
 The production fail-closed vector factory also exposed missing explicit development mode in both local startup paths. Startup tests now assert the actual shared Wrangler arguments rather than relying on manually constructed test environments.
 
 Future search changes must trace every returned field through its read snapshot, derive all scores/counts from the same final candidate set, and verify environment selection through the real startup entrypoints.
+## M2 L2 transport failure at fixture boundaries
+
+The controller's baseline L2 run failed twice with `fetch failed` / `read ECONNRESET` immediately after synchronous Wrangler D1 seeding between HTTP requests. Worker logs showed neither failed request nor a crash. This supports, but does not conclusively prove, stale keep-alive reuse while the client event loop was blocked. Both M2 API files now pre-seed all fixtures in file-level `beforeAll`, following the existing tags suite pattern. No retries or sleeps mask failures; only the controller runs the reserved-port L2 verification.
+
 ## M2 draft vector normalization failure
 
 Squaring finite components directly overflowed large vectors to a zero result and underflowed tiny nonzero vectors into rejection. Normalization now scales by the largest absolute component before using `Math.hypot`; regression cases include the largest and smallest finite JavaScript magnitudes. Finiteness checks alone do not prove arithmetic preserves a vector's norm.
