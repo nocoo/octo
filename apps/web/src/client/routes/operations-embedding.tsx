@@ -256,6 +256,7 @@ export function SettingsPage() {
 		{
 			id: "active",
 			header: "Status",
+			sortValue: (profile) => (profile.active ? "Active" : "Inactive"),
 			accessor: (profile) => (
 				<Badge variant={profile.active ? "success" : "secondary"}>
 					{profile.active ? "Active" : "Inactive"}

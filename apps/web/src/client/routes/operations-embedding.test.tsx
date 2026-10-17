@@ -1,13 +1,28 @@
+import type { DataTableProps, DataTableSort } from "@nocoo/basalt/components/data-table";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
-import type { EmbeddingModel, SettingsModel } from "../viewmodels/operations-embedding";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+	EmbeddingModel,
+	EmbeddingProfile,
+	SettingsModel,
+} from "../viewmodels/operations-embedding";
 import { EmbeddingPage, SettingsPage } from "./operations-embedding";
 
 const fixture = vi.hoisted(() => ({
 	state: {} as Partial<EmbeddingModel["state"]>,
 	settings: {} as Partial<SettingsModel["state"]> & { loaded?: boolean },
+	sort: null as DataTableSort | null,
 }));
+vi.mock("@nocoo/basalt/components/data-table", async (original) => {
+	const module = await original<typeof import("@nocoo/basalt/components/data-table")>();
+	return {
+		...module,
+		DataTable: (props: DataTableProps<EmbeddingProfile>) => (
+			<module.DataTable {...props} defaultSort={fixture.sort} />
+		),
+	};
+});
 vi.mock("../viewmodels/operations-embedding", async (original) => {
 	const module = await original<typeof import("../viewmodels/operations-embedding")>();
 	return {
@@ -27,6 +42,12 @@ vi.mock("../viewmodels/operations-embedding", async (original) => {
 	};
 });
 
+beforeEach(() => {
+	fixture.state = {};
+	fixture.settings = {};
+	fixture.sort = null;
+});
+
 describe("profile read states", () => {
 	function render() {
 		return renderToStaticMarkup(
@@ -35,6 +56,25 @@ describe("profile read states", () => {
 			</MemoryRouter>,
 		);
 	}
+	it.each(["asc", "desc"] as const)("sorts active profile status %s through Basalt", (dir) => {
+		fixture.settings = {
+			loaded: true,
+			profiles: [
+				{ id: "profile-inactive", model: "model", dims: 512, metric: "cosine", active: false },
+				{ id: "profile-active", model: "model", dims: 512, metric: "cosine", active: true },
+			],
+		};
+		fixture.sort = { id: "active", dir };
+		const html = render();
+		const ids = [...html.matchAll(/<td[^>]*>(profile-(?:active|inactive))<\/td>/g)].map(
+			(match) => match[1],
+		);
+		expect(ids).toEqual(
+			dir === "asc"
+				? ["profile-active", "profile-inactive"]
+				: ["profile-inactive", "profile-active"],
+		);
+	});
 	it.each([null, "Unable to load embedding profiles."])(
 		"does not assert an empty unknown profiles list: %s",
 		(error) => {
