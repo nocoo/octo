@@ -205,7 +205,6 @@ export async function saveEmbeddingSettings(
 			encrypted.iv,
 			encrypted.key_version,
 		]);
-	// The first CAS gates the atomic batch; later statements inherit success through changes().
 	const statements = writes.map(
 		([key, value, ciphertext = null, iv = null, keyVersion = null], index) =>
 			env.DB.prepare(
