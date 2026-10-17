@@ -235,6 +235,18 @@ export class FakeD1 {
 			).length;
 			return [{ n }];
 		}
+		if (sql.includes("SELECT DISTINCT memory_id")) {
+			const tagIds = new Set(binds.map(String));
+			const ids = [
+				...new Set(
+					this.memoryTags.filter((link) => tagIds.has(link.tag_id)).map((link) => link.memory_id),
+				),
+			];
+			return ids.map((id) => ({ id }));
+		}
+		if (sql.includes("INSERT OR REPLACE INTO memories_fts_map")) {
+			return [];
+		}
 		if (sql.includes("DELETE FROM memories_fts_map")) {
 			return [];
 		}
@@ -248,17 +260,12 @@ export class FakeD1 {
 			return [];
 		}
 		if (sql.includes("INSERT INTO memories_fts")) {
-			const tagIds = new Set(binds.map(String));
-			const memIds = new Set(
-				this.memoryTags.filter((link) => tagIds.has(link.tag_id)).map((link) => link.memory_id),
-			);
-			for (const memId of memIds) {
-				const names = this.memoryTags
-					.filter((link) => link.memory_id === memId)
-					.map((link) => this.tags.get(link.tag_id)?.name)
-					.filter((name): name is string => Boolean(name));
-				this.fts.set(memId, names.join(" "));
-			}
+			const memId = String(binds[0]);
+			const names = this.memoryTags
+				.filter((link) => link.memory_id === memId)
+				.map((link) => this.tags.get(link.tag_id)?.name)
+				.filter((name): name is string => Boolean(name));
+			this.fts.set(memId, names.join(" "));
 			return [];
 		}
 		if (sql.includes("DELETE FROM memory_tags WHERE tag_id = ? AND memory_id IN")) {
