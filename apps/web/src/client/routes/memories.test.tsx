@@ -47,6 +47,17 @@ function render(Page: () => React.JSX.Element, path: string) {
 }
 
 describe("memory pages use installed Basalt layouts and Chinese copy", () => {
+	it.each(["/memories", "/memories?view=cards"])(
+		"wraps unbroken space and tag values inside their badges at %s",
+		(path) => {
+			overrides.list = { items: [{ ...memory, space: "s".repeat(64), tags: ["t".repeat(64)] }] };
+			const html = render(MemoriesPage, path);
+			const gridStyle = html.match(/<div[^>]*style="([^"]*)"[^>]*><span[^>]*>s{64}<\/span>/)?.[1];
+			expect(gridStyle).toContain("overflow-wrap:anywhere");
+			expect(html).toContain("s".repeat(64));
+			expect(html).toContain("t".repeat(64));
+		},
+	);
 	it.each([
 		[MemoriesPage, "/memories", ["记忆库", "标题", "空间 / 标签", "下一页"]],
 		[MemoriesPage, "/memories?view=cards", ["记忆库", "卡片", "笔记"]],

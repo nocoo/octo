@@ -116,6 +116,7 @@ function MemoryTags({ memory }: { memory: Pick<Memory, "tags" | "space" | "type"
 			style={{
 				gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
 				alignItems: "center",
+				overflowWrap: "anywhere",
 			}}
 		>
 			<Badge variant="outline">{memory.space}</Badge>
