@@ -17,7 +17,7 @@ export function tokenizeQuery(query: string): TokenizedQuery {
 	const longTerms: string[] = [];
 	const shortTerms: string[] = [];
 	for (const part of parts) {
-		if (part.length >= 3) {
+		if ([...part].length >= 3) {
 			longTerms.push(part);
 		} else if (part.length > 0) {
 			shortTerms.push(part);

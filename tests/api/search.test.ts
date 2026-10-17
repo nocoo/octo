@@ -72,8 +72,8 @@ INSERT INTO tags VALUES ('tag_srch_infra','search-infra','Search infra',NULL,${n
 	for (const id of memoryIds) {
 		const space = id === HIDDEN ? "sp_srch_l2_hid" : "sp_srch_l2_vis";
 		commands.push(`INSERT INTO memories (id,space_id,title,body,type,importance,source_key_id,event_time,content_hash,created_at,updated_at,deleted_at)
-VALUES ('${id}','${space}','部署 cloudflare worker','正文包含部署与 cloudflare worker 配置','procedure',0.8,'${source}',${now},'hash',${now},${now},${id === TRASHED ? now : "NULL"});
-INSERT INTO memories_fts(title,body,tags) VALUES ('部署 cloudflare worker','正文包含部署与 cloudflare worker 配置','search-infra');
+VALUES ('${id}','${space}','部署 cloudflare worker','正文包含部署与 cloudflare worker 配置 𠮷野','procedure',0.8,'${source}',${now},'hash',${now},${now},${id === TRASHED ? now : "NULL"});
+INSERT INTO memories_fts(title,body,tags) VALUES ('部署 cloudflare worker','正文包含部署与 cloudflare worker 配置 𠮷野','search-infra');
 INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;
 INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
 VALUES ('${id}','te3-small-1536','text-embedding-3-small',1536,X'${blob}','hash',${now});
@@ -138,6 +138,14 @@ describe("POST /api/v1/search", () => {
 		const body = (await res.json()) as SearchBody;
 		expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
 		expect(body.channels.fts.partial).toBe(true);
+	});
+
+	it("finds a two-code-point supplementary CJK term through the bounded fallback", async () => {
+		const res = await post("search", { query: "𠮷野", mode: "fts" });
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as SearchBody;
+		expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
+		expect(body.channels.fts).toEqual({ candidates: 1, partial: true });
 	});
 
 	it.each(["fts", "vector", "hybrid"])(

@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildFtsMatchQuery, tokenizeQuery } from "./tokenizer";
 
 describe("tokenizeQuery", () => {
+	it("counts supplementary CJK code points for short, mixed and long terms", () => {
+		expect(tokenizeQuery("𠮷野")).toEqual({ longTerms: [], shortTerms: ["𠮷野"], allShort: true });
+		expect(tokenizeQuery("𠮷 𠮷野 𠮷野家 cloudflare")).toEqual({
+			longTerms: ["𠮷野家", "cloudflare"],
+			shortTerms: ["𠮷", "𠮷野"],
+			allShort: false,
+		});
+	});
 	it("splits mixed Chinese and punctuation", () => {
 		expect(tokenizeQuery("部署 cloudflare worker")).toEqual({
 			longTerms: ["cloudflare", "worker"],
