@@ -327,3 +327,9 @@ Trash updated by ID alone after authorization and emitted duplicate events when 
 ## M2 draft authorization and rollback failures
 
 The draft checked the current memory but not the historical destination on rollback, and single trashed reads omitted delete authorization. Auto-own-space creation also ran before checking write capability. Rollback caught TagRepo failures as if they were malformed snapshots and silently cleared tags; alias filters confused canonical deduplication with missing names. Regression tests now verify authorization before side effects, unchanged persisted state on rejected rollback, and alias-aware filtering. Keep parsing catches separate from storage calls and authorize every destination, not only the initially loaded resource.
+
+## M7 purge fault-injection correction
+
+An initial preparation-failure test bound the original database method after installing its spy. The bound spy consumed the next injected failure during the initial lookup, so the test passed without exercising SQL preparation. Capturing the original method before installing the spy exposed an uncaught preparation failure. Purge now maps preparation and commit failures through the same safe 503 boundary, while its transactional guard rejects changed trash snapshots. Fault-injection tests must verify the failing phase, not merely the final status.
+
+The first full-suite run also exposed that the local migration loader reapplies every additive migration. The cleanup table migration now uses `IF NOT EXISTS`, matching the existing migration contract; isolated service tests alone did not establish that contract.

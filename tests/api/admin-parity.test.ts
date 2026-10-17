@@ -60,6 +60,7 @@ const mirrored = [
 	["GET", "/memories/missing/attachments"],
 	["GET", "/attachments/missing/url"],
 	["DELETE", "/attachments/missing"],
+	["DELETE", "/trash/missing"],
 ] as const;
 
 describe("admin parity real HTTP", () => {
@@ -193,7 +194,63 @@ describe("admin parity real HTTP", () => {
 		["GET", "/memories/missing/attachments", undefined, 404],
 		["GET", "/attachments/missing/url", undefined, 404],
 		["DELETE", "/attachments/missing", undefined, 404],
+		["DELETE", "/trash/missing", undefined, 404],
 	] as const)("returns safe failures for %s %s", async (method, path, body, status) => {
 		expect((await admin(path, method, body)).status).toBe(status);
+	});
+
+	it("purges only trash, removes D1 data and durably cleans R2 objects", async () => {
+		const created = await admin("/memories", "POST", {
+			space: slug,
+			title: "purge",
+			body: "body",
+			type: "note",
+			tags: [],
+		});
+		expect(created.status).toBe(201);
+		const { id } = (await created.json()) as { id: string };
+		expect((await admin(`/trash/${id}`, "DELETE")).status).toBe(409);
+		const uploaded = await fetch(`${base}/api/admin/memories/${id}/attachments`, {
+			method: "POST",
+			headers: {
+				"Cf-Access-Jwt-Assertion": jwt,
+				Origin: "https://octo.hexly.ai",
+				"Content-Type": "image/png",
+				"X-Filename": "purge.png",
+			},
+			body: new Uint8Array([137, 80, 78, 71]),
+		});
+		expect(uploaded.status).toBe(201);
+		const attachment = (await uploaded.json()) as { id: string };
+		const signed = await admin(`/attachments/${attachment.id}/url`);
+		expect(signed.status).toBe(200);
+		const { url } = (await signed.json()) as { url: string };
+		const signedUrl = new URL(url);
+		const localUrl = `${base}${signedUrl.pathname}${signedUrl.search}`;
+		expect((await fetch(localUrl)).status).toBe(200);
+		expect((await admin(`/memories/${id}`, "DELETE")).status).toBe(200);
+		const purged = await admin(`/trash/${id}`, "DELETE");
+		expect(purged.status).toBe(200);
+		expect(await purged.json()).toEqual({ id, purged: true });
+		expect((await admin(`/trash/${id}`, "DELETE")).status).toBe(404);
+		const database = await e2eD1();
+		for (const [table, column] of [
+			["memories", "id"],
+			["memory_versions", "memory_id"],
+			["memory_tags", "memory_id"],
+			["memory_vectors", "memory_id"],
+			["attachments", "memory_id"],
+			["memories_fts_map", "memory_id"],
+		])
+			expect(
+				await query(database, `SELECT * FROM ${table} WHERE ${column} = ${sqlText(id)}`),
+			).toEqual([]);
+		expect(
+			await query(
+				database,
+				`SELECT actor FROM changes WHERE entity_id = ${sqlText(id)} AND op = 'purged'`,
+			),
+		).toEqual([{ actor: "admin:parity@local" }]);
+		await expect.poll(async () => (await fetch(localUrl)).status).toBe(404);
 	});
 });
