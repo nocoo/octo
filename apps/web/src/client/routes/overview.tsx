@@ -33,20 +33,20 @@ import {
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useModel } from "../components/layout/use-model";
-import { memoryOperationLabels } from "../viewmodels/memories";
 import { activitySeries, OverviewModel } from "../viewmodels/overview";
 
-const changeLabels: Record<string, string> = {
-	...memoryOperationLabels,
-	created: "创建",
-	updated: "更新",
-	deleted: "删除",
-	trashed: "移入回收站",
-	purged: "永久删除",
-	renamed: "重命名",
-	merged: "合并",
-	tag_merged: "合并标签",
-};
+const changeLabels = new Map([
+	["created", "创建"],
+	["updated", "更新"],
+	["deleted", "删除"],
+	["trashed", "移入回收站"],
+	["purged", "永久删除"],
+	["moved", "移动"],
+	["restored", "恢复"],
+	["rolled_back", "回滚"],
+	["tag_renamed", "重命名标签"],
+	["tag_merged", "合并标签"],
+]);
 
 export function activityChartSeries(activity: ReturnType<typeof activitySeries>) {
 	return activity.keys.map(
@@ -285,7 +285,7 @@ export function OverviewPage() {
 									width: "12ch",
 									wrap: true,
 									sortable: false,
-									accessor: (change) => changeLabels[change.op] ?? change.op,
+									accessor: (change) => changeLabels.get(change.op) ?? "其他操作",
 								},
 								{
 									id: "actor",

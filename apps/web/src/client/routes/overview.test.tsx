@@ -87,7 +87,7 @@ it("renders only real M7 metrics with rollup scope, change actors and unavailabl
 				seq: 2,
 				entity: "memory",
 				entity_id: "m1",
-				op: "update",
+				op: "updated",
 				actor: "admin:owner@example.com",
 				at: "2026-10-18T01:00:00.000Z",
 				version: 3,
@@ -114,6 +114,37 @@ it("renders only real M7 metrics with rollup scope, change actors and unavailabl
 	expect(html).toContain('href="/memories/m1"');
 	expect(html).not.toContain('href="/memories/gone"');
 	expect(html).not.toContain("向量健康正常");
+});
+
+it.each([
+	["created", "创建"],
+	["updated", "更新"],
+	["deleted", "删除"],
+	["trashed", "移入回收站"],
+	["purged", "永久删除"],
+	["moved", "移动"],
+	["restored", "恢复"],
+	["rolled_back", "回滚"],
+	["tag_renamed", "重命名标签"],
+	["tag_merged", "合并标签"],
+	["unexpected_operation", "其他操作"],
+	["constructor", "其他操作"],
+])("renders real change operation %s as Chinese copy", (operation, label) => {
+	snapshot.state = {
+		...new OverviewModel().state,
+		changes: [
+			{ seq: 1, entity: "memory", entity_id: "m1", op: operation, at: "2026-10-18T00:00:00Z" },
+		],
+	};
+	const html = renderToStaticMarkup(
+		<ThemeProvider persist={false}>
+			<MemoryRouter>
+				<OverviewPage />
+			</MemoryRouter>
+		</ThemeProvider>,
+	);
+	expect(html).toContain(`>${label}</td>`);
+	expect(html).not.toContain(`>${operation}</td>`);
 });
 
 it("gives overview records readable wrapping columns inside package scroll regions", () => {
