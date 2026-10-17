@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Auto-owned spaces were an untracked write side effect
+
+Reading the M6 preparation contract after staging memory and tags exposed one remaining immediate write: first-use space creation. A rejected first memory could leave an empty owned space. The HTTP service now prepares that space in the same statement sink and uses its anticipated slug/ID for the memory plan. Its request-local pending space is reusable only while its insert remains staged, so failed batch-item checkpoints cannot retain a nonexistent resource. A red/green real-auth test verifies rejected-input cleanup and a single successful batch containing the first space and memory.
+
 ## 2026-10-17 — Secondary memory fields mixed visibility snapshots
 
 Extending the history-race investigation reproduced hidden tags leaking through GET and list after a memory moved between the initial authorized row read and the tag query. Before serialization, both paths now revalidate IDs against the originally read space, version and deletion state in one bounded JSON-parameter query. Moved entries are rejected or omitted, so separately loaded tags, attachments and vector status cannot accompany an obsolete authorization snapshot. The regression interleaves a real move and retag operation rather than mocking a successful authorization result.

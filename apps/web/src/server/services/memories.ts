@@ -13,7 +13,7 @@ import { ChangeRepo } from "../repo/changes";
 import { type MemoryRecord, MemoryRepo } from "../repo/memories";
 import { encodeCursor, parseChangeCursor, parseMemoryCursor } from "../repo/memories-cursor";
 import { resolveVectorWrite } from "../repo/memories-vector";
-import { ensureAutoOwnSpace } from "../repo/spaces";
+import { ensureAutoOwnSpace, prepareOwnSpace, type SpaceRow } from "../repo/spaces";
 import { normalizeTag, TagRepo } from "../repo/tags";
 import { diffVersions, VersionRepo } from "../repo/versions";
 
@@ -168,6 +168,8 @@ export function publicVersion(
 }
 
 export class MemoryService {
+	private pendingOwnSpace?: { row: SpaceRow; statement: D1PreparedStatement };
+
 	constructor(
 		private readonly db: D1Database,
 		private readonly tags: TagRepo = new TagRepo(db),
@@ -176,9 +178,11 @@ export class MemoryService {
 		private readonly memories = new MemoryRepo(db),
 		private readonly versions = new VersionRepo(db),
 		private readonly changes = new ChangeRepo(db),
+		private readonly statements?: D1PreparedStatement[],
 	) {}
 
 	async create(authz: Authz, input: MemoryCreate): Promise<Record<string, unknown>> {
+		let own: SpaceRow | null = null;
 		if (authz.principal.autoOwnSpace) {
 			if (!authz.principal.ops.has("w")) {
 				const target = await this.memories.spaceBySlug(input.space);
@@ -187,27 +191,30 @@ export class MemoryService {
 				}
 				throw new ApiError("forbidden", "forbidden");
 			}
-			const own = await ensureAutoOwnSpace(
-				this.db,
-				{
-					id: authz.principal.id,
-					name: authz.principal.name,
-					auto_own_space: 1,
-				},
-				this.now,
-				this.id,
-			);
+			own = this.statements
+				? await this.stagedOwnSpace(authz, this.statements)
+				: await ensureAutoOwnSpace(
+						this.db,
+						{
+							id: authz.principal.id,
+							name: authz.principal.name,
+							auto_own_space: 1,
+						},
+						this.now,
+						this.id,
+					);
 			if (own && !authz.principal.ownedSpaceIds.includes(own.id)) {
 				authz.principal.ownedSpaceIds.push(own.id);
 			}
 		}
-		const space = await this.requireSpace(input.space);
+		const space = own?.slug === input.space ? own : await this.requireSpace(input.space);
 		authz.denyUnless("write", { spaceId: space.id });
 		const tags = await this.tags.resolveMany(input.tags);
 		const vector = input.vector ? await resolveVectorWrite(this.db, input.vector) : undefined;
 		const row = await this.memories.write({
 			id: this.id(),
 			spaceId: space.id,
+			spaceSlug: space.slug,
 			title: input.title,
 			body: input.body,
 			type: input.type,
@@ -225,6 +232,17 @@ export class MemoryService {
 			row,
 			tags.map((tag) => tag.name),
 		);
+	}
+
+	private async stagedOwnSpace(authz: Authz, statements: D1PreparedStatement[]): Promise<SpaceRow> {
+		if (this.pendingOwnSpace && statements.includes(this.pendingOwnSpace.statement))
+			return this.pendingOwnSpace.row;
+		const prepared = await prepareOwnSpace(this.db, authz.principal, this.now, this.id);
+		if (prepared.statement) {
+			statements.push(prepared.statement);
+			this.pendingOwnSpace = { row: prepared.row, statement: prepared.statement };
+		}
+		return prepared.row;
 	}
 
 	async get(authz: Authz, id: string, include: Set<string>): Promise<Record<string, unknown>> {

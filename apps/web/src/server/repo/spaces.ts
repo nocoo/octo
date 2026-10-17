@@ -15,6 +15,42 @@ export type SpaceRow = {
 
 export type SpaceWithCount = SpaceRow & { memory_count: number };
 
+export async function prepareOwnSpace(
+	db: D1Database,
+	key: { id: string; name: string },
+	now: () => number,
+	id: () => string,
+): Promise<{ row: SpaceRow; statement?: D1PreparedStatement }> {
+	const owned = await db
+		.prepare("SELECT * FROM spaces WHERE owner_key_id = ?")
+		.bind(key.id)
+		.first<SpaceRow>();
+	if (owned) return { row: owned };
+	const existing = await db
+		.prepare("SELECT * FROM spaces WHERE slug = ?")
+		.bind(key.name)
+		.first<SpaceRow>();
+	if (existing) throw new ApiError("unprocessable", "own space slug is taken");
+	const timestamp = now();
+	const row: SpaceRow = {
+		id: id(),
+		slug: key.name,
+		name: key.name,
+		description: "",
+		owner_key_id: key.id,
+		created_at: timestamp,
+		updated_at: timestamp,
+	};
+	return {
+		row,
+		statement: db
+			.prepare(
+				"INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			)
+			.bind(row.id, row.slug, row.name, row.description, row.owner_key_id, timestamp, timestamp),
+	};
+}
+
 export class SpaceRepo {
 	constructor(private readonly db: D1Database) {}
 

@@ -14,5 +14,8 @@ export function memoryService(c: Context<{ Bindings: Env; Variables: AppVars }>)
 			c.get("writeStatements").push(...statements);
 			c.set("writeError", mapError);
 		}),
+		undefined,
+		undefined,
+		c.get("writeStatements"),
 	);
 }

@@ -29,6 +29,7 @@ export type MemoryRecord = {
 export type MemoryWrite = {
 	id: string;
 	spaceId: string;
+	spaceSlug?: string;
 	title: string;
 	body: string;
 	type: string;
@@ -216,10 +217,12 @@ export class MemoryRepo {
 			...this.vectorStmts(input, nextVersion, hash),
 		];
 		if (this.stage) {
-			const space = await this.db
-				.prepare("SELECT slug FROM spaces WHERE id = ?")
-				.bind(input.spaceId)
-				.first<{ slug: string }>();
+			const space = input.spaceSlug
+				? { slug: input.spaceSlug }
+				: await this.db
+						.prepare("SELECT slug FROM spaces WHERE id = ?")
+						.bind(input.spaceId)
+						.first<{ slug: string }>();
 			if (!space) throw new ApiError("not_found", "not found");
 			this.stage(stmts, (error) =>
 				this.conflict(input.id, input.expectedVersion, input.op === "restore", error),

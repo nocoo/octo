@@ -45,6 +45,31 @@ async function fixture() {
 }
 
 describe("memory HTTP transaction boundary", () => {
+	it("stages an automatically owned space with the first memory", async () => {
+		const { db, request, keyId } = await fixture();
+		await db
+			.prepare(
+				"UPDATE api_keys SET name = 'new-own', auto_own_space = 1, scope = 'own' WHERE id = ?",
+			)
+			.bind(keyId)
+			.run();
+		const input = {
+			space: "new-own",
+			title: "title",
+			body: "body",
+			type: "note",
+			tags: ["orphan", " "],
+		};
+		expect((await request("/memories", "POST", input, "invalid-own")).status).toBe(400);
+		expect(await db.prepare("SELECT * FROM spaces WHERE slug = 'new-own'").first()).toBeNull();
+		const batch = vi.spyOn(db, "batch");
+		const created = await request("/memories", "POST", { ...input, tags: ["valid"] }, "valid-own");
+		expect(created.status).toBe(201);
+		expect(batch).toHaveBeenCalledTimes(1);
+		expect(
+			await db.prepare("SELECT owner_key_id FROM spaces WHERE slug = 'new-own'").first(),
+		).toEqual({ owner_key_id: keyId });
+	});
 	it.each(["ops", "scope", "move"])(
 		"reauthorizes a saved PATCH after %s changes",
 		async (change) => {
