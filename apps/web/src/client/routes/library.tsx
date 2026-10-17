@@ -156,6 +156,7 @@ function GraphTables({
 		{
 			id: "label",
 			header: "节点",
+			width: "24ch",
 			accessor: (node) => (node.href ? <Link href={node.href}>{node.label}</Link> : node.label),
 			sortValue: (node) => node.label,
 			wrap: true,
@@ -163,6 +164,7 @@ function GraphTables({
 		{
 			id: "kind",
 			header: "类型",
+			width: "12ch",
 			accessor: (node) => (
 				<Badge variant="secondary">
 					{{ tag: "标签", memory: "记忆", cluster: "聚合节点" }[node.kind]}
@@ -173,6 +175,7 @@ function GraphTables({
 		{
 			id: "count",
 			header: "数量",
+			width: "10ch",
 			accessor: (node) => node.count,
 			sortValue: (node) => node.count,
 			textAlign: "end",
@@ -211,6 +214,7 @@ function GraphTables({
 					{
 						id: "source",
 						header: "起点",
+						width: "24ch",
 						accessor: (link) => labels.get(link.source),
 						sortValue: (link) => labels.get(link.source) ?? link.source,
 						wrap: true,
@@ -218,6 +222,7 @@ function GraphTables({
 					{
 						id: "target",
 						header: "终点",
+						width: "24ch",
 						accessor: (link) => labels.get(link.target),
 						sortValue: (link) => labels.get(link.target) ?? link.target,
 						wrap: true,
@@ -225,6 +230,7 @@ function GraphTables({
 					{
 						id: "value",
 						header: "关联强度",
+						width: "12ch",
 						accessor: (link) => link.value,
 						sortValue: (link) => link.value,
 						textAlign: "end",
@@ -267,6 +273,7 @@ export function TagsPage() {
 		{
 			id: "name",
 			header: "标签",
+			width: "24ch",
 			accessor: (tag) => (
 				<Link href={`/memories?${new URLSearchParams({ tags_all: tag.name })}`}>
 					{tag.display_name}
@@ -277,6 +284,7 @@ export function TagsPage() {
 		{
 			id: "count",
 			header: "记忆数",
+			width: "10ch",
 			accessor: (tag) => tag.use_count,
 			sortValue: (tag) => tag.use_count,
 			textAlign: "end",
@@ -285,6 +293,7 @@ export function TagsPage() {
 		{
 			id: "actions",
 			header: "操作",
+			width: "28ch",
 			sortable: false,
 			accessor: (tag) => (
 				<Grid columns={2} gap="sm">
@@ -499,21 +508,24 @@ export function SpacesPage() {
 		{
 			id: "name",
 			header: "空间",
+			width: "24ch",
 			accessor: (space) => (
 				<Link href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}>{space.name}</Link>
 			),
 			sortValue: (space) => space.name,
 		},
-		{ id: "slug", header: "标识", accessor: (space) => space.slug },
+		{ id: "slug", header: "标识", width: "36ch", accessor: (space) => space.slug },
 		{
 			id: "description",
 			header: "说明",
+			width: "32ch",
 			accessor: (space) => space.description,
 			wrap: true,
 		},
 		{
 			id: "owner",
 			header: "所属密钥",
+			width: "24ch",
 			accessor: (space) =>
 				space.owner_key_id ? (
 					<Link href="/keys">
@@ -527,6 +539,7 @@ export function SpacesPage() {
 		{
 			id: "count",
 			header: "记忆数",
+			width: "10ch",
 			accessor: (space) => space.memory_count,
 			sortValue: (space) => space.memory_count,
 			textAlign: "end",
@@ -654,11 +667,12 @@ export function TrashPage() {
 	const selected = selectedIds(params);
 	const visible = filterMemories(state.memories, params);
 	const columns: DataTableColumn<LibraryMemory>[] = [
-		{ id: "title", header: "记忆", accessor: (item) => item.title, wrap: true },
-		{ id: "space", header: "空间", accessor: (item) => item.space },
+		{ id: "title", header: "记忆", width: "24ch", accessor: (item) => item.title, wrap: true },
+		{ id: "space", header: "空间", width: "24ch", accessor: (item) => item.space },
 		{
 			id: "deleted",
 			header: "移入时间",
+			width: "24ch",
 			accessor: (item) =>
 				item.deleted_at ? new Date(item.deleted_at).toLocaleString("zh-CN") : "未知",
 			sortValue: (item) => item.deleted_at ?? "",
@@ -666,6 +680,7 @@ export function TrashPage() {
 		{
 			id: "purge",
 			header: "永久删除",
+			width: "16ch",
 			sortable: false,
 			accessor: (item) => (
 				<Button
@@ -993,19 +1008,21 @@ export function TimelinePage() {
 		{
 			id: "time",
 			header: "时间（UTC）",
+			width: "28ch",
 			accessor: (item) => new Date(item.timestamp).toISOString(),
 			sortValue: (item) => item.timestamp,
 		},
 		{
 			id: "memory",
 			header: "记忆",
+			width: "24ch",
 			accessor: (item) => (
 				<Link href={`/memories/${encodeURIComponent(item.id)}`}>{item.title}</Link>
 			),
 			sortValue: (item) => item.title,
 			wrap: true,
 		},
-		{ id: "space", header: "空间", accessor: (item) => item.space },
+		{ id: "space", header: "空间", width: "24ch", accessor: (item) => item.space },
 	];
 	const rangeField = (name: "from" | "to", label: string): ReactNode => (
 		<Field label={label} htmlFor={`timeline-${name}`} hint="包含边界时刻的 UTC 时间。">

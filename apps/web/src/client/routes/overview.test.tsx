@@ -115,3 +115,52 @@ it("renders only real M7 metrics with rollup scope, change actors and unavailabl
 	expect(html).not.toContain('href="/memories/gone"');
 	expect(html).not.toContain("向量健康正常");
 });
+
+it("gives overview records readable wrapping columns inside package scroll regions", () => {
+	snapshot.state = {
+		...new OverviewModel().state,
+		changes: [
+			{
+				seq: 1,
+				entity: "memory",
+				entity_id: "01M55YM4GQAYQ0KVDC61GHRCJK",
+				op: "trashed",
+				actor: "admin:owner@example.com",
+				at: "2026-10-18T01:00:00.000Z",
+			},
+		],
+		recent: [
+			{
+				id: "m1",
+				title: "知识工作台：检索与协作",
+				space: "l3-b6f3628a23074d3d9304fad55d45f36b",
+				tags: [],
+				updated_at: "2026-10-18T01:00:00.000Z",
+			},
+		],
+	};
+	const html = renderToStaticMarkup(
+		<ThemeProvider persist={false}>
+			<MemoryRouter>
+				<OverviewPage />
+			</MemoryRouter>
+		</ThemeProvider>,
+	);
+	for (const [label, widths] of [
+		["最近变更", ["28ch", "12ch", "28ch", "28ch"]],
+		["最近更新的记忆", ["28ch", "24ch", "24ch"]],
+	] as const) {
+		expect(html).toContain(`aria-label="${label} scroll area" tabindex="0"`);
+		const table = html.match(
+			new RegExp(`<table\\b[^>]*aria-label="${label}"[\\s\\S]*?<\\/table>`),
+		)?.[0];
+		expect(table).toBeDefined();
+		const heads = table?.match(/<th\b[^>]*>/g) ?? [];
+		expect(heads).toHaveLength(widths.length);
+		for (const [index, width] of widths.entries())
+			expect(heads[index]).toContain(`style="width:${width};min-width:${width}"`);
+		expect(table).not.toContain("aria-sort");
+	}
+	expect(html).toMatch(/<td[^>]*class="[^"]*whitespace-normal break-words[^>]*>移入回收站<\/td>/);
+	expect(html).toContain("知识工作台：检索与协作");
+});

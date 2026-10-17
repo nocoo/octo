@@ -8,6 +8,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@nocoo/basalt/components/collapsible";
+import { DataTable } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
@@ -257,36 +258,53 @@ export function OverviewPage() {
 			<SectionRule title="最近变更">
 				<LayerCard>
 					<LayerCard.Well>
-						<Table aria-label="最近变更">
-							<TableHeader>
-								<TableRow>
-									<TableHead>内容</TableHead>
-									<TableHead>操作</TableHead>
-									<TableHead>操作者</TableHead>
-									<TableHead>时间 · UTC</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{state.changes.map((change) => (
-									<TableRow key={change.seq}>
-										<TableCell>
-											{change.entity === "memory" && !["trashed", "purged"].includes(change.op) ? (
-												<Link to={`/memories/${encodeURIComponent(change.entity_id)}`}>
-													{change.entity_id}
-												</Link>
-											) : (
-												change.entity_id
-											)}
-										</TableCell>
-										<TableCell>{changeLabels[change.op] ?? change.op}</TableCell>
-										<TableCell>{change.actor ?? "未提供"}</TableCell>
-										<TableCell>
-											<time dateTime={change.at}>{change.at}</time>
-										</TableCell>
-									</TableRow>
-								))}
-							</TableBody>
-						</Table>
+						<DataTable
+							aria-label="最近变更"
+							data={state.changes}
+							getRowId={(change) => String(change.seq)}
+							empty={null}
+							columns={[
+								{
+									id: "content",
+									header: "内容",
+									width: "28ch",
+									wrap: true,
+									sortable: false,
+									accessor: (change) =>
+										change.entity === "memory" && !["trashed", "purged"].includes(change.op) ? (
+											<Link to={`/memories/${encodeURIComponent(change.entity_id)}`}>
+												{change.entity_id}
+											</Link>
+										) : (
+											change.entity_id
+										),
+								},
+								{
+									id: "operation",
+									header: "操作",
+									width: "12ch",
+									wrap: true,
+									sortable: false,
+									accessor: (change) => changeLabels[change.op] ?? change.op,
+								},
+								{
+									id: "actor",
+									header: "操作者",
+									width: "28ch",
+									wrap: true,
+									sortable: false,
+									accessor: (change) => change.actor ?? "未提供",
+								},
+								{
+									id: "time",
+									header: "时间 · UTC",
+									width: "28ch",
+									wrap: true,
+									sortable: false,
+									accessor: (change) => <time dateTime={change.at}>{change.at}</time>,
+								},
+							]}
+						/>
 						{!state.changes.length && (
 							<p className="text-basalt-sm text-basalt-muted-foreground">
 								{state.memoryCount === null ? "变更记录尚未加载" : "暂无变更记录"}
@@ -299,30 +317,40 @@ export function OverviewPage() {
 				<LayerCard>
 					<LayerCard.Body>
 						<Grid columns={1}>
-							<Table aria-label="最近更新的记忆">
-								<TableHeader>
-									<TableRow>
-										<TableHead>记忆</TableHead>
-										<TableHead>空间</TableHead>
-										<TableHead>更新时间</TableHead>
-									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{state.recent.map((memory) => (
-										<TableRow key={memory.id}>
-											<TableCell>
-												<Link to={`/memories/${encodeURIComponent(memory.id)}`}>
-													{memory.title}
-												</Link>
-											</TableCell>
-											<TableCell>
-												<Badge variant="secondary">{memory.space}</Badge>
-											</TableCell>
-											<TableCell>{new Date(memory.updated_at).toLocaleString("zh-CN")}</TableCell>
-										</TableRow>
-									))}
-								</TableBody>
-							</Table>
+							<DataTable
+								aria-label="最近更新的记忆"
+								data={state.recent}
+								getRowId={(memory) => memory.id}
+								empty={null}
+								columns={[
+									{
+										id: "title",
+										header: "记忆",
+										width: "28ch",
+										wrap: true,
+										sortable: false,
+										accessor: (memory) => (
+											<Link to={`/memories/${encodeURIComponent(memory.id)}`}>{memory.title}</Link>
+										),
+									},
+									{
+										id: "space",
+										header: "空间",
+										width: "24ch",
+										wrap: true,
+										sortable: false,
+										accessor: (memory) => <Badge variant="secondary">{memory.space}</Badge>,
+									},
+									{
+										id: "updated",
+										header: "更新时间",
+										width: "24ch",
+										wrap: true,
+										sortable: false,
+										accessor: (memory) => new Date(memory.updated_at).toLocaleString("zh-CN"),
+									},
+								]}
+							/>
 							{!state.recent.length &&
 								(state.memoryCount !== null ? (
 									<LayerCard.Empty
