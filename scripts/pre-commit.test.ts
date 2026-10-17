@@ -6,6 +6,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { exportIndex, L1_SCRIPTS, linkSnapshotDeps, main, runL1, runPreCommit } from "./pre-commit";
 
+// The hook exports GIT_DIR/GIT_INDEX_FILE; fixture git calls must not touch the real repository.
+for (const key of Object.keys(process.env)) {
+	if (key.startsWith("GIT_")) delete process.env[key];
+}
+
 function git(cwd: string, args: string[]): void {
 	execFileSync("git", args, { cwd });
 }
