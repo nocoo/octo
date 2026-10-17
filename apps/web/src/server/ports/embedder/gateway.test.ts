@@ -30,16 +30,42 @@ describe("GatewayEmbedder", () => {
 		await expect(new GatewayEmbedder(config).embed(["x"])).rejects.toThrow("dimension mismatch");
 	});
 
-	it("handles absent or empty data arrays", async () => {
+	it.each([
+		{ name: "missing", body: {} },
+		{ name: "non-array object", body: { data: {} } },
+		{ name: "non-array string", body: { data: "invalid" } },
+		{ name: "null", body: { data: null } },
+		{ name: "empty", body: { data: [] } },
+		{ name: "fewer", body: { data: [{ embedding: [3, 4] }] } },
+		{
+			name: "extra",
+			body: { data: [{ embedding: [3, 4] }, { embedding: [3, 4] }, { embedding: [3, 4] }] },
+		},
+	])("rejects $name embeddings for nonempty input", async ({ body }) => {
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({})),
+			vi.fn(async () => Response.json(body)),
 		);
-		expect(await new GatewayEmbedder(config).embed([])).toEqual([]);
+		await expect(new GatewayEmbedder(config).embed(["hello", "world"])).rejects.toThrow(
+			"embedding count mismatch",
+		);
+	});
+
+	it("normalizes one embedding per input", async () => {
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [] })),
+			vi.fn(async () => Response.json({ data: [{ embedding: [3, 4] }, { embedding: [4, 3] }] })),
 		);
+		expect(await new GatewayEmbedder(config).embed(["hello", "world"])).toEqual([
+			[0.6, 0.8],
+			[0.8, 0.6],
+		]);
+	});
+
+	it("returns an empty array without calling the gateway for empty input", async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
 		expect(await new GatewayEmbedder(config).embed([])).toEqual([]);
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

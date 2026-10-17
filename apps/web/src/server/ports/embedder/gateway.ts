@@ -6,6 +6,7 @@ export class GatewayEmbedder implements QueryEmbedder {
 	constructor(private readonly config: EmbedderConfig) {}
 
 	async embed(texts: string[]): Promise<number[][]> {
+		if (texts.length === 0) return [];
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 5_000);
 		try {
@@ -25,8 +26,10 @@ export class GatewayEmbedder implements QueryEmbedder {
 			const body = (await res.json()) as {
 				data?: Array<{ embedding?: number[] }>;
 			};
-			const vectors = (body.data ?? []).map((row) => row.embedding ?? []);
-			return vectors.map((values) => assertVectorValues(values, this.config.dims));
+			if (!Array.isArray(body.data) || body.data.length !== texts.length) {
+				throw new Error("embedding count mismatch");
+			}
+			return body.data.map((row) => assertVectorValues(row.embedding ?? [], this.config.dims));
 		} finally {
 			clearTimeout(timeout);
 		}

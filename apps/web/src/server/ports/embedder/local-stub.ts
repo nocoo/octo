@@ -8,7 +8,12 @@ export type EmbedderStub = {
 	close: () => Promise<void>;
 };
 
-type StubOptions = { embedding?: number[]; delayMs?: number; status?: number };
+type StubOptions = {
+	embedding?: number[];
+	delayMs?: number;
+	status?: number;
+	responseBody?: object;
+};
 
 export function startLocalEmbedderStub(
 	expectedUserAgent: string,
@@ -45,9 +50,11 @@ export function startLocalEmbedderStub(
 			const respond = () => {
 				res.writeHead(options.status ?? 200, { "content-type": "application/json" });
 				res.end(
-					JSON.stringify({
-						data: (parsed.input ?? []).map(() => ({ embedding: options.embedding ?? [3, 4] })),
-					}),
+					JSON.stringify(
+						options.responseBody ?? {
+							data: (parsed.input ?? []).map(() => ({ embedding: options.embedding ?? [3, 4] })),
+						},
+					),
 				);
 			};
 			if (options.delayMs) timers.add(setTimeout(respond, options.delayMs));

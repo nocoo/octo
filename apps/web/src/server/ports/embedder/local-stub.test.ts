@@ -65,6 +65,14 @@ describe("real local embedding gateway", () => {
 		await expect(embedder(local.baseUrl).embed(["x"])).rejects.toThrow(error);
 	});
 
+	it("rejects a real HTTP response missing an embedding for one input", async () => {
+		const local = await stub({ responseBody: { data: [{ embedding: [3, 4] }] } });
+		await expect(embedder(local.baseUrl).embed(["hello", "world"])).rejects.toThrow(
+			"embedding count mismatch",
+		);
+		expect(local.getLastRequest()?.body).toMatchObject({ input: ["hello", "world"] });
+	});
+
 	it("normalizes extreme finite gateway values", async () => {
 		const local = await stub({ embedding: [3e300, 4e300] });
 		expect(await embedder(local.baseUrl).embed(["x"])).toEqual([[0.6, 0.8]]);
