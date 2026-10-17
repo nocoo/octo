@@ -57,6 +57,63 @@ const dataset = [
 ];
 
 describe("Vectorize filter byte budget", () => {
+	it.each([64, 65])("bounds total requests at 64 for %i required partitions", async (count) => {
+		const values = Array.from({ length: count }, (_, i) => `${i}`.padEnd(1100, "x"));
+		const query = vi.fn(async (_vector: number[], options: VectorizeQueryOptions) => {
+			expect(new TextEncoder().encode(JSON.stringify(options.filter)).length).toBeLessThan(2048);
+			expect(options.filter?.space).toEqual({ $in: ["visible"] });
+			expect(options.topK).toBe(7);
+			return { matches: [] };
+		});
+		const result = new CloudflareVectorStore({ query } as never).query({
+			vector: [1],
+			topK: 7,
+			returnMetadata: false,
+			filter: { space: { $in: ["visible"] }, source: { $in: values } },
+		});
+		if (count === 64) {
+			await expect(result).resolves.toEqual([]);
+			expect(query).toHaveBeenCalledTimes(64);
+			expect(
+				query.mock.calls.flatMap(
+					([, options]) =>
+						((options.filter as VectorizeVectorMetadataFilter).source as { $in: string[] }).$in,
+				),
+			).toEqual(values);
+		} else {
+			await expect(result).rejects.toMatchObject({ code: "unavailable" });
+			expect(query).not.toHaveBeenCalled();
+		}
+	});
+
+	it("halts Cartesian planning before outbound calls for 8 spaces by 100 sources by 50 types", async () => {
+		let serializations = 0;
+		const filter = {
+			space: { $in: Array.from({ length: 8 }, (_, i) => `${i}`.padEnd(64, "s")) },
+			source: { $in: Array.from({ length: 100 }, (_, i) => `${i}`.padEnd(900, "k")) },
+			type: { $in: Array.from({ length: 50 }, (_, i) => `${i}`.padEnd(900, "t")) },
+		};
+		const original = Object.keys(filter);
+		Object.defineProperty(filter, "toJSON", {
+			value(this: VectorizeVectorMetadataFilter) {
+				serializations++;
+				if (serializations > 256) throw new Error("unbounded partition planning");
+				return Object.fromEntries(original.map((key) => [key, this[key]]));
+			},
+			enumerable: true,
+		});
+		const query = vi.fn(async () => ({ matches: [] }));
+		await expect(
+			new CloudflareVectorStore({ query } as never).query({
+				vector: [1],
+				topK: 100,
+				returnMetadata: false,
+				filter,
+			}),
+		).rejects.toMatchObject({ code: "unavailable" });
+		expect(query).not.toHaveBeenCalled();
+		expect(serializations).toBeLessThanOrEqual(256);
+	});
 	it.each([
 		{ topK: 7, returnMetadata: false, cap: 7 },
 		{ topK: 500, returnMetadata: false, cap: 100 },

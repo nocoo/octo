@@ -328,6 +328,36 @@ describe("v1 search routes", () => {
 		expect(combinations.size).toBe(ids.length * sources.length * types.length);
 	});
 
+	it("rejects production Cartesian query amplification before calling Vectorize", async () => {
+		const { db } = keyDb(Array.from({ length: 8 }, (_, i) => `${i}`.padEnd(59, "s")));
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "bot",
+			role: "admin",
+			ops: "r",
+			scope: "all",
+		});
+		const query = vi.fn(async () => ({ matches: [] }));
+		const response = await createApp().request(
+			"/api/v1/search",
+			{
+				method: "POST",
+				headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+				body: JSON.stringify({
+					mode: "vector",
+					vector: { profile: "p1", values: [3, 4] },
+					filters: {
+						sources: Array.from({ length: 100 }, (_, i) => `${i}`.padEnd(900, "k")),
+						types: Array.from({ length: 50 }, (_, i) => `${i}`.padEnd(900, "t")),
+					},
+				}),
+			},
+			{ ...envFor(db), VEC: { query } as never },
+		);
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({ error: { code: "unavailable" } });
+		expect(query).not.toHaveBeenCalled();
+	});
+
 	it("returns unavailable without querying when a production singleton cannot fit", async () => {
 		const { db } = keyDb(["s1"]);
 		const { plaintext } = await mintApiKey(db, "pepper", {

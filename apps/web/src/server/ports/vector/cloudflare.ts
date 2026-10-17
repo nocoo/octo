@@ -8,6 +8,7 @@ import {
 } from "./types";
 
 const FILTER_BYTES_LIMIT = 2048;
+const FILTER_QUERY_LIMIT = 64;
 const encoder = new TextEncoder();
 
 function jsonBytes(value: unknown): number {
@@ -15,26 +16,34 @@ function jsonBytes(value: unknown): number {
 }
 
 function partitionFilter(filter: VectorizeVectorMetadataFilter): VectorizeVectorMetadataFilter[] {
-	if (jsonBytes(filter) < FILTER_BYTES_LIMIT) return [filter];
-	const splittable = Object.entries(filter)
-		.filter((entry): entry is [string, { $in: (string | number | boolean)[] }] => {
-			const expression = entry[1];
-			return (
-				typeof expression === "object" &&
-				expression !== null &&
-				"$in" in expression &&
-				Array.isArray(expression.$in) &&
-				expression.$in.length > 1
-			);
-		})
-		.sort((a, b) => jsonBytes(b[1].$in) - jsonBytes(a[1].$in));
-	const largest = splittable[0];
-	if (!largest) throw new ApiError("unavailable", "vector metadata filter exceeds byte limit");
-	const [field, expression] = largest;
-	const middle = Math.ceil(expression.$in.length / 2);
-	return [expression.$in.slice(0, middle), expression.$in.slice(middle)].flatMap(($in) =>
-		partitionFilter({ ...filter, [field]: { ...expression, $in } }),
-	);
+	let plannedQueries = 1;
+	function visit(current: VectorizeVectorMetadataFilter): VectorizeVectorMetadataFilter[] {
+		if (jsonBytes(current) < FILTER_BYTES_LIMIT) return [current];
+		const splittable = Object.entries(current)
+			.filter((entry): entry is [string, { $in: (string | number | boolean)[] }] => {
+				const expression = entry[1];
+				return (
+					typeof expression === "object" &&
+					expression !== null &&
+					"$in" in expression &&
+					Array.isArray(expression.$in) &&
+					expression.$in.length > 1
+				);
+			})
+			.sort((a, b) => jsonBytes(b[1].$in) - jsonBytes(a[1].$in));
+		const largest = splittable[0];
+		if (!largest) throw new ApiError("unavailable", "vector metadata filter exceeds byte limit");
+		if (plannedQueries === FILTER_QUERY_LIMIT) {
+			throw new ApiError("unavailable", "vector metadata filter exceeds query budget");
+		}
+		plannedQueries++;
+		const [field, expression] = largest;
+		const middle = Math.ceil(expression.$in.length / 2);
+		return [expression.$in.slice(0, middle), expression.$in.slice(middle)].flatMap(($in) =>
+			visit({ ...current, [field]: { ...expression, $in } }),
+		);
+	}
+	return visit(filter);
 }
 
 export class CloudflareVectorStore implements VectorStore {
