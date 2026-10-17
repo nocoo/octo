@@ -205,12 +205,15 @@ export class LibraryModel extends Store<LibraryState> {
 				(operation === "merge" && !this.state.tags.some((item) => item.name === name))
 			)
 				throw new Error("请选择来源标签和另一个有效的目标标签。");
-			await this.api.request(`/tags/${encodeURIComponent(source)}/${operation}`, {
+			const result = await this.api.request<
+				LibraryTag | { from: LibraryTag; into: LibraryTag; memories: number }
+			>(`/tags/${encodeURIComponent(source)}/${operation}`, {
 				method: "POST",
 				json: operation === "rename" ? { new_name: name } : { into: name },
 			});
 			this.set({
-				notice: `已${operation === "rename" ? "重命名" : "合并"}标签，影响 ${tag.use_count} 条记忆`,
+				notice:
+					"memories" in result ? `已合并标签，影响 ${result.memories} 条记忆` : "已重命名标签",
 			});
 			await this.refreshCommitted();
 		});

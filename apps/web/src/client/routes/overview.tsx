@@ -32,7 +32,20 @@ import {
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useModel } from "../components/layout/use-model";
+import { memoryOperationLabels } from "../viewmodels/memories";
 import { activitySeries, OverviewModel } from "../viewmodels/overview";
+
+const changeLabels: Record<string, string> = {
+	...memoryOperationLabels,
+	created: "创建",
+	updated: "更新",
+	deleted: "删除",
+	trashed: "移入回收站",
+	purged: "永久删除",
+	renamed: "重命名",
+	merged: "合并",
+	tag_merged: "合并标签",
+};
 
 export function activityChartSeries(activity: ReturnType<typeof activitySeries>) {
 	return activity.keys.map(
@@ -51,15 +64,7 @@ export function OverviewPage() {
 	useEffect(() => {
 		void model.load();
 	}, [model]);
-	const activity = activitySeries(state.usage?.daily ?? []);
-	const today = new Date().toISOString().slice(0, 10);
-	const active = state.usage
-		? new Set(
-				state.usage.daily
-					.filter((row) => row.day === today && row.calls > 0)
-					.map((row) => row.key_id),
-			).size
-		: "—";
+	const activity = activitySeries(state.usage ?? []);
 	const table = (
 		<Table aria-label="按日期和智能体统计的调用量">
 			<TableHeader>
@@ -68,15 +73,17 @@ export function OverviewPage() {
 					<TableHead>智能体</TableHead>
 					<TableHead>调用</TableHead>
 					<TableHead>错误</TableHead>
+					<TableHead>写入次数</TableHead>
 				</TableRow>
 			</TableHeader>
 			<TableBody>
-				{state.usage?.daily.map((row) => (
+				{state.usage?.map((row) => (
 					<TableRow key={`${row.day}:${row.key_id}`}>
 						<TableCell>{row.day}</TableCell>
 						<TableCell>{row.key_id}</TableCell>
 						<TableCell>{row.calls}</TableCell>
 						<TableCell>{row.errors}</TableCell>
+						<TableCell>{row.writes}</TableCell>
 					</TableRow>
 				))}
 			</TableBody>
@@ -114,14 +121,20 @@ export function OverviewPage() {
 			)}
 			<StatStrip
 				items={[
-					{ label: "记忆总数", value: state.memoryCount ?? "—" },
-					{ label: "今日活跃智能体 · UTC", value: active },
-					{ label: "待同步向量", value: state.usage?.health.vector_backlog ?? "—" },
+					{ label: "有效记忆数", value: state.memoryCount ?? "—" },
+					{ label: "今日写入次数 · UTC 小时汇总", value: state.writesToday ?? "—" },
+					{ label: "今日调用密钥 · UTC 小时汇总", value: state.activeKeysToday ?? "—" },
+					{ label: "回收站记忆数", value: state.trashCount ?? "—" },
+					{ label: "待同步向量", value: "未提供" },
 				]}
 			/>
+			<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
+				调用与写入次数来自本年度 UTC 小时汇总，非实时数据，也不等同于新增记忆数。 M7
+				未提供向量同步积压、D1 体积和定时任务最近运行时间。
+			</p>
 			<LayerCard>
 				<LayerCard.Header>
-					<h2>智能体活动</h2>
+					<h2>智能体活动 · 按密钥小时汇总</h2>
 				</LayerCard.Header>
 				<LayerCard.Well>
 					<Grid columns={1}>
@@ -242,6 +255,47 @@ export function OverviewPage() {
 					</LayerCard.Body>
 				</LayerCard>
 			</Grid>
+			<SectionRule title="最近变更">
+				<LayerCard>
+					<LayerCard.Well>
+						<Table aria-label="最近变更">
+							<TableHeader>
+								<TableRow>
+									<TableHead>内容</TableHead>
+									<TableHead>操作</TableHead>
+									<TableHead>操作者</TableHead>
+									<TableHead>时间 · UTC</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{state.changes.map((change) => (
+									<TableRow key={change.seq}>
+										<TableCell>
+											{change.entity === "memory" && !["trashed", "purged"].includes(change.op) ? (
+												<Link to={`/memories/${encodeURIComponent(change.entity_id)}`}>
+													{change.entity_id}
+												</Link>
+											) : (
+												change.entity_id
+											)}
+										</TableCell>
+										<TableCell>{changeLabels[change.op] ?? change.op}</TableCell>
+										<TableCell>{change.actor ?? "未提供"}</TableCell>
+										<TableCell>
+											<time dateTime={change.at}>{change.at}</time>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+						{!state.changes.length && (
+							<p className="text-basalt-sm text-basalt-muted-foreground">
+								{state.memoryCount === null ? "变更记录尚未加载" : "暂无变更记录"}
+							</p>
+						)}
+					</LayerCard.Well>
+				</LayerCard>
+			</SectionRule>
 			<SectionRule title="最近更新的记忆">
 				<LayerCard>
 					<LayerCard.Body>

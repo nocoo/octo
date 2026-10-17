@@ -63,3 +63,54 @@ it("passes stable colors through the installed chart descriptor contract", () =>
 	expect(one[0]?.color).toBe(getChartColor(3));
 	expect(many[1]?.color).toBe(one[0]?.color);
 });
+
+it("renders only real M7 metrics with rollup scope, change actors and unavailable health", () => {
+	snapshot.state = {
+		...new OverviewModel().state,
+		memoryCount: 12,
+		trashCount: 3,
+		writesToday: 4,
+		activeKeysToday: 1,
+		usage: [
+			{
+				day: "2026-10-18",
+				key_id: "k1",
+				calls: 8,
+				errors: 1,
+				writes: 4,
+				bytes_in: 20,
+				bytes_out: 30,
+			},
+		],
+		changes: [
+			{
+				seq: 2,
+				entity: "memory",
+				entity_id: "m1",
+				op: "update",
+				actor: "admin:owner@example.com",
+				at: "2026-10-18T01:00:00.000Z",
+				version: 3,
+				space_id: "s1",
+			},
+			{ seq: 1, entity: "memory", entity_id: "gone", op: "purged", at: "2026-10-18T00:00:00.000Z" },
+		],
+	};
+	const html = renderToStaticMarkup(
+		<ThemeProvider persist={false}>
+			<MemoryRouter>
+				<OverviewPage />
+			</MemoryRouter>
+		</ThemeProvider>,
+	);
+	expect(html).toContain("今日写入次数 · UTC 小时汇总");
+	expect(html).toContain("今日调用密钥 · UTC 小时汇总");
+	expect(html).toContain("回收站记忆数");
+	expect(html).toContain("M7 未提供向量同步积压、D1 体积和定时任务最近运行时间");
+	expect(html).toContain("admin:owner@example.com");
+	expect(html).toMatch(/dateTime="2026-10-18T01:00:00.000Z"/i);
+	expect(html).toContain("未提供");
+	expect(html).toContain('href="/memories/m1"');
+	expect(html).not.toContain('href="/memories/gone"');
+	expect(html).not.toContain("向量健康正常");
+});

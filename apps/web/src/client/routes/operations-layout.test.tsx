@@ -58,7 +58,7 @@ describe("installed Basalt operations composition", () => {
 		[KeysPage, "接口密钥", "密钥列表"],
 		[EmbeddingPage, "向量模型", "网关配置"],
 		[SettingsPage, "设置", "嵌入配置"],
-		[UsagePage, "用量与健康状态", "基础设施"],
+		[UsagePage, "每日用量", "每日用量与图表数据"],
 		[AuditPage, "审计日志", "请求记录"],
 	] as const)("renders %s with Chinese headings and Basalt layout", (Page, title, region) => {
 		const html = renderToStaticMarkup(

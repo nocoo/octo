@@ -1,13 +1,4 @@
-import {
-	Badge,
-	Button,
-	Field,
-	Input,
-	LayerCard,
-	ScrollArea,
-	StatStrip,
-	toast,
-} from "@nocoo/basalt";
+import { Badge, Button, Field, Input, LayerCard, ScrollArea, toast } from "@nocoo/basalt";
 import { LineChart } from "@nocoo/basalt/charts/line";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
@@ -88,29 +79,37 @@ export function UsagePage() {
 			accessor: (row) => `${row.error_rate.toFixed(2)}%`,
 		},
 		{
-			id: "p50",
-			header: "P50",
-			sortValue: (row) => row.p50_ms ?? Number.POSITIVE_INFINITY,
+			id: "writes",
+			header: "写入次数",
+			sortValue: (row) => row.writes,
 			textAlign: "end",
-			accessor: (row) => (row.p50_ms === null ? "暂无数据" : `${row.p50_ms} 毫秒`),
+			accessor: (row) => row.writes.toLocaleString("zh-CN"),
 		},
 		{
-			id: "p95",
-			header: "P95",
-			sortValue: (row) => row.p95_ms ?? Number.POSITIVE_INFINITY,
+			id: "bytes_in",
+			header: "输入字节",
+			sortValue: (row) => row.bytes_in,
 			textAlign: "end",
-			accessor: (row) => (row.p95_ms === null ? "暂无数据" : `${row.p95_ms} 毫秒`),
+			accessor: (row) => row.bytes_in.toLocaleString("zh-CN"),
+		},
+		{
+			id: "bytes_out",
+			header: "输出字节",
+			sortValue: (row) => row.bytes_out,
+			textAlign: "end",
+			accessor: (row) => row.bytes_out.toLocaleString("zh-CN"),
 		},
 	];
 	const alternative = (
 		<p className="text-basalt-sm text-basalt-muted-foreground">
-			精确数值请查看<a href="#usage-daily-table">每日用量表</a>.
+			精确数值请查看<a href="#usage-daily-table">每日用量表</a>。
 		</p>
 	);
 	return (
 		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="用量与健康状态"
+				title="每日用量"
+				description="按 UTC 日期与密钥展示已汇总数据；不是实时请求统计。"
 				actions={
 					<Button
 						icon={<RefreshCw aria-hidden="true" />}
@@ -177,36 +176,7 @@ export function UsagePage() {
 					</Button>
 				</p>
 			)}
-			<SectionRule title="基础设施">
-				<LayerCard>
-					<LayerCard.Body>
-						<StatStrip
-							loading={state.loading}
-							items={[
-								{
-									label: "D1 占用字节",
-									value: state.loaded ? state.health.d1_bytes.toLocaleString("zh-CN") : "暂无数据",
-								},
-								{
-									label: "待同步向量",
-									value: state.loaded
-										? state.health.vector_backlog.toLocaleString("zh-CN")
-										: "暂无数据",
-								},
-								{
-									label: "最近定时任务",
-									value: !state.loaded
-										? "暂无数据"
-										: state.health.cron_last_run_at === null
-											? "尚无记录"
-											: new Date(state.health.cron_last_run_at).toLocaleString("zh-CN"),
-								},
-							]}
-						/>
-					</LayerCard.Body>
-				</LayerCard>
-			</SectionRule>
-			{state.daily.length > 0 ? (
+			{state.items.length > 0 ? (
 				<Grid
 					columns={2}
 					gap="sm"
@@ -246,32 +216,11 @@ export function UsagePage() {
 							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
-					<LayerCard>
-						<LayerCard.Header>延迟</LayerCard.Header>
-						<LayerCard.Body>
-							<Grid columns={1} gap="sm">
-								<LineChart
-									className="ops-plot"
-									showAxes
-									data={model.chart}
-									series={[
-										{ key: "p50_ms", label: "P50（毫秒）" },
-										{ key: "p95_ms", label: "P95（毫秒）" },
-									]}
-									showLegend
-									ariaLabel="各密钥的每日 P50 与 P95 延迟"
-									valueFormatter={(value) => `${value} 毫秒`}
-									summary="服务端计算的百分位数；缺失测量保持未知，不记为零。"
-									dataAlternative={alternative}
-								/>
-							</Grid>
-						</LayerCard.Body>
-					</LayerCard>
 				</Grid>
 			) : null}
 			<LayerCard id="usage-daily-table">
 				<LayerCard.Header>每日用量与图表数据</LayerCard.Header>
-				{state.loading && state.daily.length === 0 ? (
+				{state.loading && state.items.length === 0 ? (
 					<LayerCard.Loading label="正在加载每日用量" />
 				) : (
 					<DataTable
@@ -280,7 +229,7 @@ export function UsagePage() {
 						columns={columns}
 						getRowId={(row) => `${row.key_id}/${row.day}`}
 						edge="attached"
-						error={state.daily.length === 0 ? state.error : null}
+						error={state.items.length === 0 ? state.error : null}
 						retryLabel="重试"
 						onRetry={() => void model.load(search)}
 						empty={
@@ -301,6 +250,24 @@ export function UsagePage() {
 						}
 					/>
 				)}
+				<LayerCard.Footer>
+					<Button
+						icon={<ArrowDown aria-hidden="true" />}
+						variant="outline"
+						disabled={!state.nextCursor || state.loading}
+						loading={state.loadingMore}
+						onClick={() => void model.loadMore()}
+					>
+						加载更多
+					</Button>
+					<span className="text-basalt-sm text-basalt-muted-foreground">
+						{state.nextCursor
+							? "还有更多记录"
+							: state.loaded && !state.loading && !state.error
+								? "已加载全部查询结果"
+								: "查询是否完成尚不确定"}
+					</span>
+				</LayerCard.Footer>
 			</LayerCard>
 		</Grid>
 	);
@@ -389,7 +356,7 @@ export function AuditPage() {
 							setParams(
 								auditQuery({
 									actor: String(data.get("actor") ?? "").trim(),
-									route: String(data.get("route") ?? "").trim(),
+									action: String(data.get("action") ?? "").trim(),
 									status: String(data.get("status") ?? ""),
 									from: String(data.get("from") ?? ""),
 									to: String(data.get("to") ?? ""),
@@ -408,8 +375,8 @@ export function AuditPage() {
 							<Field label="调用者">
 								<Input name="actor" defaultValue={filters.actor} autoComplete="off" />
 							</Field>
-							<Field label="路由">
-								<Input name="route" defaultValue={filters.route} autoComplete="off" />
+							<Field label="路由模板">
+								<Input name="action" defaultValue={filters.action} autoComplete="off" />
 							</Field>
 							<Field label="状态码">
 								<Input

@@ -1,7 +1,7 @@
 import { type AdminClient, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
-import { libraryError } from "./library";
-import type { UsageResponse } from "./operations-observability";
+import { type ListPage, libraryError } from "./library";
+import type { UsageDaily } from "./operations-observability";
 
 export function activitySeries(daily: { day: string; key_id: string; calls: number }[]) {
 	const keys = [...new Set(daily.map((row) => row.key_id))].sort();
@@ -34,30 +34,85 @@ interface RecentMemory {
 	updated_at: string;
 	tags: string[];
 }
+export interface OverviewChange {
+	seq: number;
+	entity: string;
+	entity_id: string;
+	op: string;
+	at: string;
+	actor?: string;
+	space_id?: string | null;
+	version?: number | null;
+}
 interface OverviewState {
 	loading: boolean;
 	error: string | null;
 	memoryCount: number | null;
-	usage: UsageResponse | null;
+	trashCount: number | null;
+	writesToday: number | null;
+	activeKeysToday: number | null;
+	usage: UsageDaily[] | null;
 	recent: RecentMemory[];
+	changes: OverviewChange[];
 }
 
 export class OverviewModel extends Store<OverviewState> {
-	constructor(private readonly api: AdminClient = adminApi) {
-		super({ loading: false, error: null, memoryCount: null, usage: null, recent: [] });
+	constructor(
+		private readonly api: AdminClient = adminApi,
+		private readonly now: () => number = Date.now,
+	) {
+		super({
+			loading: false,
+			error: null,
+			memoryCount: null,
+			trashCount: null,
+			writesToday: null,
+			activeKeysToday: null,
+			usage: null,
+			recent: [],
+			changes: [],
+		});
+	}
+	private async pages<Item>(path: string, params = new URLSearchParams()): Promise<Item[]> {
+		const items: Item[] = [];
+		const seen = new Set<string>();
+		let cursor: string | null = null;
+		do {
+			if (cursor) params.set("cursor", cursor);
+			const query = params.toString();
+			const page: ListPage<Item> = await this.api.request(query ? `${path}?${query}` : path);
+			items.push(...page.items);
+			cursor = page.next_cursor;
+			if (cursor && seen.has(cursor)) throw new Error("pagination_cycle");
+			if (cursor) seen.add(cursor);
+		} while (cursor);
+		return items;
 	}
 	async load(): Promise<void> {
+		if (this.state.loading) return;
 		this.set({ loading: true, error: null });
 		try {
-			const [spaces, usage, memories] = await Promise.all([
-				this.api.request<{ items: { memory_count: number }[] }>("/spaces"),
-				this.api.request<UsageResponse>("/usage"),
+			const today = new Date(this.now()).toISOString().slice(0, 10);
+			const [spaces, usage, memories, trash, changes] = await Promise.all([
+				this.pages<{ memory_count: number }>("/spaces"),
+				this.pages<UsageDaily>(
+					"/usage",
+					new URLSearchParams({ from: `${today.slice(0, 4)}-01-01`, to: today, limit: "200" }),
+				),
 				this.api.request<{ items: RecentMemory[] }>("/memories?limit=12"),
+				this.pages<{ id: string }>("/trash", new URLSearchParams({ limit: "200" })),
+				this.pages<OverviewChange>("/changes", new URLSearchParams({ limit: "200" })),
 			]);
+			const todayUsage = usage.filter((row) => row.day === today);
 			this.set({
-				memoryCount: spaces.items.reduce((sum, item) => sum + item.memory_count, 0),
+				memoryCount: spaces.reduce((sum, item) => sum + item.memory_count, 0),
+				trashCount: trash.length,
+				writesToday: todayUsage.reduce((sum, row) => sum + row.writes, 0),
+				activeKeysToday: new Set(todayUsage.filter((row) => row.calls > 0).map((row) => row.key_id))
+					.size,
 				usage,
 				recent: memories.items,
+				changes: changes.sort((left, right) => right.seq - left.seq).slice(0, 12),
 			});
 		} catch (error) {
 			this.set({ error: `无法刷新总览：${libraryError(error)}` });

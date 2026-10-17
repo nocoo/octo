@@ -4,14 +4,17 @@ import { memoryFiltersSchema } from "../../lib/schema/filters";
 import { type AdminClient, ApiError, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
 
-export interface Attachment {
+export interface AttachmentSummary {
 	id: string;
-	memory_id: string;
 	filename: string;
 	content_type: string;
 	size_bytes: number;
 	sha256: string;
 	created_at: string;
+}
+
+export interface Attachment extends AttachmentSummary {
+	memory_id: string;
 	markdown?: string;
 }
 
@@ -30,9 +33,11 @@ export interface Memory {
 	updated_by_key_id: string | null;
 	created_at: string;
 	updated_at: string;
-	attachments?: Attachment[];
+	deleted_at?: string;
+	deleted_by?: string | null;
+	attachments?: AttachmentSummary[];
 	versions_count?: number;
-	vector_status?: unknown;
+	vector_status?: { profile: string; indexed: boolean; stale: boolean }[];
 }
 
 export interface MemoryVersion {

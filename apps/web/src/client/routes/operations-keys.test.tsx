@@ -1,5 +1,4 @@
 import type { DataTableProps, DataTableSort } from "@nocoo/basalt/components/data-table";
-import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { KeyMetadata, KeysModel } from "../viewmodels/operations-keys";
@@ -31,15 +30,6 @@ vi.mock("@nocoo/basalt/components/data-table", async (original) => {
 		),
 	};
 });
-vi.mock("@nocoo/basalt", async (original) => {
-	const module = await original<typeof import("@nocoo/basalt")>();
-	return {
-		...module,
-		Collapsible: (props: ComponentProps<typeof module.Collapsible>) => (
-			<module.Collapsible {...props} defaultOpen={fixture.open} />
-		),
-	};
-});
 
 const base: KeyMetadata = {
 	id: "key-z",
@@ -50,11 +40,11 @@ const base: KeyMetadata = {
 	space_ids: [],
 	own_entries_only: false,
 	auto_own_space: false,
-	expires_at: Date.parse("2100-12-01"),
+	expires_at: "2100-12-01T00:00:00.000Z",
 	revoked_at: null,
-	last_used_at: Date.parse("2025-02-01"),
-	created_at: 1,
-	usage: [],
+	last_used_at: "2025-02-01T00:00:00.000Z",
+	created_at: "2026-01-01T00:00:00.000Z",
+	updated_at: "2026-01-01T00:00:00.000Z",
 };
 const keys: KeyMetadata[] = [
 	base,
@@ -63,15 +53,15 @@ const keys: KeyMetadata[] = [
 		id: "key-a",
 		name: "Alpha",
 		role: "readonly",
-		expires_at: Date.parse("2025-02-01"),
-		last_used_at: Date.parse("2026-12-01"),
+		expires_at: "2025-02-01T00:00:00.000Z",
+		last_used_at: "2026-12-01T00:00:00.000Z",
 	},
 	{
 		...base,
 		id: "key-b",
 		name: "Beta",
 		role: "drop",
-		revoked_at: 1,
+		revoked_at: "2026-01-01T00:00:00.000Z",
 		expires_at: null,
 		last_used_at: null,
 	},
@@ -123,18 +113,11 @@ describe("key table sorting", () => {
 		expect(names(render())).toEqual([...expected].reverse());
 	});
 
-	it.each([false, true])("uses Basalt disclosure for sparkline values, open=%s", (open) => {
-		fixture.state = { items: [{ ...base, usage: [2, 10] }], loaded: true };
-		fixture.open = open;
+	it("renders the real metadata DTO without an invented usage series", () => {
 		const html = render();
-		expect(html).not.toMatch(/<(?:details|summary)\b/);
-		expect(html).toContain(`aria-expanded="${open}"`);
-		expect(html).toContain("数值");
-		if (open) {
-			expect(html).toContain("aria-controls=");
-			expect(html).toContain('aria-label="Zulu 的近期调用数据"');
-			expect(html).toMatch(/<td[^>]*>10<\/td>/);
-		} else expect(html).not.toContain('aria-label="Zulu 的近期调用数据"');
+		expect(html).not.toContain("近期调用");
+		expect(html).not.toContain("Invalid Date");
+		expect(html).toContain(new Date(base.last_used_at ?? "").toLocaleString("zh-CN"));
 	});
 });
 

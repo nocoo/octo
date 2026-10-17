@@ -2,9 +2,6 @@ import {
 	Badge,
 	Button,
 	Checkbox,
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
 	ConfirmDialog,
 	Dialog,
 	DialogContent,
@@ -18,7 +15,6 @@ import {
 	Switch,
 	toast,
 } from "@nocoo/basalt";
-import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
@@ -30,14 +26,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@nocoo/basalt/components/table";
 import {
 	Ban,
 	Check,
@@ -81,12 +69,12 @@ const operationText = (ops: string) =>
 		.split(",")
 		.map((op) => operationLabels[op] ?? "未授权")
 		.join("、");
-const time = (value: number | null): string =>
+const time = (value: string | null): string =>
 	value === null ? "从未" : new Date(value).toLocaleString("zh-CN");
-function localDate(value: number | null): string {
+function localDate(value: string | null): string {
 	if (value === null) return "";
 	const date = new Date(value);
-	return new Date(value - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+	return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
 function KeyForm({
@@ -125,7 +113,7 @@ function KeyForm({
 				await onSubmit({
 					name,
 					role,
-					expires_at: expiry ? new Date(expiry).getTime() : null,
+					expires_at: expiry ? new Date(expiry).toISOString() : null,
 					permissions: {
 						...permissions,
 						space_ids: spaces
@@ -137,7 +125,11 @@ function KeyForm({
 			}}
 		>
 			<Grid columns={1} gap="sm">
-				<Field label="代理名称" required>
+				<Field
+					label="代理名称"
+					required
+					hint="项目或自动创建空间的名称须为 1 至 64 位小写字母、数字与单连字符。"
+				>
 					<Input
 						value={name}
 						onChange={(event) => setName(event.target.value)}
@@ -263,6 +255,16 @@ function KeyForm({
 						。接口密钥不能管理密钥或网关设置。
 					</p>
 				)}
+				{role === "drop" && (
+					<Field label="空间标识" hint="以逗号分隔；至少指定一个空间。" required>
+						<Input
+							value={spaces}
+							onChange={(event) => setSpaces(event.target.value)}
+							required
+							disabled={pending}
+						/>
+					</Field>
+				)}
 				{error && <p role="alert">{error}</p>}
 				<DialogFooter>
 					<Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
@@ -358,61 +360,16 @@ export function KeysPage() {
 		{
 			id: "expiry",
 			header: "到期时间",
-			sortValue: (key) => key.expires_at ?? Number.POSITIVE_INFINITY,
+			sortValue: (key) =>
+				key.expires_at === null ? Number.POSITIVE_INFINITY : Date.parse(key.expires_at),
 			accessor: (key) => (key.expires_at === null ? "永不过期" : time(key.expires_at)),
 		},
 		{
 			id: "last",
 			header: "最近使用",
-			sortValue: (key) => key.last_used_at ?? Number.POSITIVE_INFINITY,
+			sortValue: (key) =>
+				key.last_used_at === null ? Number.POSITIVE_INFINITY : Date.parse(key.last_used_at),
 			accessor: (key) => time(key.last_used_at),
-		},
-		{
-			id: "usage",
-			header: "近期调用",
-			sortable: false,
-			accessor: (key) =>
-				key.usage.length ? (
-					<Grid columns={1} gap="sm" className="ops-sparkline">
-						<Sparkline
-							data={key.usage.map((calls, index) => ({ x: index + 1, y: calls }))}
-							ariaLabel={`${key.name} 的近期调用`}
-							summary={
-								<span className="sr-only">
-									{key.usage.reduce((total, calls) => total + calls, 0)} 次调用，覆盖{" "}
-									{key.usage.length} 个时段。
-								</span>
-							}
-							dataAlternative={
-								<Collapsible>
-									<CollapsibleTrigger>数值</CollapsibleTrigger>
-									<CollapsibleContent unstyled>
-										<Table aria-label={`${key.name} 的近期调用数据`}>
-											<TableHeader>
-												<TableRow>
-													<TableHead>时段</TableHead>
-													<TableHead textAlign="end">调用次数</TableHead>
-												</TableRow>
-											</TableHeader>
-											<TableBody>
-												{key.usage
-													.map((calls, index) => ({ calls, period: index + 1 }))
-													.map(({ calls, period }) => (
-														<TableRow key={period}>
-															<TableCell>{period}</TableCell>
-															<TableCell textAlign="end">{calls}</TableCell>
-														</TableRow>
-													))}
-											</TableBody>
-										</Table>
-									</CollapsibleContent>
-								</Collapsible>
-							}
-						/>
-					</Grid>
-				) : (
-					"暂无调用"
-				),
 		},
 		{
 			id: "actions",

@@ -55,8 +55,9 @@ const base: UsageDaily = {
 	key_id: "key-ten",
 	calls: 100,
 	errors: 0,
-	p50_ms: null,
-	p95_ms: null,
+	writes: 0,
+	bytes_in: 0,
+	bytes_out: 0,
 };
 const ids = (html: string) =>
 	[...html.matchAll(/<td[^>]*>(key-(?:ten|two|unknown))<\/td>/g)].map((m) => m[1]);
@@ -73,12 +74,13 @@ describe("usage table sorting", () => {
 		["calls", "calls"],
 		["errors", "errors"],
 		["rate", "errors"],
-		["p50", "p50_ms"],
-		["p95", "p95_ms"],
+		["writes", "writes"],
+		["bytes_in", "bytes_in"],
+		["bytes_out", "bytes_out"],
 	] as const)("sorts %s numerically rather than as formatted text", (id, field) => {
 		fixture.usage = {
 			loaded: true,
-			daily: [
+			items: [
 				{ ...base, [field]: 10 },
 				{ ...base, key_id: "key-two", [field]: 2 },
 			],
@@ -92,13 +94,13 @@ describe("usage table sorting", () => {
 	it("uses a timestamp for day sorting and retains numeric latency with unavailable values last", () => {
 		fixture.usage = {
 			loaded: true,
-			daily: [
-				{ ...base, p50_ms: 10, p95_ms: 10, day: "2026-12-01" },
-				{ ...base, key_id: "key-two", p50_ms: 2, p95_ms: 2, day: "2026-02-01" },
+			items: [
+				{ ...base, day: "2026-12-01" },
+				{ ...base, key_id: "key-two", day: "2026-02-01" },
 				{ ...base, key_id: "key-unknown", day: "2027-01-01" },
 			],
 		};
-		for (const id of ["day", "p50", "p95"]) {
+		for (const id of ["day"]) {
 			fixture.sort = { id, dir: "asc" };
 			expect(ids(render("usage"))).toEqual(["key-two", "key-ten", "key-unknown"]);
 		}
@@ -134,7 +136,7 @@ describe("observability read states", () => {
 			items: [
 				{
 					id: "a",
-					at: 1,
+					at: "2026-10-01T00:00:00.000Z",
 					actor: "cached-actor",
 					method: "GET",
 					route: "/api/v1/memories",
@@ -142,6 +144,9 @@ describe("observability read states", () => {
 					error_code: null,
 					request_id: "r",
 					duration_ms: 2,
+					bytes_in: null,
+					bytes_out: null,
+					ip_hash: null,
 				},
 			],
 		};
@@ -151,7 +156,7 @@ describe("observability read states", () => {
 		expect(html).toContain("还有更多记录");
 	});
 
-	it.each([null, "无法加载用量与健康状态。"])(
+	it.each([null, "无法加载每日用量。"])(
 		"does not assert an empty unknown usage query: %s",
 		(error) => {
 			fixture.usage = { loaded: false, error };
@@ -161,4 +166,14 @@ describe("observability read states", () => {
 			if (error) expect(html).toContain(error);
 		},
 	);
+});
+
+it("renders only M7 daily writes and bytes, not fabricated infrastructure or percentiles", () => {
+	fixture.usage = { loaded: true, items: [{ ...base, writes: 9, bytes_in: 123, bytes_out: 456 }] };
+	const html = render("usage");
+	for (const label of ["写入次数", "输入字节", "输出字节"]) expect(html).toContain(label);
+	for (const fake of ["D1 占用", "待同步向量", "最近定时任务", "P50", "P95"])
+		expect(html).not.toContain(fake);
+	expect(html).toMatch(/<td[^>]*>123<\/td>/);
+	expect(html).toMatch(/<td[^>]*>456<\/td>/);
 });

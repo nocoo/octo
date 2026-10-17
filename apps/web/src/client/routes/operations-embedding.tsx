@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { APP_VERSION } from "../../lib/version";
 import { useModel } from "../components/layout/use-model";
 import {
 	type EmbeddingFields,
@@ -144,10 +143,7 @@ export function EmbeddingPage() {
 									>
 										<p role="status">
 											{state.config.api_key_set ? (
-												<>
-													已配置 {"\u2022\u2022\u2022\u2022"}
-													{state.config.api_key_suffix ?? ""}
-												</>
+												<>已配置 {state.config.api_key_mask ?? ""}</>
 											) : (
 												"尚未配置接口密钥"
 											)}
@@ -227,19 +223,17 @@ export function EmbeddingPage() {
 						连接结果{" "}
 						<Badge
 							variant={
-								state.testResult.dims_match && !state.testResult.error_code
-									? "success"
-									: "secondary"
+								state.testResult.match && !state.testResult.error_code ? "success" : "secondary"
 							}
 						>
-							{state.testResult.dims_match && !state.testResult.error_code ? (
+							{state.testResult.match && !state.testResult.error_code ? (
 								<CircleCheck className="size-basalt-icon" aria-hidden="true" />
 							) : (
 								<CircleAlert className="size-basalt-icon" aria-hidden="true" />
 							)}
 							{state.testResult.error_code
 								? "失败"
-								: state.testResult.dims_match
+								: state.testResult.match
 									? "连接成功"
 									: "维度不匹配"}
 						</Badge>
@@ -250,13 +244,16 @@ export function EmbeddingPage() {
 								{ label: "延迟", value: `${state.testResult.latency_ms} 毫秒` },
 								{
 									label: "实际维度",
-									value: state.testResult.actual_dims ?? "暂无数据",
+									value: state.testResult.dims ?? "暂无数据",
 								},
-								{ label: "配置匹配", value: state.testResult.dims_match ? "是" : "否" },
+								{ label: "配置匹配", value: state.testResult.match ? "是" : "否" },
 							]}
 						/>
 						{state.testResult.error_code && (
-							<p role="alert">错误：{operationsError(state.testResult.error_code)}</p>
+							<p role="alert">
+								错误：{operationsError(state.testResult.error_code)}{" "}
+								<code>{state.testResult.error_code}</code>
+							</p>
 						)}
 					</LayerCard.Well>
 				</LayerCard>
@@ -306,6 +303,12 @@ export function SettingsPage() {
 				"未知度量",
 		},
 		{
+			id: "created_at",
+			header: "创建时间",
+			sortValue: (profile) => Date.parse(profile.created_at),
+			accessor: (profile) => new Date(profile.created_at).toLocaleString("zh-CN"),
+		},
+		{
 			id: "active",
 			header: "状态",
 			sortValue: (profile) => (profile.active ? "已启用" : "未启用"),
@@ -344,7 +347,9 @@ export function SettingsPage() {
 				<LayerCard.Body>
 					<DescriptionList>
 						<DescriptionList.Item term="应用">Octo</DescriptionList.Item>
-						<DescriptionList.Item term="版本">{APP_VERSION}</DescriptionList.Item>
+						<DescriptionList.Item term="活跃嵌入配置">
+							{state.loaded ? (state.activeProfile ?? "尚无活跃配置") : "尚未加载"}
+						</DescriptionList.Item>
 					</DescriptionList>
 				</LayerCard.Body>
 			</LayerCard>

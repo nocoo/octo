@@ -134,7 +134,9 @@ describe("library data", () => {
 					{ id: "b", name: "beta", display_name: "Beta", use_count: 1 },
 				]),
 				envelope([]),
-				{},
+				operation === "merge"
+					? { from: { name: "a/b" }, into: { name: "beta" }, memories: 5 }
+					: { name: "beta" },
 				envelope([]),
 				envelope([]),
 			]);
@@ -150,7 +152,9 @@ describe("library data", () => {
 				method: "POST",
 				json: operation === "rename" ? { new_name: "beta" } : { into: "beta" },
 			});
-			expect(model.state.notice).toContain("2");
+			expect(model.state.notice).toBe(
+				operation === "merge" ? "已合并标签，影响 5 条记忆" : "已重命名标签",
+			);
 		},
 	);
 	it("loads spaces and key owners and creates a validated space", async () => {
@@ -192,7 +196,7 @@ describe("library data", () => {
 		const model = new LibraryModel("tags", api);
 		await model.load();
 		expect(await model.changeTag("rename", "alpha", "new")).toBe(true);
-		expect(model.state.notice).toBe("已重命名标签，影响 2 条记忆");
+		expect(model.state.notice).toBe("已重命名标签");
 		expect(model.state.error).toBe("已保存，但刷新失败：请求失败，请稍后重试。");
 		expect(model.state.tags[0]?.name).toBe("alpha");
 		expect(request.mock.calls).toHaveLength(4);

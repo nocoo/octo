@@ -60,8 +60,22 @@ describe("profile read states", () => {
 		fixture.settings = {
 			loaded: true,
 			profiles: [
-				{ id: "profile-inactive", model: "model", dims: 512, metric: "cosine", active: false },
-				{ id: "profile-active", model: "model", dims: 512, metric: "cosine", active: true },
+				{
+					id: "profile-inactive",
+					model: "model",
+					dims: 512,
+					metric: "cosine",
+					active: false,
+					created_at: "2026-10-01T00:00:00.000Z",
+				},
+				{
+					id: "profile-active",
+					model: "model",
+					dims: 512,
+					metric: "cosine",
+					active: true,
+					created_at: "2026-10-01T00:00:00.000Z",
+				},
 			],
 		};
 		fixture.sort = { id: "active", dir };
@@ -91,7 +105,14 @@ describe("profile read states", () => {
 			loaded: true,
 			error: "无法加载嵌入配置。",
 			profiles: [
-				{ id: "cached-profile", model: "active-model", dims: 512, metric: "cosine", active: true },
+				{
+					id: "cached-profile",
+					model: "active-model",
+					dims: 512,
+					metric: "cosine",
+					active: true,
+					created_at: "2026-10-01T00:00:00.000Z",
+				},
 			],
 		};
 		const html = render();
@@ -129,15 +150,41 @@ describe("embedding configuration visibility", () => {
 				dims: 512,
 				backfill_enabled: true,
 				api_key_set: true,
-				api_key_suffix: "abcd",
+				api_key_mask: "****abcd",
 			},
 		};
 		const html = renderToStaticMarkup(<EmbeddingPage />);
 		expect(html).toContain("无法加载嵌入设置。");
 		expect(html).toContain('value="active-model"');
-		expect(html).toContain("abcd");
+		expect(html).toContain("****abcd");
 		expect(html).toContain("<form");
 		expect(html).toContain("保存设置");
 		expect(html).not.toContain("disabled=");
+	});
+});
+
+describe("M7 embedding test result SSR", () => {
+	it.each([
+		["embedder_unavailable", "嵌入服务暂时不可用。"],
+		["vector_dimension_mismatch", "向量维度不匹配。"],
+	] as const)("shows only safe Chinese and documented code %s", (code, message) => {
+		fixture.state = {
+			loaded: true,
+			testResult: { latency_ms: 12, dims: 8, match: false, error_code: code },
+		};
+		const html = renderToStaticMarkup(<EmbeddingPage />);
+		expect(html).toContain(message);
+		expect(html).toContain(code);
+		expect(html).toContain("实际维度");
+		expect(html).toContain("12 毫秒");
+	});
+	it("does not fabricate a server version or generic settings payload", () => {
+		const html = renderToStaticMarkup(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>,
+		);
+		expect(html).not.toContain("版本");
+		expect(html).not.toContain("0.1.0");
 	});
 });

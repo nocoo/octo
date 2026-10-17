@@ -11,12 +11,19 @@ import {
 } from "./operations-observability";
 
 const daily = [
-	{ day: "2026-10-17", key_id: "key-a", calls: 10, errors: 2, p50_ms: 20, p95_ms: 50 },
+	{
+		day: "2026-10-17",
+		key_id: "key-a",
+		calls: 10,
+		errors: 2,
+		writes: 3,
+		bytes_in: 120,
+		bytes_out: 240,
+	},
 ];
-const health = { d1_bytes: 1000, vector_backlog: 3, cron_last_run_at: null };
 const row = {
 	id: "1",
-	at: 0,
+	at: "1970-01-01T00:00:00.000Z",
 	actor: "key:a",
 	method: "GET",
 	route: "/api/v1/memories",
@@ -24,13 +31,16 @@ const row = {
 	error_code: null,
 	request_id: "r1",
 	duration_ms: 12,
+	bytes_in: null,
+	bytes_out: 20,
+	ip_hash: null,
 };
 
 describe("URL filter contracts", () => {
 	it("round-trips audit filters, strips unknown/invalid values and encodes delimiters", () => {
 		const filters = {
 			actor: "admin:a+b@example.com",
-			route: "/api/v1/memories",
+			action: "/api/v1/memories",
 			status: "403",
 			from: "2026-10-01",
 			to: "2026-10-17",
@@ -38,7 +48,7 @@ describe("URL filter contracts", () => {
 		expect(parseAuditFilters(auditQuery(filters))).toEqual(filters);
 		expect(parseAuditFilters("?status=999&from=bad&to=bad&actor=%20&unknown=x")).toEqual({
 			actor: "",
-			route: "",
+			action: "",
 			status: "",
 			from: "",
 			to: "",
@@ -51,7 +61,7 @@ describe("URL filter contracts", () => {
 	});
 });
 
-describe("usage health model", () => {
+describe("daily usage contract", () => {
 	it("ignores rejected requests after disposal", async () => {
 		let reject: (reason: Error) => void = () => {};
 		const request = vi.fn().mockImplementationOnce(
@@ -67,45 +77,105 @@ describe("usage health model", () => {
 		await pending;
 		expect(model.state.error).toBeNull();
 	});
-	it("loads server-filtered data with per-row error rates and chart data", async () => {
-		const request = vi.fn().mockResolvedValue({
-			daily: [
-				...daily,
-				{ ...daily[0], day: "2026-10-18", calls: 0, errors: 0, p50_ms: null, p95_ms: null },
-			],
-			health,
-		});
+	it("loads real daily rows and follows filter-bound cursors without inventing metrics", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce({ items: daily, next_cursor: "next+/" })
+			.mockResolvedValueOnce({
+				items: [{ ...daily[0], day: "2026-10-18", calls: 0, errors: 0 }],
+				next_cursor: null,
+			});
 		const model = new UsageModel({ request });
 		expect(model.state.loaded).toBe(false);
 		await model.load("?key_id=key-a&from=2026-10-01");
-		expect(request).toHaveBeenCalledWith("/usage?key_id=key-a&from=2026-10-01");
+		expect(request).toHaveBeenCalledWith("/usage?key_id=key-a&from=2026-10-01&limit=200");
+		await model.loadMore();
+		expect(request).toHaveBeenLastCalledWith(
+			"/usage?key_id=key-a&from=2026-10-01&limit=200&cursor=next%2B%2F",
+		);
 		expect(model.rows.map((r) => r.error_rate)).toEqual([20, 0]);
-		expect(model.chart[0]).toEqual({
-			x: "2026-10-17 / key-a",
-			calls: 10,
-			error_rate: 20,
-			p50_ms: 20,
-			p95_ms: 50,
-		});
-		expect(model.state.health).toEqual(health);
+		expect(model.chart[0]).toEqual({ x: "2026-10-17 / key-a", calls: 10, error_rate: 20 });
+		expect(model.state).not.toHaveProperty("health");
 		expect(model.state.loaded).toBe(true);
+		await model.loadMore();
+		expect(request).toHaveBeenCalledTimes(2);
+	});
+
+	it("preserves pages on failure, deduplicates records and ignores stale pagination", async () => {
+		let finish: (value: unknown) => void = () => {};
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce({ items: daily, next_cursor: "more" })
+			.mockRejectedValueOnce(new Error("private"))
+			.mockResolvedValueOnce({
+				items: [...daily, { ...daily[0], key_id: "key-b" }],
+				next_cursor: "older",
+			});
+		const model = new UsageModel({ request });
+		await model.load();
+		await model.loadMore();
+		expect(model.state).toMatchObject({
+			items: daily,
+			nextCursor: "more",
+			error: "无法加载每日用量。",
+			loadingMore: false,
+		});
+		await model.loadMore();
+		expect(model.state.items).toHaveLength(2);
+		request.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+		);
+		const pending = model.loadMore();
+		await model.loadMore();
+		request.mockResolvedValueOnce({ items: [], next_cursor: null });
+		await model.load("key_id=changed");
+		finish({ items: daily, next_cursor: null });
+		await pending;
+		expect(model.state).toMatchObject({ items: [], loaded: true, nextCursor: null });
+	});
+	it("disposal ignores pagination failures and results", async () => {
+		for (const fail of [true, false]) {
+			let resolve: (value: unknown) => void = () => {};
+			let reject: (reason: Error) => void = () => {};
+			const request = vi
+				.fn()
+				.mockResolvedValueOnce({ items: [], next_cursor: "more" })
+				.mockImplementationOnce(
+					() =>
+						new Promise((done, failed) => {
+							resolve = done;
+							reject = failed;
+						}),
+				);
+			const model = new UsageModel({ request });
+			await model.load();
+			const pending = model.loadMore();
+			model.dispose();
+			if (fail) reject(new Error("private"));
+			else resolve({ items: daily, next_cursor: null });
+			await pending;
+			expect(model.state).toMatchObject({ items: [], error: null, loadingMore: false });
+		}
 	});
 
 	it("retains old data on refresh errors, rejects reversed ranges, and ignores stale results", async () => {
 		let finish: (value: unknown) => void = () => {};
 		const request = vi
 			.fn()
-			.mockResolvedValueOnce({ daily, health })
+			.mockResolvedValueOnce({ items: daily, next_cursor: null })
 			.mockRejectedValueOnce(new Error("secret"));
 		const model = new UsageModel({ request });
 		await model.load();
 		await model.load();
-		expect(model.state.daily).toEqual(daily);
-		expect(model.state.error).toBe("无法加载用量与健康状态。");
+		expect(model.state.items).toEqual(daily);
+		expect(model.state.error).toBe("无法加载每日用量。");
 		await model.load("from=2026-10-18&to=2026-10-01");
 		expect(request).toHaveBeenCalledTimes(2);
 		expect(model.state.filters.from).toBe("2026-10-18");
-		expect(model.state.daily).toEqual([]);
+		expect(model.state.items).toEqual([]);
 		request
 			.mockImplementationOnce(
 				() =>
@@ -113,12 +183,12 @@ describe("usage health model", () => {
 						finish = resolve;
 					}),
 			)
-			.mockResolvedValueOnce({ daily: [], health });
+			.mockResolvedValueOnce({ items: [], next_cursor: null });
 		const pending = model.load();
 		await model.load("key_id=new");
-		finish({ daily, health });
+		finish({ items: daily, next_cursor: null });
 		await pending;
-		expect(model.state.daily).toEqual([]);
+		expect(model.state.items).toEqual([]);
 		model.dispose();
 	});
 });

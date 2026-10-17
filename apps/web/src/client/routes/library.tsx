@@ -476,7 +476,8 @@ export function TagsPage() {
 				title={`${operation === "rename" ? "重命名" : "合并"}所有空间中的标签？`}
 				description={
 					<>
-						影响 {source?.use_count ?? 0} 条记忆：{source?.display_name} → {target}。
+						{source?.display_name} → {target}。当前用于 {source?.use_count ?? 0} 条未删除记忆；
+						此操作也会影响回收站中的标签。
 						{state.error && <span role="alert">{state.error}</span>}
 					</>
 				}

@@ -7,7 +7,7 @@ const fields = {
 	dims: 1536,
 	backfill_enabled: false,
 };
-const saved = { ...fields, api_key_set: true, api_key_suffix: "abcd" };
+const saved = { ...fields, api_key_set: true, api_key_mask: "****abcd" };
 
 describe("embedding settings", () => {
 	it("keeps configuration unknown after an initial read failure and blocks changes without hiding the error", async () => {
@@ -48,10 +48,10 @@ describe("embedding settings", () => {
 	it("shows cleared credentials and ignores disposed read failures", async () => {
 		const request = vi
 			.fn()
-			.mockResolvedValueOnce({ ...saved, api_key_set: false, api_key_suffix: null });
+			.mockResolvedValueOnce({ ...saved, api_key_set: false, api_key_mask: null });
 		const model = new EmbeddingModel({ request });
 		await model.load();
-		expect(model.state.config.api_key_suffix).toBeNull();
+		expect(model.state.config.api_key_mask).toBeNull();
 		let reject: (reason: Error) => void = () => {};
 		request.mockImplementationOnce(
 			() =>
@@ -86,7 +86,7 @@ describe("embedding settings", () => {
 				const pending = model[action](fields, "secret");
 				model.dispose();
 				if (fail) reject(new Error("secret"));
-				else resolve({ latency_ms: 1, actual_dims: 1536, dims_match: true, error_code: null });
+				else resolve({ latency_ms: 1, dims: 1536, match: true, error_code: null });
 				await pending;
 				expect(model.state).toMatchObject({ error: null, pending: false, testResult: null });
 				expect(JSON.stringify(model.state)).not.toContain("secret");
@@ -101,7 +101,7 @@ describe("embedding settings", () => {
 			...fields,
 			base_url: "",
 			api_key_set: false,
-			api_key_suffix: null,
+			api_key_mask: null,
 		});
 		await model.load();
 		expect(model.state.loaded).toBe(true);
@@ -156,9 +156,9 @@ describe("embedding settings", () => {
 	it("tests an unsaved config and reports latency, dimensions, mismatch and sanitized errors", async () => {
 		const result = {
 			latency_ms: 23,
-			actual_dims: 3,
-			dims_match: false,
-			error_code: "dims_mismatch",
+			dims: 3,
+			match: false,
+			error_code: "vector_dimension_mismatch",
 		};
 		const request = vi
 			.fn()
@@ -175,17 +175,33 @@ describe("embedding settings", () => {
 		expect(JSON.stringify(model.state)).not.toContain("leak");
 		request.mockResolvedValueOnce({
 			latency_ms: 12,
-			actual_dims: 1536,
-			dims_match: true,
+			dims: 1536,
+			match: true,
 			error_code: null,
 		});
 		await model.test(fields);
-		expect(model.state.testResult?.dims_match).toBe(true);
+		expect(model.state.testResult?.match).toBe(true);
 		request.mockRejectedValueOnce(new Error("test-secret"));
 		await model.test(fields, null);
 		expect(model.state.error).toBe("无法测试嵌入连接。");
 		expect(model.state.testResult).toBeNull();
 		await model.test({ ...fields, dims: -1 });
+	});
+
+	it("rejects undocumented diagnostics rather than retaining or displaying them", async () => {
+		const request = vi.fn().mockResolvedValueOnce(saved).mockResolvedValueOnce({
+			latency_ms: 1,
+			dims: null,
+			match: false,
+			error_code: "upstream-secret-response",
+			upstream_error: "private",
+		});
+		const model = new EmbeddingModel({ request });
+		await model.load();
+		await model.test(fields);
+		expect(model.state.testResult).toBeNull();
+		expect(model.state.error).toBe("无法测试嵌入连接。");
+		expect(JSON.stringify(model.state)).not.toMatch(/upstream|private/);
 	});
 
 	it("handles load/save failures, retains prior data and ignores stale responses", async () => {
@@ -236,7 +252,7 @@ describe("embedding settings", () => {
 		await model.test(fields);
 		expect(request).toHaveBeenCalledTimes(1);
 		model.dispose();
-		finish({ latency_ms: 1, actual_dims: 1, dims_match: false, error_code: null });
+		finish({ latency_ms: 1, dims: 1, match: false, error_code: null });
 		await pending;
 		expect(model.state.testResult).toBeNull();
 		expect(model.state.pending).toBe(false);
@@ -282,17 +298,25 @@ describe("embedding profiles settings", () => {
 	});
 	it("loads profiles and exposes errors and retries without dropping old data", async () => {
 		const items = [
-			{ id: "p", model: "text-embedding-3-small", dims: 1536, metric: "cosine", active: true },
+			{
+				id: "p",
+				model: "text-embedding-3-small",
+				dims: 1536,
+				metric: "cosine",
+				active: true,
+				created_at: "2026-10-01T00:00:00.000Z",
+			},
 		];
 		const request = vi
 			.fn()
-			.mockResolvedValueOnce({ items })
+			.mockResolvedValueOnce({ items, active_profile: "p", next_cursor: null })
 			.mockRejectedValueOnce(new Error("secret"))
 			.mockResolvedValueOnce({ items: [] });
 		const model = new SettingsModel({ request });
 		await model.load();
 		expect(request).toHaveBeenCalledWith("/embedding-profiles");
 		expect(model.state.profiles).toEqual(items);
+		expect(model.state.activeProfile).toBe("p");
 		await model.load();
 		expect(model.state.profiles).toEqual(items);
 		expect(model.state.error).toBe("无法加载嵌入配置。");

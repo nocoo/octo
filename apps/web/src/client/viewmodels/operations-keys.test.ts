@@ -13,8 +13,8 @@ const key = {
 	expires_at: null,
 	revoked_at: null,
 	last_used_at: null,
-	created_at: 1,
-	usage: [1, 2],
+	created_at: "2026-10-01T00:00:00.000Z",
+	updated_at: "2026-10-01T00:00:00.000Z",
 };
 
 describe("key permissions and lifecycle", () => {
@@ -54,7 +54,7 @@ describe("key permissions and lifecycle", () => {
 		expect(await model.update("x", { role: "admin", expires_at: null })).toBe(true);
 		expect(request).toHaveBeenCalledWith("/keys/x", {
 			method: "PATCH",
-			json: { role: "admin", expires_at: null, ...rolePermissions("admin") },
+			json: { role: "admin", expires_at: null },
 		});
 		const permissions = { ...rolePermissions("custom"), ops: "r", scope: "all" as const };
 		request.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ items: [] });
@@ -109,12 +109,12 @@ describe("key permissions and lifecycle", () => {
 	it("offers explicit role templates with default-deny custom permissions", () => {
 		expect(rolePermissions("admin")).toMatchObject({ ops: "r,w,u,d", scope: "all" });
 		expect(rolePermissions("project")).toMatchObject({ scope: "own", auto_own_space: true });
-		expect(rolePermissions("drop")).toMatchObject({ ops: "w", scope: "own" });
+		expect(rolePermissions("drop")).toMatchObject({ ops: "w", scope: "spaces" });
 		expect(rolePermissions("readonly")).toMatchObject({ ops: "r", scope: "all" });
 		expect(rolePermissions("custom")).toMatchObject({ ops: "", scope: "spaces" });
 		expect(keyStatus(key, 100)).toBe("active");
-		expect(keyStatus({ ...key, expires_at: 100 }, 100)).toBe("expired");
-		expect(keyStatus({ ...key, revoked_at: 0 }, 100)).toBe("revoked");
+		expect(keyStatus({ ...key, expires_at: "1970-01-01T00:00:00.100Z" }, 100)).toBe("expired");
+		expect(keyStatus({ ...key, revoked_at: "1970-01-01T00:00:00.000Z" }, 100)).toBe("revoked");
 	});
 
 	it("loads projected metadata, refreshes without clearing old rows, and retries", async () => {
@@ -139,12 +139,16 @@ describe("key permissions and lifecycle", () => {
 			.mockResolvedValueOnce({ key, plaintext: "octo_once" })
 			.mockResolvedValueOnce({ items: [key] });
 		const model = new KeysModel({ request });
-		expect(await model.create({ name: " Reader ", role: "readonly", expires_at: 500 })).toBe(
-			"octo_once",
-		);
+		expect(
+			await model.create({
+				name: " Reader ",
+				role: "readonly",
+				expires_at: "2027-01-01T00:00:00.000Z",
+			}),
+		).toBe("octo_once");
 		expect(request).toHaveBeenNthCalledWith(1, "/keys", {
 			method: "POST",
-			json: { name: "Reader", role: "readonly", expires_at: 500, ...rolePermissions("readonly") },
+			json: { name: "Reader", role: "readonly", expires_at: "2027-01-01T00:00:00.000Z" },
 		});
 		expect(JSON.stringify(model.state)).not.toContain("octo_once");
 	});
@@ -154,8 +158,12 @@ describe("key permissions and lifecycle", () => {
 		const model = new KeysModel({ request });
 		expect(await model.create({ name: " ", role: "admin", expires_at: null })).toBeNull();
 		expect(await model.create({ name: "x", role: "custom", expires_at: null })).toBeNull();
-		expect(await model.create({ name: "x", role: "readonly", expires_at: Number.NaN })).toBeNull();
-		expect(await model.create({ name: "x", role: "readonly", expires_at: -1 })).toBeNull();
+		expect(
+			await model.create({ name: "x", role: "readonly", expires_at: "not-a-date" }),
+		).toBeNull();
+		expect(
+			await model.create({ name: "x", role: "readonly", expires_at: "2027-01-01T00:00:00+08:00" }),
+		).toBeNull();
 		expect(
 			await model.create({
 				name: "x",
@@ -180,7 +188,7 @@ describe("key permissions and lifecycle", () => {
 		expect(await model.rotate(key.id, 604800)).toBe("rotated_once");
 		expect(request).toHaveBeenCalledWith("/keys/key%2F1/rotate", {
 			method: "POST",
-			json: { grace_seconds: 604800 },
+			json: { grace_ms: 604800000 },
 		});
 		expect(await model.update(key.id, { expires_at: null })).toBe(true);
 		expect(request).toHaveBeenCalledWith("/keys/key%2F1", {
@@ -193,8 +201,38 @@ describe("key permissions and lifecycle", () => {
 		expect(await model.rotate(key.id, -1)).toBeNull();
 		expect(await model.rotate(key.id, 604801)).toBeNull();
 		expect(await model.rotate(key.id, 0.5)).toBeNull();
-		expect(await model.update(key.id, { expires_at: -1 })).toBe(false);
+		expect(await model.update(key.id, { expires_at: "2027-01-01T00:00:00+08:00" })).toBe(false);
 		expect(request).toHaveBeenCalledTimes(before);
+	});
+
+	it("sends drop space permissions and rejects auto-space names outside the real slug contract", async () => {
+		const request = vi.fn().mockResolvedValue({ items: [], plaintext: "once" });
+		const model = new KeysModel({ request });
+		for (const name of ["Uppercase", "has spaces", "double--hyphen", "a".repeat(65)]) {
+			expect(await model.create({ name, role: "project", expires_at: null })).toBeNull();
+		}
+		expect(request).not.toHaveBeenCalled();
+		const permissions = { ...rolePermissions("drop"), space_ids: ["space-id"] };
+		expect(
+			await model.create({ name: "drop-agent", role: "drop", expires_at: null, permissions }),
+		).toBe("once");
+		expect(request).toHaveBeenCalledWith("/keys", {
+			method: "POST",
+			json: { name: "drop-agent", role: "drop", expires_at: null, space_ids: ["space-id"] },
+		});
+		expect(await model.update("drop", { role: "drop", expires_at: null, permissions })).toBe(true);
+		expect(request).toHaveBeenCalledWith("/keys/drop", {
+			method: "PATCH",
+			json: { role: "drop", expires_at: null, space_ids: ["space-id"] },
+		});
+		expect(
+			await model.create({
+				name: "x",
+				role: "custom",
+				expires_at: null,
+				permissions: { ...permissions, ops: "r,r" },
+			}),
+		).toBeNull();
 	});
 
 	it("contains failures without exposing secrets and prevents overlapping writes", async () => {

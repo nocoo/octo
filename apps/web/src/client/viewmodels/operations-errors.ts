@@ -7,7 +7,7 @@ const messages = new Map([
 	["not_found", "请求的资源不存在或不可访问。"],
 	["validation_failed", "提交的数据不符合要求。"],
 	["vector_dimension_mismatch", "向量维度不匹配。"],
-	["dims_mismatch", "向量维度不匹配。"],
+	["embedder_unavailable", "嵌入服务暂时不可用。"],
 	["version_conflict", "内容已发生变化，请刷新后重试。"],
 	["tag_conflict", "标签发生冲突，请刷新后重试。"],
 	["idempotency_conflict", "重复请求的内容不一致。"],

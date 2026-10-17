@@ -10,13 +10,13 @@ export interface EmbeddingFields {
 }
 export interface EmbeddingConfig extends EmbeddingFields {
 	api_key_set: boolean;
-	api_key_suffix: string | null;
+	api_key_mask: string | null;
 }
 export interface EmbeddingTestResult {
 	latency_ms: number;
-	actual_dims: number | null;
-	dims_match: boolean;
-	error_code: string | null;
+	dims: number | null;
+	match: boolean;
+	error_code: "embedder_unavailable" | "vector_dimension_mismatch" | null;
 }
 interface EmbeddingState {
 	config: EmbeddingConfig;
@@ -28,14 +28,17 @@ interface EmbeddingState {
 }
 
 function readable(config: EmbeddingConfig): EmbeddingConfig {
-	const { base_url, model, dims, backfill_enabled, api_key_set, api_key_suffix } = config;
+	const { base_url, model, dims, backfill_enabled, api_key_set, api_key_mask } = config;
 	return {
 		base_url,
 		model,
 		dims,
 		backfill_enabled,
 		api_key_set,
-		api_key_suffix: api_key_set && api_key_suffix ? api_key_suffix.slice(-4) : null,
+		api_key_mask:
+			api_key_set && api_key_mask
+				? `****${api_key_mask.length > 4 ? api_key_mask.slice(-4) : ""}`
+				: null,
 	};
 }
 
@@ -87,7 +90,7 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 				dims: 1536,
 				backfill_enabled: false,
 				api_key_set: false,
-				api_key_suffix: null,
+				api_key_mask: null,
 			},
 			loading: false,
 			loaded: false,
@@ -135,8 +138,14 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 				method: "POST",
 				json: payload(fields, secret),
 			});
-			const { latency_ms, actual_dims, dims_match, error_code } = result;
-			if (this.alive) this.set({ testResult: { latency_ms, actual_dims, dims_match, error_code } });
+			const { latency_ms, dims, match, error_code } = result;
+			if (
+				error_code !== null &&
+				error_code !== "embedder_unavailable" &&
+				error_code !== "vector_dimension_mismatch"
+			)
+				throw new Error("Invalid embedding test error code");
+			if (this.alive) this.set({ testResult: { latency_ms, dims, match, error_code } });
 		} catch (error) {
 			if (this.alive) this.set({ error: operationsError(error, "无法测试嵌入连接。") });
 		} finally {
@@ -169,24 +178,35 @@ export interface EmbeddingProfile {
 	dims: number;
 	metric: string;
 	active: boolean;
+	created_at: string;
 }
 export class SettingsModel extends Store<{
 	profiles: EmbeddingProfile[];
+	activeProfile: string | null;
 	loading: boolean;
 	loaded: boolean;
 	error: string | null;
 }> {
 	private revision = 0;
 	constructor(private readonly api: AdminClient = adminApi) {
-		super({ profiles: [], loading: false, loaded: false, error: null });
+		super({ profiles: [], activeProfile: null, loading: false, loaded: false, error: null });
 	}
 	async load(): Promise<void> {
 		const revision = ++this.revision;
 		this.set({ loading: true, error: null });
 		try {
-			const result = await this.api.request<{ items: EmbeddingProfile[] }>("/embedding-profiles");
+			const result = await this.api.request<{
+				items: EmbeddingProfile[];
+				active_profile: string | null;
+				next_cursor: null;
+			}>("/embedding-profiles");
 			if (revision === this.revision)
-				this.set({ profiles: result.items, loading: false, loaded: true });
+				this.set({
+					profiles: result.items,
+					activeProfile: result.active_profile,
+					loading: false,
+					loaded: true,
+				});
 		} catch (error) {
 			if (revision === this.revision)
 				this.set({ error: operationsError(error, "无法加载嵌入配置。"), loading: false });

@@ -7,17 +7,13 @@ export interface UsageDaily {
 	key_id: string;
 	calls: number;
 	errors: number;
-	p50_ms: number | null;
-	p95_ms: number | null;
-}
-export interface UsageHealth {
-	d1_bytes: number;
-	vector_backlog: number;
-	cron_last_run_at: number | null;
+	writes: number;
+	bytes_in: number;
+	bytes_out: number;
 }
 export interface UsageResponse {
-	daily: UsageDaily[];
-	health: UsageHealth;
+	items: UsageDaily[];
+	next_cursor: string | null;
 }
 export interface UsageFilters {
 	key_id: string;
@@ -26,14 +22,14 @@ export interface UsageFilters {
 }
 export interface AuditFilters {
 	actor: string;
-	route: string;
+	action: string;
 	status: string;
 	from: string;
 	to: string;
 }
 export interface AuditRow {
 	id: string;
-	at: number;
+	at: string;
 	actor: string;
 	method: string;
 	route: string;
@@ -41,6 +37,9 @@ export interface AuditRow {
 	error_code: string | null;
 	request_id: string;
 	duration_ms: number;
+	bytes_in: number | null;
+	bytes_out: number | null;
+	ip_hash: string | null;
 }
 interface AuditResponse {
 	items: AuditRow[];
@@ -65,7 +64,7 @@ export function parseAuditFilters(search = ""): AuditFilters {
 	const status = params.get("status") ?? "";
 	return {
 		actor: params.get("actor")?.trim() ?? "",
-		route: params.get("route")?.trim() ?? "",
+		action: params.get("action")?.trim() ?? "",
 		status: /^[1-5]\d\d$/.test(status) ? status : "",
 		from: dateFilter(params.get("from")),
 		to: dateFilter(params.get("to")),
@@ -81,43 +80,45 @@ export const usageQuery = (filters: UsageFilters): string => query(filters);
 function reversed(filters: { from: string; to: string }): boolean {
 	return Boolean(filters.from && filters.to && Date.parse(filters.from) > Date.parse(filters.to));
 }
-function endpoint(path: string, search: string): string {
-	return search ? `${path}?${search}` : path;
+function usagePath(filters: UsageFilters, cursor: string | null): string {
+	const params = new URLSearchParams(usageQuery(filters));
+	params.set("limit", "200");
+	if (cursor) params.set("cursor", cursor);
+	return `/usage?${params}`;
 }
 
-export class UsageModel extends Store<
-	UsageResponse & { filters: UsageFilters; loading: boolean; loaded: boolean; error: string | null }
-> {
+export class UsageModel extends Store<{
+	items: UsageDaily[];
+	nextCursor: string | null;
+	filters: UsageFilters;
+	loading: boolean;
+	loadingMore: boolean;
+	loaded: boolean;
+	error: string | null;
+}> {
 	private revision = 0;
 	constructor(private readonly api: AdminClient = adminApi) {
 		super({
-			daily: [],
-			health: { d1_bytes: 0, vector_backlog: 0, cron_last_run_at: null },
+			items: [],
+			nextCursor: null,
 			filters: parseUsageFilters(),
 			loading: false,
+			loadingMore: false,
 			loaded: false,
 			error: null,
 		});
 	}
 	get rows(): Array<UsageDaily & { error_rate: number }> {
-		return this.state.daily.map((row) => ({
+		return this.state.items.map((row) => ({
 			...row,
 			error_rate: row.calls > 0 ? (row.errors / row.calls) * 100 : 0,
 		}));
 	}
-	get chart(): Array<{
-		x: string;
-		calls: number;
-		error_rate: number;
-		p50_ms: number | null;
-		p95_ms: number | null;
-	}> {
+	get chart(): Array<{ x: string; calls: number; error_rate: number }> {
 		return this.rows.map((row) => ({
 			x: `${row.day} / ${row.key_id}`,
 			calls: row.calls,
 			error_rate: row.error_rate,
-			p50_ms: row.p50_ms,
-			p95_ms: row.p95_ms,
 		}));
 	}
 	async load(search = ""): Promise<void> {
@@ -126,25 +127,60 @@ export class UsageModel extends Store<
 		if (reversed(filters)) {
 			this.set({
 				filters,
-				daily: [],
+				items: [],
+				nextCursor: null,
+				loaded: false,
 				error: "开始时间不能晚于结束时间。",
 				loading: false,
+				loadingMore: false,
 			});
 			return;
 		}
 		const changed = usageQuery(filters) !== usageQuery(this.state.filters);
-		this.set({ filters, daily: changed ? [] : this.state.daily, loading: true, error: null });
+		this.set({
+			filters,
+			items: changed ? [] : this.state.items,
+			nextCursor: changed ? null : this.state.nextCursor,
+			loaded: changed ? false : this.state.loaded,
+			loading: true,
+			loadingMore: false,
+			error: null,
+		});
 		try {
-			const result = await this.api.request<UsageResponse>(endpoint("/usage", usageQuery(filters)));
+			const result = await this.api.request<UsageResponse>(usagePath(filters, null));
 			if (revision === this.revision)
-				this.set({ daily: result.daily, health: result.health, loading: false, loaded: true });
+				this.set({
+					items: result.items,
+					nextCursor: result.next_cursor,
+					loading: false,
+					loaded: true,
+				});
 		} catch (error) {
 			if (revision === this.revision)
-				this.set({ error: operationsError(error, "无法加载用量与健康状态。"), loading: false });
+				this.set({ error: operationsError(error, "无法加载每日用量。"), loading: false });
+		}
+	}
+	async loadMore(): Promise<void> {
+		if (this.state.loading || this.state.loadingMore || !this.state.nextCursor) return;
+		const revision = this.revision;
+		this.set({ loadingMore: true, error: null });
+		try {
+			const result = await this.api.request<UsageResponse>(
+				usagePath(this.state.filters, this.state.nextCursor),
+			);
+			if (revision === this.revision) {
+				const rows = new Map(this.state.items.map((row) => [`${row.day}/${row.key_id}`, row]));
+				for (const row of result.items) rows.set(`${row.day}/${row.key_id}`, row);
+				this.set({ items: [...rows.values()], nextCursor: result.next_cursor, loadingMore: false });
+			}
+		} catch (error) {
+			if (revision === this.revision)
+				this.set({ error: operationsError(error, "无法加载每日用量。"), loadingMore: false });
 		}
 	}
 	dispose(): void {
 		this.revision++;
+		this.set({ loading: false, loadingMore: false });
 	}
 }
 

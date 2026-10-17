@@ -6,7 +6,9 @@ import {
 	filtersFromUrl,
 	HistoryModel,
 	MemoriesModel,
+	type Memory,
 	MemoryModel,
+	type MemoryVersion,
 	memoryQuery,
 } from "./memories";
 
@@ -129,6 +131,50 @@ describe("MemoriesModel", () => {
 });
 
 describe("MemoryModel", () => {
+	it("consumes raw M7 detail summaries, version metadata and signed attachment URLs", async () => {
+		const api = client();
+		const attachment = {
+			id: "a1",
+			filename: "image.png",
+			content_type: "image/png",
+			size_bytes: 42,
+			sha256: "hash",
+			created_at: "2026-10-18T00:00:00.000Z",
+		};
+		const detail = {
+			...memory,
+			attachments: [attachment],
+			versions_count: 1,
+			vector_status: [{ profile: "te3-small-1536", indexed: false, stale: true }],
+		} satisfies Memory;
+		const version = {
+			memory_id: memory.id,
+			version: 2,
+			title: memory.title,
+			type: memory.type,
+			importance: memory.importance,
+			tags: memory.tags,
+			event_time: null,
+			space_id: "s1",
+			actor: "admin:owner@example.com",
+			op: "update",
+			rollback_of: null,
+			created_at: "2026-10-18T00:00:00.000Z",
+		} satisfies MemoryVersion;
+		api.request
+			.mockResolvedValueOnce(detail)
+			.mockResolvedValueOnce({ items: [version] })
+			.mockResolvedValueOnce({
+				url: "https://octo.hexly.ai/files/a1?exp=3&sig=abc",
+				expires_at: "2026-10-18T00:05:00.000Z",
+			});
+		const model = new MemoryModel("m1", api.api, () => 0);
+		await model.load();
+		expect(model.state.memory?.attachments).toEqual([attachment]);
+		expect(model.state.memory?.vector_status).toEqual(detail.vector_status);
+		expect(model.state.versions).toEqual([version]);
+		expect(model.state.urls.a1).toBe("https://octo.hexly.ai/files/a1?exp=3&sig=abc");
+	});
 	it("ignores stale read responses and stale read errors", async () => {
 		const api = client();
 		const model = new MemoryModel("m1", api.api);

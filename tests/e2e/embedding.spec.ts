@@ -19,10 +19,7 @@ test("embedding defaults, write-only masking, real connection test, and clear", 
 		expect((await replacement.inputValue()) === "").toBe(true);
 		await page.getByRole("textbox", { name: "网关地址", exact: true }).fill(gateway.url);
 		await expect(replacement).toBeEditable();
-		await replacement.evaluate((element, value) => {
-			(element as HTMLInputElement).value = value;
-			element.dispatchEvent(new Event("input", { bubbles: true }));
-		}, secret);
+		await replacement.fill(secret);
 		await page.getByRole("button", { name: "保存设置", exact: true }).click();
 		await expect(page.getByRole("status").filter({ hasText: "已配置" })).toContainText("abcd");
 		expect((await replacement.inputValue()) === "").toBe(true);
@@ -34,7 +31,7 @@ test("embedding defaults, write-only masking, real connection test, and clear", 
 		expect(storedText.includes(secret)).toBe(false);
 		expect(JSON.parse(storedText)).toMatchObject({
 			api_key_set: true,
-			api_key_suffix: "abcd",
+			api_key_mask: "****abcd",
 			backfill_enabled: false,
 		});
 		expect(
@@ -46,7 +43,18 @@ test("embedding defaults, write-only masking, real connection test, and clear", 
 				secret,
 			),
 		).toBe(true);
+		const tested = page.waitForResponse(
+			(response) =>
+				response.request().method() === "POST" &&
+				response.url().endsWith("/settings/embedding/test"),
+		);
 		await page.getByRole("button", { name: "测试连接", exact: true }).click();
+		expect(await (await tested).json()).toEqual({
+			latency_ms: expect.any(Number),
+			dims: 1536,
+			match: true,
+			error_code: null,
+		});
 		await expect(page.getByText("连接成功", { exact: true })).toBeVisible();
 		expect(gateway.observations.length).toBeGreaterThan(0);
 		for (const observation of gateway.observations)
@@ -67,10 +75,14 @@ test("embedding defaults, write-only masking, real connection test, and clear", 
 		await page.reload();
 		expect((await replacement.inputValue()) === "").toBe(true);
 		await expect(page.getByText("尚未配置接口密钥", { exact: true })).toBeVisible();
-		const cleared = await admin.json<{ api_key_set: boolean; api_key_suffix: string | null }>(
+		const cleared = await admin.json<{ api_key_set: boolean; api_key_mask: string | null }>(
 			"/settings/embedding",
 		);
-		expect(cleared).toMatchObject({ api_key_set: false, api_key_suffix: null });
+		expect(cleared).toMatchObject({ api_key_set: false, api_key_mask: null });
+		await page.getByRole("button", { name: "测试连接", exact: true }).click();
+		await expect(page.getByRole("alert").filter({ hasText: "embedder_unavailable" })).toContainText(
+			"嵌入服务暂时不可用。",
+		);
 		await capture(page, info, "embedding-secret-cleared");
 	} finally {
 		await gateway.close();
