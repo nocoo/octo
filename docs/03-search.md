@@ -20,6 +20,8 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
   1. 查询被切成若干词（按空白和标点分），≥3 字符的走 `MATCH`；
   2. <3 字符的词在 FTS 候选集上加 `instr(body, ?) > 0` 过滤；如果整个查询都是短词，就在调用方可见的 space 内做有上限的 `LIKE` 扫描（最多扫 N 行并标记 `partial=true`）；
   3. 实现前先做 spike，在本地 D1 上确认 trigram 分词器可用并测一下 bm25 表现（见 08 M0）。
+
+**Spike 结论（M0，L2 隔离本地 D1，复用 `migrations/0001_core.sql`）：** wrangler `--local` 的 FTS5 `tokenize='trigram remove_diacritics 1'` 与 `contentless_delete=1` 可用。英文子串（如 `cdef`）和 ≥3 字中文（如「三个字」）都能 `MATCH`；2 字中文（如「部署」）单独 `MATCH` 为空，必须走 `instr` / 有上限 `LIKE`。contentless 表不回填 title/body 列，读结果要靠 `memories_fts_map` 的 `rowid`。`DELETE WHERE rowid=?` 在 contentless_delete 下有效。`bm25(memories_fts, 5.0, 1.0, 2.0)` 返回数值并可排序（越小越相关）。
 - **排序：** `bm25(memories_fts, 5.0, 1.0, 2.0)`（title 权重高）。返回原始 bm25 和归一化分数。
 - **同步：** 在写路径的 batch 中显式 delete + insert（contentless-delete 模式），不用触发器，便于测试。
 - **备份注意：** D1 导出不支持包含虚拟表的库，所以备份依赖 D1 Time Travel；需要导出时先 drop FTS 再重建（脚本化，写进运行手册）。

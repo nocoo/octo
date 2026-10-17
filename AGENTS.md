@@ -1,6 +1,6 @@
 # Octo
 
-Private, API-first memory / knowledge-base SaaS on Zheng's Cloudflare account, replacing Nowledge Mem. Design-phase repository: no application code yet.
+Private, API-first memory / knowledge-base SaaS on Zheng's Cloudflare account, replacing Nowledge Mem.
 
 Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not rewrite this file.
 
@@ -26,7 +26,19 @@ Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not re
 
 ## Setup and commands
 
-Planned toolchain (mirrors nocoo/giraffe): Bun 1.4, TypeScript 7 strict, Hono, Vite (latest), React 19, Tailwind v4, Biome, Vitest + V8 coverage, Playwright, Husky. Commands will be listed here when `package.json` lands; until then there is nothing to build or test.
+Bun 1.4, TypeScript 7 strict, Hono, Vite 8, Biome 2.5, Vitest 5 + V8 coverage, Husky. Install with a temporary registry (`BUN_CONFIG_REGISTRY=… bun install`); never set a global bun registry.
+
+```
+bun run dev              # Vite 127.0.0.1:7059 + wrangler sidecar 37059
+bun run typecheck
+bun run lint             # biome check --error-on-warnings
+bun run test:coverage    # L1, four metrics ≥95%
+bun run test:e2e:api     # L2 real HTTP on 17059
+bun run gate:test-skip
+bun run gate:no-remote
+bun run gate:wrangler-vars
+bun run gate:security    # gitleaks + osv-scanner; missing tools fail
+```
 
 ## Testing and quality contract
 
@@ -34,11 +46,11 @@ Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-veri
 
 | Dimension | Required proof | Status |
 |---|---|---|
-| L1 pre-commit | Statements/branches/functions/lines each ≥95%, no skipped/focused tests, strict typecheck, Biome `--error-on-warnings`, on the index snapshot <30s | planned |
-| L2 API | Real local HTTP over 100% endpoint × method, success/failure/auth | planned |
+| L1 pre-commit | Statements/branches/functions/lines each ≥95%, no skipped/focused tests, strict typecheck, Biome `--error-on-warnings`, on the index snapshot <30s | enforced |
+| L2 API | Real local HTTP over 100% endpoint × method, success/failure/auth | enforced |
 | L3 UI | Critical dashboard journeys in Chromium (phase 2) | planned |
-| G2 security | gitleaks over pushed ranges + osv-scanner on `bun.lock` | planned |
-| D1 isolation | Per-run local persistence and ports, local-mode assertion, `_test_marker env=test` before fixtures/cleanup | planned |
+| G2 security | gitleaks over pushed ranges + osv-scanner on `bun.lock` | enforced |
+| D1 isolation | Per-run local persistence and ports, local-mode assertion, `_test_marker env=test` before fixtures/cleanup | enforced |
 
 Details: [docs/07-dev-workflow.md](docs/07-dev-workflow.md).
 

@@ -117,6 +117,8 @@ index_name = "<见 03 §3，按 embedding profile 命名>"
 crons = ["17 * * * *"]
 ```
 
+M0 的仓库 `wrangler.toml` 绑定 D1 `octo-db` 和 R2 `octo-files`，**不**绑定 Vectorize：该产品没有本地模拟，测试禁止远程资源，向量端口在后续里程碑再加。`database_id` 在创建生产库之前用占位 UUID。
+
 Secrets（`wrangler secret`，本地用 `.dev.vars`，由 `dev.vars.example` 初始化）：`API_KEY_PEPPER`（API key HMAC 的 pepper）、`ATTACHMENT_URL_SECRET`（附件签名 URL）、`OCTO_SETTINGS_KEY`（AES-GCM master key，用来加密 D1 中的向量模型 API key）。向量模型网关的 base URL / key / model / dims 不是 Worker secret，而是在 dashboard「向量模型」设置页配置（见 03 §2.1）。Access team domain 和 AUD 不是 secret：和 giraffe 一样，写成代码常量 `apps/web/src/server/lib/access-config.ts`，只有测试环境可以通过 `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` / `ACCESS_JWKS_URL` 覆盖（见 05 §2）。
 
 ## 6. 横切约定
