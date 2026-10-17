@@ -18,6 +18,10 @@ export class D1BruteForceVectorStore implements VectorStore {
 		private readonly baseFilter: SqlFilter,
 	) {}
 
+	async upsert(_records: VectorizeVector[]): Promise<void> {}
+
+	async delete(_ids: string[]): Promise<void> {}
+
 	async query(input: VectorQueryInput): Promise<VectorQueryHit[]> {
 		const topK = capVectorTopK(input.topK, input.returnMetadata);
 		const metadata = vectorFilterSql(input.filter);

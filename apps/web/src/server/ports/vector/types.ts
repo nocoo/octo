@@ -12,6 +12,8 @@ export type VectorQueryHit = {
 
 export interface VectorStore {
 	query(input: VectorQueryInput): Promise<VectorQueryHit[]>;
+	upsert(records: VectorizeVector[]): Promise<void>;
+	delete(ids: string[]): Promise<void>;
 }
 
 export const VECTOR_TOPK_WITH_METADATA = 50;

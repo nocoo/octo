@@ -22,7 +22,7 @@ import { assertVectorValues, loadEmbeddingProfile } from "./vector-write";
 export type SearchDeps = {
 	db: D1Database;
 	env?: Env;
-	vectorStore?: VectorStore;
+	vectorStore?: Pick<VectorStore, "query">;
 };
 
 function bm25ToNormalized(hits: Array<{ id: string; bm25: number }>): Map<string, number> {

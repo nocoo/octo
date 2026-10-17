@@ -49,6 +49,14 @@ function partitionFilter(filter: VectorizeVectorMetadataFilter): VectorizeVector
 export class CloudflareVectorStore implements VectorStore {
 	constructor(private readonly index: Vectorize) {}
 
+	async upsert(records: VectorizeVector[]): Promise<void> {
+		await this.index.upsert(records);
+	}
+
+	async delete(ids: string[]): Promise<void> {
+		await this.index.deleteByIds(ids);
+	}
+
 	async query(input: VectorQueryInput): Promise<VectorQueryHit[]> {
 		const topK = capVectorTopK(input.topK, input.returnMetadata);
 		const filters = input.filter ? partitionFilter(input.filter) : [undefined];
