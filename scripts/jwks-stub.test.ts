@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	b64url,
+	b64urlDecode,
 	generateJwksPair,
 	L2_ACCESS_AUD,
 	l2AccessIss,
@@ -12,6 +13,7 @@ import {
 	loadJwksState,
 	signAccessJwt,
 	startJwksStub,
+	tamperJwtSignature,
 } from "./jwks-stub";
 import { L2_JWKS_PORT } from "./ports";
 
@@ -43,6 +45,13 @@ describe("jwks stub", () => {
 		expect(state.publicJwk.kid).toBe("k-e2e");
 		const token = await signAccessJwt(state, { email: "a@b.c", aud: L2_ACCESS_AUD });
 		expect(token.split(".")).toHaveLength(3);
+		const tampered = tamperJwtSignature(token);
+		const origSig = token.split(".")[2] ?? "";
+		const badSig = tampered.split(".")[2] ?? "";
+		expect(b64urlDecode(badSig)).not.toEqual(b64urlDecode(origSig));
+		expect(tampered.startsWith(`${token.split(".").slice(0, 2).join(".")}.`)).toBe(true);
+		expect(() => tamperJwtSignature("nope")).toThrow("three parts");
+		expect(() => tamperJwtSignature("a.b.")).toThrow("empty signature");
 		const dir = await mkdtemp(join(tmpdir(), "octo-jwks-"));
 		const path = join(dir, "state.json");
 		await writeFile(path, JSON.stringify(state));

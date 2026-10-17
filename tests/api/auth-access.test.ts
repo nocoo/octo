@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { L2_ACCESS_AUD, l2AccessIss, loadJwksState, signAccessJwt } from "../../scripts/jwks-stub";
+import {
+	b64urlDecode,
+	L2_ACCESS_AUD,
+	l2AccessIss,
+	loadJwksState,
+	signAccessJwt,
+	tamperJwtSignature,
+} from "../../scripts/jwks-stub";
 import { L2_JWKS_PORT } from "../../scripts/ports";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
@@ -50,10 +57,10 @@ describe("GET /api/admin/whoami", () => {
 			{ iss, aud: L2_ACCESS_AUD, exp: now + 3600, email: "e2e@local" },
 			"missing",
 		);
-		const parts = valid.split(".");
-		const sig = parts[2] ?? "";
-		const flipped = `${sig.slice(0, -1)}${sig.endsWith("A") ? "B" : "A"}`;
-		const badSig = `${parts[0]}.${parts[1]}.${flipped}`;
+		const badSig = tamperJwtSignature(valid);
+		expect(b64urlDecode(badSig.split(".")[2] ?? "")).not.toEqual(
+			b64urlDecode(valid.split(".")[2] ?? ""),
+		);
 		for (const jwt of [wrongAud, wrongIss, expired, unknownKid, badSig, undefined]) {
 			const res = await whoami(jwt);
 			expect(res.status).toBe(401);

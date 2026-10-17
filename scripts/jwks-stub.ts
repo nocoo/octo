@@ -42,6 +42,34 @@ export function b64url(bytes: Uint8Array): string {
 	return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+export function b64urlDecode(value: string): Uint8Array {
+	const padded =
+		value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (value.length % 4)) % 4);
+	const bin = atob(padded);
+	const out = new Uint8Array(bin.length);
+	for (let i = 0; i < bin.length; i += 1) {
+		out[i] = bin.charCodeAt(i);
+	}
+	return out;
+}
+
+export function tamperJwtSignature(jwt: string): string {
+	const parts = jwt.split(".");
+	const header = parts[0];
+	const payload = parts[1];
+	const sig = parts[2];
+	if (parts.length !== 3 || !header || !payload || sig === undefined) {
+		throw new Error("jwt must have three parts");
+	}
+	const bytes = b64urlDecode(sig);
+	const original = bytes[0];
+	if (original === undefined) {
+		throw new Error("empty signature");
+	}
+	bytes[0] = original ^ 0xff;
+	return `${header}.${payload}.${b64url(bytes)}`;
+}
+
 export async function generateJwksPair(kid = L2_JWKS_KID): Promise<JwksState> {
 	const pair = (await crypto.subtle.generateKey(
 		{
