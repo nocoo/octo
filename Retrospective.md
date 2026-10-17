@@ -2,6 +2,18 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## M6: shared fixture spaces invalidate singleton assumptions
+
+Adding base and scoped spaces to the explicit M6 fixture invalidated the older
+admin `/me` test's assumption that Alpha was the entire database. That is a test
+isolation error, not an API visibility defect. The regression now runs the actual
+L2 test source in-process against real M1 authentication and SQLite, including
+unrelated spaces. Admin results must exactly match an independent database
+snapshot; scoped and own keys must return exactly their allowed space while
+excluding unrelated rows. When extending shared fixtures, exercise existing
+suite assumptions without replacing identity or visibility assertions with
+status-only checks.
+
 ## M6: prove the transaction, not only the replay
 
 The reviewed prototype executed business writes before saving replay data,
