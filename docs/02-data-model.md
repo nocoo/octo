@@ -186,6 +186,8 @@ Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.
 Each drain processes at most 50 jobs, with a 60-second lease and a one-hour
 anti-entropy interval. Failed work is moved behind untouched due work, so a
 persistently failing prefix cannot starve later updates or purge tombstones.
+Claiming a lease also advances its queue position before the external call;
+an abandoned or hung call therefore cannot reclaim the queue head forever.
 Completed rows and tombstones are intentionally retained; this is the durable
 recovery cost of a destination without conditional/fenced writes.
 
@@ -198,6 +200,8 @@ Purge atomically removes D1 data and records R2 cleanup work; failed external
 cleanup remains retryable without resurrecting the memory or deleting audit.
 R2 cleanup is bounded to 100 objects per drain and orders retries by last
 attempt, so repeatedly failing older objects do not starve newer purges.
+The attempt timestamp is persisted before calling R2, including calls whose
+process never reaches a catch handler.
 
 ## 4. 版本
 

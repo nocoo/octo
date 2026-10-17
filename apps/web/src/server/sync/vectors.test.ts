@@ -22,6 +22,26 @@ function fixture() {
 }
 
 describe("durable vector synchronization", () => {
+	it("advances abandoned claims so expired leases cannot starve untouched jobs", async () => {
+		const { env, store, sqlite } = fixture();
+		sqlite.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-healthy')");
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		store.upsert.mockImplementationOnce(async () => {
+			entered.resolve();
+			await release.promise;
+		});
+		const abandoned = synchronizeVectors(env, { store, now: 100, limit: 1 });
+		await entered.promise;
+		try {
+			await synchronizeVectors(env, { store, now: 101 + SYNC_LEASE_MS, limit: 1 });
+			expect(store.delete).toHaveBeenCalledWith(["z-healthy"]);
+		} finally {
+			release.resolve();
+			await abandoned;
+		}
+	});
+
 	it("moves failed tasks behind untouched work instead of starving purge", async () => {
 		const { env, sqlite } = fixture();
 		sqlite.exec("DELETE FROM vector_sync_jobs");

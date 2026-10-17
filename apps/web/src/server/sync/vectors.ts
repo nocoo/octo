@@ -68,10 +68,11 @@ export async function synchronizeVectors(
 		.all<{ memory_id: string }>();
 	for (const job of jobs.results) {
 		const token = crypto.randomUUID();
-		const claim = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?
+		const claim =
+			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?
 			WHERE memory_id = ? AND lease_until <= ? AND due_at <= ? RETURNING generation`)
-			.bind(token, now + SYNC_LEASE_MS, job.memory_id, now, now)
-			.first<{ generation: number }>();
+				.bind(token, now + SYNC_LEASE_MS, now, job.memory_id, now, now)
+				.first<{ generation: number }>();
 		if (!claim) continue;
 		try {
 			const source =

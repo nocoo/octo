@@ -94,17 +94,17 @@ export async function cleanupExternalFiles(env: Pick<Env, "DB" | "FILES">): Prom
 	).all<{ r2_key: string }>();
 	for (const job of results) {
 		try {
+			await env.DB.prepare(
+				"UPDATE external_file_cleanup_jobs SET last_attempt_at = ? WHERE r2_key = ?",
+			)
+				.bind(Date.now(), job.r2_key)
+				.run();
 			await env.FILES.delete(job.r2_key);
 			await env.DB.prepare("DELETE FROM external_file_cleanup_jobs WHERE r2_key = ?")
 				.bind(job.r2_key)
 				.run();
 		} catch {
 			console.error("purge file cleanup failed");
-			await env.DB.prepare(
-				"UPDATE external_file_cleanup_jobs SET last_attempt_at = ? WHERE r2_key = ?",
-			)
-				.bind(Date.now(), job.r2_key)
-				.run();
 		}
 	}
 }

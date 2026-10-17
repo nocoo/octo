@@ -370,6 +370,16 @@ failed jobs retain their creation time but advance their last-attempt ordering.
 
 ## M7 full-review contract corrections
 
+The controller initially missed one finding in truncated terminal output: a
+claim whose external call hangs and whose process terminates never reaches the
+failure handler. Advancing queue order only in catch still let expired leases
+repeatedly block untouched work. Vector claims now persist their scheduling
+position before the external call. R2 cleanup likewise records an attempt before
+deletion. Deterministic suspended-call tests cover both interruption paths, and
+the acknowledgment-failure injection now targets the SQL phase rather than a
+fragile preparation-call index. Read the complete review disposition before
+asserting that every finding has been handled.
+
 The independent full review found that key rotation compared only the secret
 hash while writing a revision calculated from an older row. With a fixed clock,
 intervening permission edits could be undone after that revision moved backward.

@@ -204,16 +204,41 @@ describe("transactional admin purge", () => {
 		).toBeUndefined();
 	});
 
+	it("orders interrupted attempts behind untouched file cleanup", async () => {
+		const { sqlite, files, env } = await fixture();
+		sqlite.exec(
+			"INSERT INTO external_file_cleanup_jobs (r2_key, created_at) VALUES ('a-stuck', 1), ('z-healthy', 1)",
+		);
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		files.delete.mockImplementationOnce(async () => {
+			entered.resolve();
+			await release.promise;
+		});
+		const abandoned = cleanupExternalFiles(env);
+		await entered.promise;
+		try {
+			await cleanupExternalFiles(env);
+			expect(files.delete.mock.calls.slice(0, 2)).toEqual([["a-stuck"], ["z-healthy"]]);
+		} finally {
+			release.resolve();
+			await abandoned;
+		}
+	});
+
 	it("retries an already deleted object when the D1 acknowledgment fails", async () => {
 		const { db, sqlite, memoryId, files, env } = await fixture();
 		await purgeMemory(db, memoryId, "admin:owner@local");
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
 		const prepare = db.prepare.bind(db);
-		vi.spyOn(db, "prepare")
-			.mockImplementationOnce(prepare)
-			.mockImplementationOnce(() => {
+		let failed = false;
+		vi.spyOn(db, "prepare").mockImplementation((sql) => {
+			if (!failed && sql.startsWith("DELETE FROM external_file_cleanup_jobs")) {
+				failed = true;
 				throw new Error("private acknowledgment failure");
-			});
+			}
+			return prepare(sql);
+		});
 		await cleanupExternalFiles(env);
 		expect(sqlite.prepare("SELECT r2_key FROM external_file_cleanup_jobs").all()).toEqual([
 			{ r2_key: "files/a1" },
