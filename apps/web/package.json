@@ -6,6 +6,7 @@
 		"build": "bun --cwd ../.. run build"
 	},
 	"dependencies": {
+		"diff": "^9.0.0",
 		"hono": "^4.13.12",
 		"zod": "^4.5.0-canary.20260825T041357"
 	}

@@ -5,6 +5,7 @@
     "": {
       "name": "octo",
       "dependencies": {
+        "diff": "^9.0.0",
         "hono": "^4.13.12",
         "zod": "^4.5.0-canary.20260825T041357",
       },
@@ -24,6 +25,7 @@
     "apps/web": {
       "name": "@octo/web",
       "dependencies": {
+        "diff": "^9.0.0",
         "hono": "^4.13.12",
         "zod": "^4.5.0-canary.20260825T041357",
       },
@@ -312,6 +314,8 @@
     "cookie": ["cookie@1.1.1", "", {}, "sha1-O7m9/II2nbnC9pyTycPOsxDIizw="],
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha1-aJxdzcGQDvVYOky59te0c3QgdK0="],
+
+    "diff": ["diff@9.0.0", "", {}, "sha1-KXwxzXwoDxPf4zV5HsIGO9SnOm8="],
 
     "error-stack-parser-es": ["error-stack-parser-es@1.0.5", "", {}, "sha1-5qFlXdEvObs6hb9McIgYfXh0Ayc="],
 
