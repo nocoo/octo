@@ -10,6 +10,18 @@ For future transport failures, compare the application runtime with development 
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Detached workers lacked Husky launchers
+
+M7 worker worktrees inherited `core.hooksPath=.husky/_` but not the ignored Husky
+launchers. Linking dependencies alone did not install them, so the audit worker's
+first commit did not execute pre-commit even though no bypass flag was used.
+The worker detected this, ran the exact-index gate, installed launchers with
+`bun run prepare`, and was instructed to recreate the commit through the actual
+hook. All other workers were told to verify executable launchers before committing.
+Worktree bootstrap must verify the resolved hook executable, not just hooksPath
+or tracked hook source. The controller also verifies the integrated index before
+signoff; a worker's claimed test pass cannot substitute for hook execution.
+
 ## 2026-10-17 — M7 contract draft assumed an envelope
 
 The initial M7 admin contract described a `{data}` success envelope before checking
