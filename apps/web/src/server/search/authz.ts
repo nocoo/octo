@@ -1,7 +1,37 @@
+import type { ApiPrincipal } from "../auth/authorize";
+import { authorize, visibleSpaceIds } from "../auth/authorize";
+import { ApiError } from "../lib/errors";
+
 export type AuthzContext = {
 	keyId: string;
 	visibleSpaceIds: string[] | "all";
 };
+
+export function searchAuthzFromPrincipal(principal: ApiPrincipal): AuthzContext {
+	const vis = visibleSpaceIds(principal);
+	return {
+		keyId: principal.id,
+		visibleSpaceIds: vis.kind === "all" ? "all" : [...vis.ids],
+	};
+}
+
+export function requireSearchRead(principal: ApiPrincipal): void {
+	const vis = visibleSpaceIds(principal);
+	if (vis.kind === "ids") {
+		const probe = vis.ids[0];
+		if (!probe) {
+			throw new ApiError("forbidden", "forbidden");
+		}
+		const result = authorize(principal, "read", { spaceId: probe });
+		if (!result.allow) {
+			throw new ApiError(result.reason === "forbidden" ? "forbidden" : "not_found", result.reason);
+		}
+		return;
+	}
+	if (!principal.ops.has("r")) {
+		throw new ApiError("forbidden", "forbidden");
+	}
+}
 
 export function canReadSpace(authz: AuthzContext, spaceId: string): boolean {
 	if (authz.visibleSpaceIds === "all") {

@@ -2,6 +2,63 @@ import { describe, expect, it } from "vitest";
 import { runFtsChannel } from "./fts-channel";
 
 describe("runFtsChannel", () => {
+	it("uses a LIKE scan for all-short Chinese queries such as 部署", async () => {
+		let sawLike = false;
+		let sawMatch = false;
+		const db = {
+			prepare: (sql: string) => ({
+				bind: () => ({
+					all: async () => {
+						if (sql.includes("LIKE")) {
+							sawLike = true;
+							return { results: [{ id: "m2" }] };
+						}
+						if (sql.includes("MATCH")) {
+							sawMatch = true;
+						}
+						return { results: [] };
+					},
+				}),
+			}),
+		} as never;
+		const result = await runFtsChannel(db, "部署", ["s1"], undefined, 5);
+		expect(sawLike).toBe(true);
+		expect(sawMatch).toBe(false);
+		expect(result.hits).toEqual([{ id: "m2", bm25: 1 }]);
+		expect(result.partial).toBe(false);
+	});
+
+	it("filters 部署 with instr on fts candidates when mixed with long terms", async () => {
+		const db = {
+			prepare: (sql: string) => ({
+				bind: () => ({
+					all: async () => {
+						if (sql.includes("MATCH")) {
+							return {
+								results: [
+									{ id: "m1", score: -1 },
+									{ id: "m2", score: -2 },
+								],
+							};
+						}
+						if (sql.includes("SELECT id, body")) {
+							return {
+								results: [
+									{ id: "m1", body: "正文包含部署与 cloudflare worker 配置" },
+									{ id: "m2", body: "cloudflare only" },
+								],
+							};
+						}
+						return { results: [] };
+					},
+				}),
+			}),
+		} as never;
+		const result = await runFtsChannel(db, "cloudflare 部署", ["s1"], undefined, 5);
+		expect(result.hits).toEqual([{ id: "m1", bm25: -1 }]);
+		expect(result.partial).toBe(false);
+	});
+
 	it("runs a short-query like scan", async () => {
 		const db = {
 			prepare: (sql: string) => ({
