@@ -3,6 +3,7 @@ import type { AppVars, Env } from "../env";
 import { ApiError } from "../lib/errors";
 import { parseIdempotencyKey } from "./idempotency-key";
 import { commitIdempotencyOutcome, readIdempotencyResponse } from "./idempotency-repo";
+import { authorizeMemoryRequest } from "./memory-authorization";
 import { requestHash } from "./request-hash";
 
 function replayResponse(outcome: { status: number; body: string }): Response {
@@ -25,6 +26,7 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 		}
 		const writes: D1PreparedStatement[] = [];
 		c.set("writeStatements", writes);
+		await authorizeMemoryRequest(c);
 		const key = parseIdempotencyKey(c.req.header("Idempotency-Key"));
 		if (key === null) {
 			await next();
@@ -45,7 +47,10 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 		const hash = await requestHash(c.req.method, c.req.path, await c.req.raw.clone().text());
 		try {
 			const existing = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
-			if (existing) return replayResponse(existing);
+			if (existing) {
+				await authorizeMemoryRequest(c, existing);
+				return replayResponse(existing);
+			}
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
 			throw new ApiError("unavailable", "idempotency store unavailable");
@@ -66,6 +71,7 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 			try {
 				const outcome = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
 				if (outcome) {
+					await authorizeMemoryRequest(c, outcome);
 					c.res = replayResponse(outcome);
 					return;
 				}

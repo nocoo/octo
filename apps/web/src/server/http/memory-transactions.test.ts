@@ -41,10 +41,57 @@ async function fixture() {
 			},
 			env,
 		);
-	return { db, sqlite, request };
+	return { db, sqlite, request, keyId: key.row.id };
 }
 
 describe("memory HTTP transaction boundary", () => {
+	it.each(["ops", "scope", "move"])(
+		"reauthorizes a saved PATCH after %s changes",
+		async (change) => {
+			const { db, request, keyId } = await fixture();
+			const { id } = (await (await request()).json()) as { id: string };
+			const patch = { body: "private body", expected_version: 1 };
+			expect((await request(`/memories/${id}`, "PATCH", patch, "saved")).status).toBe(200);
+			if (change === "ops")
+				await db.prepare("UPDATE api_keys SET ops = 'r' WHERE id = ?").bind(keyId).run();
+			if (change === "scope")
+				await db
+					.prepare("UPDATE api_keys SET scope = 'spaces', space_ids_json = '[]' WHERE id = ?")
+					.bind(keyId)
+					.run();
+			if (change === "move") {
+				await db
+					.prepare(
+						"UPDATE api_keys SET scope = 'spaces', space_ids_json = '[\"space:kb\"]' WHERE id = ?",
+					)
+					.bind(keyId)
+					.run();
+				await db
+					.prepare("UPDATE memories SET space_id = 'space:other', version = 3 WHERE id = ?")
+					.bind(id)
+					.run();
+			}
+			const replay = await request(`/memories/${id}`, "PATCH", patch, "saved");
+			expect(replay.status).toBe(change === "ops" ? 403 : 404);
+			expect(await replay.text()).not.toContain("private body");
+		},
+	);
+
+	it("does not replay a created memory that moved beyond current scope", async () => {
+		const { db, request, keyId } = await fixture();
+		const { id } = (await (await request()).json()) as { id: string };
+		await db
+			.prepare(
+				"UPDATE api_keys SET scope = 'spaces', space_ids_json = '[\"space:kb\"]' WHERE id = ?",
+			)
+			.bind(keyId)
+			.run();
+		await db
+			.prepare("UPDATE memories SET space_id = 'space:other', version = 2 WHERE id = ?")
+			.bind(id)
+			.run();
+		expect((await request()).status).toBe(404);
+	});
 	it("does not persist newly resolved tags on rejected memory input", async () => {
 		const { db, request } = await fixture();
 		const response = await request("/memories", "POST", {

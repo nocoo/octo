@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Saved memory responses bypassed current authorization
+
+The generic idempotency middleware returned saved memory bodies before M2 handlers could apply current M1 scope and operation checks. Red tests reproduced successful replay after permission withdrawal, scope removal and a move to a hidden space. Memory write authorization now runs before replay lookup and again before returning a saved outcome, including looking up a created response's current memory. It checks move/rollback destinations without reapplying the old OCC token and preserves authorized DELETE/restore replay. The first implementation changed the established auto-own-space name-collision error; focused API tests caught it and the read-only precheck now preserves that contract. Authentication is not sufficient authorization for a cached resource response. A later patch context mismatch also showed why chained patch-and-commit commands must stop on the patch exit status.
+
 ## 2026-10-17 — Tag resolution crossed memory transaction boundaries
 
 MAX review demonstrated orphan global tags after rejected memory input and resurrection of a merged tag when a title-only PATCH rebuilt stale associations. HTTP tag resolution now stages new rows into the same request batch; pending-name reuse tracks statement ownership so a failed batch item cannot retain nonexistent tags. Association insertion validates the resolved canonical ID and name at commit, rejecting concurrent rename/merge with `tag_conflict` and rolling back the memory mutation. Regressions verify invalid-input and replay-persistence rollback, pending-tag reuse/rollback, existing aliases, and a real merge interleaved before PATCH commit. Memory version CAS alone cannot protect related entities whose mutations deliberately do not increment that version.
