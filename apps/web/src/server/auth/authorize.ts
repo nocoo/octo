@@ -12,6 +12,13 @@ export type AuthzKey = {
 	ownEntriesOnly: boolean;
 };
 
+export type ApiPrincipal = AuthzKey & {
+	name: string;
+	role: string;
+	autoOwnSpace: boolean;
+	expiresAt: number | null;
+};
+
 export type AuthzTarget = {
 	spaceId?: string;
 	destSpaceId?: string;

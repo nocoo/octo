@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Env, WORKER_BINDINGS } from "./env";
+import { type Env, resourceEnv, WORKER_BINDINGS } from "./env";
 
 describe("Env", () => {
 	it("types optional secrets separately from bindings", () => {
@@ -10,5 +10,9 @@ describe("Env", () => {
 		};
 		expect(env.API_KEY_PEPPER).toBeUndefined();
 		expect(WORKER_BINDINGS).toEqual(["DB", "FILES", "ASSETS"]);
+		expect(resourceEnv("development")).toBe("development");
+		expect(resourceEnv("test")).toBe("test");
+		expect(resourceEnv("production")).toBe("production");
+		expect(resourceEnv(undefined)).toBe("production");
 	});
 });
