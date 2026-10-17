@@ -1,6 +1,7 @@
 import type { SearchRequest } from "../../lib/schema/search";
+import type { Env } from "../env";
 import { d1Results } from "../lib/d1";
-import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
+import { ApiError } from "../lib/errors";
 import { buildVectorMetadataFilter } from "../ports/vector/filter";
 import type { VectorStore } from "../ports/vector/types";
 import type { AuthzContext } from "./authz";
@@ -19,11 +20,14 @@ import {
 } from "./memory-read";
 import { channelScore } from "./scores";
 import { highlightSnippet } from "./snippet";
-import { resolveCanonicalTagIds } from "./tag-resolve";
+import { resolveCanonicalTagIds, resolveRequiredTagIds } from "./tag-resolve";
 import { tokenizeQuery } from "./tokenizer";
+import { createSearchVectorStore } from "./vector-store-factory";
+import { assertVectorValues, loadEmbeddingProfile } from "./vector-write";
 
 export type SearchDeps = {
 	db: D1Database;
+	env?: Env;
 	vectorStore?: VectorStore;
 };
 
@@ -48,7 +52,10 @@ export async function memoryPassesTagFilters(
 		.all<{ id: string; name: string }>();
 	const have = new Set(d1Results(rows).map((r) => r.id));
 	if (filters.tags_all?.length) {
-		const need = await resolveCanonicalTagIds(db, filters.tags_all);
+		const need = await resolveRequiredTagIds(db, filters.tags_all);
+		if (need === null) {
+			return false;
+		}
 		if (!need.every((id) => have.has(id))) {
 			return false;
 		}
@@ -87,6 +94,29 @@ export async function revalidateVectorHits(
 	return out;
 }
 
+function normalizeQueryVector(
+	db: D1Database,
+	vector: NonNullable<SearchRequest["vector"]>,
+): Promise<number[]> {
+	return loadEmbeddingProfile(db, vector.profile).then((profile) => {
+		if (!profile) {
+			throw new ApiError("validation_failed", "unknown embedding profile");
+		}
+		try {
+			return assertVectorValues(vector.values, profile.dims);
+		} catch (err) {
+			const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+			if (code === "vector_dimension_mismatch") {
+				throw new ApiError("vector_dimension_mismatch", "vector dimension mismatch");
+			}
+			throw new ApiError(
+				"validation_failed",
+				err instanceof Error ? err.message : "invalid vector",
+			);
+		}
+	});
+}
+
 export async function searchMemories(authz: AuthzContext, req: SearchRequest, deps: SearchDeps) {
 	const limit = req.limit ?? 20;
 	const candidateK = Math.min(100, limit * 5);
@@ -116,12 +146,19 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 	let vectorTruncated = false;
 	const profile = req.vector?.profile ?? "te3-small-1536";
 	if (mode !== "fts" && req.vector) {
+		const queryVector = await normalizeQueryVector(deps.db, req.vector);
 		const filter = buildVectorMetadataFilter(req.filters, spaceSlugs);
+		const sqlFilter = buildMemoryFilterSql(req.filters, spaceIds);
 		const store =
 			deps.vectorStore ??
-			new D1BruteForceVectorStore(deps.db, profile, buildMemoryFilterSql(req.filters, spaceIds));
+			createSearchVectorStore(
+				deps.env ?? { DB: deps.db, FILES: {} as R2Bucket, ASSETS: {} as Fetcher },
+				deps.db,
+				profile,
+				sqlFilter,
+			);
 		const raw = await store.query({
-			vector: req.vector.values,
+			vector: queryVector,
 			topK: candidateK,
 			filter,
 			returnMetadata: false,

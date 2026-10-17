@@ -13,7 +13,7 @@ describe("branch harvest", () => {
 	});
 
 	it("marks like scans partial at the limit", async () => {
-		const rows = Array.from({ length: FTS_SHORT_SCAN_LIMIT }, (_, i) => ({ id: `m${i}` }));
+		const rows = Array.from({ length: FTS_SHORT_SCAN_LIMIT + 1 }, (_, i) => ({ id: `m${i}` }));
 		const db = {
 			prepare: () => ({
 				bind: () => ({ all: async () => ({ results: rows }) }),

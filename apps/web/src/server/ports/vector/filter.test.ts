@@ -6,9 +6,10 @@ describe("buildVectorMetadataFilter", () => {
 		expect(buildVectorMetadataFilter(undefined, ["kb"])).toEqual({ space: { $in: ["kb"] } });
 	});
 
-	it("maps spaces and types", () => {
+	it("merges fields into one filter object", () => {
 		expect(buildVectorMetadataFilter({ types: ["note"] }, ["kb"])).toEqual({
-			$and: [{ space: { $in: ["kb"] } }, { type: { $in: ["note"] } }],
+			space: { $in: ["kb"] },
+			type: { $in: ["note"] },
 		});
 	});
 
@@ -18,7 +19,7 @@ describe("buildVectorMetadataFilter", () => {
 		expect(buildVectorMetadataFilter({ time: { field: "updated" } }, [])).toBeUndefined();
 	});
 
-	it("returns a single clause without $and when only one predicate applies", () => {
+	it("returns a single clause without space when only types apply", () => {
 		expect(buildVectorMetadataFilter({ types: ["note"] }, [])).toEqual({
 			type: { $in: ["note"] },
 		});
@@ -29,15 +30,26 @@ describe("buildVectorMetadataFilter", () => {
 			{ time: { field: "updated", from: "2026-01-01T00:00:00Z" } },
 			["kb"],
 		);
-		expect(result?.$and).toEqual(
-			expect.arrayContaining([
-				{ space: { $in: ["kb"] } },
-				{ updated: { $gte: Date.parse("2026-01-01T00:00:00Z") } },
-			]),
-		);
+		expect(result).toEqual({
+			space: { $in: ["kb"] },
+			updated: { $gte: Date.parse("2026-01-01T00:00:00Z") },
+		});
 	});
 
-	it("maps time and importance ranges", () => {
+	it("maps importance min only", () => {
+		expect(buildVectorMetadataFilter({ importance: { min: 0.1 } }, [])).toEqual({
+			importance: { $gte: 0.1 },
+		});
+	});
+
+	it("maps importance max only", () => {
+		expect(buildVectorMetadataFilter({ importance: { max: 0.5 } }, ["kb"])).toEqual({
+			space: { $in: ["kb"] },
+			importance: { $lte: 0.5 },
+		});
+	});
+
+	it("merges importance min and max on one field", () => {
 		const result = buildVectorMetadataFilter(
 			{
 				importance: { min: 0.2, max: 0.9 },
@@ -46,19 +58,14 @@ describe("buildVectorMetadataFilter", () => {
 			},
 			["kb"],
 		);
-		expect(result).toMatchObject({
-			$and: expect.arrayContaining([
-				{ space: { $in: ["kb"] } },
-				{ source: { $in: ["key1"] } },
-				{ importance: { $gte: 0.2 } },
-				{ importance: { $lte: 0.9 } },
-				{
-					created: {
-						$gte: Date.parse("2026-01-01T00:00:00Z"),
-						$lte: Date.parse("2026-02-01T00:00:00Z"),
-					},
-				},
-			]),
+		expect(result).toEqual({
+			space: { $in: ["kb"] },
+			source: { $in: ["key1"] },
+			importance: { $gte: 0.2, $lte: 0.9 },
+			created: {
+				$gte: Date.parse("2026-01-01T00:00:00Z"),
+				$lte: Date.parse("2026-02-01T00:00:00Z"),
+			},
 		});
 	});
 });

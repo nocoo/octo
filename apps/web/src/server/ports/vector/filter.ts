@@ -1,33 +1,34 @@
 import type { MemoryFilters } from "../../../lib/schema/filters";
 import { isoToMs } from "../../search/time";
 
+type FieldFilter = Record<string, unknown>;
+
 export function buildVectorMetadataFilter(
 	filters: MemoryFilters | undefined,
 	spaceSlugs: string[],
 ): VectorizeVectorMetadataFilter | undefined {
-	const parts: VectorizeVectorMetadataFilter[] = [];
+	const out: FieldFilter = {};
 	if (spaceSlugs.length > 0) {
-		parts.push({ space: { $in: spaceSlugs } });
+		out.space = { $in: spaceSlugs };
 	}
 	if (!filters) {
-		if (parts.length === 0) {
-			return undefined;
-		}
-		return parts.length === 1
-			? (parts[0] as VectorizeVectorMetadataFilter)
-			: ({ $and: parts } as VectorizeVectorMetadataFilter);
+		return Object.keys(out).length === 0 ? undefined : (out as VectorizeVectorMetadataFilter);
 	}
 	if (filters.types?.length) {
-		parts.push({ type: { $in: filters.types } });
+		out.type = { $in: filters.types };
 	}
 	if (filters.sources?.length) {
-		parts.push({ source: { $in: filters.sources } });
+		out.source = { $in: filters.sources };
 	}
-	if (filters.importance?.min !== undefined) {
-		parts.push({ importance: { $gte: filters.importance.min } });
-	}
-	if (filters.importance?.max !== undefined) {
-		parts.push({ importance: { $lte: filters.importance.max } });
+	if (filters.importance?.min !== undefined || filters.importance?.max !== undefined) {
+		const importance: Record<string, number> = {};
+		if (filters.importance.min !== undefined) {
+			importance.$gte = filters.importance.min;
+		}
+		if (filters.importance.max !== undefined) {
+			importance.$lte = filters.importance.max;
+		}
+		out.importance = importance;
 	}
 	if (filters.time) {
 		const key = filters.time.field;
@@ -39,13 +40,8 @@ export function buildVectorMetadataFilter(
 			range.$lte = isoToMs(filters.time.to);
 		}
 		if (Object.keys(range).length > 0) {
-			parts.push({ [key]: range });
+			out[key] = range;
 		}
 	}
-	if (parts.length === 0) {
-		return undefined;
-	}
-	return parts.length === 1
-		? (parts[0] as VectorizeVectorMetadataFilter)
-		: ({ $and: parts } as VectorizeVectorMetadataFilter);
+	return Object.keys(out).length === 0 ? undefined : (out as VectorizeVectorMetadataFilter);
 }

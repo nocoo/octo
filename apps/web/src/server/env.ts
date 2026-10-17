@@ -10,6 +10,7 @@ export type AppVars = {
 };
 
 export interface Env extends CloudflareBindings {
+	VEC?: Vectorize;
 	API_KEY_PEPPER?: string;
 	ATTACHMENT_URL_SECRET?: string;
 	OCTO_SETTINGS_KEY?: string;

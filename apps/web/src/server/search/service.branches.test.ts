@@ -20,7 +20,12 @@ function dbFrom(handler: (sql: string) => Promise<{ results: unknown[] }>) {
 			all: async () => handler(sql),
 			bind: () => ({
 				all: async () => handler(sql),
-				first: async () => (sql.includes("m.id = ?") ? { id: "m1" } : null),
+				first: async () => {
+					if (sql.includes("embedding_profiles")) {
+						return { id: "te3-small-1536", model: "m", dims: 2 };
+					}
+					return sql.includes("m.id = ?") ? { id: "m1" } : null;
+				},
 			}),
 		}),
 	} as never;
@@ -41,7 +46,7 @@ describe("searchMemories branches", () => {
 			{ keyId: "k", visibleSpaceIds: "all" },
 			{
 				query: "cloudflare",
-				vector: { profile: "te3-small-1536", values: [1] },
+				vector: { profile: "te3-small-1536", values: [1, 0] },
 				limit: 1,
 			},
 			{ db, vectorStore: { query: async () => [{ id: "m1", score: 0.7 }] } },
@@ -147,7 +152,7 @@ describe("searchMemories branches", () => {
 			{ keyId: "k", visibleSpaceIds: "all" },
 			{
 				query: "cloudflare",
-				vector: { profile: "te3-small-1536", values: [1, 0] },
+				vector: { profile: "te3-small-1536", values: [1, 0] as number[] },
 				fusion: { method: "rrf", k: 10, weights: { fts: 2, vector: 1 } },
 				limit: 1,
 			},

@@ -1,7 +1,8 @@
 import type { MemoryFilters } from "../../lib/schema/filters";
 import { d1Results } from "../lib/d1";
 import { buildMemoryFilterSql, tagsAllExistsSql, tagsAnyExistsSql } from "./filters-sql";
-import { resolveCanonicalTagIds } from "./tag-resolve";
+import { chunkIds } from "./sql-in";
+import { resolveCanonicalTagIds, resolveRequiredTagIds } from "./tag-resolve";
 import { buildFtsMatchQuery, FTS_SHORT_SCAN_LIMIT, tokenizeQuery } from "./tokenizer";
 
 export type FtsHit = {
@@ -28,13 +29,14 @@ export async function runFtsChannel(
 	const tagClauses: string[] = [];
 	const tagBinds: string[] = [];
 	if (filters?.tags_all?.length) {
-		const resolved = await resolveCanonicalTagIds(db, filters.tags_all);
+		const resolved = await resolveRequiredTagIds(db, filters.tags_all);
+		if (resolved === null) {
+			return { hits: [], partial: false };
+		}
 		if (resolved.length > 0) {
 			const t = tagsAllExistsSql(resolved);
 			tagClauses.push(t.sql);
 			tagBinds.push(...t.binds);
-		} else {
-			return { hits: [], partial: false };
 		}
 	}
 	if (filters?.tags_any?.length) {
@@ -75,30 +77,47 @@ LIMIT ?
 
 	let hits = d1Results(rows).map((r) => ({ id: r.id, bm25: r.score }));
 	if (tokenized.shortTerms.length > 0) {
-		hits = await filterShortTerms(db, hits, tokenized.shortTerms);
+		hits = await filterShortTermsOnCandidates(
+			db,
+			hits,
+			tokenized.shortTerms,
+			base,
+			tagClauses,
+			tagBinds,
+		);
 	}
 	return { hits, partial: false };
 }
 
-async function filterShortTerms(
+async function filterShortTermsOnCandidates(
 	db: D1Database,
 	hits: FtsHit[],
 	shortTerms: string[],
+	base: ReturnType<typeof buildMemoryFilterSql>,
+	tagClauses: string[],
+	tagBinds: string[],
 ): Promise<FtsHit[]> {
 	if (hits.length === 0) {
 		return hits;
 	}
-	const ids = hits.map((h) => h.id);
-	const placeholders = ids.map(() => "?").join(", ");
-	const rows = await db
-		.prepare(`SELECT id, body FROM memories WHERE id IN (${placeholders})`)
-		.bind(...ids)
-		.all<{ id: string; body: string }>();
-	const bodyById = new Map(d1Results(rows).map((r) => [r.id, r.body]));
-	return hits.filter((hit) => {
-		const body = bodyById.get(hit.id) ?? "";
-		return shortTerms.every((term) => body.includes(term));
-	});
+	const instrParts = shortTerms.map(() => "(instr(m.body, ?) > 0 OR instr(m.title, ?) > 0)");
+	const instrBinds = shortTerms.flatMap((term) => [term, term]);
+	const allowed = new Set<string>();
+	for (const idChunk of chunkIds(hits.map((h) => h.id))) {
+		const idIn = idChunk.map(() => "?").join(", ");
+		const where = [...base.clauses, ...tagClauses, `m.id IN (${idIn})`, ...instrParts].join(
+			" AND ",
+		);
+		const sql = `SELECT m.id AS id FROM memories m WHERE ${where}`;
+		const rows = await db
+			.prepare(sql)
+			.bind(...base.binds, ...tagBinds, ...idChunk, ...instrBinds)
+			.all<{ id: string }>();
+		for (const row of d1Results(rows)) {
+			allowed.add(row.id);
+		}
+	}
+	return hits.filter((hit) => allowed.has(hit.id));
 }
 
 async function runShortLikeScan(
@@ -119,12 +138,15 @@ WHERE ${where}
 ORDER BY m.updated_at DESC
 LIMIT ?
 `;
-	const limit = Math.min(candidateK, FTS_SHORT_SCAN_LIMIT);
+	const probeLimit = FTS_SHORT_SCAN_LIMIT + 1;
 	const rows = await db
 		.prepare(sql)
-		.bind(...base.binds, ...tagBinds, ...likeBinds, limit)
+		.bind(...base.binds, ...tagBinds, ...likeBinds, probeLimit)
 		.all<{ id: string }>();
 	const resultRows = d1Results(rows);
-	const hits = resultRows.map((r, idx) => ({ id: r.id, bm25: idx + 1 }));
-	return { hits, partial: resultRows.length === FTS_SHORT_SCAN_LIMIT };
+	const partial = resultRows.length > FTS_SHORT_SCAN_LIMIT;
+	const scanned = resultRows.slice(0, FTS_SHORT_SCAN_LIMIT);
+	const capped = scanned.slice(0, candidateK);
+	const hits = capped.map((r, idx) => ({ id: r.id, bm25: idx + 1 }));
+	return { hits, partial };
 }

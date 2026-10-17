@@ -130,6 +130,29 @@ describe("v1 search routes", () => {
 		expect(res.status).toBe(200);
 	});
 
+	it("returns 400 for malformed json bodies", async () => {
+		const { db } = keyDb();
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "bot",
+			role: "admin",
+			ops: "r",
+			scope: "all",
+		});
+		const res = await createApp().request(
+			"/api/v1/search",
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${plaintext}`,
+					"Content-Type": "application/json",
+				},
+				body: "{",
+			},
+			envFor(db),
+		);
+		expect(res.status).toBe(400);
+	});
+
 	it("returns validation errors for malformed search bodies", async () => {
 		const { db } = keyDb();
 		const { plaintext } = await mintApiKey(db, "pepper", {

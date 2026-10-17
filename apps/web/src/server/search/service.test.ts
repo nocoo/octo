@@ -84,7 +84,12 @@ describe("searchMemories", () => {
 				all: async () => query(sql),
 				bind: () => ({
 					all: async () => query(sql),
-					first: async () => (sql.includes("m.id = ?") ? { id: "m1" } : null),
+					first: async () => {
+						if (sql.includes("embedding_profiles")) {
+							return { id: "te3-small-1536", model: "m", dims: 2 };
+						}
+						return sql.includes("m.id = ?") ? { id: "m1" } : null;
+					},
 				}),
 			}),
 		} as never;
@@ -134,7 +139,12 @@ describe("searchMemories", () => {
 				all: async () => query(sql),
 				bind: () => ({
 					all: async () => query(sql),
-					first: async () => (sql.includes("m.id = ?") ? { id: "m1" } : null),
+					first: async () => {
+						if (sql.includes("embedding_profiles")) {
+							return { id: "te3-small-1536", model: "m", dims: 1 };
+						}
+						return sql.includes("m.id = ?") ? { id: "m1" } : null;
+					},
 				}),
 			}),
 		} as never;
@@ -179,7 +189,12 @@ describe("searchMemories", () => {
 				all: async () => query(sql),
 				bind: () => ({
 					all: async () => query(sql),
-					first: async () => (sql.includes("m.id = ?") ? { id: "m1" } : null),
+					first: async () => {
+						if (sql.includes("embedding_profiles")) {
+							return { id: "te3-small-1536", model: "m", dims: 2 };
+						}
+						return sql.includes("m.id = ?") ? { id: "m1" } : null;
+					},
 				}),
 			}),
 		} as never;

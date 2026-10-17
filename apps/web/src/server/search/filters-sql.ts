@@ -1,4 +1,5 @@
 import type { MemoryFilters } from "../../lib/schema/filters";
+import { sqlInClause } from "./sql-in";
 import { isoToMs } from "./time";
 
 export type SqlFilter = {
@@ -25,8 +26,9 @@ export function buildMemoryFilterSql(
 	if (spaceIds.length === 0) {
 		clauses.push("1 = 0");
 	} else {
-		clauses.push(`m.space_id IN (${spaceIds.map(() => "?").join(", ")})`);
-		binds.push(...spaceIds);
+		const spaceIn = sqlInClause("m.space_id", spaceIds);
+		clauses.push(spaceIn.sql);
+		binds.push(...spaceIn.binds);
 	}
 	if (!filters) {
 		return { clauses, binds };
@@ -36,8 +38,9 @@ export function buildMemoryFilterSql(
 		binds.push(...filters.types);
 	}
 	if (filters.sources?.length) {
-		clauses.push(`m.source_key_id IN (${filters.sources.map(() => "?").join(", ")})`);
-		binds.push(...filters.sources);
+		const sourcesIn = sqlInClause("m.source_key_id", filters.sources);
+		clauses.push(sourcesIn.sql);
+		binds.push(...sourcesIn.binds);
 	}
 	if (filters.importance?.min !== undefined) {
 		clauses.push("m.importance >= ?");

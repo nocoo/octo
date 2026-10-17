@@ -28,6 +28,58 @@ describe("runFtsChannel", () => {
 		expect(result.partial).toBe(false);
 	});
 
+	it("re-applies space visibility when filtering short terms on fts candidates", async () => {
+		const db = {
+			prepare: (sql: string) => ({
+				bind: () => ({
+					all: async () => {
+						if (sql.includes("MATCH")) {
+							return { results: [{ id: "m1", score: -1 }] };
+						}
+						if (sql.includes("instr")) {
+							return { results: [] };
+						}
+						return { results: [] };
+					},
+				}),
+			}),
+		} as never;
+		const result = await runFtsChannel(db, "cloudflare 部署", ["s1"], undefined, 5);
+		expect(result.hits).toEqual([]);
+	});
+
+	it("marks partial when the short scan exceeds the row cap", async () => {
+		const rows = Array.from({ length: 501 }, (_, i) => ({ id: `m${i}` }));
+		const db = {
+			prepare: (sql: string) => ({
+				bind: () => ({
+					all: async () => {
+						if (sql.includes("LIKE")) {
+							return { results: rows };
+						}
+						return { results: [] };
+					},
+				}),
+			}),
+		} as never;
+		const result = await runFtsChannel(db, "部署", ["s1"], undefined, 100);
+		expect(result.partial).toBe(true);
+		expect(result.hits.length).toBe(100);
+	});
+
+	it("returns empty for unknown tags_all names", async () => {
+		const db = {
+			prepare: () => ({
+				bind: () => ({
+					all: async () => ({ results: [] }),
+					first: async () => null,
+				}),
+			}),
+		} as never;
+		const result = await runFtsChannel(db, "cloudflare", ["s1"], { tags_all: ["ghost"] }, 5);
+		expect(result.hits).toEqual([]);
+	});
+
 	it("filters 部署 with instr on fts candidates when mixed with long terms", async () => {
 		const db = {
 			prepare: (sql: string) => ({
@@ -41,13 +93,8 @@ describe("runFtsChannel", () => {
 								],
 							};
 						}
-						if (sql.includes("SELECT id, body")) {
-							return {
-								results: [
-									{ id: "m1", body: "正文包含部署与 cloudflare worker 配置" },
-									{ id: "m2", body: "cloudflare only" },
-								],
-							};
+						if (sql.includes("instr")) {
+							return { results: [{ id: "m1" }] };
 						}
 						return { results: [] };
 					},

@@ -37,6 +37,40 @@ describe("authz helpers", () => {
 		).toEqual({ keyId: "k1", visibleSpaceIds: "all" });
 	});
 
+	it("forbids scope-all keys without read op", () => {
+		expect(() =>
+			requireSearchRead({
+				id: "k1",
+				name: "n",
+				role: "admin",
+				ops: parseOps("w"),
+				scope: "all",
+				spaceIds: [],
+				ownedSpaceIds: [],
+				ownEntriesOnly: false,
+				autoOwnSpace: false,
+				expiresAt: null,
+			}),
+		).toThrow(ApiError);
+	});
+
+	it("allows scoped keys with read but no visible spaces", () => {
+		expect(() =>
+			requireSearchRead({
+				id: "k1",
+				name: "n",
+				role: "drop",
+				ops: parseOps("r"),
+				scope: "spaces",
+				spaceIds: [],
+				ownedSpaceIds: [],
+				ownEntriesOnly: false,
+				autoOwnSpace: false,
+				expiresAt: null,
+			}),
+		).not.toThrow();
+	});
+
 	it("requires read access via authorize for scoped keys", () => {
 		const principal = {
 			id: "k1",

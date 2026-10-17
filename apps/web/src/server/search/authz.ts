@@ -18,9 +18,12 @@ export function searchAuthzFromPrincipal(principal: ApiPrincipal): AuthzContext 
 export function requireSearchRead(principal: ApiPrincipal): void {
 	const vis = visibleSpaceIds(principal);
 	if (vis.kind === "ids") {
+		if (vis.ids.length === 0) {
+			return;
+		}
 		const probe = vis.ids[0];
 		if (!probe) {
-			throw new ApiError("forbidden", "forbidden");
+			return;
 		}
 		const result = authorize(principal, "read", { spaceId: probe });
 		if (!result.allow) {

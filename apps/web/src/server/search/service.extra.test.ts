@@ -23,6 +23,9 @@ function makeDb(handler: (sql: string) => Promise<{ results: unknown[] }>) {
 			bind: (...binds: unknown[]) => ({
 				all: async () => handler(sql),
 				first: async () => {
+					if (sql.includes("embedding_profiles")) {
+						return { id: "te3-small-1536", model: "m", dims: 1 };
+					}
 					if (sql.includes("m.id = ?") && binds[binds.length - 1] === "ghost") {
 						return null;
 					}
