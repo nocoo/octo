@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — M5 rebase omitted compensation diagnostics
+
+Rebasing M5 onto `41d469f` required combining main's memory authorization, OCC hashes and safe error mapper with attachment hashing and R2 compensation. Reusing the shared mapper preserved recovery but initially dropped M5's request-ID-only cleanup failure log. The existing attachment transaction suite exposed three failures; restoring the diagnostic in the shared catch retained the original assertions without duplicating the mapper. Compensation still runs before saved-outcome recovery so a concurrent losing upload can remove its uncommitted blob; replay authorization still rechecks main's current memory and batch permissions. The fixture Worker now uses main's production memory routes rather than restoring the removed fake service. Zheng separately accepted the three documented local-proxy oversize scenario removals; that decision does not waive integration regressions or claim the SDK defect is fixed.
+
 ## 2026-10-17 — Final instruction checks must include delegated tests
 
 The final instruction pass found newly added one-letter fixture, counter and context identifiers after functional approval and the first branch push. They were renamed without changing assertions or behavior, and the new revision was sent through hooks and independent signoff again. Review all additions for repository instructions as well as behavior before declaring the branch final.

@@ -23,6 +23,7 @@ async function writeFailure(
 	try {
 		return (await context.get("writeError")?.(error)) ?? unavailable;
 	} catch {
+		console.error("write compensation failed", { request_id: context.get("requestId") });
 		return unavailable;
 	}
 }
