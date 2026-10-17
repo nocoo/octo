@@ -124,6 +124,31 @@ describe("usage health model", () => {
 });
 
 describe("audit query, virtualization and CSV", () => {
+	it("certifies successful current-filter reads and preserves cached rows/cursor on refresh failure", async () => {
+		const request = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("private"))
+			.mockResolvedValueOnce({ items: [row], next_cursor: "older" })
+			.mockRejectedValueOnce(new Error("private"))
+			.mockRejectedValueOnce(new Error("private"))
+			.mockResolvedValueOnce({ items: [], next_cursor: null });
+		const model = new AuditModel({ request });
+		expect(model.state).toMatchObject({ loaded: false });
+		await model.load();
+		expect(model.state).toMatchObject({ loaded: false, error: "Unable to load audit log." });
+		await model.load();
+		await model.load();
+		expect(model.state).toMatchObject({
+			loaded: true,
+			items: [row],
+			nextCursor: "older",
+			error: "Unable to load audit log.",
+		});
+		await model.load("status=500");
+		expect(model.state).toMatchObject({ loaded: false, items: [], nextCursor: null });
+		await model.load("status=500");
+		expect(model.state).toMatchObject({ loaded: true, items: [], error: null });
+	});
 	it("ignores stale initial loads, rejected pages, and cancelled exports", async () => {
 		for (const action of ["load", "loadMore", "exportCsv"] as const) {
 			for (const fail of [false, true]) {

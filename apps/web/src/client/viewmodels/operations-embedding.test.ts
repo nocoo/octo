@@ -244,6 +244,21 @@ describe("embedding settings", () => {
 });
 
 describe("embedding profiles settings", () => {
+	it("does not certify an unknown profiles list, including after a failed initial read", async () => {
+		const request = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("private"))
+			.mockResolvedValueOnce({ items: [] });
+		const model = new SettingsModel({ request });
+		expect(model.state).toMatchObject({ loaded: false });
+		await model.load();
+		expect(model.state).toMatchObject({
+			loaded: false,
+			error: "Unable to load embedding profiles.",
+		});
+		await model.load();
+		expect(model.state).toMatchObject({ loaded: true, profiles: [], error: null });
+	});
 	it("ignores stale profile reads and failures after disposal", async () => {
 		for (const fail of [false, true]) {
 			let resolve: (value: unknown) => void = () => {};

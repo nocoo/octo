@@ -18,6 +18,27 @@ const key = {
 };
 
 describe("key permissions and lifecycle", () => {
+	it("only certifies a successfully read list and preserves cached rows on refresh failure", async () => {
+		const request = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("private"))
+			.mockResolvedValueOnce({ items: [key] })
+			.mockRejectedValueOnce(new Error("private"))
+			.mockResolvedValueOnce({ items: [] });
+		const model = new KeysModel({ request });
+		expect(model.state).toMatchObject({ loaded: false });
+		await model.load();
+		expect(model.state).toMatchObject({ loaded: false, error: "Unable to load API keys." });
+		await model.load();
+		await model.load();
+		expect(model.state).toMatchObject({
+			loaded: true,
+			items: [key],
+			error: "Unable to load API keys.",
+		});
+		await model.load();
+		expect(model.state).toMatchObject({ loaded: true, items: [], error: null });
+	});
 	it("updates template/custom permissions, rejects empty grants, and accepts 204 writes", async () => {
 		const request = vi.fn().mockResolvedValue(undefined);
 		const model = new KeysModel({ request });

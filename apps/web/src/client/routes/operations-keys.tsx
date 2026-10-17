@@ -2,6 +2,9 @@ import {
 	Badge,
 	Button,
 	Checkbox,
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
 	ConfirmDialog,
 	Dialog,
 	DialogContent,
@@ -283,6 +286,7 @@ export function KeysPage() {
 		{
 			id: "name",
 			header: "Agent",
+			sortValue: (key) => key.name,
 			accessor: (key) => (
 				<span>
 					<strong>{key.name}</strong>
@@ -294,6 +298,7 @@ export function KeysPage() {
 		{
 			id: "role",
 			header: "Role / scope",
+			sortValue: (key) => key.role,
 			accessor: (key) => (
 				<span>
 					{key.role}
@@ -307,14 +312,25 @@ export function KeysPage() {
 		{
 			id: "status",
 			header: "Status",
+			sortValue: (key) => keyStatus(key),
 			accessor: (key) => (
 				<Badge variant={keyStatus(key) === "active" ? "success" : "secondary"}>
 					{keyStatus(key)}
 				</Badge>
 			),
 		},
-		{ id: "expiry", header: "Expiry", accessor: (key) => time(key.expires_at) },
-		{ id: "last", header: "Last used", accessor: (key) => time(key.last_used_at) },
+		{
+			id: "expiry",
+			header: "Expiry",
+			sortValue: (key) => key.expires_at ?? Number.POSITIVE_INFINITY,
+			accessor: (key) => time(key.expires_at),
+		},
+		{
+			id: "last",
+			header: "Last used",
+			sortValue: (key) => key.last_used_at ?? Number.POSITIVE_INFINITY,
+			accessor: (key) => time(key.last_used_at),
+		},
 		{
 			id: "usage",
 			header: "Recent calls",
@@ -332,27 +348,29 @@ export function KeysPage() {
 								</span>
 							}
 							dataAlternative={
-								<details>
-									<summary>Values</summary>
-									<Table aria-label={`Recent calls data for ${key.name}`}>
-										<TableHeader>
-											<TableRow>
-												<TableHead>Period</TableHead>
-												<TableHead textAlign="end">Calls</TableHead>
-											</TableRow>
-										</TableHeader>
-										<TableBody>
-											{key.usage
-												.map((calls, index) => ({ calls, period: index + 1 }))
-												.map(({ calls, period }) => (
-													<TableRow key={period}>
-														<TableCell>{period}</TableCell>
-														<TableCell textAlign="end">{calls}</TableCell>
-													</TableRow>
-												))}
-										</TableBody>
-									</Table>
-								</details>
+								<Collapsible>
+									<CollapsibleTrigger>Values</CollapsibleTrigger>
+									<CollapsibleContent unstyled>
+										<Table aria-label={`Recent calls data for ${key.name}`}>
+											<TableHeader>
+												<TableRow>
+													<TableHead>Period</TableHead>
+													<TableHead textAlign="end">Calls</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{key.usage
+													.map((calls, index) => ({ calls, period: index + 1 }))
+													.map(({ calls, period }) => (
+														<TableRow key={period}>
+															<TableCell>{period}</TableCell>
+															<TableCell textAlign="end">{calls}</TableCell>
+														</TableRow>
+													))}
+											</TableBody>
+										</Table>
+									</CollapsibleContent>
+								</Collapsible>
 							}
 						/>
 					</div>
@@ -436,7 +454,13 @@ export function KeysPage() {
 					getRowId={(key) => key.id}
 					edge="attached"
 					loading={state.loading && state.items.length === 0}
-					empty="No API keys. Create an agent key to get started."
+					error={state.items.length === 0 ? state.error : null}
+					onRetry={() => void model.load()}
+					empty={
+						state.loaded
+							? "No API keys. Create an agent key to get started."
+							: "API key list is unknown. Refresh to load keys."
+					}
 				/>
 			</LayerCard>
 			<Dialog

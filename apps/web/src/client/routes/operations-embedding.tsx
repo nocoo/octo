@@ -304,7 +304,13 @@ export function SettingsPage() {
 					getRowId={(profile) => profile.id}
 					edge="attached"
 					loading={state.loading && state.profiles.length === 0}
-					empty="No embedding profiles configured."
+					error={state.profiles.length === 0 ? state.error : null}
+					onRetry={() => void model.load()}
+					empty={
+						state.loaded
+							? "No embedding profiles configured."
+							: "Embedding profiles are unknown. Refresh to load profiles."
+					}
 				/>
 			</LayerCard>
 		</div>

@@ -28,6 +28,7 @@ export interface KeyDraft {
 interface KeysState {
 	items: KeyMetadata[];
 	loading: boolean;
+	loaded: boolean;
 	pending: boolean;
 	error: string | null;
 }
@@ -95,7 +96,7 @@ export class KeysModel extends Store<KeysState> {
 	private revision = 0;
 	private alive = true;
 	constructor(private readonly api: AdminClient = adminApi) {
-		super({ items: [], loading: false, pending: false, error: null });
+		super({ items: [], loading: false, loaded: false, pending: false, error: null });
 	}
 
 	async load(): Promise<void> {
@@ -104,7 +105,7 @@ export class KeysModel extends Store<KeysState> {
 		try {
 			const result = await this.api.request<{ items: KeyMetadata[] }>("/keys");
 			if (this.alive && revision === this.revision)
-				this.set({ items: result.items.map(metadata), loading: false });
+				this.set({ items: result.items.map(metadata), loading: false, loaded: true });
 		} catch {
 			if (this.alive && revision === this.revision)
 				this.set({ loading: false, error: "Unable to load API keys." });

@@ -201,6 +201,7 @@ export class AuditModel extends Store<{
 	filters: AuditFilters;
 	nextCursor: string | null;
 	loading: boolean;
+	loaded: boolean;
 	loadingMore: boolean;
 	exporting: boolean;
 	error: string | null;
@@ -212,6 +213,7 @@ export class AuditModel extends Store<{
 			filters: parseAuditFilters(),
 			nextCursor: null,
 			loading: false,
+			loaded: false,
 			loadingMore: false,
 			exporting: false,
 			error: null,
@@ -225,6 +227,7 @@ export class AuditModel extends Store<{
 				filters,
 				items: [],
 				nextCursor: null,
+				loaded: false,
 				loadingMore: false,
 				error: "Start time must not follow end time.",
 				loading: false,
@@ -235,7 +238,8 @@ export class AuditModel extends Store<{
 		this.set({
 			filters,
 			items: changed ? [] : this.state.items,
-			nextCursor: null,
+			nextCursor: changed ? null : this.state.nextCursor,
+			loaded: changed ? false : this.state.loaded,
 			loading: true,
 			loadingMore: false,
 			error: null,
@@ -243,7 +247,12 @@ export class AuditModel extends Store<{
 		try {
 			const result = await this.api.request<AuditResponse>(auditPath(filters, null));
 			if (revision === this.revision)
-				this.set({ items: result.items, nextCursor: result.next_cursor, loading: false });
+				this.set({
+					items: result.items,
+					nextCursor: result.next_cursor,
+					loading: false,
+					loaded: true,
+				});
 		} catch {
 			if (revision === this.revision)
 				this.set({ error: "Unable to load audit log.", loading: false });

@@ -37,35 +37,45 @@ export function UsagePage() {
 	}, [model, search]);
 	useEffect(() => () => model.dispose(), [model]);
 	const columns: DataTableColumn<UsageDaily & { error_rate: number }>[] = [
-		{ id: "day", header: "Day", accessor: (row) => row.day },
+		{
+			id: "day",
+			header: "Day",
+			sortValue: (row) => Date.parse(row.day),
+			accessor: (row) => row.day,
+		},
 		{ id: "key", header: "Key", accessor: (row) => row.key_id },
 		{
 			id: "calls",
 			header: "Calls",
+			sortValue: (row) => row.calls,
 			textAlign: "end",
 			accessor: (row) => row.calls.toLocaleString(),
 		},
 		{
 			id: "errors",
 			header: "Errors",
+			sortValue: (row) => row.errors,
 			textAlign: "end",
 			accessor: (row) => row.errors.toLocaleString(),
 		},
 		{
 			id: "rate",
 			header: "Error rate",
+			sortValue: (row) => row.error_rate,
 			textAlign: "end",
 			accessor: (row) => `${row.error_rate.toFixed(2)}%`,
 		},
 		{
 			id: "p50",
 			header: "P50",
+			sortValue: (row) => row.p50_ms ?? Number.POSITIVE_INFINITY,
 			textAlign: "end",
 			accessor: (row) => (row.p50_ms === null ? "Unavailable" : `${row.p50_ms} ms`),
 		},
 		{
 			id: "p95",
 			header: "P95",
+			sortValue: (row) => row.p95_ms ?? Number.POSITIVE_INFINITY,
 			textAlign: "end",
 			accessor: (row) => (row.p95_ms === null ? "Unavailable" : `${row.p95_ms} ms`),
 		},
@@ -216,7 +226,9 @@ export function UsagePage() {
 					</LayerCard>
 				</div>
 			) : (
-				!state.loading && (
+				state.loaded &&
+				!state.loading &&
+				!state.error && (
 					<LayerCard>
 						<LayerCard.Empty
 							title="No usage in this range"
@@ -235,7 +247,13 @@ export function UsagePage() {
 						getRowId={(row) => `${row.key_id}/${row.day}`}
 						edge="attached"
 						loading={state.loading && state.daily.length === 0}
-						empty="No daily usage records."
+						error={state.daily.length === 0 ? state.error : null}
+						onRetry={() => void model.load(search)}
+						empty={
+							state.loaded
+								? "No daily usage records."
+								: "Daily usage is unknown. Refresh to load usage."
+						}
 					/>
 				</LayerCard>
 			</div>
@@ -374,7 +392,9 @@ export function AuditPage() {
 			{state.loading && <p role="status">Refreshing audit log...</p>}
 			<LayerCard>
 				<LayerCard.Header>
-					{state.items.length.toLocaleString()} loaded records{" "}
+					{state.loaded
+						? `${state.items.length.toLocaleString()} loaded records`
+						: "Audit records not loaded"}{" "}
 					<span className="ops-muted">/ virtualized rows</span>
 				</LayerCard.Header>
 				<section
@@ -451,7 +471,11 @@ export function AuditPage() {
 							{state.items.length === 0 && !state.loading && (
 								<TableRow>
 									<TableCell colSpan={7} className="ps-basalt-table-edge pe-basalt-table-edge">
-										No audit records match these filters.
+										{state.error
+											? "Audit records are unavailable. Retry the query."
+											: state.loaded
+												? "No audit records match these filters."
+												: "Audit records are unknown. Refresh to load records."}
 									</TableCell>
 								</TableRow>
 							)}
@@ -468,7 +492,11 @@ export function AuditPage() {
 						Load more
 					</Button>
 					<span className="ops-muted">
-						{state.nextCursor ? "More records available" : "End of loaded query"}
+						{state.nextCursor
+							? "More records available"
+							: state.loaded && !state.loading && !state.error
+								? "End of loaded query"
+								: "Query completion is unknown"}
 					</span>
 				</LayerCard.Footer>
 			</LayerCard>

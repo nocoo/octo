@@ -1,9 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import type { EmbeddingModel } from "../viewmodels/operations-embedding";
-import { EmbeddingPage } from "./operations-embedding";
+import type { EmbeddingModel, SettingsModel } from "../viewmodels/operations-embedding";
+import { EmbeddingPage, SettingsPage } from "./operations-embedding";
 
-const fixture = vi.hoisted(() => ({ state: {} as Partial<EmbeddingModel["state"]> }));
+const fixture = vi.hoisted(() => ({
+	state: {} as Partial<EmbeddingModel["state"]>,
+	settings: {} as Partial<SettingsModel["state"]> & { loaded?: boolean },
+}));
 vi.mock("../viewmodels/operations-embedding", async (original) => {
 	const module = await original<typeof import("../viewmodels/operations-embedding")>();
 	return {
@@ -14,7 +18,46 @@ vi.mock("../viewmodels/operations-embedding", async (original) => {
 				this.state = { ...this.state, ...fixture.state };
 			}
 		},
+		SettingsModel: class extends module.SettingsModel {
+			constructor() {
+				super();
+				this.state = { ...this.state, ...fixture.settings };
+			}
+		},
 	};
+});
+
+describe("profile read states", () => {
+	function render() {
+		return renderToStaticMarkup(
+			<MemoryRouter>
+				<SettingsPage />
+			</MemoryRouter>,
+		);
+	}
+	it.each([null, "Unable to load embedding profiles."])(
+		"does not assert an empty unknown profiles list: %s",
+		(error) => {
+			fixture.settings = { loaded: false, error };
+			const html = render();
+			expect(html).not.toContain("No embedding profiles configured.");
+			if (error) expect(html).toContain(error);
+		},
+	);
+	it("distinguishes successful emptiness and preserves profiles after a refresh failure", () => {
+		fixture.settings = { loaded: true };
+		expect(render()).toContain("No embedding profiles configured.");
+		fixture.settings = {
+			loaded: true,
+			error: "Unable to load embedding profiles.",
+			profiles: [
+				{ id: "cached-profile", model: "active-model", dims: 512, metric: "cosine", active: true },
+			],
+		};
+		const html = render();
+		expect(html).toContain("cached-profile");
+		expect(html).toContain("Unable to load embedding profiles.");
+	});
 });
 
 describe("embedding configuration visibility", () => {

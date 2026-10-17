@@ -173,18 +173,20 @@ export interface EmbeddingProfile {
 export class SettingsModel extends Store<{
 	profiles: EmbeddingProfile[];
 	loading: boolean;
+	loaded: boolean;
 	error: string | null;
 }> {
 	private revision = 0;
 	constructor(private readonly api: AdminClient = adminApi) {
-		super({ profiles: [], loading: false, error: null });
+		super({ profiles: [], loading: false, loaded: false, error: null });
 	}
 	async load(): Promise<void> {
 		const revision = ++this.revision;
 		this.set({ loading: true, error: null });
 		try {
 			const result = await this.api.request<{ items: EmbeddingProfile[] }>("/embedding-profiles");
-			if (revision === this.revision) this.set({ profiles: result.items, loading: false });
+			if (revision === this.revision)
+				this.set({ profiles: result.items, loading: false, loaded: true });
 		} catch {
 			if (revision === this.revision)
 				this.set({ error: "Unable to load embedding profiles.", loading: false });
