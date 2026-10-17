@@ -3,7 +3,9 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { migrationSqlForNode } from "../../../../../scripts/sqlite-test";
 import { batchGetMemories } from "./batch-get";
+import { runFtsChannel } from "./fts-channel";
 import { searchMemories } from "./service";
+import { FTS_SHORT_SCAN_LIMIT } from "./tokenizer";
 
 const databases: DatabaseSync[] = [];
 afterEach(() => {
@@ -38,7 +40,75 @@ function fixture(beforeQuery: (sql: string) => void = () => {}) {
 	return { db, sqlite };
 }
 
+function addMemory(sqlite: DatabaseSync, id: string, body: string, updated: number) {
+	sqlite
+		.prepare(`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
+		VALUES (?,'s1','cloudflare',?,'note','k','hash',1,?)`)
+		.run(id, body, updated);
+	sqlite.prepare("INSERT INTO memories_fts(title,body,tags) VALUES ('cloudflare',?,'')").run(body);
+	sqlite.prepare("INSERT INTO memories_fts_map VALUES (?,last_insert_rowid())").run(id);
+}
+
 const authz = { keyId: "k", visibleSpaceIds: ["s1"] };
+
+describe("bounded search SQL", () => {
+	it("caps rows before LIKE even when the only match lies beyond the cap", async () => {
+		const { db, sqlite } = fixture();
+		sqlite.exec("UPDATE memories SET body='部署', updated_at=0");
+		for (let i = 0; i < FTS_SHORT_SCAN_LIMIT; i++) addMemory(sqlite, `n${i}`, "unrelated", i + 1);
+		const result = await runFtsChannel(db, "部署", ["s1"], undefined, 100);
+		expect(result).toEqual({ hits: [], partial: true });
+	});
+
+	it.each([40, 41, 100])(
+		"keeps maximal filters within 100 binds at %i sources/spaces",
+		async (size) => {
+			const { db, sqlite } = fixture();
+			const names = Array.from({ length: 50 }, (_, i) => `tag${i}`);
+			for (const name of names) {
+				sqlite.prepare("INSERT INTO tags VALUES (?,?,?,NULL,1,1)").run(name, name, name);
+				sqlite.prepare("INSERT INTO memory_tags VALUES ('m1',?)").run(name);
+			}
+			const result = await runFtsChannel(
+				db,
+				"cloudflare 部署",
+				["s1", ...Array.from({ length: size - 1 }, (_, i) => `s${i + 2}`)],
+				{
+					sources: ["k", ...Array.from({ length: size - 1 }, (_, i) => `k${i}`)],
+					types: ["note", ...Array.from({ length: 49 }, (_, i) => `type${i}`)],
+					tags_all: names,
+					tags_any: names,
+					importance: { min: 0, max: 1 },
+					time: { field: "updated", from: "1970-01-01T00:00:00Z", to: "2026-01-01T00:00:00Z" },
+				},
+				100,
+			);
+			expect(result.hits.map((hit) => hit.id)).toEqual(["m1"]);
+		},
+	);
+
+	it("reads 200 hybrid candidates and tags, plus a 100-id batch, within the bind budget", async () => {
+		const { db, sqlite } = fixture();
+		sqlite.exec("UPDATE memories SET deleted_at=1 WHERE id='m1'");
+		const ids = Array.from({ length: 200 }, (_, i) => `h${String(i).padStart(3, "0")}`);
+		for (const [i, id] of ids.entries()) addMemory(sqlite, id, "cloudflare", i + 2);
+		const result = await searchMemories(
+			authz,
+			{
+				query: "cloudflare",
+				vector: { profile: "te3-small-1536", values: [1, ...Array<number>(1535).fill(0)] },
+				mode: "hybrid",
+				limit: 200,
+			},
+			{ db, vectorStore: { query: async () => ids.slice(100).map((id) => ({ id, score: 1 })) } },
+		);
+		expect(result.items).toHaveLength(200);
+		expect(result.channels.fts.candidates).toBe(100);
+		expect(result.channels.vector.candidates).toBe(100);
+		const batch = await batchGetMemories(db, authz, ids.slice(0, 100));
+		expect(batch.items.map((item) => item.id)).toEqual(ids.slice(0, 100));
+	});
+});
 
 describe("same-statement memory visibility", () => {
 	it("does not return content moved to a hidden space after candidate validation", async () => {

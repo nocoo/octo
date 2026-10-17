@@ -25,7 +25,7 @@ describe("runFtsChannel", () => {
 		expect(sawLike).toBe(true);
 		expect(sawMatch).toBe(false);
 		expect(result.hits).toEqual([{ id: "m2", bm25: 1 }]);
-		expect(result.partial).toBe(false);
+		expect(result.partial).toBe(true);
 	});
 
 	it("re-applies space visibility when filtering short terms on fts candidates", async () => {
@@ -48,8 +48,8 @@ describe("runFtsChannel", () => {
 		expect(result.hits).toEqual([]);
 	});
 
-	it("marks partial when the short scan exceeds the row cap", async () => {
-		const rows = Array.from({ length: 501 }, (_, i) => ({ id: `m${i}` }));
+	it("marks bounded short scans partial even when result count is capped", async () => {
+		const rows = Array.from({ length: 100 }, (_, i) => ({ id: `m${i}` }));
 		const db = {
 			prepare: (sql: string) => ({
 				bind: () => ({

@@ -18,7 +18,7 @@ describe("buildMemoryFilterSql", () => {
 		);
 		expect(clauses.join(" ")).toMatch(/m.type IN/);
 		expect(clauses.join(" ")).toMatch(/m.importance >=/);
-		expect(binds).toEqual(["s1", "note", 0.2, 0.9]);
+		expect(binds).toEqual(['["s1"]', '["note"]', 0.2, 0.9]);
 	});
 
 	it("maps time filters to columns", () => {
@@ -34,7 +34,7 @@ describe("buildMemoryFilterSql", () => {
 describe("tag exists helpers", () => {
 	it("builds tags_all and tags_any", () => {
 		expect(tagsAllExistsSql(["t1", "t2"]).sql.split("EXISTS").length).toBe(3);
-		expect(tagsAnyExistsSql(["t1"]).sql).toContain("IN (?)");
+		expect(tagsAnyExistsSql(["t1"]).sql).toContain("json_each(?)");
 	});
 });
 
@@ -54,6 +54,6 @@ describe("timeColumn", () => {
 		);
 		expect(clauses.join(" ")).toMatch(/source_key_id/);
 		expect(clauses.join(" ")).toMatch(/event_time <=/);
-		expect(binds).toContain("k1");
+		expect(binds).toContain('["k1"]');
 	});
 });

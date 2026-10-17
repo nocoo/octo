@@ -35,8 +35,9 @@ export function buildMemoryFilterSql(
 		return { clauses, binds };
 	}
 	if (filters.types?.length) {
-		clauses.push(`m.type IN (${filters.types.map(() => "?").join(", ")})`);
-		binds.push(...filters.types);
+		const typesIn = sqlInClause("m.type", filters.types);
+		clauses.push(typesIn.sql);
+		binds.push(...typesIn.binds);
 	}
 	if (filters.sources?.length) {
 		const sourcesIn = sqlInClause("m.source_key_id", filters.sources);
@@ -91,18 +92,18 @@ export async function resolveMemoryFilterSql(
 }
 
 export function tagsAllExistsSql(tagIds: string[]): { sql: string; binds: string[] } {
-	const binds = [...tagIds];
-	const parts = tagIds.map(
-		() => `EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND mt.tag_id = ?)`,
-	);
-	return { sql: parts.join(" AND "), binds };
+	return {
+		sql: `NOT EXISTS (SELECT 1 FROM json_each(?) required WHERE NOT EXISTS
+			(SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND mt.tag_id = required.value))`,
+		binds: [JSON.stringify(tagIds)],
+	};
 }
 
 export function tagsAnyExistsSql(tagIds: string[]): { sql: string; binds: string[] } {
+	if (!tagIds.length) return { sql: "1 = 0", binds: [] };
+	const tags = sqlInClause("mt.tag_id", tagIds);
 	return {
-		sql: `EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND mt.tag_id IN (${tagIds
-			.map(() => "?")
-			.join(", ")}))`,
-		binds: [...tagIds],
+		sql: `EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND ${tags.sql})`,
+		binds: tags.binds,
 	};
 }
