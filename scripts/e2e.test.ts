@@ -40,6 +40,10 @@ describe("e2e helpers", () => {
 				'directory = "./dist/client"',
 				'main = "apps/web/src/server/index.ts"',
 				"",
+				"[[routes]]",
+				'pattern = "octo.hexly.ai"',
+				"custom_domain = true",
+				"",
 			].join("\n"),
 			17059,
 			"/tmp/assets",
@@ -47,7 +51,18 @@ describe("e2e helpers", () => {
 		);
 		expect(rewritten).toContain("port = 17059");
 		expect(rewritten).toContain("/tmp/assets");
-		expect(wranglerDevArgs(17059, "p", "c", "e").includes("--local")).toBe(true);
+		expect(rewritten).not.toContain("octo.hexly.ai");
+		expect(wranglerDevArgs(17059, "p", "c", "e")).toEqual(
+			expect.arrayContaining([
+				"--local",
+				"--ip",
+				"127.0.0.1",
+				"--host",
+				"127.0.0.1",
+				"--local-upstream",
+				"127.0.0.1",
+			]),
+		);
 		expect(e2eEnvContents(17057)).toContain("RESOURCE_ENV=test");
 		expect(e2eEnvContents(17057)).toContain("http://127.0.0.1:17057/cdn-cgi/access/certs");
 		expect(() => assertWranglerConfigLocal("name = 'octo'\n")).not.toThrow();

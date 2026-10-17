@@ -163,9 +163,27 @@ async function verifyJwt(
 
 type AccessConfig = { iss: string; aud: string; jwksUrl: string };
 
-function accessConfig(env: Env): AccessConfig {
-	const mode = resourceEnv(env.RESOURCE_ENV);
-	if (mode === "test") {
+const PRODUCTION_HOST = "octo.hexly.ai";
+
+function productionAccessConfig(): AccessConfig {
+	const iss = ACCESS_TEAM_DOMAIN;
+	return { iss, aud: ACCESS_AUD, jwksUrl: `${iss.replace(/\/$/, "")}/cdn-cgi/access/certs` };
+}
+
+function allowsTestAccessOverrides(request: Request, env: Env): boolean {
+	if (resourceEnv(env.RESOURCE_ENV) !== "test") {
+		return false;
+	}
+	const headerHost = requestHostname(request);
+	const urlHost = hostnameFromHostHeader(new URL(request.url).host);
+	if (headerHost === PRODUCTION_HOST || urlHost === PRODUCTION_HOST) {
+		return false;
+	}
+	return isLoopbackHost(headerHost) || isLoopbackHost(urlHost);
+}
+
+function accessConfig(env: Env, request: Request): AccessConfig {
+	if (allowsTestAccessOverrides(request, env)) {
 		if (!env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUD || !env.ACCESS_JWKS_URL) {
 			throw new ApiError("internal", "internal error");
 		}
@@ -175,8 +193,7 @@ function accessConfig(env: Env): AccessConfig {
 			jwksUrl: env.ACCESS_JWKS_URL,
 		};
 	}
-	const iss = ACCESS_TEAM_DOMAIN;
-	return { iss, aud: ACCESS_AUD, jwksUrl: `${iss.replace(/\/$/, "")}/cdn-cgi/access/certs` };
+	return productionAccessConfig();
 }
 
 export async function resolveAccessIdentity(
@@ -194,7 +211,7 @@ export async function resolveAccessIdentity(
 	if (!token) {
 		throw unauthenticated();
 	}
-	const cfg = accessConfig(env);
+	const cfg = accessConfig(env, request);
 	const now = nowMs();
 	const headerPart = token.split(".")[0];
 	let kid: string | undefined;

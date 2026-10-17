@@ -44,6 +44,12 @@ export function wranglerDevArgs(
 	const args = [
 		"dev",
 		localFlag,
+		"--ip",
+		"127.0.0.1",
+		"--host",
+		"127.0.0.1",
+		"--local-upstream",
+		"127.0.0.1",
 		"--port",
 		String(port),
 		`--persist-to=${persistTo}`,
@@ -69,7 +75,8 @@ export function rewriteWranglerConfig(
 	return toml
 		.replaceAll("port = 37059", `port = ${port}`)
 		.replaceAll('directory = "./dist/client"', `directory = ${JSON.stringify(assetsDir)}`)
-		.replaceAll('main = "apps/web/src/server/index.ts"', `main = ${JSON.stringify(mainPath)}`);
+		.replaceAll('main = "apps/web/src/server/index.ts"', `main = ${JSON.stringify(mainPath)}`)
+		.replace(/\n\[\[routes\]\]\npattern = "octo\.hexly\.ai"\ncustom_domain = true\n?/g, "\n");
 }
 
 export function occupyingPid(port: number): string {

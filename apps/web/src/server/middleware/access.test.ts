@@ -276,13 +276,13 @@ describe("resolveAccessIdentity", () => {
 		await resolveAccessIdentity(req, env(testEnv), ttlFetch, () => t);
 	});
 
-	it("uses test JWKS overrides only when RESOURCE_ENV is test", async () => {
+	it("uses test JWKS overrides only on loopback in RESOURCE_ENV=test", async () => {
 		const headerMissing = b64url(
 			new TextEncoder().encode(JSON.stringify({ alg: "RS256", kid: "k1" })),
 		);
 		await expect(
 			resolveAccessIdentity(
-				new Request("https://octo.hexly.ai/api/admin/whoami", {
+				new Request("http://127.0.0.1:17059/api/admin/whoami", {
 					headers: { "Cf-Access-Jwt-Assertion": `${headerMissing}.e.s` },
 				}),
 				env({ RESOURCE_ENV: "test" }),
@@ -309,5 +309,73 @@ describe("resolveAccessIdentity", () => {
 		).rejects.toBeInstanceOf(ApiError);
 		expect(jwks).toBe(`${ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
 		expect(ACCESS_AUD.length).toBeGreaterThan(8);
+	});
+
+	it("rejects a test token when the production host carries test config", async () => {
+		const pair = await rsaPair();
+		const jwk = (await crypto.subtle.exportKey("jwk", pair.publicKey)) as JsonWebKey & {
+			kid?: string;
+		};
+		jwk.kid = "k1";
+		const now = Math.floor(Date.now() / 1000);
+		const token = await signJwt(pair.privateKey, {
+			iss: testEnv.CF_ACCESS_TEAM_DOMAIN,
+			aud: testEnv.CF_ACCESS_AUD,
+			exp: now + 60,
+			email: "a@b.c",
+		});
+		let jwks = "";
+		const fetchUrl = async (input: RequestInfo | URL) => {
+			jwks = String(input);
+			return Response.json({ keys: [jwk] });
+		};
+		await expect(
+			resolveAccessIdentity(
+				new Request("https://octo.hexly.ai/api/admin/whoami", {
+					headers: { "Cf-Access-Jwt-Assertion": token },
+				}),
+				env(testEnv),
+				fetchUrl,
+			),
+		).rejects.toMatchObject({ code: "unauthenticated" });
+		expect(jwks).toBe(`${ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+		resetJwksCache();
+		jwks = "";
+		await expect(
+			resolveAccessIdentity(
+				new Request("http://127.0.0.1:17059/api/admin/whoami", {
+					headers: { Host: "octo.hexly.ai", "Cf-Access-Jwt-Assertion": token },
+				}),
+				env(testEnv),
+				fetchUrl,
+			),
+		).rejects.toMatchObject({ code: "unauthenticated" });
+		expect(jwks).toBe(`${ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+		resetJwksCache();
+		jwks = "";
+		await expect(
+			resolveAccessIdentity(
+				new Request("https://octo.dev.hexly.ai/api/admin/whoami", {
+					headers: { "Cf-Access-Jwt-Assertion": token },
+				}),
+				env(testEnv),
+				fetchUrl,
+			),
+		).rejects.toMatchObject({ code: "unauthenticated" });
+		expect(jwks).toBe(`${ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+		resetJwksCache();
+		jwks = "";
+		expect(
+			(
+				await resolveAccessIdentity(
+					new Request("http://127.0.0.1:17059/api/admin/whoami", {
+						headers: { "Cf-Access-Jwt-Assertion": token },
+					}),
+					env(testEnv),
+					fetchUrl,
+				)
+			).email,
+		).toBe("a@b.c");
+		expect(jwks).toBe(testEnv.ACCESS_JWKS_URL);
 	});
 });
