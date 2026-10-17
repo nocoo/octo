@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    uses: nocoo/base-ci/.github/workflows/quality.yml@ad43150de3a2be2fa464b5cd2f921dc4fa9f8f0f
+    with:
+      runtime-version: "1.4.0"
+      install-policy: "project"
+      coverage-path: "coverage"
+      prepare-command: |
+        bun run gate:test-skip
+        bun run gate:no-remote
+        bun run gate:wrangler-vars
+      test-command: "bun run test:coverage"
+      lint-command: "bun run lint"
+      typecheck-command: "bun run typecheck"
+      l2: true
+      l2-command: "bun run test:e2e:api"
