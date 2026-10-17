@@ -204,23 +204,6 @@ export function stopProcessGroup(pid: number | undefined, signal: NodeJS.Signals
 	}
 }
 
-export function killPortListeners(port: number): void {
-	const raw = occupyingPid(port);
-	if (raw === "unknown" || raw === "") {
-		return;
-	}
-	for (const pid of raw.split(",")) {
-		const n = Number(pid);
-		if (Number.isInteger(n) && n > 1) {
-			try {
-				process.kill(n, "SIGKILL");
-			} catch {
-				// already gone
-			}
-		}
-	}
-}
-
 export async function stopChild(child: ChildProcess, sleeper = sleep): Promise<void> {
 	if (child.exitCode !== null) {
 		return;
@@ -304,7 +287,7 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	wrangler.stderr?.on("data", (chunk) => process.stderr.write(chunk as Buffer));
 	const base = `http://127.0.0.1:${port}`;
 	const onSignal = (): void => {
-		void stopChild(wrangler).then(() => killPortListeners(port));
+		void stopChild(wrangler);
 	};
 	process.on("SIGINT", onSignal);
 	process.on("SIGTERM", onSignal);
@@ -323,7 +306,6 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
 		await stopChild(wrangler);
-		killPortListeners(port);
 		await jwks.close();
 	}
 }

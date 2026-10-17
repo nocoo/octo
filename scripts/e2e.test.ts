@@ -11,7 +11,6 @@ import {
 	assertWranglerConfigLocal,
 	createExclusiveDir,
 	e2eEnvContents,
-	killPortListeners,
 	listenError,
 	listenErrorCode,
 	occupyingPid,
@@ -257,7 +256,7 @@ describe("runE2eApi", () => {
 		expect(occupyingPid(1)).toBe("unknown");
 	});
 
-	it("kills a process group and port listeners", () => {
+	it("kills only this run's process group", () => {
 		stopProcessGroup(undefined, "SIGTERM");
 		stopProcessGroup(0, "SIGTERM");
 		const killed: Array<[number, string]> = [];
@@ -277,7 +276,38 @@ describe("runE2eApi", () => {
 			throw new Error("gone");
 		}) as typeof process.kill);
 		stopProcessGroup(7, "SIGKILL");
-		killPortListeners(1);
+		spy.mockRestore();
+	});
+
+	it("does not signal a pid occupying the port after this run", async () => {
+		const killed: number[] = [];
+		const spy = vi.spyOn(process, "kill").mockImplementation(((pid: number) => {
+			killed.push(Number(pid));
+			return true;
+		}) as typeof process.kill);
+		const child = new EventEmitter() as ChildProcess & EventEmitter;
+		Object.defineProperty(child, "pid", { value: 4242 });
+		Object.defineProperty(child, "exitCode", { writable: true, value: 0 });
+		child.stdout = new EventEmitter() as ChildProcess["stdout"];
+		child.stderr = new EventEmitter() as ChildProcess["stderr"];
+		child.kill = (() => true) as ChildProcess["kill"];
+		await runE2eApi({
+			prepareDb: async () => undefined,
+			assertFree: async () => undefined,
+			wait: async () => undefined,
+			generateJwks: async () => ({
+				kid: "e2e",
+				privateJwk: { kty: "RSA" },
+				publicJwk: { kty: "RSA", kid: "e2e" },
+			}),
+			startJwks: async () => ({
+				url: "http://127.0.0.1:17057/cdn-cgi/access/certs",
+				close: async () => undefined,
+			}),
+			spawnWrangler: () => child,
+			spawnVitest: async () => undefined,
+		});
+		expect(killed).toEqual([]);
 		spy.mockRestore();
 	});
 
