@@ -22,5 +22,5 @@
 			"@/*": ["./apps/web/src/*"]
 		}
 	},
-	"include": ["apps/web/src/lib/version.ts", "vite.config.ts"]
+	"include": ["apps/web/src/client/**/*", "apps/web/src/lib/version.ts", "vite.config.ts"]
 }

@@ -18,6 +18,7 @@ jobs:
         bun run gate:test-skip
         bun run gate:no-remote
         bun run gate:wrangler-vars
+        bun run gate:client-fetch
       test-command: "bun run test:coverage"
       lint-command: "bun run lint"
       typecheck-command: "bun run typecheck"

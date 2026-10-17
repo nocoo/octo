@@ -11,6 +11,7 @@ export const L1_SCRIPTS = [
 	"gate:test-skip",
 	"gate:no-remote",
 	"gate:wrangler-vars",
+	"gate:client-fetch",
 	"test:coverage",
 ] as const;
 
@@ -20,9 +21,11 @@ export function exportIndex(repo: string, dest: string): void {
 }
 
 export function linkSnapshotDeps(repo: string, dest: string): void {
-	const modules = join(repo, "node_modules");
-	if (existsSync(modules)) {
-		execFileSync("ln", ["-s", modules, join(dest, "node_modules")]);
+	for (const directory of ["node_modules", "apps/web/node_modules"]) {
+		const modules = join(repo, directory);
+		if (existsSync(modules)) {
+			execFileSync("ln", ["-s", modules, join(dest, directory)]);
+		}
 	}
 }
 

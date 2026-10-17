@@ -16,10 +16,15 @@
 		"gate:test-skip": "bun run scripts/gate-test-skip.ts",
 		"gate:no-remote": "bun run scripts/gate-no-remote.ts",
 		"gate:wrangler-vars": "bun run scripts/gate-wrangler-vars.ts",
+		"gate:client-fetch": "bun run scripts/gate-client-fetch.ts",
 		"gate:security": "bun run scripts/gate-security.ts",
 		"prepare": "husky"
 	},
 	"devDependencies": {
+		"oxc-parser": "^0.125.0",
+		"@playwright/test": "^1.58.0",
+		"@types/react": "^19.2.0",
+		"@types/react-dom": "^19.2.0",
 		"@biomejs/biome": "2.5.15",
 		"@cloudflare/workers-types": "5.20260930.2",
 		"@types/bun": "^1.4.2",

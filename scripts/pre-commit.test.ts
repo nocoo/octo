@@ -31,6 +31,7 @@ describe("index snapshot", () => {
 			"gate:test-skip",
 			"gate:no-remote",
 			"gate:wrangler-vars",
+			"gate:client-fetch",
 			"test:coverage",
 		]);
 	});
@@ -72,8 +73,11 @@ describe("index snapshot", () => {
 		const dest = await mkdtemp(join(tmpdir(), "octo-link-dest-"));
 		try {
 			mkdirSync(join(repo, "node_modules"));
+			mkdirSync(join(repo, "apps/web/node_modules"), { recursive: true });
+			mkdirSync(join(dest, "apps/web"), { recursive: true });
 			linkSnapshotDeps(repo, dest);
 			expect(existsSync(join(dest, "node_modules"))).toBe(true);
+			expect(existsSync(join(dest, "apps/web/node_modules"))).toBe(true);
 			linkSnapshotDeps(join(tmpdir(), "octo-missing-modules"), dest);
 		} finally {
 			await rm(repo, { recursive: true, force: true });
