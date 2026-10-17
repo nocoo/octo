@@ -30,7 +30,9 @@ export function sqliteD1(db: DatabaseSync): D1Database {
 				return { results: db.prepare(sql).all(...this.binds) as T[] };
 			},
 			async run() {
-				const info = db.prepare(sql).run(...this.binds);
+				const prepared = db.prepare(sql);
+				prepared.setReadBigInts(true);
+				const info = prepared.run(...this.binds);
 				return { success: true as const, meta: { changes: Number(info.changes) } };
 			},
 		};

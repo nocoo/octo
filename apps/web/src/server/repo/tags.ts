@@ -143,7 +143,7 @@ export class TagRepo {
 						"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) VALUES ('tag', ?, NULL, 'tag_renamed', NULL, ?, ?)",
 					)
 					.bind(from.id, actor, ts),
-				...(await this.ftsRebuildStmts(from.id)),
+				...this.ftsRebuildStmts(from.id),
 			]);
 		} catch (err) {
 			if (isUniqueConstraint(err, "tags")) {
@@ -199,7 +199,7 @@ export class TagRepo {
 				this.db
 					.prepare("UPDATE memory_tags SET tag_id = ? WHERE tag_id = ?")
 					.bind(into.id, from.id),
-				...(await this.ftsRebuildStmts(into.id, from.id)),
+				...this.ftsRebuildStmts(into.id, from.id),
 			]);
 			const written = results[2] as { meta?: { changes?: number } } | undefined;
 			return { from, into, memories: Number(written?.meta?.changes ?? 0) };
@@ -211,39 +211,32 @@ export class TagRepo {
 		}
 	}
 
-	private async ftsRebuildStmts(...tagIds: string[]): Promise<D1PreparedStatement[]> {
+	private ftsRebuildStmts(...tagIds: string[]): D1PreparedStatement[] {
 		const placeholders = tagIds.map(() => "?").join(",");
-		const { results } = await this.db
-			.prepare(`SELECT DISTINCT memory_id AS id FROM memory_tags WHERE tag_id IN (${placeholders})`)
-			.bind(...tagIds)
-			.all<{ id: string }>();
+		const affected = `SELECT DISTINCT memory_id FROM memory_tags WHERE tag_id IN (${placeholders})`;
 		const tagSql =
 			"IFNULL((SELECT GROUP_CONCAT(t.name, ' ') FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id = m.id), '')";
-		const stmts: D1PreparedStatement[] = [];
-		for (const row of results) {
-			stmts.push(
-				this.db
-					.prepare(
-						"DELETE FROM memories_fts WHERE rowid = (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?)",
-					)
-					.bind(row.id),
-				this.db
-					.prepare(
-						`INSERT INTO memories_fts(rowid, title, body, tags) SELECT map.fts_rowid, IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m INNER JOIN memories_fts_map map ON map.memory_id = m.id WHERE m.id = ?`,
-					)
-					.bind(row.id),
-				this.db
-					.prepare(
-						`INSERT INTO memories_fts(title, body, tags) SELECT IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m WHERE m.id = ? AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m.id)`,
-					)
-					.bind(row.id),
-				this.db
-					.prepare(
-						"INSERT INTO memories_fts_map (memory_id, fts_rowid) SELECT ?, last_insert_rowid() WHERE NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = ?)",
-					)
-					.bind(row.id, row.id),
-			);
-		}
-		return stmts;
+		return [
+			this.db
+				.prepare(
+					`DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${affected}))`,
+				)
+				.bind(...tagIds),
+			this.db
+				.prepare(
+					`INSERT INTO memories_fts(rowid, title, body, tags) SELECT map.fts_rowid, IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m INNER JOIN memories_fts_map map ON map.memory_id = m.id WHERE m.id IN (${affected})`,
+				)
+				.bind(...tagIds),
+			this.db
+				.prepare(
+					`INSERT INTO memories_fts(rowid, title, body, tags) SELECT (SELECT COALESCE(MAX(fts_rowid), 0) FROM memories_fts_map) + ROW_NUMBER() OVER (ORDER BY m.id), IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m WHERE m.id IN (${affected}) AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m.id)`,
+				)
+				.bind(...tagIds),
+			this.db
+				.prepare(
+					`INSERT INTO memories_fts_map (memory_id, fts_rowid) SELECT m.id, (SELECT COALESCE(MAX(fts_rowid), 0) FROM memories_fts_map) + (SELECT COUNT(*) FROM memories m2 WHERE m2.id IN (${affected}) AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m2.id) AND m2.id <= m.id) FROM memories m WHERE m.id IN (${affected}) AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m.id)`,
+				)
+				.bind(...tagIds),
+		];
 	}
 }

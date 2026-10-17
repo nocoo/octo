@@ -98,6 +98,39 @@ describe("TagRepo on real sqlite", () => {
 		raw.close();
 	});
 
+	it("rebuilds fts for memories a concurrent merge moved onto the source tag", async () => {
+		const { raw, d1 } = migratedSqlite();
+		raw.exec(`
+			INSERT INTO spaces (id, slug, name, description, created_at, updated_at)
+			VALUES ('s1', 's1', 's1', '', 1, 1);
+			INSERT INTO tags (id, name, display_name, created_at, updated_at) VALUES
+				('ta', 'alpha', 'alpha', 1, 1), ('tb', 'beta', 'beta', 1, 1), ('tc', 'gamma', 'gamma', 1, 1);
+			INSERT INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at)
+			VALUES ('m1', 's1', 't', 'b', 'note', 0.5, 'k', 1, 'h', 1, 1),
+			       ('m2', 's1', 't', 'b', 'note', 0.5, 'k', 1, 'h', 1, 1);
+			INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1', 'ta'), ('m2', 'tc');
+			INSERT INTO memories_fts(title, body, tags) VALUES('t', 'b', 'alpha');
+			INSERT INTO memories_fts_map (memory_id, fts_rowid) VALUES ('m1', last_insert_rowid());
+			INSERT INTO memories_fts(title, body, tags) VALUES('t', 'b', 'gamma');
+			INSERT INTO memories_fts_map (memory_id, fts_rowid) VALUES ('m2', last_insert_rowid());
+		`);
+		const repo = new TagRepo(d1, () => 30);
+		const origBatch = d1.batch.bind(d1);
+		let nested = false;
+		d1.batch = async (stmts) => {
+			if (!nested) {
+				nested = true;
+				await repo.merge("gamma", "alpha", "key:1");
+			}
+			return origBatch(stmts);
+		};
+		await repo.merge("alpha", "beta", "key:1");
+		expect(ftsHits(raw, "beta").sort()).toEqual(["m1", "m2"]);
+		expect(ftsHits(raw, "alpha")).toEqual([]);
+		expect(ftsHits(raw, "gamma")).toEqual([]);
+		raw.close();
+	});
+
 	it("counts only this merge from batch meta.changes", async () => {
 		const { raw, d1 } = migratedSqlite();
 		raw.exec(`
