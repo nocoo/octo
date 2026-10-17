@@ -77,8 +77,13 @@ export class FakeD1 {
 				return { results: self.exec(this.sql, this.binds) as never[] };
 			},
 			async run() {
-				await this.all();
-				return { success: true as const };
+				const before = self.changes.length;
+				self.exec(this.sql, this.binds);
+				let changes = 0;
+				if (this.sql.includes("INSERT INTO changes") && this.sql.includes("SELECT 'memory'")) {
+					changes = self.changes.length - before;
+				}
+				return { success: true as const, meta: { changes } };
 			},
 		};
 		return stmt;
@@ -113,6 +118,15 @@ export class FakeD1 {
 			}
 			return [];
 		}
+		if (sql.includes("INSERT INTO tags") && sql.includes("AND NOT EXISTS")) {
+			const fromId = String(binds[0]);
+			const intoId = String(binds[2]);
+			const tag = this.tags.get(fromId);
+			if (tag?.merged_into !== intoId) {
+				throw new Error("UNIQUE constraint failed: tags.id");
+			}
+			return [];
+		}
 		if (sql.includes("INSERT INTO tags")) {
 			const [id, name, display, created, updated] = binds as [
 				string,
@@ -138,15 +152,6 @@ export class FakeD1 {
 			}
 			const found = [...this.tags.values()].find((t) => t.name === name);
 			return found ? [found] : [];
-		}
-		if (sql.includes("SELECT 1 / CASE WHEN")) {
-			const fromId = String(binds[0]);
-			const intoId = String(binds[1]);
-			const tag = this.tags.get(fromId);
-			if (tag?.merged_into !== intoId) {
-				throw new Error("stale_tag_merge");
-			}
-			return [{ 1: 1 }];
 		}
 		if (sql.includes("FROM tags WHERE id = ?")) {
 			const found = this.tags.get(String(binds[0]));
@@ -251,12 +256,10 @@ export class FakeD1 {
 			return [];
 		}
 		if (sql.includes("DELETE FROM memories_fts")) {
-			const tagIds = new Set(binds.map(String));
-			for (const link of this.memoryTags) {
-				if (tagIds.has(link.tag_id)) {
-					this.fts.delete(link.memory_id);
-				}
-			}
+			this.fts.delete(String(binds[0]));
+			return [];
+		}
+		if (sql.includes("INSERT INTO memories_fts_map") && sql.includes("last_insert_rowid()")) {
 			return [];
 		}
 		if (sql.includes("INSERT INTO memories_fts")) {

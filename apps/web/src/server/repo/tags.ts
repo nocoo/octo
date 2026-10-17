@@ -173,8 +173,13 @@ export class TagRepo {
 			throw new ApiError("validation_failed", "cannot merge a tag into itself");
 		}
 		const ts = this.now();
+		const changeInsert = this.db
+			.prepare(
+				"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', mt.memory_id, m.space_id, 'tag_merged', NULL, ?, ? FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?",
+			)
+			.bind(actor, ts, from.id);
 		try {
-			await this.db.batch([
+			const results = await this.db.batch([
 				this.db
 					.prepare(
 						"UPDATE tags SET merged_into = ?, updated_at = ? WHERE id = ? AND merged_into IS NULL AND EXISTS (SELECT 1 FROM tags t WHERE t.id = ? AND t.merged_into IS NULL)",
@@ -182,14 +187,10 @@ export class TagRepo {
 					.bind(into.id, ts, from.id, into.id),
 				this.db
 					.prepare(
-						"SELECT 1 / CASE WHEN (SELECT merged_into FROM tags WHERE id = ?) = ? THEN 1 ELSE 0 END",
+						"INSERT INTO tags (id, name, display_name, merged_into, created_at, updated_at) SELECT id, name, display_name, merged_into, created_at, updated_at FROM tags WHERE id = ? AND NOT EXISTS (SELECT 1 FROM tags WHERE id = ? AND merged_into = ?)",
 					)
-					.bind(from.id, into.id),
-				this.db
-					.prepare(
-						"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', mt.memory_id, m.space_id, 'tag_merged', NULL, ?, ? FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?",
-					)
-					.bind(actor, ts, from.id),
+					.bind(from.id, from.id, into.id),
+				changeInsert,
 				this.db
 					.prepare(
 						"DELETE FROM memory_tags WHERE tag_id = ? AND memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id = ?)",
@@ -200,17 +201,14 @@ export class TagRepo {
 					.bind(into.id, from.id),
 				...(await this.ftsRebuildStmts(into.id, from.id)),
 			]);
+			const written = results[2] as { meta?: { changes?: number } } | undefined;
+			return { from, into, memories: Number(written?.meta?.changes ?? 0) };
 		} catch (err) {
-			if (/stale_tag_merge|division by zero|DIVIDE/i.test(String(err))) {
+			if (String(err).includes("UNIQUE constraint") || String(err).includes("stale_tag_merge")) {
 				throw new ApiError("unprocessable", "tag merge is stale");
 			}
 			throw err;
 		}
-		const count = await this.db
-			.prepare("SELECT COUNT(*) AS n FROM changes WHERE op = 'tag_merged' AND actor = ? AND at = ?")
-			.bind(actor, ts)
-			.first<{ n: number }>();
-		return { from, into, memories: Number(count?.n ?? 0) };
 	}
 
 	private async ftsRebuildStmts(...tagIds: string[]): Promise<D1PreparedStatement[]> {
@@ -219,30 +217,31 @@ export class TagRepo {
 			.prepare(`SELECT DISTINCT memory_id AS id FROM memory_tags WHERE tag_id IN (${placeholders})`)
 			.bind(...tagIds)
 			.all<{ id: string }>();
-		const stmts: D1PreparedStatement[] = [
-			this.db
-				.prepare(
-					`DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id IN (${placeholders})))`,
-				)
-				.bind(...tagIds),
-			this.db
-				.prepare(
-					`DELETE FROM memories_fts_map WHERE memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id IN (${placeholders}))`,
-				)
-				.bind(...tagIds),
-		];
+		const tagSql =
+			"IFNULL((SELECT GROUP_CONCAT(t.name, ' ') FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id = m.id), '')";
+		const stmts: D1PreparedStatement[] = [];
 		for (const row of results) {
 			stmts.push(
 				this.db
 					.prepare(
-						"INSERT INTO memories_fts (title, body, tags) SELECT IFNULL(m.title, ''), IFNULL(m.body, ''), IFNULL((SELECT GROUP_CONCAT(t.name, ' ') FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id = m.id), '') FROM memories m WHERE m.id = ?",
+						"DELETE FROM memories_fts WHERE rowid = (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?)",
 					)
 					.bind(row.id),
 				this.db
 					.prepare(
-						"INSERT OR REPLACE INTO memories_fts_map (memory_id, fts_rowid) VALUES (?, last_insert_rowid())",
+						`INSERT INTO memories_fts(rowid, title, body, tags) SELECT map.fts_rowid, IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m INNER JOIN memories_fts_map map ON map.memory_id = m.id WHERE m.id = ?`,
 					)
 					.bind(row.id),
+				this.db
+					.prepare(
+						`INSERT INTO memories_fts(title, body, tags) SELECT IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m WHERE m.id = ? AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m.id)`,
+					)
+					.bind(row.id),
+				this.db
+					.prepare(
+						"INSERT INTO memories_fts_map (memory_id, fts_rowid) SELECT ?, last_insert_rowid() WHERE NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = ?)",
+					)
+					.bind(row.id, row.id),
 			);
 		}
 		return stmts;
