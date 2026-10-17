@@ -495,3 +495,13 @@ production body handling are unchanged. The first wrapper unit run exhausted
 memory because a deep mock-call matcher enumerated the 50 MiB typed array.
 The regression now checks body identity instead, preserving the full size
 without increasing the heap limit or weakening the transport assertions.
+
+The first request-API integration then exposed a separate class-brand boundary:
+Node's FormData passed Undici's broad request check but not its serializer's
+own FormData assertion, leaving multipart bodies unsent. Four real multipart
+cases failed while the raw/chunked cases passed. The adapter now rebuilds only
+the FormData container with Undici's exported class, retaining every field,
+duplicate name, File object and byte payload; it does not buffer or shorten
+the upload. A focused regression verifies the actual client class plus file
+identity and duplicate fields. Library support must be checked through its
+serializer, not inferred from a structural entry-point type alone.

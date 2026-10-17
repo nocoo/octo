@@ -1,14 +1,22 @@
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
-import { type Dispatcher, request } from "undici";
+import { FormData as ClientFormData, type Dispatcher, request } from "undici";
+
+function multipartBody(form: FormData): ClientFormData {
+	const body = new ClientFormData();
+	for (const [name, value] of form) body.append(name, value);
+	return body;
+}
 
 export async function e2eFetch(url: string | URL, init?: RequestInit): Promise<Response> {
 	try {
 		const method = (init?.method ?? "GET") as Dispatcher.HttpMethod;
 		const upload =
-			init?.body instanceof ReadableStream
-				? Readable.fromWeb(init.body as unknown as NodeReadableStream<Uint8Array>)
-				: init?.body;
+			init?.body instanceof FormData
+				? multipartBody(init.body)
+				: init?.body instanceof ReadableStream
+					? Readable.fromWeb(init.body as unknown as NodeReadableStream<Uint8Array>)
+					: init?.body;
 		const result = await request(url, {
 			method,
 			headers: Object.fromEntries(new Headers(init?.headers)),

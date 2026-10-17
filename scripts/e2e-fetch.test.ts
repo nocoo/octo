@@ -1,9 +1,12 @@
 import { Readable } from "node:stream";
-import { request } from "undici";
+import { FormData as ClientFormData, request } from "undici";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { e2eFetch } from "./e2e-fetch";
 
-vi.mock("undici", () => ({ request: vi.fn() }));
+vi.mock("undici", async (importOriginal) => ({
+	...(await importOriginal<typeof import("undici")>()),
+	request: vi.fn(),
+}));
 
 function response(statusCode: number, contents = "failure") {
 	return {
@@ -50,7 +53,10 @@ describe("L2 HTTP response ownership", () => {
 
 	it("preserves multipart bodies and abort signals", async () => {
 		const body = new FormData();
-		body.set("file", new File(["contents"], "file.png", { type: "image/png" }));
+		const file = new File(["contents"], "file.png", { type: "image/png" });
+		body.set("file", file);
+		body.append("note", "first");
+		body.append("note", "second");
 		const controller = new AbortController();
 		vi.mocked(request).mockResolvedValue(response(500));
 		expect(
@@ -63,10 +69,12 @@ describe("L2 HTTP response ownership", () => {
 			).status,
 		).toBe(500);
 		expect(request).toHaveBeenCalledOnce();
-		expect(vi.mocked(request).mock.calls[0]?.[1]).toMatchObject({
-			body,
-			signal: controller.signal,
-		});
+		const options = vi.mocked(request).mock.calls[0]?.[1];
+		expect(options?.signal).toBe(controller.signal);
+		expect(options?.body).toBeInstanceOf(ClientFormData);
+		const sent = options?.body as ClientFormData;
+		expect(sent.get("file")).toBe(file);
+		expect(sent.getAll("note")).toEqual(["first", "second"]);
 	});
 
 	it("streams chunked request and response bytes without buffering the upload", async () => {
