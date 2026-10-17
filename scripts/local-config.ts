@@ -7,6 +7,9 @@ export const LOCAL_WRANGLER_CONFIG = ".wrangler.local.toml";
 export function localWranglerConfig(toml: string): string {
 	const config = parse(toml);
 	delete config.vectorize;
+	// Production custom domains make wrangler rewrite Host to octo.hexly.ai locally,
+	// which blocks ACCESS_DEV_BYPASS_EMAIL (only allowed on octo.dev.hexly.ai / loopback).
+	delete config.routes;
 	return stringify(config);
 }
 

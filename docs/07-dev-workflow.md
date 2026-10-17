@@ -27,6 +27,8 @@
 
 ## 3. 本地开发和 Caddy
 
+`ensureDevVars` copies `ACCESS_DEV_BYPASS_EMAIL=dev@local` and `RESOURCE_ENV=development` from `dev.vars.example` only when local vars are missing, preserves existing files, and local config generation removes routes without changing production `wrangler.toml`; never commit `.dev.vars`.
+
 | 通道 | 地址 / 端口 | 持久化 |
 |---|---|---|
 | 日常开发 | `https://octo.dev.hexly.ai` → Vite `127.0.0.1:7059`（HMR），`/api` 和 `/mcp` 反代到 wrangler sidecar `127.0.0.1:37059` | `.wrangler/state` |

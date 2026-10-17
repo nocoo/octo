@@ -24,6 +24,7 @@ MCP 每个 HTTP 请求独立鉴权，不接受 Access JWT 代替 key。工具调
   4. 取 `email` 作为 actor。任何一步失败：返回 401 `unauthenticated`。
 - 生产环境忽略所有测试用 JWKS 覆盖项。L2 用本地 JWKS stub 加自签 token，并且只在 `RESOURCE_ENV=test` 且请求来自 loopback 时才生效（giraffe 的 suite B 就是这样）。
 - 本地日常开发：`.dev.vars` 设置 `ACCESS_DEV_BYPASS_EMAIL`，只有在 `RESOURCE_ENV=development` 且 host 是 `octo.dev.hexly.ai` 或 loopback 时才生效；生产构建会断言这个值为空。
+- Local config generation removes custom-domain routes to preserve the development Host; `bun run build` rejects a nonempty bypass in the process, Vite production environment or deployment bindings, without reading `.dev.vars`.
 
 ## 3. API key
 

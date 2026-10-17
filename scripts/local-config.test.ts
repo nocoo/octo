@@ -31,8 +31,11 @@ describe("daily local config startup", () => {
 				const configPath = args[configAt + 1] as string;
 				const local = parse(await readFile(configPath, "utf8"));
 				expect(local.vectorize).toBeUndefined();
+				expect(local.routes).toBeUndefined();
 				expect(local).toEqual(
-					Object.fromEntries(Object.entries(production).filter(([key]) => key !== "vectorize")),
+					Object.fromEntries(
+						Object.entries(production).filter(([key]) => !["vectorize", "routes"].includes(key)),
+					),
 				);
 				expect(dirname(configPath)).toBe(cwd);
 				expect(resolve(dirname(configPath), local.main as string)).toBe(
@@ -49,6 +52,7 @@ describe("daily local config startup", () => {
 				expect(production.vectorize).toEqual([
 					{ binding: "VEC", index_name: "octo-vec-te3-small-1536", remote: false },
 				]);
+				expect(production.routes).toEqual([{ pattern: "octo.hexly.ai", custom_domain: true }]);
 			} finally {
 				await rm(cwd, { recursive: true, force: true });
 			}

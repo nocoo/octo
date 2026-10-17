@@ -21,6 +21,21 @@ describe("ensureDevVars", () => {
 		expect(Buffer.from(key, "base64").length).toBe(32);
 	});
 
+	it("copies local bypass defaults without replacing existing configuration", async () => {
+		const example = await readFile("dev.vars.example", "utf8");
+		expect(example).toContain("ACCESS_DEV_BYPASS_EMAIL=dev@local\n");
+		expect(example).toContain("RESOURCE_ENV=development\n");
+		await withDir(async (root) => {
+			await writeFile(join(root, "dev.vars.example"), example);
+			ensureDevVars(root);
+			expect(await readFile(join(root, ".dev.vars"), "utf8")).toBe(example);
+			await writeFile(join(root, ".dev.vars"), "ACCESS_DEV_BYPASS_EMAIL=\nRESOURCE_ENV=test\n");
+			ensureDevVars(root);
+			expect(await readFile(join(root, ".dev.vars"), "utf8")).toBe(
+				"ACCESS_DEV_BYPASS_EMAIL=\nRESOURCE_ENV=test\n",
+			);
+		});
+	});
 	it("copies the example when missing", async () => {
 		await withDir(async (root) => {
 			await writeFile(join(root, "dev.vars.example"), "API_KEY_PEPPER=x");
