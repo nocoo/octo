@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { root } from "../../scripts/e2e";
@@ -73,28 +72,6 @@ describe("tags api", () => {
 		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg1')`);
 		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm2', 'tg1')`);
 		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg2')`);
-		d1("INSERT INTO memories_fts(title, body, tags) VALUES('t','b','alpha beta')");
-		const ftsId = rows<{ rowid: number }>(
-			execFileSync(
-				join(root, "node_modules/.bin/wrangler"),
-				[
-					"d1",
-					"execute",
-					"octo-db",
-					"--local",
-					`--persist-to=${process.env.OCTO_PERSIST}`,
-					`--config=${process.env.OCTO_CONFIG}`,
-					"--json",
-					"--command",
-					"SELECT rowid FROM memories_fts LIMIT 1",
-				],
-				{ encoding: "utf8" },
-			),
-		)[0]?.rowid;
-		if (ftsId) {
-			d1(`INSERT OR IGNORE INTO memories_fts_map (memory_id, fts_rowid) VALUES ('mm1', ${ftsId})`);
-		}
-
 		const anon = await fetch(`${base}/api/v1/tags`);
 		expect(anon.status).toBe(401);
 

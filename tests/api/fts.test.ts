@@ -38,9 +38,13 @@ describe("FTS5 trigram on local D1", () => {
 					"--json",
 				]),
 			).map((row) => row.rowid);
-		expect(match("三个字")).toEqual([2]);
-		expect(match("cdef")).toEqual([2]);
-		expect(match("cloudflare")).toEqual([1]);
+		const chinese = match("三个字");
+		const english = match("cdef");
+		const cloudflare = match("cloudflare");
+		expect(chinese).toHaveLength(1);
+		expect(english).toEqual(chinese);
+		expect(cloudflare).toHaveLength(1);
+		expect(cloudflare[0]).not.toBe(chinese[0]);
 		expect(match("部署")).toEqual([]);
 		const ordered = rows<{ rowid: number; score: number }>(
 			d1([
@@ -51,7 +55,7 @@ describe("FTS5 trigram on local D1", () => {
 		);
 		expect(ordered.length).toBeGreaterThan(0);
 		expect(ordered[0]?.score).toBeLessThanOrEqual(ordered.at(-1)?.score ?? 0);
-		d1(["--command", "DELETE FROM memories_fts WHERE rowid = 1"]);
+		d1(["--command", `DELETE FROM memories_fts WHERE rowid = ${cloudflare[0]}`]);
 		expect(match("cloudflare")).toEqual([]);
 	});
 });
