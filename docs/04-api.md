@@ -64,6 +64,12 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 | POST | `/memories:batchDelete` | delete | ≤100 个 id |
 | PUT | `/memories/:id/vector` | update | 单独写或替换向量 `{profile, values}` |
 
+Vector PUT uses the same versioned write contract as PATCH: supply
+`expected_version` in the body or the matching `If-Match` header. It requires
+`u` permission (not `r`), returns the updated memory, increments its version,
+and supports idempotency through the same atomic write boundary. The body is
+`{profile,values,expected_version?}`, not a nested `vector` object.
+
 ### 版本
 
 | 方法 | 路径 | 权限 | 说明 |

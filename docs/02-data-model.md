@@ -196,6 +196,8 @@ Vectorize. Backfill writes a guarded vector to D1, then uses this same queue;
 client-provided vectors and newer memory revisions must not be overwritten.
 Purge atomically removes D1 data and records R2 cleanup work; failed external
 cleanup remains retryable without resurrecting the memory or deleting audit.
+R2 cleanup is bounded to 100 objects per drain and orders retries by last
+attempt, so repeatedly failing older objects do not starve newer purges.
 
 ## 4. 版本
 

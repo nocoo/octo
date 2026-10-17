@@ -349,6 +349,25 @@ blocked that import boundary. The test now lives with the server tests; no
 compiler contract was relaxed. HTTP tests explicitly drain registered local
 background work instead of adding sleeps or polling until an assertion passes.
 
+The first integrated HTTP run passed 194 of 205 tests. New background writes
+overlapped the separate local fixture D1 runtime, producing marker-check
+failures and local D1 internal errors. Fixture access now explicitly drains the
+running Worker's registered background work before opening or querying the
+shared isolated store; the existing local-only path and marker checks remain.
+Its unit substitutes also need to model this new boundary rather than bypass
+the isolation checks.
+
+Both real HTTP embedding probes failed before reaching their local stub.
+An isolated workerd reproduction established that `redirect: "error"` throws
+`TypeError: Invalid redirect value` immediately, although the host-side fetch
+mock accepted it. The gateway now uses supported manual redirect handling and
+rejects non-2xx responses without following Location or reading their body.
+Browser/Node fetch typing is not proof of Worker runtime compatibility.
+
+The same failed-prefix starvation pattern also affected the bounded R2 purge
+queue. A 101-job regression now requires healthy later cleanup to progress;
+failed jobs retain their creation time but advance their last-attempt ordering.
+
 ## M7 purge fault-injection correction
 
 An initial preparation-failure test bound the original database method after installing its spy. The bound spy consumed the next injected failure during the initial lookup, so the test passed without exercising SQL preparation. Capturing the original method before installing the spy exposed an uncaught preparation failure. Purge now maps preparation and commit failures through the same safe 503 boundary, while its transactional guard rejects changed trash snapshots. Fault-injection tests must verify the failing phase, not merely the final status.
