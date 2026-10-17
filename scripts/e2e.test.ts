@@ -119,6 +119,7 @@ describe("e2e helpers", () => {
 		expect(listenErrorCode({ code: "EADDRINUSE" })).toBe("EADDRINUSE");
 		expect(String(listenError({ code: "EADDRINUSE" }, 9))).toContain("already in use");
 		expect(listenError("boom", 9)).toBe("boom");
+		expect(listenErrorCode(null)).toBe("");
 	});
 
 	it("prepares the e2e db with a stub executor", async () => {

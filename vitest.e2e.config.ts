@@ -5,6 +5,7 @@ export default defineConfig({
 		environment: "node",
 		include: ["tests/api/**/*.test.ts"],
 		fileParallelism: false,
+		maxWorkers: 1,
 		testTimeout: 120_000,
 	},
 });
