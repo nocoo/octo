@@ -18,6 +18,11 @@ function newId(): string {
 
 export class StubMemoryService implements MemoryService {
 	private readonly store = new Map<string, MemoryRecord>();
+
+	async resolveSpace(slug: string, _ctx: MemoryServiceContext): Promise<string> {
+		return `space:${slug}`;
+	}
+
 	async get(id: string, _ctx: MemoryServiceContext): Promise<MemoryRecord | null> {
 		return this.store.get(id) ?? null;
 	}
@@ -28,7 +33,7 @@ export class StubMemoryService implements MemoryService {
 		const record: MemoryRecord = {
 			id,
 			space: input.space,
-			space_id: ctx.spaceId ?? input.space,
+			space_id: await this.resolveSpace(input.space, ctx),
 			source_key_id: ctx.keyId,
 			title: input.title,
 			body: input.body,
@@ -60,7 +65,7 @@ export class StubMemoryService implements MemoryService {
 		const updated: MemoryRecord = {
 			...existing,
 			space: patch.space ?? existing.space,
-			space_id: ctx.spaceId ?? existing.space_id,
+			space_id: patch.space ? await this.resolveSpace(patch.space, ctx) : existing.space_id,
 			title: patch.title ?? existing.title,
 			body: patch.body ?? existing.body,
 			type: patch.type ?? existing.type,

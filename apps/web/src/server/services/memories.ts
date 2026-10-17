@@ -18,7 +18,6 @@ export type MemoryRecord = {
 export type MemoryServiceContext = {
 	keyId: string;
 	actor: string;
-	spaceId?: string;
 };
 
 export type MemoryServiceError = {
@@ -28,6 +27,7 @@ export type MemoryServiceError = {
 };
 
 export interface MemoryService {
+	resolveSpace(slug: string, ctx: MemoryServiceContext): Promise<string>;
 	get(id: string, ctx: MemoryServiceContext): Promise<MemoryRecord | null>;
 	create(input: MemoryCreate, ctx: MemoryServiceContext): Promise<MemoryRecord>;
 	update(
