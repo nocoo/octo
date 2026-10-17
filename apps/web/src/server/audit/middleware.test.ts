@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import { hashSecret, mintApiKey } from "../auth/api-key";
 import type { AppVars, Env } from "../env";
+import { idempotencyMiddleware } from "../http/idempotency";
 import { ApiError } from "../lib/errors";
 import { execution, PEPPER, testApp, testEnv } from "./__tests__/app";
 import { auditMiddleware } from "./middleware";
@@ -19,6 +20,43 @@ function rows(sqlite: ReturnType<typeof sqliteD1>["sqlite"]) {
 }
 
 describe("audit middleware", () => {
+	it.each(["version_conflict", "tag_conflict", "idempotency_conflict"] as const)(
+		"preserves the exact %s audit code on idempotent error replay",
+		async (code) => {
+			const { db, sqlite, env, app, ctx, flush } = setup();
+			const key = await mintApiKey(db, PEPPER, {
+				name: "writer",
+				role: "admin",
+				ops: "r,w,u,d",
+				scope: "all",
+			});
+			app.use("/api/v1/*", idempotencyMiddleware());
+			app.post("/api/v1/error", () => {
+				throw new ApiError(code, "private message");
+			});
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const response = await app.request(
+					"http://local/api/v1/error",
+					{
+						method: "POST",
+						headers: {
+							Authorization: `Bearer ${key.plaintext}`,
+							"Idempotency-Key": "error-replay",
+						},
+						body: "{}",
+					},
+					env,
+					ctx,
+				);
+				expect(response.status).toBe(409);
+				expect(response.headers.get("Idempotent-Replayed")).toBe(attempt === 1 ? "true" : null);
+			}
+			await flush();
+			expect(rows(sqlite).map((row) => row.error_code)).toEqual([code, code]);
+			sqlite.close();
+		},
+	);
+
 	it("audits denied, missing, admin and authenticated calls with final status", async () => {
 		const { db, sqlite, env, app, ctx, flush } = setup();
 		const key = await mintApiKey(db, PEPPER, {

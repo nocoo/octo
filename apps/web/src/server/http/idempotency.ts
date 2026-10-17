@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
+import { errorCodeSchema } from "../../lib/schema/errors";
 import type { AppVars, Env } from "../env";
 import { ApiError } from "../lib/errors";
 import { authorizeBatchReplay, prepareBatchAuthorization } from "./batch-authorization";
@@ -7,7 +8,16 @@ import { commitIdempotencyOutcome, readIdempotencyResponse } from "./idempotency
 import { authorizeMemoryRequest } from "./memory-authorization";
 import { requestHash } from "./request-hash";
 
-function replayResponse(outcome: { status: number; body: string }): Response {
+function replayResponse(
+	context: Context<{ Bindings: Env; Variables: AppVars }>,
+	outcome: { status: number; body: string },
+): Response {
+	if (outcome.status >= 400) {
+		try {
+			const parsed = errorCodeSchema.safeParse(JSON.parse(outcome.body)?.error?.code);
+			if (parsed.success) context.set("responseErrorCode", parsed.data);
+		} catch {}
+	}
 	return new Response(outcome.body, {
 		status: outcome.status,
 		headers: { "content-type": "application/json; charset=utf-8", "Idempotent-Replayed": "true" },
@@ -69,7 +79,7 @@ export function idempotencyMiddleware(
 			if (existing) {
 				await authorizeMemoryRequest(c, existing, prefix);
 				await authorizeBatchReplay(c, existing, prefix);
-				return replayResponse(existing);
+				return replayResponse(c, existing);
 			}
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
@@ -99,7 +109,7 @@ export function idempotencyMiddleware(
 				if (outcome) {
 					await authorizeMemoryRequest(c, outcome, prefix);
 					await authorizeBatchReplay(c, outcome, prefix);
-					c.res = replayResponse(outcome);
+					c.res = replayResponse(c, outcome);
 					return;
 				}
 			} catch (err) {

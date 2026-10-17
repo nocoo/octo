@@ -10,6 +10,7 @@ export type AppVars = {
 	attachmentUpload: ParsedUpload;
 	apiKey: ApiPrincipal;
 	adminEmail: string;
+	responseErrorCode: ErrorCode;
 };
 
 export interface Env extends CloudflareBindings {
@@ -35,3 +36,5 @@ export function resourceEnv(value: string | undefined): ResourceEnv {
 	}
 	return "production";
 }
+
+import type { ErrorCode } from "../lib/schema/errors";
