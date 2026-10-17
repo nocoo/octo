@@ -15,6 +15,23 @@ describe("l2Normalize", () => {
 		expect(dot(v, v)).toBeCloseTo(1);
 	});
 
+	it.each([
+		[3e300, 4e300],
+		[3e-300, 4e-300],
+		[Number.MIN_VALUE, Number.MIN_VALUE],
+	])("normalizes finite magnitudes without overflow: %j", (...values) => {
+		const result = l2Normalize(values);
+		expect(result.every(Number.isFinite)).toBe(true);
+		expect(dot(result, result)).toBeCloseTo(1, 12);
+	});
+
+	it.each([
+		[Infinity, 1],
+		[NaN, 1],
+	])("rejects non-finite components: %j", (...values) => {
+		expect(() => l2Normalize(values)).toThrow("finite");
+	});
+
 	it("rejects a zero vector", () => {
 		expect(() => l2Normalize([0, 0])).toThrow("zero vector");
 	});

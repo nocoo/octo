@@ -1,6 +1,6 @@
 import { d1Results } from "../../lib/d1";
 import type { SqlFilter } from "../../search/filters-sql";
-import { decodeFloat32Vector, dot } from "../../search/math";
+import { decodeFloat32Vector, dot, l2Normalize } from "../../search/math";
 import type { VectorQueryHit, VectorQueryInput, VectorStore } from "./types";
 import { capVectorTopK } from "./types";
 
@@ -32,10 +32,12 @@ AND ${clauses.join(" AND ")}
 			.prepare(sql)
 			.bind(this.profileId, ...binds)
 			.all<D1VectorRow>();
+		const queryVector = l2Normalize(input.vector);
 		const scored: VectorQueryHit[] = [];
 		for (const row of d1Results(rows)) {
-			const values = decodeFloat32Vector(row.vector, row.dim);
-			scored.push({ id: row.memory_id, score: dot(input.vector, values) });
+			if (row.dim !== queryVector.length) throw new Error("vector dimension mismatch");
+			const values = l2Normalize(decodeFloat32Vector(row.vector, row.dim));
+			scored.push({ id: row.memory_id, score: dot(queryVector, values) });
 		}
 		scored.sort((a, b) => b.score - a.score);
 		return scored.slice(0, topK);

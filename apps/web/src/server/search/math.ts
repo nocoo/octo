@@ -1,13 +1,13 @@
 export function l2Normalize(values: number[]): number[] {
-	let sumSq = 0;
-	for (const v of values) {
-		sumSq += v * v;
+	let scale = 0;
+	for (const value of values) {
+		if (!Number.isFinite(value)) throw new Error("vector values must be finite");
+		scale = Math.max(scale, Math.abs(value));
 	}
-	if (sumSq === 0) {
-		throw new Error("zero vector");
-	}
-	const inv = 1 / Math.sqrt(sumSq);
-	return values.map((v) => v * inv);
+	if (scale === 0) throw new Error("zero vector");
+	const scaled = values.map((value) => value / scale);
+	const norm = Math.sqrt(scaled.reduce((sum, value) => sum + value * value, 0));
+	return scaled.map((value) => value / norm);
 }
 
 export function dot(a: number[], b: number[]): number {

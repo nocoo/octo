@@ -27,6 +27,29 @@ describe("D1BruteForceVectorStore", () => {
 		expect(hits[0]?.score).toBeCloseTo(1);
 	});
 
+	it("computes true cosine for scaled queries and stored vectors", async () => {
+		const db = {
+			prepare: () => ({
+				bind: () => ({
+					all: async () => ({
+						results: [
+							{ memory_id: "same", dim: 2, vector: encodeFloat32Vector([3, 4]).buffer },
+							{ memory_id: "opposite", dim: 2, vector: encodeFloat32Vector([-3, -4]).buffer },
+						],
+					}),
+				}),
+			}),
+		} as never;
+		const store = new D1BruteForceVectorStore(db, "p1", { clauses: ["1=1"], binds: [] });
+		const hits = await store.query({ vector: [3e300, 4e300], topK: 10, returnMetadata: false });
+		expect(hits.map((hit) => hit.id)).toEqual(["same", "opposite"]);
+		expect(hits[0]?.score).toBeCloseTo(1, 12);
+		expect(hits[1]?.score).toBeCloseTo(-1, 12);
+		await expect(store.query({ vector: [1], topK: 1, returnMetadata: false })).rejects.toThrow(
+			"dimension",
+		);
+	});
+
 	it("handles missing result sets and metadata topK", async () => {
 		const db = {
 			prepare: () => ({
