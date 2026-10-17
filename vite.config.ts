@@ -19,6 +19,7 @@ export default defineConfig({
 		},
 		proxy: {
 			"/api": `http://127.0.0.1:${DEV_WORKER_PORT}`,
+			"/files": `http://127.0.0.1:${DEV_WORKER_PORT}`,
 			"/mcp": `http://127.0.0.1:${DEV_WORKER_PORT}`,
 		},
 	},

@@ -66,6 +66,30 @@ M6's generic non-GET replay middleware captured M4 search and batchGet. Real M1-
 
 Rebasing M4 onto `d774ee5` preserved M6's injected batch-write service, idempotency middleware, scheduled cleanup, cursor code and all M3 routes. The earlier node-SQLite migration helper commit was redundant with main's identical implementation and was dropped; main's async D1 helpers were retained unchanged. The FTS vocabulary regression now uses M6's awaited marker-checked fixture/query helpers. Conflict resolution retained both milestone narratives and the combined endpoint inventory. Full L1 exposed two stale test assumptions: M4's local-config test still expected the production entrypoint rather than M6's explicit fixture Worker, and M6's no-write-service test incorrectly included independent read-only batchGet among absent write routes. Exact assertions now protect the fixture entrypoint, mounted batchGet and absent batch writes rather than changing either runtime contract.
 
+## 2026-10-17 — Distinguish unused-body rejection from active-reader cancellation
+
+Independent review reproduced a raw 50 MiB + 1 request returning ProxyWorker 500 immediately after a successful exact-limit upload, with no fixture CLI work between requests. My prior 25/25 run did not prove that intermittent path reliable, and the stale-socket experiment does not explain it. I had required explicit cancellation even for a body never read. The matching workerd source retains the incoming body through response sending and delegates unused-body cleanup to the runtime after response proxying. The candidate correction rejects declared oversize without touching the body, while preserving cancellation of an active reader on actual overflow. Reader and route guards failed first because cancellation preceded the error response, then passed after removing that one early cancel. Real HTTP causal verification remains pending the controller's next exclusive window; unit guards alone do not prove the historical 500 fixed.
+
+## 2026-10-17 — Do not block a live HTTP client's event loop
+
+The authorized M5 L2 reproduction failed six first-POST requests after synchronous fixture CLI work with ECONNRESET, UND_ERR_SOCKET or EPIPE. A controlled probe against the same isolated Wrangler Worker warmed a POST connection, executed eight marker queries synchronously (9122 ms), and observed Undici reuse the same socket before UND_ERR_SOCKET. The async control ran the same queries (10336 ms), observed a fresh connection, and received the expected 401 without retrying. Attachment fixtures now use async execFile and await marker checks, inserts, mutations and cleanup; sync startup/schema APIs remain unchanged. The complete L2 then passed 25/25, including both chunked JSON 413 paths, 50 MiB raw/multipart, permission loops and signed download/deletion. The earlier ProxyWorker 500 did not recur even in the pre-fix reproduction, so its historical cause is not proven by the socket experiment; cancellation was not weakened or changed.
+
+## 2026-10-17 — Preserve transport failure evidence
+
+The first attachment L2 review exposed a ProxyWorker 500 on streamed rejection and five ECONNRESETs that unit cancellation mocks could not diagnose. My paired raw/multipart loop also stopped at the first failure without identifying which transport path failed. The cases are now separate, and request errors retain their causes plus method/origin/path without logging auth or signature query parameters. No retries or relaxed assertions were added. Synchronous fixture execution and idle connection reuse remain hypotheses until a controlled HTTP reproduction establishes the cause; passing mocked cancellation is not proof of a delivered 413.
+
+## 2026-10-17 — Pin the isolated public origin
+
+I changed download tests to fetch the absolute signed URL without asserting its origin. Wrangler's host rewrite dropped the reserved port, so the test accepted an unrelated 200 before failing its ETag assertion. The L2 runner now sets the existing `ATTACHMENT_URL_HOST` override to its own isolated origin; unit tests verify default and custom ports and the actual generated env file. Every signed-URL test checks the origin before fetching. Production origin derivation is unchanged. HTTP acceptance remains pending the controller's port window.
+
+## 2026-10-17 — Exercise fixture constraints before handoff
+
+I expanded the attachment permission matrix with a key helper that reused a literal name despite `api_keys.name` being unique. L1 passed because the HTTP fixtures were not exercised there, and the three permission scenarios aborted before their assertions in review. The helper now uses its generated key ID in the fixture name. A SQLite-backed L1 test invokes the actual helper four times against the real migration and verifies permissions and cleanup. Unexecuted L2 assertions are a pending verification requirement, not completed behavioral proof.
+
+## 2026-10-17 — Stream assertions must avoid request cloning
+
+An upload authorization regression test initially used Hono's `app.request(request, {})`. Reconstructing the Request can pull its stream before the handler runs, so a pull-count assertion incorrectly blamed the authorization path. Calling `app.fetch(request, bindings)` directly isolates handler consumption. For stream-order tests, use a zero-high-water-mark source and pass the original Request without wrapping or cloning it.
+
 ## M6: shared-run observations must be fixture-scoped
 
 M3's tag test queried every tag_merged event and expected only its two memories.

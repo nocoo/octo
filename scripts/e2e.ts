@@ -242,11 +242,12 @@ export async function stopChild(child: ChildProcess, sleeper = sleep): Promise<v
 	}
 }
 
-export function e2eEnvContents(jwksPort = L2_JWKS_PORT): string {
+export function e2eEnvContents(jwksPort = L2_JWKS_PORT, workerPort = L2_WORKER_PORT): string {
 	const iss = l2AccessIss(jwksPort);
 	return [
 		"API_KEY_PEPPER=change-me-api-key-pepper",
 		"ATTACHMENT_URL_SECRET=change-me-attachment-url-secret",
+		`ATTACHMENT_URL_HOST=http://127.0.0.1:${workerPort}`,
 		"OCTO_SETTINGS_KEY=change-me-octo-settings-key",
 		"RESOURCE_ENV=test",
 		`CF_ACCESS_TEAM_DOMAIN=${iss}`,
@@ -290,7 +291,7 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	await writeFile(configPath, rewritten);
 	const envFile = join(tmp, ".env");
 	const jwksPort = options.jwksPort ?? L2_JWKS_PORT;
-	await writeFile(envFile, e2eEnvContents(jwksPort));
+	await writeFile(envFile, e2eEnvContents(jwksPort, port));
 	const state = await (options.generateJwks ?? generateJwksPair)();
 	const jwksStatePath = join(tmp, "jwks-state.json");
 	await writeFile(jwksStatePath, JSON.stringify(state));

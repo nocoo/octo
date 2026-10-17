@@ -13,6 +13,7 @@ export interface Env extends CloudflareBindings {
 	VEC?: Vectorize;
 	API_KEY_PEPPER?: string;
 	ATTACHMENT_URL_SECRET?: string;
+	ATTACHMENT_URL_HOST?: string;
 	OCTO_SETTINGS_KEY?: string;
 	RESOURCE_ENV?: string;
 	CF_ACCESS_TEAM_DOMAIN?: string;

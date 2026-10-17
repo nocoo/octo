@@ -9,8 +9,10 @@ import { jsonError, toErrorResponse } from "./lib/errors";
 import { newRequestId, withOctoHeaders } from "./lib/request";
 import { accessMiddleware } from "./middleware/access";
 import { whoamiResponse } from "./routes/admin/whoami";
+import { createFilesRoutes } from "./routes/files";
 import { liveResponse } from "./routes/live";
 import { createV1Routes } from "./routes/v1";
+import { createAttachmentsRoutes } from "./routes/v1/attachments";
 import { changesRoutes } from "./routes/v1/changes";
 import { meResponse } from "./routes/v1/me";
 import { memoriesRoutes } from "./routes/v1/memories";
@@ -61,6 +63,8 @@ export function createApp(): Hono<{
 	app.get("/api/admin/whoami", (c) => whoamiResponse(c));
 	app.route("/api/v1/tags", tagsRoutes());
 	app.route("/api/v1/spaces", spacesRoutes());
+	app.route("/api/v1", createAttachmentsRoutes());
+	app.route("/", createFilesRoutes());
 	return app;
 }
 

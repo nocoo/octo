@@ -103,6 +103,8 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 | GET | `/files/<r2_key>?exp&sig` | 签名 | 不需要 API key；签名和有效期校验通过后流式返回；`Content-Disposition`、`ETag`=sha256；SVG 强制 `attachment` 下载 |
 | DELETE | `/attachments/:id` | delete | 软删除（随 memory purge 时物理删除） |
 
+Multipart uploads accept exactly one `file` part (no extra fields), with at most 50 MiB of file bytes and 64 KiB of envelope bytes. Raw uploads accept at most 50 MiB. Declared oversize requests are rejected before acquiring a body reader; the runtime owns cleanup of that unused body. Actual bytes are bounded while reading, and an active reader is cancelled on overflow.
+
 ### 回收站
 
 | 方法 | 路径 | 权限 | 说明 |

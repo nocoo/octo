@@ -66,6 +66,8 @@ describe("e2e helpers", () => {
 				"127.0.0.1",
 			]),
 		);
+		expect(e2eEnvContents(17057)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:17059");
+		expect(e2eEnvContents(17057, 18059)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:18059");
 		expect(e2eEnvContents(17057)).toContain("RESOURCE_ENV=test");
 		expect(e2eEnvContents(17057)).toContain("http://127.0.0.1:17057/cdn-cgi/access/certs");
 		expect(() => assertWranglerConfigLocal("name = 'octo'\n")).not.toThrow();
@@ -188,6 +190,7 @@ describe("runE2eApi", () => {
 		const vitest = vi.fn<(env: Record<string, string>) => Promise<void>>(async () => undefined);
 		const jwksClosed: boolean[] = [];
 		const code = await runE2eApi({
+			port: 18059,
 			prepareDb: async () => undefined,
 			assertFree: async () => undefined,
 			wait: async () => undefined,
@@ -230,6 +233,12 @@ describe("runE2eApi", () => {
 		expect(parse(await readFile(join(root, "wrangler.toml"), "utf8")).vectorize).toEqual([
 			{ binding: "VEC", index_name: "octo-vec-te3-small-1536", remote: false },
 		]);
+		const configPath = vitest.mock.calls[0]?.[0].OCTO_CONFIG;
+		expect(configPath).toBeDefined();
+		expect(await readFile(join(dirname(configPath ?? ""), ".env"), "utf8")).toContain(
+			"ATTACHMENT_URL_HOST=http://127.0.0.1:18059",
+		);
+		expect(vitest.mock.calls[0]?.[0].OCTO_E2E).toBe("http://127.0.0.1:18059");
 		expect(jwksClosed).toEqual([true]);
 		const livePort = await new Promise<number>((resolve, reject) => {
 			const server = createServer();
