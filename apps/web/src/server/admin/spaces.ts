@@ -4,12 +4,14 @@ import { newUlid } from "../lib/ulid";
 import type { SpaceRow } from "../repo/spaces";
 import { commitAdminMutation } from "./common";
 
+export const spaceSlugSchema = z
+	.string()
+	.min(1)
+	.max(64)
+	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
 const fields = {
-	slug: z
-		.string()
-		.min(1)
-		.max(128)
-		.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+	slug: spaceSlugSchema,
 	name: z.string().trim().min(1).max(256),
 	description: z.string().max(10000),
 	owner_key_id: z.string().min(1).nullable(),

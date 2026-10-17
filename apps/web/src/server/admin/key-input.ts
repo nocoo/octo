@@ -3,6 +3,7 @@ import type { ApiKeyRow, MintInput } from "../auth/api-key";
 import { ROLE_TEMPLATES } from "../auth/authorize";
 import { ApiError } from "../lib/errors";
 import { parseStrict } from "../lib/validate";
+import { spaceSlugSchema } from "./spaces";
 
 const fields = {
 	name: z.string().trim().min(1).max(128),
@@ -69,6 +70,8 @@ export async function resolveKeyInput(
 	const autoOwnSpace =
 		input.auto_own_space ??
 		(reset ? (template?.autoOwnSpace ?? false) : existing.auto_own_space === 1);
+	const name = input.name ?? (existing as ApiKeyRow).name;
+	if (autoOwnSpace) parseStrict(spaceSlugSchema, name);
 	if (template) {
 		const permittedScope =
 			role === "drop"
@@ -95,7 +98,7 @@ export async function resolveKeyInput(
 		if (results.length !== ids.length) throw new ApiError("validation_failed", "unknown space id");
 	}
 	return {
-		name: input.name ?? (existing as ApiKeyRow).name,
+		name,
 		role: role as string,
 		ops,
 		scope,

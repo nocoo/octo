@@ -91,6 +91,15 @@ describe("admin spaces", () => {
 		);
 	});
 
+	it("keeps created and renamed slugs within the memory write contract", async () => {
+		const accepted = "a".repeat(64);
+		await create({ slug: accepted });
+		expect((await request("", "POST", { slug: "a".repeat(65), name: "too long" })).status).toBe(
+			400,
+		);
+		expect((await request(`/${accepted}`, "PATCH", { slug: "b".repeat(65) })).status).toBe(400);
+	});
+
 	it("rejects deletion of live and trashed memories without writing a change", async () => {
 		for (const deleted_at of [null, 1000]) {
 			const slug = deleted_at === null ? "live" : "trashed";

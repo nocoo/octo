@@ -77,6 +77,15 @@ describe("admin keys", () => {
 		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM changes").get()).toMatchObject({ n: 0 });
 	});
 
+	it("requires auto-owned space names to satisfy the space slug contract", async () => {
+		for (const name of ["a".repeat(65), "UpperCase", "with space", "with/slash"]) {
+			expect((await request("", "POST", { name, role: "project" })).status).toBe(400);
+		}
+		const { key } = await mint({ name: "a".repeat(64), role: "project" });
+		expect((await request(`/${key.id}`, "PATCH", { name: "b".repeat(65) })).status).toBe(400);
+		await mint({ name: "long-display-name-".repeat(6), role: "readonly" });
+	});
+
 	it("marks plaintext responses as non-cacheable and accepts omitted rotation options", async () => {
 		const created = await request("", "POST", { name: "uncached", role: "admin" });
 		expect(created.status).toBe(201);

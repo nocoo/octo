@@ -170,6 +170,9 @@ Key lists and space lists return `{items,next_cursor:null}`. Space PATCH uses
 the create fields, all optional; deletion returns `{id,slug,deleted:true}`.
 Key administration is recorded only in the protected audit log, never the
 public memory/space change stream.
+Space slugs are 1–64 lowercase alphanumeric characters with single interior
+hyphens. Keys with `auto_own_space` enabled, including `project`, require a name
+meeting the same slug contract so their space can be used by memory writes.
 
 Audit returns `{items,next_cursor}`. Items contain
 `id,at,actor,method,route,status,error_code,request_id,duration_ms,bytes_in,bytes_out,ip_hash`.
