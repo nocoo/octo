@@ -14,7 +14,6 @@ body {
 	box-sizing: border-box;
 }
 a {
-	color: inherit;
 	text-underline-offset: var(--basalt-space-sm);
 }
 .octo-island {

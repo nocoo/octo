@@ -68,6 +68,24 @@ for (const [path, heading, endpoints] of pages) {
 }
 
 for (const colorScheme of ["light", "dark"] as const) {
+	test(`${colorScheme} primary links retain the Basalt foreground`, async ({ page }) => {
+		await page.emulateMedia({ colorScheme });
+		await page.goto("/settings");
+		const link = page.getByRole("link", { name: "配置嵌入网关", exact: true });
+		await expect(link).toBeVisible();
+		const colors = await link.evaluate((element) => {
+			const actual = getComputedStyle(element).color;
+			const token = getComputedStyle(element).getPropertyValue("--basalt-primary-foreground");
+			const probe = document.createElement("span");
+			probe.style.color = "hsl(var(--basalt-primary-foreground))";
+			element.appendChild(probe);
+			const expected = getComputedStyle(probe).color;
+			probe.remove();
+			return { actual, expected, token };
+		});
+		expect(colors.token.trim()).not.toBe("");
+		expect(colors.actual).toBe(colors.expected);
+	});
 	for (const reducedMotion of ["no-preference", "reduce"] as const) {
 		test(`${colorScheme} theme with motion ${reducedMotion}`, async ({ page, admin }, info) => {
 			await page.emulateMedia({ colorScheme, reducedMotion });
