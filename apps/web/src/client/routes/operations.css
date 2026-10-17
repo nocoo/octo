@@ -3,11 +3,6 @@
 	block-size: clamp(14rem, 26vh, 20rem);
 }
 
-.ops-sparkline {
-	inline-size: 9rem;
-	min-block-size: var(--basalt-size-control);
-}
-
 .ops-audit-scroll {
 	block-size: min(60vh, 32rem);
 }

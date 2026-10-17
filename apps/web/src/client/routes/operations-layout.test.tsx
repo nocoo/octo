@@ -131,5 +131,6 @@ describe("installed Basalt operations composition", () => {
 		}
 		const css = readFileSync(new URL("./operations.css", import.meta.url), "utf8");
 		expect(css).not.toMatch(/(?:padding|margin|gap):\s*\d/);
+		expect(css).not.toContain(".ops-sparkline");
 	});
 });
