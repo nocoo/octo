@@ -158,6 +158,32 @@ describe("library data", () => {
 			json: { slug: "new", name: "New", description: "Detail" },
 		});
 	});
+	it("reports a committed tag write as success even when revalidation fails", async () => {
+		const { api, request } = fake([
+			envelope([{ id: "t", name: "alpha", display_name: "Alpha", use_count: 2 }]),
+			envelope([]),
+			{},
+			new Error("offline"),
+		]);
+		const model = new LibraryModel("tags", api);
+		await model.load();
+		expect(await model.changeTag("rename", "alpha", "new")).toBe(true);
+		expect(model.state.notice).toBe("Renamed tag affecting 2 memories");
+		expect(model.state.error).toBe("Saved, but refresh failed: offline");
+		expect(model.state.tags[0]?.name).toBe("alpha");
+		expect(request.mock.calls).toHaveLength(4);
+	});
+	it("does not suggest repeating space creation when a post-write refresh fails", async () => {
+		const { api, request } = fake([{}, new Error("unavailable")]);
+		const model = new LibraryModel("spaces", api);
+		expect(await model.createSpace({ slug: "work", name: "Work", description: "" })).toBe(true);
+		expect(model.state).toMatchObject({
+			notice: "Space created",
+			error: "Saved, but refresh failed: unavailable",
+			busy: false,
+		});
+		expect(request.mock.calls).toHaveLength(2);
+	});
 	it("restores only selected trash, retains failures and requires two purge confirmations", async () => {
 		const { api, request } = fake([
 			envelope([memory("m1"), memory("m2")]),

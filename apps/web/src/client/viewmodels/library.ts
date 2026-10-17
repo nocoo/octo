@@ -129,6 +129,14 @@ export class LibraryModel extends Store<LibraryState> {
 		return this.run(() => this.read());
 	}
 
+	private async refreshCommitted(): Promise<void> {
+		try {
+			await this.read();
+		} catch (error) {
+			this.set({ error: `Saved, but refresh failed: ${libraryError(error)}` });
+		}
+	}
+
 	changeTag(operation: "rename" | "merge", source: string, target: string): Promise<boolean> {
 		return this.run(async () => {
 			const tag = this.state.tags.find((item) => item.name === source);
@@ -147,7 +155,7 @@ export class LibraryModel extends Store<LibraryState> {
 			this.set({
 				notice: `${operation === "rename" ? "Renamed" : "Merged"} tag affecting ${tag.use_count} memories`,
 			});
-			await this.read();
+			await this.refreshCommitted();
 		});
 	}
 
@@ -164,7 +172,7 @@ export class LibraryModel extends Store<LibraryState> {
 				},
 			});
 			this.set({ notice: "Space created" });
-			await this.read();
+			await this.refreshCommitted();
 		});
 	}
 
