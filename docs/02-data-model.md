@@ -118,6 +118,16 @@ CREATE TABLE memory_vectors (
   PRIMARY KEY (memory_id, profile_id)
 );
 
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,             -- 如 embedding.base_url / embedding.model / embedding.dims / embedding.backfill_enabled / embedding.api_key
+  value TEXT,                       -- 明文配置值；敏感项为 NULL
+  ciphertext BLOB,                  -- 敏感项：AES-GCM（OCTO_SETTINGS_KEY）密文
+  iv BLOB,
+  key_version INTEGER,              -- master key 版本，便于轮换
+  updated_by TEXT NOT NULL,         -- admin:<email>
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE changes (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, -- 全局单调，游标基础
   entity TEXT NOT NULL,             -- memory|tag|space|attachment

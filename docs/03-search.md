@@ -37,12 +37,18 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
   - `D1BruteForceVectorStore`（本地 dev / L2 / L3）：从 `memory_vectors` 读取，在 Worker 内算 cosine，并实现同一套过滤语义。
   - 两个实现共用同一套契约测试。生产路径的真实行为在部署后用只读冒烟脚本验证（手动，不进门禁）。
 
-### 2.1 查询向量提供方（dashboard）
+### 2.1 向量模型设置与查询向量（dashboard）
 
-- 抽象为 `QueryEmbedder` 端口：`embed(texts: string[]) → number[][] | unavailable`。API 调用方照常自带查询向量，不经过这个端口。
-- 生产实现 `GatewayEmbedder`：`POST {EMBEDDING_BASE_URL}/v1/embeddings`，请求头 `Authorization: Bearer {EMBEDDING_API_KEY}`、`Content-Type: application/json` 和**必填的** `User-Agent: octo/<APP_VERSION>`（网关不带 UA 会返回 403），body 为 `{"model": "text-embedding-3-small", "input": [...]}`；返回后校验维度并做 L2 归一化。
-- 两个 secret 任一未设置、网关出错或超时（5 秒）时，dashboard 搜索**降级为全文 + 过滤**，响应里带 `channels.vector = {skipped: "embedder_unavailable"}`，UI 显示提示条。
-- L1 / L2 用本地 stub embedder，测试不访问真实网关。
+- **配置位置：** dashboard 的「向量模型」设置页（`/settings/embedding`），只走 Access 保护的 `/api/admin/settings/embedding`，**绝不**通过 `/api/v1` 或任何 API key 暴露。
+- **字段：** `base_url`、`api_key`、`model`（默认 `text-embedding-3-small`）、`dims`（默认 1536）、`backfill_enabled`（默认关）。
+- **API key 的存储：** 在 D1 `settings` 表中用 AES-GCM 加密保存，master key 是 Worker secret `OCTO_SETTINGS_KEY`。只能写不能读：GET 只返回 `api_key_set: true/false` 和末 4 位掩码，从不回显明文；可以整体替换或清除。明文只在提交那次请求体和 Worker 内存中出现，不进日志。
+- **「测试连接」按钮：** `POST /api/admin/settings/embedding/test` 用当前（或尚未保存的）配置嵌入一个固定短文本，返回耗时、实际维度、维度是否匹配和错误码（不返回上游原始错误）。
+- **调用方式：** `QueryEmbedder` 端口，实现为 `GatewayEmbedder`：`POST {base_url}/v1/embeddings`，请求头 `Authorization: Bearer <api_key>`、`Content-Type: application/json`，并且**始终带** `User-Agent: octo/<APP_VERSION>`（网关不带 UA 会返回 403）；body `{"model", "input": [...]}`；超时 5 秒；结果校验维度后做 L2 归一化。
+- **dashboard 搜索：** 查询文本经 `QueryEmbedder` 转成向量后走混合搜索。未配置或调用失败时**降级为全文 + 过滤**，响应带 `channels.vector = {skipped: "embedder_unavailable"}`，UI 显示提示条。
+- **API 不变：** `/api/v1` 的写入和搜索仍由调用方自带向量，服务端不替 API 生成查询向量。
+- **可选的服务端补向量（backfill）：** dashboard 里的开关，**默认关闭**。开启且配置了模型时，没有带向量的写入（v1 或 dashboard）在响应后通过 `ctx.waitUntil` 异步调用 embedder，写入 `memory_vectors`（`embedding_model` / `dim` 记为当前配置的值）并索引到 Vectorize。失败只记日志（observability + `memory_vectors` 缺失 / `indexed_at` 为空，健康页可见），不影响写入结果。补向量用的文本是 `title + "\n\n" + body`，超长部分截断。
+- 配置的 `model` / `dims` 必须和活跃的 embedding profile 一致，否则保存失败（`dims` 不同意味着需要新的 Vectorize 索引，见上文的 profile 切换流程）。
+- L1 / L2 使用本地 stub 网关，测试不访问真实网关；stub 会断言请求带了 User-Agent。
 
 ## 3. 过滤
 

@@ -122,7 +122,7 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 
 ## 6. Admin API（只给 dashboard）
 
-前缀 `/api/admin/*`，要求通过 Cloudflare Access JWT 校验，并且写请求必须同源（`Origin` 必须等于 `https://octo.hexly.ai`，开发环境是 `https://octo.dev.hexly.ai`）。功能：key 的增删改查、轮换、吊销；space 增删改；purge；审计查询；全局用量；embedding profile 管理；回收站批量操作；以及与 v1 对等的读写（actor 记为 `admin:<email>`）。详见 [05](05-auth-permissions-audit.md)、[06](06-dashboard.md)。
+前缀 `/api/admin/*`，要求通过 Cloudflare Access JWT 校验，并且写请求必须同源（`Origin` 必须等于 `https://octo.hexly.ai`，开发环境是 `https://octo.dev.hexly.ai`）。功能：key 的增删改查、轮换、吊销；space 增删改；purge；审计查询；全局用量；embedding profile 管理；向量模型设置（`GET/PUT /api/admin/settings/embedding`，API key 只能写；`POST …/test` 测试连接）；回收站批量操作；以及与 v1 对等的读写（actor 记为 `admin:<email>`）。详见 [05](05-auth-permissions-audit.md)、[06](06-dashboard.md)。
 
 ## 7. 示例
 
