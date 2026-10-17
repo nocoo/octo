@@ -165,7 +165,10 @@ describe("tags api", () => {
 		);
 		expect(versions.every((row) => row.version === 1)).toBe(true);
 		const changes = rows<{ entity_id: string }>(
-			await d1("SELECT entity_id FROM changes WHERE op = 'tag_merged' ORDER BY entity_id", true),
+			await d1(
+				"SELECT entity_id FROM changes WHERE op = 'tag_merged' AND entity_id IN ('mm1','mm2') ORDER BY entity_id",
+				true,
+			),
 		);
 		expect(changes.map((row) => row.entity_id)).toEqual(["mm1", "mm2"]);
 		const gammaHits = rows<{ n: number }>(

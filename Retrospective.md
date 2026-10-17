@@ -2,6 +2,16 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## M6: shared-run observations must be fixture-scoped
+
+M3's tag test queried every tag_merged event and expected only its two memories.
+The new idempotency merge legitimately added another event, so reversing suite
+imports failed although the first full L2 run happened to pass. Scope the query
+to the test's fixture memory IDs and retain exact event-count/entity assertions.
+The committed source harness now seeds an unrelated prior merge event, proving
+isolation independently of suite order. Serial files are not an ordering or
+isolation guarantee; a green full run alone cannot establish either.
+
 ## M6: replay middleware does not make immediate writes atomic
 
 Rebasing onto M3 preserved its routes but exposed a transaction integration bug:

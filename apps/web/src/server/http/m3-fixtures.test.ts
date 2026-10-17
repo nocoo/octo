@@ -24,6 +24,9 @@ beforeAll(() => {
 	fixture.sqlite.exec(
 		"CREATE TABLE _test_marker (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO _test_marker VALUES ('env', 'test')",
 	);
+	fixture.sqlite.exec(
+		"INSERT INTO changes (entity, entity_id, op, actor, at) VALUES ('memory', 'unrelated-prior-merge', 'tag_merged', 'key:unrelated', 1)",
+	);
 	state.exec = (args) => {
 		const sql = args[args.indexOf("--command") + 1];
 		if (!sql) throw new Error("expected isolated SQL command");
