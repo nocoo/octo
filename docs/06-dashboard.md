@@ -29,7 +29,7 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 | `/memories/:id` | 阅读 | 一流的 Markdown 阅读体验：GFM 表格、代码高亮、图片（附件经过鉴权代理）、自动 TOC（sticky，移动端折叠）、阅读宽度约 72ch；右栏显示元数据、标签、版本时间线 |
 | `/memories/:id/edit` | 编辑 | 分栏 Markdown 编辑 + 实时预览（移动端用 tab 切换）；粘贴或拖入图片 / PDF 直接上传附件；保存时带 `If-Match`，冲突时打开三方对比 |
 | `/memories/:id/history` | 版本 | 版本列表 + 左右或行内 diff（字段级 + 正文）；选中任意版本 → 回滚（ConfirmDialog） |
-| `/search` | 搜索 | 与 API 功能对等：模式（hybrid / fts / vector）、融合方法和参数、过滤条件；每个结果展示各通道分数条（fts / vector / fused）。查询向量的来源待定，见 99 |
+| `/search` | 搜索 | 与 API 功能对等：模式（hybrid / fts / vector）、融合方法和参数、过滤条件；每个结果展示各通道分数条（fts / vector / fused）。查询文本由 Worker 经 `QueryEmbedder`（网关）转成向量；没有配置网关时降级为全文 + 过滤，见 03 §2.1 |
 | `/tags` | 标签 | 用量表、重命名、合并（预览受影响条目数）；标签共现图 |
 | `/spaces` | Space | 列表、新建、负责的 key、计数 |
 | `/graph` | 关系图 | 标签 ↔ memory 二部图 / 标签共现图（力导向，WebGL 或 canvas；节点数上限 + 聚类） |

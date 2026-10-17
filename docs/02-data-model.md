@@ -98,7 +98,7 @@ CREATE TABLE attachments (
 );
 
 CREATE TABLE embedding_profiles (
-  id TEXT PRIMARY KEY,              -- 如 "bge-m3-1024"
+  id TEXT PRIMARY KEY,              -- 如 "te3-small-1536"（v1 种子：text-embedding-3-small / 1536 / cosine）
   model TEXT NOT NULL,
   dims INTEGER NOT NULL CHECK (dims BETWEEN 1 AND 1536),
   metric TEXT NOT NULL DEFAULT 'cosine',
@@ -109,7 +109,9 @@ CREATE TABLE embedding_profiles (
 CREATE TABLE memory_vectors (
   memory_id TEXT NOT NULL REFERENCES memories(id),
   profile_id TEXT NOT NULL REFERENCES embedding_profiles(id),
-  vector BLOB NOT NULL,             -- float32 小端，长度 = dims*4
+  embedding_model TEXT NOT NULL,    -- 冗余记录，如 text-embedding-3-small（重建用）
+  dim INTEGER NOT NULL,             -- 冗余记录，如 1536
+  vector BLOB NOT NULL,             -- L2 归一化后的 float32 小端，长度 = dim*4
   content_hash TEXT NOT NULL,       -- 生成该向量时 memory 的 content_hash
   indexed_at INTEGER,               -- 写入 Vectorize 成功的时间；NULL = 待同步
   updated_at INTEGER NOT NULL,

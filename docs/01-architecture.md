@@ -52,7 +52,7 @@ Zheng 浏览器 ──Cloudflare Access──▶ octo.hexly.ai/ (SPA) + /api/adm
 | Hooks / CI | Husky 9；`nocoo/base-ci` 共享 workflow（固定到与 giraffe 相同的 SHA） | 6DQ L1 / L2 / G2 |
 | 安全扫描 | gitleaks + osv-scanner（`gate:security`） | G2 |
 
-**明确不用：** Durable Objects、`@cloudflare/vite-plugin`（giraffe 也不用，开发用 Vite + wrangler sidecar）、Next.js、速率限制、KV（暂时不需要）、Workers AI（向量由调用方提供；dashboard 查询向量的来源待定，见 99）。
+**明确不用：** Durable Objects、`@cloudflare/vite-plugin`（giraffe 也不用，开发用 Vite + wrangler sidecar）、Next.js、速率限制、KV（暂时不需要）、Workers AI（写入向量由调用方提供；dashboard 的查询向量走 Zheng 的 OpenAI 兼容网关，见 03 §2.1）。
 
 ## 4. 目录（目标）
 
@@ -117,7 +117,7 @@ index_name = "<见 03 §3，按 embedding profile 命名>"
 crons = ["17 * * * *"]
 ```
 
-Secrets（`wrangler secret`，本地用 `.dev.vars`，由 `dev.vars.example` 初始化）：`API_KEY_PEPPER`（API key HMAC 的 pepper）。Access team domain 和 AUD 不是 secret：和 giraffe 一样，写成代码常量 `apps/web/src/server/lib/access-config.ts`，只有测试环境可以通过 `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` / `ACCESS_JWKS_URL` 覆盖（见 05 §2）。
+Secrets（`wrangler secret`，本地用 `.dev.vars`，由 `dev.vars.example` 初始化）：`API_KEY_PEPPER`（API key HMAC 的 pepper）、`ATTACHMENT_URL_SECRET`（附件签名 URL）、`EMBEDDING_BASE_URL` 和 `EMBEDDING_API_KEY`（dashboard 查询向量用的网关；可以不设）。Access team domain 和 AUD 不是 secret：和 giraffe 一样，写成代码常量 `apps/web/src/server/lib/access-config.ts`，只有测试环境可以通过 `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` / `ACCESS_JWKS_URL` 覆盖（见 05 §2）。
 
 ## 6. 横切约定
 

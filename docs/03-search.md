@@ -26,8 +26,9 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
 
 ## 2. 向量：Vectorize（调用方自带向量）
 
-- 写入 memory 时可以带 `vector: { profile, values: number[] }`。服务端校验 `values.length === profile.dims`、数值有限，然后存进 D1 `memory_vectors`（原值，用于重建）并 upsert 到 Vectorize。
-- **Embedding profile** = `(model, dims, metric)`。Vectorize 索引的维度在创建时就固定了，所以每个 profile 对应一个独立的索引 `octo-vec-<profile_id>`。v1 只有一个**活跃** profile 绑定为 `VEC`；切换模型 = 新建索引和绑定，调用方补写向量（或由知识库 bot 重新计算），从 D1 回填，完成后切换 `active`。
+- **已决（知识库 bot，2026-10-17）：** 模型 `text-embedding-3-small`，1536 维，cosine。维度和模型是配置（`embedding_profiles`），不在代码里写死。
+- 写入 memory 时可以带 `vector: { profile, values: number[] }`。服务端校验 `values.length === profile.dims`、数值有限、非零向量，**做 L2 归一化**，然后存进 D1 `memory_vectors`（归一化后的值，连同 `embedding_model`、`dim`，便于重建）并 upsert 到 Vectorize。
+- **Embedding profile** = `(model, dims, metric)`。Vectorize 索引的维度在创建时就固定了，所以每个 profile 对应一个独立的索引 `octo-vec-<profile_id>`。v1 的活跃 profile 是 `te3-small-1536`（索引 `octo-vec-te3-small-1536`），绑定为 `VEC`；切换模型 = 新建索引和绑定，调用方补写向量（或由知识库 bot 重新计算），从 D1 回填，完成后切换 `active`。
 - **限制（文档核实）：** ≤1536 维、float32；id ≤64 字节（ULID 26 字节）；每个索引最多 10 个 metadata index；string 只有前 64 字节可以过滤；**string 数组不能被索引或过滤**；topK 带 metadata 时 ≤50，不带时 ≤100；每个索引最多 2000 万向量。
 - **Metadata（被索引的）：** `space`（string）、`type`（string）、`source`（string，key id）、`importance`（number）、`created`（number）、`updated`（number）、`event`（number）。共 7 个，在 10 个的上限内。metadata index 必须在插入向量**之前**建好，写进部署脚本。
 - **tags 过滤：** Vectorize 过滤不了数组，所以先在 Vectorize 用其他条件取 topK=100（不返回 metadata），再在 D1 用 `memory_tags` 做后过滤和可见性校验。命中太少时在响应里标记 `vector_truncated=true`。
@@ -35,6 +36,13 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
   - `CloudflareVectorStore`（生产，包装 `env.VEC`），L1 用一个假 binding 测它的请求映射；
   - `D1BruteForceVectorStore`（本地 dev / L2 / L3）：从 `memory_vectors` 读取，在 Worker 内算 cosine，并实现同一套过滤语义。
   - 两个实现共用同一套契约测试。生产路径的真实行为在部署后用只读冒烟脚本验证（手动，不进门禁）。
+
+### 2.1 查询向量提供方（dashboard）
+
+- 抽象为 `QueryEmbedder` 端口：`embed(texts: string[]) → number[][] | unavailable`。API 调用方照常自带查询向量，不经过这个端口。
+- 生产实现 `GatewayEmbedder`：`POST {EMBEDDING_BASE_URL}/v1/embeddings`，请求头 `Authorization: Bearer {EMBEDDING_API_KEY}`、`Content-Type: application/json` 和**必填的** `User-Agent: octo/<APP_VERSION>`（网关不带 UA 会返回 403），body 为 `{"model": "text-embedding-3-small", "input": [...]}`；返回后校验维度并做 L2 归一化。
+- 两个 secret 任一未设置、网关出错或超时（5 秒）时，dashboard 搜索**降级为全文 + 过滤**，响应里带 `channels.vector = {skipped: "embedder_unavailable"}`，UI 显示提示条。
+- L1 / L2 用本地 stub embedder，测试不访问真实网关。
 
 ## 3. 过滤
 
