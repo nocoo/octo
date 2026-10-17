@@ -5,6 +5,12 @@ import { base, e2eD1, query, seedKey, seedSpace, sqlText } from "../fixtures/l2-
 
 let jwt: string;
 let token: string;
+let readonlyToken: string;
+let writeonlyToken: string;
+let updateonlyToken: string;
+let outOfScopeToken: string;
+let ownerScopedToken: string;
+let ownEntriesToken: string;
 let slug: string;
 let suffix: string;
 
@@ -17,6 +23,12 @@ beforeAll(async () => {
 	});
 	const db = await e2eD1();
 	token = (await seedKey(db)).token;
+	readonlyToken = (await seedKey(db, { ops: "r" })).token;
+	writeonlyToken = (await seedKey(db, { ops: "w" })).token;
+	updateonlyToken = (await seedKey(db, { ops: "u" })).token;
+	outOfScopeToken = (await seedKey(db, { scope: "spaces", spaceIds: [] })).token;
+	ownerScopedToken = (await seedKey(db, { scope: "own" })).token;
+	ownEntriesToken = (await seedKey(db, { ownEntriesOnly: true })).token;
 	slug = (await seedSpace(db)).slug;
 	suffix = crypto.randomUUID();
 });
@@ -39,6 +51,7 @@ const mirrored = [
 	["POST", "/memories"],
 	["GET", "/memories/missing"],
 	["PATCH", "/memories/missing"],
+	["PUT", "/memories/missing/vector"],
 	["DELETE", "/memories/missing"],
 	["GET", "/memories/missing/versions"],
 	["GET", "/memories/missing/versions/1"],
@@ -67,7 +80,7 @@ describe("admin parity real HTTP", () => {
 	it.each(mirrored)(
 		"requires Access for %s %s even with an admin API key",
 		async (method, path) => {
-			for (const headers of [{}, { Authorization: `Bearer ${token}` }]) {
+			for (const headers of [new Headers(), new Headers({ Authorization: `Bearer ${token}` })]) {
 				const response = await fetch(`${base}/api/admin${path}`, { method, headers });
 				expect(response.status).toBe(401);
 			}
@@ -180,6 +193,12 @@ describe("admin parity real HTTP", () => {
 		["GET", "/memories/missing/diff", undefined, 400],
 		["POST", "/memories", {}, 400],
 		["PATCH", "/memories/missing", { title: "x", expected_version: 1 }, 404],
+		[
+			"PUT",
+			"/memories/missing/vector",
+			{ profile: "missing", values: [1], expected_version: 1 },
+			404,
+		],
 		["DELETE", "/memories/missing", undefined, 404],
 		["POST", "/memories/missing/rollback", {}, 404],
 		["POST", "/trash/missing/restore", undefined, 404],
@@ -254,4 +273,111 @@ describe("admin parity real HTTP", () => {
 		expect((await fetch(`${base}/api/__test/background`, { method: "POST" })).status).toBe(200);
 		expect((await fetch(localUrl)).status).toBe(404);
 	});
+
+	it.each(["/api/v1", "/api/admin"] as const)(
+		"PUT %s/memories/:id/vector enforces OCC and auth",
+		async (prefix) => {
+			const headers = {
+				Authorization: `Bearer ${token}`,
+				"Cf-Access-Jwt-Assertion": jwt,
+				Origin: "https://octo.hexly.ai",
+				"Content-Type": "application/json",
+			};
+			const created = await fetch(`${base}${prefix}/memories`, {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					space: slug,
+					title: "vector",
+					body: "body",
+					type: "note",
+					tags: [],
+				}),
+			});
+			expect(created.status).toBe(201);
+			const { id } = (await created.json()) as { id: string };
+			const path = `${base}${prefix}/memories/${id}/vector`;
+			const values = Array.from({ length: 1536 }, (_, position) => (position === 0 ? 1 : 0));
+			const body = { profile: "te3-small-1536", values, expected_version: 1 };
+			expect((await fetch(path, { method: "PUT" })).status).toBe(401);
+			if (prefix === "/api/v1") {
+				for (const [deniedToken, status] of [
+					[readonlyToken, 403],
+					[writeonlyToken, 403],
+					[outOfScopeToken, 404],
+					[ownerScopedToken, 404],
+					[ownEntriesToken, 403],
+				] as const) {
+					const response = await fetch(path, {
+						method: "PUT",
+						headers: { ...headers, Authorization: `Bearer ${deniedToken}` },
+						body: JSON.stringify(body),
+					});
+					expect(response.status).toBe(status);
+					expect(await response.json()).toMatchObject({
+						error: { code: status === 403 ? "forbidden" : "not_found" },
+					});
+				}
+			}
+			const put = (input: unknown, extra: Record<string, string> = {}) =>
+				fetch(path, {
+					method: "PUT",
+					headers: { ...headers, ...extra },
+					body: JSON.stringify(input),
+				});
+			for (const invalid of [
+				{ profile: body.profile, values },
+				{ ...body, expected_version: 0 },
+				{ ...body, expected_version: -1 },
+				{ ...body, expected_version: 1.5 },
+				{ ...body, expected_version: "1" },
+				{ ...body, values: "invalid" },
+				{ ...body, values: [] },
+				{ ...body, values: [1] },
+				{ ...body, values: values.map(() => 0) },
+				{ ...body, profile: "missing" },
+				{ ...body, title: "rejected" },
+				{ vector: { profile: body.profile, values }, expected_version: 1 },
+			])
+				expect((await put(invalid)).status).toBe(400);
+			expect((await put(body, { "If-Match": "invalid" })).status).toBe(400);
+			expect((await put(body, { "If-Match": "2" })).status).toBe(400);
+			expect((await put({ ...body, expected_version: 7 })).status).toBe(409);
+			const updated = await put(body, { "Idempotency-Key": `vector-${id}` });
+			expect(updated.status).toBe(200);
+			expect(await updated.json()).toMatchObject({ id, version: 2 });
+			const replay = await put(body, { "Idempotency-Key": `vector-${id}` });
+			expect(replay.status).toBe(200);
+			expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+			expect((await put(body)).status).toBe(409);
+			expect((await put({ profile: body.profile, values })).status).toBe(400);
+			expect((await put({ ...body, expected_version: 2, values: [1] })).status).toBe(400);
+			const database = await e2eD1();
+			expect(
+				await query(
+					database,
+					`SELECT dim, length(vector) AS bytes FROM memory_vectors WHERE memory_id = ${sqlText(id)}`,
+				),
+			).toEqual([{ dim: 1536, bytes: 6144 }]);
+			if (prefix === "/api/v1") {
+				expect(
+					(
+						await put(
+							{ profile: body.profile, values },
+							{ "If-Match": "2", Authorization: `Bearer ${updateonlyToken}` },
+						)
+					).status,
+				).toBe(200);
+				for (const readPath of ["/search", "/memories:batchGet"]) {
+					const response = await fetch(`${base}/api/v1${readPath}`, {
+						method: "POST",
+						headers: { ...headers, Authorization: `Bearer ${writeonlyToken}` },
+						body: JSON.stringify(readPath === "/search" ? { query: "vector" } : { ids: [id] }),
+					});
+					expect(response.status).toBe(403);
+					expect(await response.json()).toMatchObject({ error: { code: "forbidden" } });
+				}
+			}
+		},
+	);
 });

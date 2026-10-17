@@ -23,9 +23,13 @@ export async function authorizeMemoryRequest(
 	const path = context.req.path.slice(prefix.length).replace(/\/$/, "");
 	const method = context.req.method;
 	const create = method === "POST" && path === "/memories";
-	const memory = /^\/memories\/([^/]+)(\/rollback)?$/.exec(path);
+	const memory = /^\/memories\/([^/]+)(\/(?:rollback|vector))?$/.exec(path);
 	const restore = method === "POST" && /^\/trash\/([^/]+)\/restore$/.exec(path);
-	const update = memory && ((method === "PATCH" && !memory[2]) || (method === "POST" && memory[2]));
+	const update =
+		memory &&
+		((method === "PATCH" && !memory[2]) ||
+			(method === "POST" && memory[2] === "/rollback") ||
+			(method === "PUT" && memory[2] === "/vector"));
 	const remove = memory && method === "DELETE" && !memory[2];
 	if (!create && !update && !remove && !restore) return;
 	const principal = context.get("apiKey");

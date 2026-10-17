@@ -95,5 +95,7 @@ export const TESTED_API_ROUTES: RouteKey[] = [
 	"POST /api/v1/tags/:name/merge",
 	"POST /api/v1/tags/:name/rename",
 	"POST /api/v1/trash/:id/restore",
+	"PUT /api/admin/memories/:id/vector",
 	"PUT /api/admin/settings/embedding",
+	"PUT /api/v1/memories/:id/vector",
 ];

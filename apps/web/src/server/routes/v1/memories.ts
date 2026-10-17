@@ -5,6 +5,7 @@ import {
 	MEMORY_BODY_MAX_BYTES,
 	memoryCreateSchema,
 	memoryPatchSchema,
+	memoryVectorSchema,
 	utf8Bytes,
 } from "../../../lib/schema/memory";
 import type { AppVars, Env } from "../../env";
@@ -16,6 +17,10 @@ import { memoryService } from "./memory-service";
 
 const rollbackSchema = z.strictObject({
 	to_version: z.number().int().positive(),
+	expected_version: z.number().int().positive().optional(),
+});
+
+const vectorPutSchema = memoryVectorSchema.extend({
 	expected_version: z.number().int().positive().optional(),
 });
 
@@ -187,6 +192,20 @@ export function memoriesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			c.req.param("id"),
 			body,
 			c.req.header("If-Match") ?? undefined,
+		);
+		return jsonOk(item);
+	});
+
+	app.put("/:id/vector", async (context) => {
+		const { expected_version, ...vector } = parseStrict(
+			vectorPutSchema,
+			await readJsonLimited(context.req.raw),
+		);
+		const item = await memoryService(context).patch(
+			authzFrom(context.get("apiKey")),
+			context.req.param("id"),
+			{ vector, expected_version },
+			context.req.header("If-Match"),
 		);
 		return jsonOk(item);
 	});
