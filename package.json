@@ -40,6 +40,7 @@
 		"apps/*"
 	],
 	"dependencies": {
+		"@modelcontextprotocol/sdk": "1.32.1",
 		"diff": "^9.0.0",
 		"hono": "^4.13.12",
 		"zod": "^4.5.0-canary.20260825T041357"
