@@ -1,6 +1,7 @@
 import { d1Results } from "../../lib/d1";
 import type { SqlFilter } from "../../search/filters-sql";
 import { decodeFloat32Vector, dot, l2Normalize } from "../../search/math";
+import { vectorFilterSql } from "./filter-sql";
 import type { VectorQueryHit, VectorQueryInput, VectorStore } from "./types";
 import { capVectorTopK } from "./types";
 
@@ -19,7 +20,9 @@ export class D1BruteForceVectorStore implements VectorStore {
 
 	async query(input: VectorQueryInput): Promise<VectorQueryHit[]> {
 		const topK = capVectorTopK(input.topK, input.returnMetadata);
-		const { clauses, binds } = this.baseFilter;
+		const metadata = vectorFilterSql(input.filter);
+		const clauses = [...this.baseFilter.clauses, ...metadata.clauses];
+		const binds = [...this.baseFilter.binds, ...metadata.binds];
 		const sql = `
 SELECT mv.memory_id, mv.dim, mv.vector
 FROM memory_vectors mv
