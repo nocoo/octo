@@ -388,6 +388,34 @@ memory API could never write to. Space creation/rename and auto-own-space key
 names now share the 64-character lowercase slug contract; ordinary display-only
 key names retain their longer limit.
 
+## M7 blocked by the local Wrangler proxy
+
+After the integration fixes, the complete real-HTTP suite passes 205 of 206
+tests. The remaining case sends an unauthenticated vector PUT, a readonly-key
+vector PUT, then a writeonly-key vector PUT with the same complete 3,132-byte
+payload. The first two return 401 and 403; the third never reaches the application
+and Wrangler's ProxyWorker returns a non-JSON 500, `Network connection lost`.
+The fixture background barrier removed the separate shared-D1 failures; it did
+not fix or hide this transport failure.
+
+An independent worker reproduced the exact sequence with the actual app,
+local D1, fixture wrapper and ASSETS router. Direct Miniflare/workerd returns
+401/403/403. Pinned Wrangler 4.145.0 fails the third request in all five trials
+for each of three client modes: leave the 401 body alone, consume it completely,
+or cancel that response body. None of those client changes fixes the proxy.
+
+A disposable installation of Wrangler 4.151.1, Miniflare
+5.20261012.1-beta and workerd 1.20261012.1 reproduces the same failure in all
+15 exact-sequence trials. Installation used an approved temporary mirror;
+repository dependencies and lockfile remain unchanged. No remote Cloudflare
+resources were used. These diagnostic comparisons are not acceptance retries.
+
+The failing assertion remains intact. No sleeps, automatic retries, shortened
+request body, production drain/cancel workaround, disabled hook or test exclusion
+was introduced. This blocks branch publication and full milestone approval until
+the upstream proxy is fixed or a native-workerd L2 transport change is explicitly
+accepted. Successful application-level and L1 checks do not establish L2 success.
+
 ## M7 purge fault-injection correction
 
 An initial preparation-failure test bound the original database method after installing its spy. The bound spy consumed the next injected failure during the initial lookup, so the test passed without exercising SQL preparation. Capturing the original method before installing the spy exposed an uncaught preparation failure. Purge now maps preparation and commit failures through the same safe 503 boundary, while its transactional guard rejects changed trash snapshots. Fault-injection tests must verify the failing phase, not merely the final status.
