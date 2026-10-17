@@ -328,6 +328,27 @@ Trash updated by ID alone after authorization and emitted duplicate events when 
 
 The draft checked the current memory but not the historical destination on rollback, and single trashed reads omitted delete authorization. Auto-own-space creation also ran before checking write capability. Rollback caught TagRepo failures as if they were malformed snapshots and silently cleared tags; alias filters confused canonical deduplication with missing names. Regression tests now verify authorization before side effects, unchanged persisted state on rejected rollback, and alias-aware filtering. Keep parsing catches separate from storage calls and authorize every destination, not only the initially loaded resource.
 
+## M7 integrated review corrections
+
+Independent review reproduced a stale partial settings save pairing a newer
+credential with an older gateway URL. The save now compares the complete
+observed settings snapshot inside its atomic batch. Gateway dimension errors
+also require an actual array before deriving its length; untrusted objects must
+never flow into the sanitized test response. Both issues require adversarial
+concurrency and upstream-shape tests, not just happy-path validation.
+
+The original retry queue reset failures to zero, allowing the same first 50
+jobs to starve every later job. Failed jobs now move behind untouched work.
+Backfill also assumed D1 `meta.changes` counted only the directly inserted row;
+real D1 includes trigger writes. Tests now exercise this count difference and
+confirm successful guarded inserts report true.
+
+A fixture barrier test was initially placed under `scripts/`, whose TypeScript
+environment deliberately excludes Worker globals. The real pre-commit gate
+blocked that import boundary. The test now lives with the server tests; no
+compiler contract was relaxed. HTTP tests explicitly drain registered local
+background work instead of adding sleeps or polling until an assertion passes.
+
 ## M7 purge fault-injection correction
 
 An initial preparation-failure test bound the original database method after installing its spy. The bound spy consumed the next injected failure during the initial lookup, so the test passed without exercising SQL preparation. Capturing the original method before installing the spy exposed an uncaught preparation failure. Purge now maps preparation and commit failures through the same safe 503 boundary, while its transactional guard rejects changed trash snapshots. Fault-injection tests must verify the failing phase, not merely the final status.

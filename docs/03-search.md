@@ -45,6 +45,12 @@ Production index synchronization is owned by M7. The same post-commit queue
 handles explicit vectors, metadata edits, trash/restore, backfill and purge;
 see [the durable synchronization protocol](02-data-model.md#m7-derived-index-ownership-and-recovery).
 Hourly cron retries pending vectors and performs bounded anti-entropy passes.
+Backfill uses at most 16,000 characters of `title + "\n\n" + body`, then
+conditionally stores the vector against the observed content, version, active
+profile and complete settings snapshot. It preserves source ownership and
+history. Gateway requests have a five-second timeout and reject redirects.
+URL validation rejects literal nonpublic addresses and local hostnames in
+production; it cannot eliminate DNS rebinding by a configured public hostname.
 `indexed_at` acknowledges only a successful operation for the current generation,
 never an obsolete in-flight write. A stale vector keeps its original content hash
 so search can report staleness; synchronization does not fabricate an embedding.

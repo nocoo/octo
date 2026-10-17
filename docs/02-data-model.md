@@ -183,6 +183,11 @@ retried by the hourly cron. Completed jobs and purge tombstones remain available
 for periodic anti-entropy reconciliation: a lease alone cannot fence an old
 Vectorize call after a process pauses or crashes in the non-transactional gap.
 Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.
+Each drain processes at most 50 jobs, with a 60-second lease and a one-hour
+anti-entropy interval. Failed work is moved behind untouched due work, so a
+persistently failing prefix cannot starve later updates or purge tombstones.
+Completed rows and tombstones are intentionally retained; this is the durable
+recovery cost of a destination without conditional/fenced writes.
 
 The local D1 brute-force adapter already reads the authoritative state, so its
 write-port operations do not mutate or delete the source vectors. Tests exercise

@@ -142,6 +142,7 @@ these routes. Write requests require both Access and the allowed Origin.
 | GET / PATCH / DELETE | `/spaces/:slug` | Read / edit / delete only when empty, including trash |
 | GET | `/audit` | Filter by `from,to,actor,action,status`; opaque `cursor`, bounded `limit` |
 | GET | `/usage` | UTC daily rows; `from,to,key_id?` |
+| GET | `/embedding-profiles` | Profile discovery, identical payload to v1 |
 | GET / PUT | `/settings/embedding` | Read sanitized configuration / atomically save fields |
 | POST | `/settings/embedding/test` | Current configuration or unsaved overrides; fixed probe text |
 | DELETE | `/trash/:id` | Purge a trashed memory; durable external cleanup |
@@ -151,16 +152,58 @@ as an array and boolean flags. Role templates are `admin`, `project`, `drop`,
 `readonly`, and `custom`. Mint and rotate return `{key,plaintext}` exactly once;
 other responses never include plaintext or either secret hash.
 
+Create requires `{name,role}`; custom roles additionally require `ops` (a
+comma-separated subset of `r,w,u,d`) and `scope` (`all`, `spaces`, or `own`).
+Optional fields are `space_ids`, `own_entries_only`, `auto_own_space`, and
+`expires_at` (ISO UTC or null). PATCH accepts a nonempty subset of these fields.
+Templates reject incompatible permission overrides; use `custom` instead.
+Metadata includes `id,name,role,ops,scope,space_ids,own_entries_only,auto_own_space`
+and nullable ISO timestamps `expires_at,revoked_at,last_used_at`, plus
+`created_at,updated_at`. Read, PATCH and revoke return this metadata object.
+Key lists and space lists return `{items,next_cursor:null}`. Space PATCH uses
+the create fields, all optional; deletion returns `{id,slug,deleted:true}`.
+Key administration is recorded only in the protected audit log, never the
+public memory/space change stream.
+
+Audit returns `{items,next_cursor}`. Items contain
+`id,at,actor,method,route,status,error_code,request_id,duration_ms,bytes_in,bytes_out,ip_hash`.
+`at` is ISO UTC; byte counts and `ip_hash` can be null. `action` matches the
+normalized route template exactly (or `unmatched`), not the HTTP method or raw
+URL. `from`/`to` accept UTC dates or ISO-Z timestamps; day bounds are inclusive.
+Usage returns `{items,next_cursor}` with daily rows
+`{day,key_id,calls,errors,writes,bytes_in,bytes_out}` from the hourly rollup,
+not a live request-time aggregation. Its date bounds accept inclusive UTC days.
+Without `key_id`, admin usage lists per-day/per-key rows; v1 always uses the
+authenticated key and ignores a supplied `key_id`. Both endpoints accept
+`limit` (1–200, default 50) and signed cursors bound to the effective filters
+and, for v1 usage, caller identity. Unknown, duplicate or malformed query
+parameters return `validation_failed`.
+
+Profiles return `{items,active_profile,next_cursor:null}`; each item has
+`{id,model,dims,metric,active,created_at}` with boolean `active` and ISO UTC
+`created_at`. Profile mutation is not part of M7.
+
 Embedding fields are `base_url,model,dims,backfill_enabled`. GET additionally
 returns `api_key_set` and `api_key_mask` (only the last four characters). PUT
 omitting `api_key` preserves it, `null` clears it, and a nonempty string replaces
 it. Model/dimensions must match the active profile. Test returns only
 `{latency_ms,dims,match,error_code}`; no upstream response body or credential.
+`dims` is a number or null, and `error_code` is null,
+`embedder_unavailable`, or `vector_dimension_mismatch`. An empty test body `{}`
+uses saved settings; partial fields override without persisting. Concurrent
+PUTs compare the complete observed settings snapshot and reject a stale save
+with `validation_failed`, rather than pairing newer credentials with an old URL.
+`OCTO_SETTINGS_KEY` must be canonical base64 encoding exactly 32 random bytes.
 
 Memory, version, diff, rollback, batch, trash/restore, changes, tags, attachments,
 and search endpoints mirror their `/api/v1` methods and suffixes under this
 prefix, reuse the same services and atomic transaction boundary, and record
 `admin:<email>` as actor. Purge has no `/api/v1` equivalent.
+Purge returns `{id,purged:true}` after the D1 commit; Vectorize and R2 cleanup
+are durable asynchronous work. Admin text search uses the configured gateway
+for hybrid search unless `mode: "fts"` is explicit; an unavailable gateway falls
+back to FTS with `channels.vector.skipped: "embedder_unavailable"`. V1 never
+uses the server-side embedding credential.
 
 ## 7. 示例
 
