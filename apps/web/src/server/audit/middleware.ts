@@ -37,9 +37,10 @@ async function writeAudit(context: AuditContext, started: number): Promise<void>
 	const errorCode =
 		status < 400
 			? null
-			: context.error instanceof ApiError
-				? context.error.code
-				: (context.get("responseErrorCode") ?? STATUS_CODES[status] ?? "internal");
+			: (context.get("responseErrorCode") ??
+				(context.error instanceof ApiError
+					? context.error.code
+					: (STATUS_CODES[status] ?? "internal")));
 	const requestId = context.get("requestId");
 	const safeRequestId =
 		typeof requestId === "string" &&

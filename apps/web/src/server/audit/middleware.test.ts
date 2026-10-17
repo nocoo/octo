@@ -4,7 +4,7 @@ import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import { hashSecret, mintApiKey } from "../auth/api-key";
 import type { AppVars, Env } from "../env";
 import { idempotencyMiddleware } from "../http/idempotency";
-import { ApiError } from "../lib/errors";
+import { ApiError, jsonError } from "../lib/errors";
 import { execution, PEPPER, testApp, testEnv } from "./__tests__/app";
 import { auditMiddleware } from "./middleware";
 
@@ -20,6 +20,22 @@ function rows(sqlite: ReturnType<typeof sqliteD1>["sqlite"]) {
 }
 
 describe("audit middleware", () => {
+	it("audits the final replay code rather than an earlier handled error", async () => {
+		const { sqlite, env, app, ctx, flush } = setup();
+		app.use("/recovered", async (context, next) => {
+			await next();
+			context.set("responseErrorCode", "tag_conflict");
+			context.res = jsonError("tag_conflict", "conflict", context.get("requestId"));
+		});
+		app.post("/recovered", () => {
+			throw new ApiError("version_conflict", "older error");
+		});
+		expect((await app.request("/recovered", { method: "POST" }, env, ctx)).status).toBe(409);
+		await flush();
+		expect(rows(sqlite)[0]?.error_code).toBe("tag_conflict");
+		sqlite.close();
+	});
+
 	it.each(["version_conflict", "tag_conflict", "idempotency_conflict"] as const)(
 		"preserves the exact %s audit code on idempotent error replay",
 		async (code) => {
