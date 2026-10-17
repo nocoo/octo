@@ -145,6 +145,70 @@ describe("M5 writes at the M6 transaction boundary", () => {
 		}
 	});
 
+	it("recovers the committed winner even if losing R2 cleanup rejects", async () => {
+		const f = await fixture();
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			let release!: () => void;
+			const bothUploaded = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			let uploaded = 0;
+			f.put.mockImplementation(async (key, bytes) => {
+				f.blobs.set(key, bytes);
+				if (++uploaded === 2) release();
+				await bothUploaded;
+			});
+			f.del.mockRejectedValueOnce(new Error("sensitive-delete-response"));
+			const responses = await Promise.all([f.post(), f.post()]);
+			expect(responses.map((response) => response.status)).toEqual([201, 201]);
+			expect(
+				responses.filter((response) => response.headers.get("Idempotent-Replayed") === "true"),
+			).toHaveLength(1);
+			expect(new Set(await Promise.all(responses.map((response) => response.text()))).size).toBe(1);
+			expect(f.rows("SELECT * FROM attachments")).toHaveLength(1);
+			expect(f.rows("SELECT * FROM changes WHERE entity = 'attachment'")).toHaveLength(1);
+			expect(f.blobs.size).toBe(2);
+			expect(logged).toHaveBeenCalledOnce();
+			expect(logged).toHaveBeenCalledWith("write compensation failed", {
+				request_id: expect.any(String),
+			});
+			expect(JSON.stringify(logged.mock.calls)).not.toContain("sensitive-delete-response");
+		} finally {
+			logged.mockRestore();
+			f.sqlite.close();
+		}
+	});
+
+	it.each([null, "upload"])(
+		"returns 503 without a winner if R2 cleanup rejects (key=%s)",
+		async (key) => {
+			const f = await fixture();
+			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				f.sqlite.exec(
+					"CREATE TRIGGER fail_m5 BEFORE INSERT ON changes WHEN NEW.entity = 'attachment' BEGIN SELECT RAISE(ABORT, 'write failed'); END",
+				);
+				f.del.mockRejectedValueOnce(new Error("sensitive-delete-response"));
+				const response = await f.post(new Uint8Array([1]), key);
+				expect(response.status).toBe(503);
+				expect(response.headers.get("Idempotent-Replayed")).toBeNull();
+				expect(await response.json()).toMatchObject({ error: { code: "unavailable" } });
+				expect(f.rows("SELECT * FROM attachments")).toEqual([]);
+				expect(f.rows("SELECT * FROM idempotency_records")).toEqual([]);
+				expect(f.blobs.size).toBe(1);
+				expect(logged).toHaveBeenCalledOnce();
+				expect(logged).toHaveBeenCalledWith("write compensation failed", {
+					request_id: expect.any(String),
+				});
+				expect(JSON.stringify(logged.mock.calls)).not.toContain("sensitive-delete-response");
+			} finally {
+				logged.mockRestore();
+				f.sqlite.close();
+			}
+		},
+	);
+
 	it("preserves a blob if rollback verification is unavailable", async () => {
 		const f = await fixture();
 		try {
