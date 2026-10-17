@@ -1,5 +1,6 @@
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { runDev, viteArgs, wranglerSidecarArgs } from "./dev";
+import { root, runDev, viteArgs, wranglerSidecarArgs } from "./dev";
 
 describe("dev", () => {
 	it("uses the sidecar and vite ports", () => {
@@ -8,6 +9,8 @@ describe("dev", () => {
 			"--local",
 			"--port",
 			"37059",
+			"--config",
+			join(root, ".wrangler.local.toml"),
 			"--var",
 			"RESOURCE_ENV:development",
 		]);
@@ -31,7 +34,10 @@ describe("dev", () => {
 		expect(await runDev("/tmp", spawn, prepare)).toBe(0);
 		expect(prepare).toHaveBeenCalledWith("/tmp");
 		expect(killed.length).toBe(2);
-		expect(commands[0]).toEqual(["/tmp/node_modules/.bin/wrangler", ...wranglerSidecarArgs()]);
+		expect(commands[0]).toEqual([
+			"/tmp/node_modules/.bin/wrangler",
+			...wranglerSidecarArgs(37059, "/tmp"),
+		]);
 		expect(commands[0]?.slice(-2)).toEqual(["--var", "RESOURCE_ENV:development"]);
 	});
 

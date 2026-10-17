@@ -14,6 +14,8 @@ describe("dev-server", () => {
 				"--local",
 				"--port",
 				"37059",
+				"--config",
+				"/tmp/.wrangler.local.toml",
 				"--var",
 				"RESOURCE_ENV:development",
 			],

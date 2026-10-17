@@ -1,9 +1,10 @@
 import type { ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { parse } from "smol-toml";
 import { describe, expect, it, vi } from "vitest";
 import {
 	assertLocalMode,
@@ -17,6 +18,7 @@ import {
 	persistDir,
 	prepareE2eDb,
 	rewriteWranglerConfig,
+	root,
 	runE2eApi,
 	spawnVitestProcess,
 	stopChild,
@@ -214,6 +216,20 @@ describe("runE2eApi", () => {
 		expect(vitest.mock.calls.at(0)?.[0]).toMatchObject({
 			OCTO_JWKS_PORT: "17057",
 		});
+		const generatedPath = vitest.mock.calls[0]?.[0].OCTO_CONFIG as string;
+		const generated = parse(await readFile(generatedPath, "utf8"));
+		expect(generated.vectorize).toBeUndefined();
+		expect(generated.main).toBe(join(root, "apps/web/src/server/index.ts"));
+		expect(generated.assets).toMatchObject({
+			directory: join(dirname(generatedPath), "dist/client"),
+			binding: "ASSETS",
+		});
+		expect(generated.d1_databases).toEqual(
+			parse(await readFile(join(root, "wrangler.toml"), "utf8")).d1_databases,
+		);
+		expect(parse(await readFile(join(root, "wrangler.toml"), "utf8")).vectorize).toEqual([
+			{ binding: "VEC", index_name: "octo-vec-te3-small-1536", remote: false },
+		]);
 		expect(jwksClosed).toEqual([true]);
 		const livePort = await new Promise<number>((resolve, reject) => {
 			const server = createServer();

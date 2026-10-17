@@ -14,6 +14,7 @@ import {
 	l2JwksUrl,
 	startJwksStub,
 } from "./jwks-stub";
+import { localWranglerConfig } from "./local-config";
 import { applyMigrations, assertTestMarker, createD1Exec, writeTestMarker } from "./local-d1";
 import { L2_JWKS_PORT, L2_WORKER_PORT } from "./ports";
 
@@ -72,11 +73,13 @@ export function rewriteWranglerConfig(
 	assetsDir: string,
 	mainPath: string,
 ): string {
-	return toml
-		.replaceAll("port = 37059", `port = ${port}`)
-		.replaceAll('directory = "./dist/client"', `directory = ${JSON.stringify(assetsDir)}`)
-		.replaceAll('main = "apps/web/src/server/index.ts"', `main = ${JSON.stringify(mainPath)}`)
-		.replace(/\n\[\[routes\]\]\npattern = "octo\.hexly\.ai"\ncustom_domain = true\n?/g, "\n");
+	return localWranglerConfig(
+		toml
+			.replaceAll("port = 37059", `port = ${port}`)
+			.replaceAll('directory = "./dist/client"', `directory = ${JSON.stringify(assetsDir)}`)
+			.replaceAll('main = "apps/web/src/server/index.ts"', `main = ${JSON.stringify(mainPath)}`)
+			.replace(/\n\[\[routes\]\]\npattern = "octo\.hexly\.ai"\ncustom_domain = true\n?/g, "\n"),
+	);
 }
 
 export function occupyingPid(port: number): string {

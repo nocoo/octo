@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
 	ensureDevVars: vi.fn(),
 	ensureClientAssets: vi.fn(),
 	ensureLocalSchema: vi.fn(),
+	writeDevWranglerConfig: vi.fn(),
 }));
 
 vi.mock("./ensure-dev-vars", () => ({
@@ -11,6 +12,10 @@ vi.mock("./ensure-dev-vars", () => ({
 	ensureClientAssets: mocks.ensureClientAssets,
 }));
 vi.mock("./local-d1", () => ({ ensureLocalSchema: mocks.ensureLocalSchema }));
+vi.mock("./local-config", () => ({
+	LOCAL_WRANGLER_CONFIG: ".wrangler.local.toml",
+	writeDevWranglerConfig: mocks.writeDevWranglerConfig,
+}));
 
 import { bunDevSpawn, main as devMain, prepareDev, runDev } from "./dev";
 import { prepareServer, runDevServer, main as serverMain } from "./dev-server";
@@ -22,6 +27,7 @@ describe("prepare helpers", () => {
 		expect(mocks.ensureDevVars).toHaveBeenCalled();
 		expect(mocks.ensureClientAssets).toHaveBeenCalled();
 		expect(mocks.ensureLocalSchema).toHaveBeenCalled();
+		expect(mocks.writeDevWranglerConfig).toHaveBeenCalledWith("/tmp");
 		const spawn = () => ({
 			exited: Promise.resolve(0),
 			kill: () => undefined,
