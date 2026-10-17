@@ -69,3 +69,18 @@ describe("GatewayEmbedder", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });
+
+it("blocks credential-bearing redirects and exposes only safe dimension metadata", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async (_input: RequestInfo, init: RequestInit) => {
+			expect(init.redirect).toBe("error");
+			expect(new Headers(init.headers).get("User-Agent")).toMatch(/^octo\//);
+			return Response.json({ data: [{ embedding: [1, 2, 3] }] });
+		}),
+	);
+	await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toMatchObject({
+		code: "vector_dimension_mismatch",
+		actualDims: 3,
+	});
+});

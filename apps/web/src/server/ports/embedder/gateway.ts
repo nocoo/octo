@@ -2,6 +2,13 @@ import { APP_VERSION, versionLabel } from "../../../lib/version";
 import { assertVectorValues } from "../../search/vector-write";
 import type { EmbedderConfig, QueryEmbedder } from "./types";
 
+export class EmbeddingDimensionError extends Error {
+	readonly code = "vector_dimension_mismatch";
+	constructor(readonly actualDims: number) {
+		super("vector dimension mismatch");
+	}
+}
+
 export class GatewayEmbedder implements QueryEmbedder {
 	constructor(private readonly config: EmbedderConfig) {}
 
@@ -12,6 +19,7 @@ export class GatewayEmbedder implements QueryEmbedder {
 		try {
 			const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}/v1/embeddings`, {
 				method: "POST",
+				redirect: "error",
 				headers: {
 					Authorization: `Bearer ${this.config.apiKey}`,
 					"Content-Type": "application/json",
@@ -29,7 +37,11 @@ export class GatewayEmbedder implements QueryEmbedder {
 			if (!Array.isArray(body.data) || body.data.length !== texts.length) {
 				throw new Error("embedding count mismatch");
 			}
-			return body.data.map((row) => assertVectorValues(row.embedding ?? [], this.config.dims));
+			return body.data.map((row) => {
+				const values = row.embedding ?? [];
+				if (values.length !== this.config.dims) throw new EmbeddingDimensionError(values.length);
+				return assertVectorValues(values, this.config.dims);
+			});
 		} finally {
 			clearTimeout(timeout);
 		}
