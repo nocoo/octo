@@ -131,6 +131,25 @@ describe("TagRepo on real sqlite", () => {
 		raw.close();
 	});
 
+	it("indexes memories that had no fts map after merge", async () => {
+		const { raw, d1 } = migratedSqlite();
+		raw.exec(`
+			INSERT INTO spaces (id, slug, name, description, created_at, updated_at)
+			VALUES ('s1', 's1', 's1', '', 1, 1);
+			INSERT INTO tags (id, name, display_name, created_at, updated_at) VALUES
+				('ta', 'alpha', 'alpha', 1, 1), ('tb', 'beta', 'beta', 1, 1);
+			INSERT INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at)
+			VALUES ('m1', 's1', 't', 'b', 'note', 0.5, 'k', 1, 'h', 1, 1),
+			       ('m2', 's1', 't', 'b', 'note', 0.5, 'k', 1, 'h', 1, 1);
+			INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1', 'ta'), ('m2', 'ta');
+		`);
+		const repo = new TagRepo(d1, () => 40);
+		await repo.merge("alpha", "beta", "key:1");
+		expect(ftsHits(raw, "beta").sort()).toEqual(["m1", "m2"]);
+		expect(ftsHits(raw, "alpha")).toEqual([]);
+		raw.close();
+	});
+
 	it("counts only this merge from batch meta.changes", async () => {
 		const { raw, d1 } = migratedSqlite();
 		raw.exec(`

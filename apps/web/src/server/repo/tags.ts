@@ -227,6 +227,16 @@ export class TagRepo {
 					`INSERT INTO memories_fts(rowid, title, body, tags) SELECT map.fts_rowid, IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m INNER JOIN memories_fts_map map ON map.memory_id = m.id WHERE m.id IN (${affected})`,
 				)
 				.bind(...tagIds),
+			this.db
+				.prepare(
+					`INSERT INTO memories_fts(rowid, title, body, tags) SELECT (SELECT COALESCE(MAX(fts_rowid), 0) FROM memories_fts_map) + (SELECT COUNT(*) FROM memories m2 WHERE m2.id IN (${affected}) AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m2.id) AND m2.id <= m.id), IFNULL(m.title, ''), IFNULL(m.body, ''), ${tagSql} FROM memories m WHERE m.id IN (${affected}) AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m.id)`,
+				)
+				.bind(...tagIds, ...tagIds),
+			this.db
+				.prepare(
+					`INSERT INTO memories_fts_map (memory_id, fts_rowid) SELECT m.id, (SELECT COALESCE(MAX(fts_rowid), 0) FROM memories_fts_map) + (SELECT COUNT(*) FROM memories m2 WHERE m2.id IN (${affected}) AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m2.id) AND m2.id <= m.id) FROM memories m WHERE m.id IN (${affected}) AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m.id)`,
+				)
+				.bind(...tagIds, ...tagIds),
 		];
 	}
 }
