@@ -18,9 +18,10 @@ describe("canonicalBody", () => {
 		expect(canonicalBody('[{"b":2,"a":1}]')).toBe('[{"a":1,"b":2}]');
 	});
 
-	it("ignores unsafe prototype keys when hashing", () => {
+	it("keeps distinct hashes for __proto__ payloads via null-prototype sorting", () => {
 		const withProto = '{"__proto__":{"polluted":true},"a":1}';
 		const without = '{"a":1}';
-		expect(canonicalBody(withProto)).toBe(canonicalBody(without));
+		expect(canonicalBody(withProto)).not.toBe(canonicalBody(without));
+		expect(canonicalBody(withProto)).toContain("__proto__");
 	});
 });

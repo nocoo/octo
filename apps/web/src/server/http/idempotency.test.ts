@@ -95,6 +95,13 @@ function mockEnv(records: Map<string, IdempotencyRecord>): Env {
 				}
 				throw new Error(`unexpected sql: ${sql}`);
 			},
+			batch: async (statements: Array<{ run: () => Promise<{ meta: { changes?: number } }> }>) => {
+				const results = [];
+				for (const statement of statements) {
+					results.push(await statement.run());
+				}
+				return results;
+			},
 		} as unknown as D1Database,
 		FILES: {} as R2Bucket,
 		ASSETS: { fetch: () => Promise.resolve(new Response("spa")) } as unknown as Fetcher,

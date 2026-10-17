@@ -3,6 +3,8 @@ import type { MemoryCreate, MemoryPatch } from "../../lib/schema/memory";
 export type MemoryRecord = {
 	id: string;
 	space: string;
+	space_id: string;
+	source_key_id: string;
 	title: string;
 	body: string;
 	type: string;
@@ -16,6 +18,7 @@ export type MemoryRecord = {
 export type MemoryServiceContext = {
 	keyId: string;
 	actor: string;
+	spaceId?: string;
 };
 
 export type MemoryServiceError = {

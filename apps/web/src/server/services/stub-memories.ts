@@ -18,17 +18,18 @@ function newId(): string {
 
 export class StubMemoryService implements MemoryService {
 	private readonly store = new Map<string, MemoryRecord>();
-
 	async get(id: string, _ctx: MemoryServiceContext): Promise<MemoryRecord | null> {
 		return this.store.get(id) ?? null;
 	}
 
-	async create(input: MemoryCreate, _ctx: MemoryServiceContext): Promise<MemoryRecord> {
+	async create(input: MemoryCreate, ctx: MemoryServiceContext): Promise<MemoryRecord> {
 		const id = newId();
 		const ts = nowIso();
 		const record: MemoryRecord = {
 			id,
 			space: input.space,
+			space_id: ctx.spaceId ?? input.space,
+			source_key_id: ctx.keyId,
 			title: input.title,
 			body: input.body,
 			type: input.type,
@@ -45,7 +46,7 @@ export class StubMemoryService implements MemoryService {
 	async update(
 		id: string,
 		patch: MemoryPatch & { expected_version: number },
-		_ctx: MemoryServiceContext,
+		ctx: MemoryServiceContext,
 	): Promise<MemoryRecord> {
 		const existing = this.store.get(id);
 		if (!existing) {
@@ -59,6 +60,7 @@ export class StubMemoryService implements MemoryService {
 		const updated: MemoryRecord = {
 			...existing,
 			space: patch.space ?? existing.space,
+			space_id: ctx.spaceId ?? existing.space_id,
 			title: patch.title ?? existing.title,
 			body: patch.body ?? existing.body,
 			type: patch.type ?? existing.type,

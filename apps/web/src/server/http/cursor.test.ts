@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../lib/errors";
-import { decodeCursor, encodeCursor } from "./cursor";
+import { cursorSecretFromEnv, decodeCursor, encodeCursor } from "./cursor";
 
 const secret = "test-pepper";
 
@@ -38,10 +38,23 @@ describe("cursor codec", () => {
 		});
 	});
 
+	it("rejects null cursor blobs", async () => {
+		const { base64UrlEncode } = await import("./base64url");
+		const blob = base64UrlEncode(new TextEncoder().encode("null"));
+		await expect(decodeCursor(secret, blob)).rejects.toMatchObject({
+			code: "validation_failed",
+		});
+	});
+
 	it("rejects malformed cursors", async () => {
 		await expect(decodeCursor(secret, "not-a-cursor")).rejects.toMatchObject({
 			code: "validation_failed",
 		});
+	});
+
+	it("requires API_KEY_PEPPER for cursor secrets", () => {
+		expect(() => cursorSecretFromEnv({})).toThrow(ApiError);
+		expect(cursorSecretFromEnv({ API_KEY_PEPPER: "pepper" })).toBe("pepper");
 	});
 
 	it("rejects array payloads", async () => {

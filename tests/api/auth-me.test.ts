@@ -35,20 +35,28 @@ describe("GET /api/v1/me", () => {
 			headers: { Authorization: `Bearer ${material.plaintext}` },
 		});
 		expect(res.status).toBe(200);
-		const body = (await res.json()) as {
+		const profile = (await res.json()) as {
+			id: string;
+			name: string;
+			role: string;
+			ops: string[];
+			scope: string;
 			spaces: Array<{ id: string; slug: string; name: string }>;
+			own_entries_only: boolean;
+			auto_own_space: boolean;
+			expires_at: string | null;
 		};
-		expect(body).toMatchObject({
+		expect(profile).toMatchObject({
 			id: material.keyid,
 			name: "e2e-bot",
 			role: "admin",
-			ops: ["d", "r", "u", "w"],
 			scope: "all",
 			own_entries_only: false,
 			auto_own_space: false,
 			expires_at: null,
 		});
-		expect(body.spaces).toEqual(
+		expect(profile.ops.sort()).toEqual(["d", "r", "u", "w"]);
+		expect(profile.spaces).toEqual(
 			expect.arrayContaining([{ id: "sp-me", slug: "alpha", name: "Alpha" }]),
 		);
 		const denied = await fetch(`${base}/api/v1/me`);

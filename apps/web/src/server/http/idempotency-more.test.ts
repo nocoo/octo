@@ -2,13 +2,12 @@ import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
 import { APP_VERSION } from "../../lib/version";
 import type { AppVars, Env } from "../env";
-import { toErrorResponse } from "../lib/errors";
+import { ApiError, toErrorResponse } from "../lib/errors";
 import { newRequestId, withOctoHeaders } from "../lib/request";
 import { testApiPrincipal } from "../test-principal";
 import { idempotencyMiddleware } from "./idempotency";
 import type { IdempotencyRecord } from "./idempotency-repo";
 import * as idempotencyRepo from "./idempotency-repo";
-import { IDEMPOTENCY_MAX_RESPONSE_BYTES } from "./idempotency-storage";
 
 function mockEnv(_records: Map<string, IdempotencyRecord>): Env {
 	return {
@@ -44,7 +43,7 @@ function testApp() {
 
 describe("idempotencyMiddleware edge cases", () => {
 	it("replays after waiting on an in-flight claim", async () => {
-		vi.spyOn(idempotencyRepo, "claimIdempotencyKey").mockResolvedValueOnce({ kind: "conflict" });
+		vi.spyOn(idempotencyRepo, "claimIdempotencyKey").mockResolvedValueOnce({ kind: "in_progress" });
 		vi.spyOn(idempotencyRepo, "waitForIdempotencyReplay").mockResolvedValueOnce({
 			kind: "replay",
 			status: 201,
@@ -66,26 +65,91 @@ describe("idempotencyMiddleware edge cases", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("returns payload_too_large when the stored response exceeds the limit", async () => {
+	it("does not release the claim when persistence fails after the handler succeeds", async () => {
 		vi.spyOn(idempotencyRepo, "claimIdempotencyKey").mockResolvedValueOnce({ kind: "claimed" });
 		const release = vi.spyOn(idempotencyRepo, "releaseIdempotencyClaim").mockResolvedValue();
+		vi.spyOn(idempotencyRepo, "completeIdempotencyRecord").mockRejectedValueOnce(new Error("d1"));
 		const app = testApp();
-		app.post("/api/v1/big", (c) =>
-			c.body("x".repeat(IDEMPOTENCY_MAX_RESPONSE_BYTES + 1), 200, {
-				"content-type": "application/json",
-			}),
-		);
 		const res = await app.request(
-			"/api/v1/big",
+			"/api/v1/echo",
 			{
 				method: "POST",
-				headers: { "Idempotency-Key": "big", "Content-Type": "application/json" },
+				headers: { "Idempotency-Key": "store", "Content-Type": "application/json" },
 				body: "{}",
 			},
 			mockEnv(new Map()),
 		);
-		expect(res.status).toBe(413);
-		expect(release).toHaveBeenCalled();
+		expect(res.status).toBe(500);
+		expect(release).not.toHaveBeenCalled();
+		vi.restoreAllMocks();
+	});
+
+	it("returns unavailable when a matching request is still in flight", async () => {
+		vi.spyOn(idempotencyRepo, "claimIdempotencyKey").mockResolvedValueOnce({ kind: "in_progress" });
+		vi.spyOn(idempotencyRepo, "waitForIdempotencyReplay").mockResolvedValueOnce({
+			kind: "in_progress",
+		});
+		const app = testApp();
+		const res = await app.request(
+			"/api/v1/echo",
+			{
+				method: "POST",
+				headers: { "Idempotency-Key": "pending", "Content-Type": "application/json" },
+				body: "{}",
+			},
+			mockEnv(new Map()),
+		);
+		expect(res.status).toBe(503);
+		vi.restoreAllMocks();
+	});
+
+	it("rethrows ApiError failures from storage", async () => {
+		vi.spyOn(idempotencyRepo, "claimIdempotencyKey").mockResolvedValueOnce({ kind: "claimed" });
+		vi.spyOn(idempotencyRepo, "completeIdempotencyRecord").mockRejectedValueOnce(
+			new ApiError("internal", "corrupt idempotency row"),
+		);
+		const app = testApp();
+		const res = await app.request(
+			"/api/v1/echo",
+			{
+				method: "POST",
+				headers: { "Idempotency-Key": "api-err", "Content-Type": "application/json" },
+				body: "{}",
+			},
+			mockEnv(new Map()),
+		);
+		expect(res.status).toBe(500);
+		vi.restoreAllMocks();
+	});
+
+	it("releases the claim when downstream middleware throws", async () => {
+		vi.spyOn(idempotencyRepo, "claimIdempotencyKey").mockResolvedValueOnce({ kind: "claimed" });
+		const release = vi.spyOn(idempotencyRepo, "releaseIdempotencyClaim").mockResolvedValue();
+		const mw = idempotencyMiddleware();
+		const env = mockEnv(new Map());
+		const req = new Request("http://localhost/api/v1/echo", {
+			method: "POST",
+			headers: { "Idempotency-Key": "boom", "Content-Type": "application/json" },
+			body: "{}",
+		});
+		const res = new Response();
+		const c = {
+			req: {
+				method: "POST",
+				path: "/api/v1/echo",
+				header: (n: string) => req.headers.get(n),
+				raw: req,
+			},
+			env,
+			get: (key: string) => (key === "apiKey" ? testApiPrincipal() : undefined),
+			res,
+		};
+		await expect(
+			mw(c as never, async () => {
+				throw new Error("handler failed");
+			}),
+		).rejects.toThrow("handler failed");
+		expect(release).toHaveBeenCalledOnce();
 		vi.restoreAllMocks();
 	});
 
@@ -97,7 +161,7 @@ describe("idempotencyMiddleware edge cases", () => {
 			"/api/v1/echo",
 			{
 				method: "POST",
-				headers: { "Idempotency-Key": "store", "Content-Type": "application/json" },
+				headers: { "Idempotency-Key": "store2", "Content-Type": "application/json" },
 				body: "{}",
 			},
 			mockEnv(new Map()),

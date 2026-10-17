@@ -1,5 +1,3 @@
-const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-
 export function canonicalBody(raw: string): string {
 	if (raw.length === 0) {
 		return "";
@@ -17,10 +15,10 @@ function sortJson(value: unknown): unknown {
 		return value.map((item) => sortJson(item));
 	}
 	if (value && typeof value === "object") {
-		const entries = Object.entries(value as Record<string, unknown>)
-			.filter(([key]) => !UNSAFE_KEYS.has(key))
-			.sort(([a], [b]) => a.localeCompare(b));
-		const out: Record<string, unknown> = {};
+		const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+			a.localeCompare(b),
+		);
+		const out = Object.create(null) as Record<string, unknown>;
 		for (const [key, child] of entries) {
 			out[key] = sortJson(child);
 		}

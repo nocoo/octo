@@ -19,8 +19,15 @@ export async function decodeCursor(secret: string, cursor: string): Promise<Curs
 	let wire: CursorWire;
 	try {
 		const json = new TextDecoder().decode(base64UrlDecode(cursor));
-		wire = JSON.parse(json) as CursorWire;
-	} catch {
+		const parsed: unknown = JSON.parse(json);
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			throw new ApiError("validation_failed", "invalid cursor");
+		}
+		wire = parsed as CursorWire;
+	} catch (err) {
+		if (err instanceof ApiError) {
+			throw err;
+		}
 		throw new ApiError("validation_failed", "invalid cursor");
 	}
 	if (wire.v !== VERSION || typeof wire.p !== "string" || typeof wire.m !== "string") {

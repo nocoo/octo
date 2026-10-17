@@ -7,7 +7,23 @@ import { createBatchRoutes } from "./batch";
 
 function envWithKey(): Env {
 	return {
-		DB: {} as D1Database,
+		DB: {
+			prepare: (sql: string) => {
+				if (sql.includes("FROM spaces")) {
+					return {
+						bind: (slug: string) => ({
+							first: async () => (slug === "kb" ? { id: "sp-kb" } : null),
+						}),
+					};
+				}
+				return {
+					bind: () => ({
+						first: async () => null,
+						run: async () => ({ success: true, meta: { changes: 0 } }),
+					}),
+				};
+			},
+		} as unknown as D1Database,
 		FILES: {} as R2Bucket,
 		ASSETS: { fetch: () => Promise.resolve(new Response("spa")) } as unknown as Fetcher,
 		API_KEY_PEPPER: "pepper",

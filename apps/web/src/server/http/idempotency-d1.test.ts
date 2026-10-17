@@ -6,27 +6,41 @@ import { migrationSqlForNode } from "../../../../../scripts/sqlite-test";
 import {
 	claimIdempotencyKey,
 	completeIdempotencyRecord,
+	releaseIdempotencyClaim,
 	waitForIdempotencyReplay,
 } from "./idempotency-repo";
-import { IDEMPOTENCY_PENDING_STATUS } from "./idempotency-storage";
+import {
+	IDEMPOTENCY_CHUNK_MARKER_PREFIX,
+	IDEMPOTENCY_CHUNK_STATUS,
+	IDEMPOTENCY_PENDING_STATUS,
+	isChunkRowIdemKey,
+} from "./idempotency-storage";
 
 function sqliteD1(db: DatabaseSync): D1Database {
+	const prepare = (sql: string) => {
+		const stmt = db.prepare(sql);
+		return {
+			bind: (...params: Array<string | number | null>) => ({
+				run: async () => {
+					try {
+						const info = stmt.run(...params);
+						return { success: true, meta: { changes: info.changes } };
+					} catch {
+						return { success: false, meta: { changes: 0 } };
+					}
+				},
+				first: async () => (stmt.get(...params) as Record<string, unknown> | undefined) ?? null,
+			}),
+		};
+	};
 	return {
-		prepare: (sql: string) => {
-			const stmt = db.prepare(sql);
-			return {
-				bind: (...params: Array<string | number | null>) => ({
-					run: async () => {
-						try {
-							const info = stmt.run(...params);
-							return { success: true, meta: { changes: info.changes } };
-						} catch {
-							return { success: false, meta: { changes: 0 } };
-						}
-					},
-					first: async () => (stmt.get(...params) as Record<string, unknown> | undefined) ?? null,
-				}),
-			};
+		prepare,
+		batch: async (statements: Array<{ run: () => Promise<{ meta: { changes?: number } }> }>) => {
+			const results = [];
+			for (const statement of statements) {
+				results.push(await statement.run());
+			}
+			return results;
 		},
 	} as unknown as D1Database;
 }
@@ -52,7 +66,7 @@ describe("idempotency repo on sqlite", () => {
 			),
 		);
 		const winners = claims.filter((c) => c.kind === "claimed");
-		const waiters = claims.filter((c) => c.kind === "conflict");
+		const waiters = claims.filter((c) => c.kind === "in_progress");
 		expect(winners).toHaveLength(1);
 		expect(waiters).toHaveLength(15);
 		db.close();
@@ -66,7 +80,7 @@ describe("idempotency repo on sqlite", () => {
 		expect(first.kind).toBe("claimed");
 		const mismatch = await claimIdempotencyKey(d1, "key-a", "idem-2", "hash-b", 2_001);
 		expect(mismatch.kind).toBe("conflict");
-		await completeIdempotencyRecord(d1, "key-a", "idem-2", "hash-a", 201, '{"ok":true}');
+		await completeIdempotencyRecord(d1, "key-a", "idem-2", "hash-a", 201, '{"ok":true}', 2_000);
 		const replay = await claimIdempotencyKey(d1, "key-a", "idem-2", "hash-a", 2_002);
 		expect(replay).toEqual({ kind: "replay", status: 201, body: '{"ok":true}' });
 		const stillConflict = await claimIdempotencyKey(d1, "key-a", "idem-2", "hash-b", 2_003);
@@ -83,7 +97,7 @@ describe("idempotency repo on sqlite", () => {
 		});
 		const waiter = waitForIdempotencyReplay(d1, "key-a", "idem-3", "hash");
 		await new Promise((resolve) => setTimeout(resolve, 40));
-		await completeIdempotencyRecord(d1, "key-a", "idem-3", "hash", 200, '{"hits":1}');
+		await completeIdempotencyRecord(d1, "key-a", "idem-3", "hash", 200, '{"hits":1}', 3_000);
 		expect(await waiter).toEqual({ kind: "replay", status: 200, body: '{"hits":1}' });
 		db.close();
 	});
@@ -105,22 +119,86 @@ describe("idempotency repo on sqlite", () => {
 		db.close();
 	});
 
-	it("stores chunked responses under the row size limit", async () => {
+	it("stores chunked responses across multiple rows and replays them", async () => {
 		const db = new DatabaseSync(":memory:");
 		idempotencyTableOnly(db);
 		const d1 = sqliteD1(db);
-		const body = "x".repeat(900_000);
+		const body = "x".repeat(1_600_000);
 		expect(await claimIdempotencyKey(d1, "key-a", "big", "hash", 5_000)).toEqual({
 			kind: "claimed",
 		});
-		await completeIdempotencyRecord(d1, "key-a", "big", "hash", 200, body);
-		const row = db
-			.prepare("SELECT status, response_json FROM idempotency_records WHERE key_id = 'key-a'")
+		await completeIdempotencyRecord(d1, "key-a", "big", "hash", 200, body, 5_000);
+		const main = db
+			.prepare(
+				"SELECT status, response_json FROM idempotency_records WHERE key_id = 'key-a' AND idem_key = 'big'",
+			)
 			.get() as { status: number; response_json: string };
-		expect(row.status).toBe(200);
-		expect(row.response_json.startsWith('{"_chunks":')).toBe(true);
+		expect(main.status).toBe(200);
+		expect(main.response_json.startsWith(IDEMPOTENCY_CHUNK_MARKER_PREFIX)).toBe(true);
+		const chunkRows = db
+			.prepare("SELECT idem_key, status FROM idempotency_records WHERE key_id = 'key-a'")
+			.all() as Array<{ idem_key: string; status: number }>;
+		const chunks = chunkRows.filter((row) => isChunkRowIdemKey(row.idem_key));
+		expect(chunks.length).toBeGreaterThan(1);
+		expect(chunks.every((row) => row.status === IDEMPOTENCY_CHUNK_STATUS)).toBe(true);
 		const replay = await claimIdempotencyKey(d1, "key-a", "big", "hash", 5_001);
 		expect(replay).toEqual({ kind: "replay", status: 200, body });
+		db.close();
+	});
+
+	it("stops waiting when the stored hash does not match", async () => {
+		const db = new DatabaseSync(":memory:");
+		idempotencyTableOnly(db);
+		const d1 = sqliteD1(db);
+		expect(await claimIdempotencyKey(d1, "key-a", "idem-4", "hash-a", 4_000)).toEqual({
+			kind: "claimed",
+		});
+		await completeIdempotencyRecord(d1, "key-a", "idem-4", "hash-a", 200, "{}", 4_000);
+		expect(await waitForIdempotencyReplay(d1, "key-a", "idem-4", "hash-b", 200, 10)).toEqual({
+			kind: "conflict",
+		});
+		db.close();
+	});
+
+	it("returns in_progress when wait times out on a pending claim", async () => {
+		const db = new DatabaseSync(":memory:");
+		idempotencyTableOnly(db);
+		const d1 = sqliteD1(db);
+		expect(await claimIdempotencyKey(d1, "key-a", "slow", "hash", 7_000)).toEqual({
+			kind: "claimed",
+		});
+		expect(await waitForIdempotencyReplay(d1, "key-a", "slow", "hash", 60, 10)).toEqual({
+			kind: "in_progress",
+		});
+		db.close();
+	});
+
+	it("treats incomplete non-pending rows as conflict", async () => {
+		const db = new DatabaseSync(":memory:");
+		idempotencyTableOnly(db);
+		const d1 = sqliteD1(db);
+		db.prepare(
+			`INSERT INTO idempotency_records (key_id, idem_key, request_hash, status, response_json, created_at)
+       VALUES ('key-a', 'broken', 'hash', 200, '', 1)`,
+		).run();
+		expect(await claimIdempotencyKey(d1, "key-a", "broken", "hash", 2)).toEqual({
+			kind: "conflict",
+		});
+		db.close();
+	});
+
+	it("releases a pending claim without touching completed rows", async () => {
+		const db = new DatabaseSync(":memory:");
+		idempotencyTableOnly(db);
+		const d1 = sqliteD1(db);
+		expect(await claimIdempotencyKey(d1, "key-a", "rel", "hash", 8_000)).toEqual({
+			kind: "claimed",
+		});
+		await releaseIdempotencyClaim(d1, "key-a", "rel", "hash");
+		const count = db
+			.prepare("SELECT COUNT(*) AS n FROM idempotency_records WHERE idem_key = 'rel'")
+			.get() as { n: number };
+		expect(count.n).toBe(0);
 		db.close();
 	});
 

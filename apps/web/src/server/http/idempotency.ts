@@ -42,10 +42,13 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 		if (claim.kind === "replay") {
 			return replayResponse(claim.status, claim.body);
 		}
-		if (claim.kind === "conflict") {
+		if (claim.kind !== "claimed") {
 			claim = await waitForIdempotencyReplay(c.env.DB, keyId, idemKey, hash);
 			if (claim.kind === "replay") {
 				return replayResponse(claim.status, claim.body);
+			}
+			if (claim.kind === "in_progress") {
+				throw new ApiError("unavailable", "idempotent request still processing");
 			}
 			throw new ApiError("idempotency_conflict", "idempotency key reused with different request");
 		}
@@ -57,9 +60,8 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 		}
 		const bodyText = await c.res.clone().text();
 		try {
-			await completeIdempotencyRecord(c.env.DB, keyId, idemKey, hash, c.res.status, bodyText);
+			await completeIdempotencyRecord(c.env.DB, keyId, idemKey, hash, c.res.status, bodyText, now);
 		} catch (storeErr) {
-			await releaseIdempotencyClaim(c.env.DB, keyId, idemKey, hash);
 			if (storeErr instanceof ApiError) {
 				throw storeErr;
 			}
