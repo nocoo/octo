@@ -1,11 +1,14 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { MAX_ATTACHMENT_BYTES } from "../../apps/web/src/server/attachments/content-type";
 import { MAX_MULTIPART_OVERHEAD_BYTES } from "../../apps/web/src/server/attachments/upload";
 import { signAttachmentUrl } from "../../apps/web/src/server/attachments/url-sign";
 import { seedAttachmentKey } from "../../scripts/attachment-fixtures";
 import { e2eFetch as fetch } from "../../scripts/e2e-fetch";
-import type { AsyncD1Exec } from "../../scripts/local-d1";
-import { e2eD1, query, sqlText } from "../fixtures/l2-batch";
+import {
+	cleanupAttachmentFixtures,
+	setupAttachmentFixtures as setup,
+} from "../fixtures/attachments";
+import { query, sqlText } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const urlSecret = "change-me-attachment-url-secret";
@@ -20,33 +23,6 @@ type CreatedAttachment = {
 	size_bytes: number;
 	created_at: string;
 };
-
-async function cleanupAttachmentFixtures(d1: AsyncD1Exec) {
-	await d1([
-		"--command",
-		`DELETE FROM changes WHERE entity = 'attachment' AND entity_id IN
-			(SELECT id FROM attachments WHERE memory_id = 'meme2e000001');
-		DELETE FROM attachments WHERE memory_id = 'meme2e000001';
-		DELETE FROM memories WHERE id = 'meme2e000001';
-		DELETE FROM spaces WHERE id IN ('spacee2e01', 'spacee2e02');
-		DELETE FROM api_keys WHERE name LIKE 'e2e-att%';`,
-	]);
-}
-
-async function setup() {
-	const d1 = await e2eD1();
-	await cleanupAttachmentFixtures(d1);
-	const key = await seedAttachmentKey(d1);
-	const now = Date.now();
-	await d1([
-		"--command",
-		`INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at)
-		VALUES ('spacee2e01', 'e2e-space', 'E2E', '', '${key.keyId}', ${now}, ${now});
-		INSERT INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at)
-		VALUES ('meme2e000001', 'spacee2e01', 't', 'b', 'note', 0.5, '${key.keyId}', 1, 'hash', ${now}, ${now});`,
-	]);
-	return { d1, ...key };
-}
 
 function endpoints(id: string) {
 	return [
@@ -102,7 +78,7 @@ async function multipartUpload(header: string, form: FormData) {
 }
 
 describe("attachments API", { sequential: true }, () => {
-	afterEach(async () => cleanupAttachmentFixtures(await e2eD1()));
+	afterAll(cleanupAttachmentFixtures);
 
 	it("uploads, lists, signs, streams, and soft-deletes", async () => {
 		const { header } = await setup();
