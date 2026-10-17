@@ -1,5 +1,5 @@
 import type { ApiPrincipal } from "../auth/authorize";
-import { authorize, visibleSpaceIds } from "../auth/authorize";
+import { visibleSpaceIds } from "../auth/authorize";
 import { ApiError } from "../lib/errors";
 
 export type AuthzContext = {
@@ -16,21 +16,6 @@ export function searchAuthzFromPrincipal(principal: ApiPrincipal): AuthzContext 
 }
 
 export function requireSearchRead(principal: ApiPrincipal): void {
-	const vis = visibleSpaceIds(principal);
-	if (vis.kind === "ids") {
-		if (vis.ids.length === 0) {
-			return;
-		}
-		const probe = vis.ids[0];
-		if (!probe) {
-			return;
-		}
-		const result = authorize(principal, "read", { spaceId: probe });
-		if (!result.allow) {
-			throw new ApiError(result.reason === "forbidden" ? "forbidden" : "not_found", result.reason);
-		}
-		return;
-	}
 	if (!principal.ops.has("r")) {
 		throw new ApiError("forbidden", "forbidden");
 	}

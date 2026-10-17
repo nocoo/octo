@@ -93,6 +93,26 @@ describe("authz helpers", () => {
 		).toThrow(ApiError);
 	});
 
+	it.each(["all", "spaces", "own"] as const)(
+		"checks read independently from empty %s scope",
+		(scope) => {
+			const principal = {
+				id: "k1",
+				name: "n",
+				role: "project",
+				scope,
+				ops: parseOps("w"),
+				spaceIds: [],
+				ownedSpaceIds: [],
+				ownEntriesOnly: false,
+				autoOwnSpace: true,
+				expiresAt: null,
+			};
+			expect(() => requireSearchRead(principal)).toThrow(ApiError);
+			expect(() => requireSearchRead({ ...principal, ops: parseOps("r") })).not.toThrow();
+		},
+	);
+
 	it("intersects requested slugs with visibility", () => {
 		expect(
 			intersectRequestedSpaces({ keyId: "k", visibleSpaceIds: ["s1"] }, ["alpha", "beta"], spaces),
