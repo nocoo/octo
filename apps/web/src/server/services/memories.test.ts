@@ -52,6 +52,11 @@ describe("authzFrom and helpers", () => {
 		expect(expectedVersion('"4"', 4)).toBe(4);
 		expect(() => expectedVersion("1", 2)).toThrow(ApiError);
 		expect(() => expectedVersion(undefined)).toThrow(ApiError);
+		const src = principal({ scope: "own" });
+		const own = authzFrom(src);
+		own.principal.ownedSpaceIds.push("s9");
+		expect(src.ownedSpaceIds).toEqual([]);
+		expect(own.visible()).toEqual({ kind: "ids", ids: ["s9"] });
 	});
 
 	it("serializes public memory and version payloads", () => {
@@ -219,5 +224,60 @@ describe("MemoryService", () => {
 				})
 			).items,
 		).toEqual([]);
+	});
+
+	it("creates the auto own space on first write", async () => {
+		const db = openTestD1();
+		const svc = new MemoryService(db);
+		const authz = authzFrom(
+			principal({
+				id: "Kown",
+				name: "alice",
+				role: "project",
+				scope: "own",
+				autoOwnSpace: true,
+			}),
+		);
+		const created = await svc.create(authz, {
+			space: "alice",
+			title: "t",
+			body: "b",
+			type: "note",
+			tags: [],
+		});
+		expect(created.space).toBe("alice");
+		expect(authz.principal.ownedSpaceIds).toHaveLength(1);
+		const again = await svc.create(authz, {
+			space: "alice",
+			title: "t2",
+			body: "b2",
+			type: "note",
+			tags: [],
+		});
+		expect(again.space).toBe("alice");
+	});
+
+	it("rejects first write when the own space slug is taken", async () => {
+		const db = openTestD1();
+		await insertSpace(db, { id: "sTaken", slug: "alice", ownerKeyId: "other" });
+		const svc = new MemoryService(db);
+		const authz = authzFrom(
+			principal({
+				id: "Kown",
+				name: "alice",
+				role: "project",
+				scope: "own",
+				autoOwnSpace: true,
+			}),
+		);
+		await expect(
+			svc.create(authz, {
+				space: "alice",
+				title: "t",
+				body: "b",
+				type: "note",
+				tags: [],
+			}),
+		).rejects.toMatchObject({ code: "unprocessable" });
 	});
 });

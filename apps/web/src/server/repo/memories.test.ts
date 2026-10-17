@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { insertSpace, insertTinyProfile, openTestD1 } from "./__tests__/sqlite-d1";
 import { MemoryRepo, type MemoryWrite } from "./memories";
-import { InlineTagRepo } from "./memories-tags";
 import { resolveVectorWrite } from "./memories-vector";
+import { TagRepo } from "./tags";
 
 function writeInput(over: Partial<MemoryWrite> & Pick<MemoryWrite, "id" | "op">): MemoryWrite {
 	return {
@@ -26,7 +26,7 @@ async function setup() {
 	await insertSpace(db, { id: "s1", slug: "kb-bot" });
 	await insertSpace(db, { id: "s2", slug: "other" });
 	await insertTinyProfile(db);
-	const tags = new InlineTagRepo(
+	const tags = new TagRepo(
 		db,
 		() => 1,
 		() => "tag1",
@@ -187,7 +187,7 @@ describe("MemoryRepo", () => {
 
 	it("filters list by space, tags, type, time, importance, and cursor", async () => {
 		const { db, repo } = await setup();
-		const tags = new InlineTagRepo(db);
+		const tags = new TagRepo(db);
 		const infra = await tags.resolveMany(["infra"]);
 		const ops = await tags.resolveMany(["ops"]);
 		await repo.write({

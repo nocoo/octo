@@ -12,23 +12,26 @@ import { newUlid } from "../lib/ulid";
 import { ChangeRepo } from "../repo/changes";
 import { type MemoryRecord, MemoryRepo } from "../repo/memories";
 import { encodeCursor, parseChangeCursor, parseMemoryCursor } from "../repo/memories-cursor";
-import { InlineTagRepo, normalizeTag, type TagRepo } from "../repo/memories-tags";
 import { resolveVectorWrite } from "../repo/memories-vector";
+import { ensureAutoOwnSpace } from "../repo/spaces";
+import { normalizeTag, TagRepo } from "../repo/tags";
 import { diffVersions, VersionRepo } from "../repo/versions";
 
 export type Authz = {
-	principal: ApiPrincipal;
+	principal: ApiPrincipal & { ownedSpaceIds: string[] };
 	actor: string;
 	denyUnless(op: AuthzOp, target: AuthzTarget): void;
 	visible(): ReturnType<typeof visibleSpaceIds>;
 };
 
 export function authzFrom(principal: ApiPrincipal): Authz {
+	const ownedSpaceIds = [...principal.ownedSpaceIds];
+	const key: ApiPrincipal & { ownedSpaceIds: string[] } = { ...principal, ownedSpaceIds };
 	return {
-		principal,
-		actor: `key:${principal.id}`,
+		principal: key,
+		actor: `key:${key.id}`,
 		denyUnless(op, target) {
-			const result = authorize(principal, op, target);
+			const result = authorize(key, op, target);
 			if (result.allow) {
 				return;
 			}
@@ -37,7 +40,7 @@ export function authzFrom(principal: ApiPrincipal): Authz {
 			}
 			throw new ApiError("forbidden", "forbidden");
 		},
-		visible: () => visibleSpaceIds(principal),
+		visible: () => visibleSpaceIds(key),
 	};
 }
 
@@ -152,7 +155,7 @@ export function publicVersion(
 export class MemoryService {
 	constructor(
 		private readonly db: D1Database,
-		private readonly tags: TagRepo = new InlineTagRepo(db),
+		private readonly tags: TagRepo = new TagRepo(db),
 		private readonly now: () => number = Date.now,
 		private readonly id: () => string = newUlid,
 		private readonly memories = new MemoryRepo(db),
@@ -161,6 +164,21 @@ export class MemoryService {
 	) {}
 
 	async create(authz: Authz, input: MemoryCreate): Promise<Record<string, unknown>> {
+		if (authz.principal.autoOwnSpace) {
+			const own = await ensureAutoOwnSpace(
+				this.db,
+				{
+					id: authz.principal.id,
+					name: authz.principal.name,
+					auto_own_space: 1,
+				},
+				this.now,
+				this.id,
+			);
+			if (own && !authz.principal.ownedSpaceIds.includes(own.id)) {
+				authz.principal.ownedSpaceIds.push(own.id);
+			}
+		}
 		const space = await this.requireSpace(input.space);
 		authz.denyUnless("write", { spaceId: space.id });
 		const tags = await this.tags.resolveMany(input.tags);
@@ -511,10 +529,22 @@ export class MemoryService {
 				unique.push(name);
 			}
 		}
-		const resolved = await this.tags.lookupMany(unique);
+		const resolved: string[] = [];
+		const seenIds = new Set<string>();
+		for (const name of unique) {
+			const row = await this.tags.getByName(name);
+			if (!row) {
+				continue;
+			}
+			const canonical = await this.tags.follow(row);
+			if (!seenIds.has(canonical.id)) {
+				seenIds.add(canonical.id);
+				resolved.push(canonical.id);
+			}
+		}
 		if (all && resolved.length !== unique.length) {
 			return [];
 		}
-		return resolved.map((tag) => tag.id);
+		return resolved;
 	}
 }

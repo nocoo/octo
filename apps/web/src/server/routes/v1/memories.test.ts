@@ -646,4 +646,72 @@ describe("memory v1 routes", () => {
 		);
 		expect(noList.status).toBe(403);
 	});
+
+	it("creates an auto own space on first write and rejects a taken slug", async () => {
+		const db = openTestD1();
+		const minted = await mintApiKey(db, pepper, {
+			name: "alice",
+			role: "project",
+			ops: "r,w,u,d",
+			scope: "own",
+			autoOwnSpace: true,
+		});
+		const env: Env = {
+			DB: db,
+			FILES: {} as R2Bucket,
+			ASSETS: { fetch: () => Promise.resolve(new Response("spa")) } as unknown as Fetcher,
+			API_KEY_PEPPER: pepper,
+		};
+		const app = createApp();
+		const created = await app.request(
+			"/api/v1/memories",
+			{
+				method: "POST",
+				headers: auth(minted.plaintext),
+				body: JSON.stringify({
+					space: "alice",
+					title: "t",
+					body: "b",
+					type: "note",
+					tags: [],
+				}),
+			},
+			env,
+		);
+		expect(created.status).toBe(201);
+		expect(await created.json()).toMatchObject({ space: "alice" });
+
+		const takenDb = openTestD1();
+		await insertSpace(takenDb, { id: "sTaken", slug: "alice", ownerKeyId: "other" });
+		const takenKey = await mintApiKey(takenDb, pepper, {
+			name: "alice",
+			role: "project",
+			ops: "r,w,u,d",
+			scope: "own",
+			autoOwnSpace: true,
+		});
+		const takenEnv: Env = {
+			DB: takenDb,
+			FILES: {} as R2Bucket,
+			ASSETS: { fetch: () => Promise.resolve(new Response("spa")) } as unknown as Fetcher,
+			API_KEY_PEPPER: pepper,
+		};
+		const taken = await createApp().request(
+			"/api/v1/memories",
+			{
+				method: "POST",
+				headers: auth(takenKey.plaintext),
+				body: JSON.stringify({
+					space: "alice",
+					title: "t",
+					body: "b",
+					type: "note",
+					tags: [],
+				}),
+			},
+			takenEnv,
+		);
+		expect(taken.status).toBe(422);
+		expect(await taken.json()).toMatchObject({ error: { code: "unprocessable" } });
+	});
 });

@@ -2,7 +2,6 @@ import type { MemoryFilters } from "../../lib/schema/filters";
 import type { VisibleSpaces } from "../auth/authorize";
 import { ApiError } from "../lib/errors";
 import { encodeCursor, type MemoryCursor } from "./memories-cursor";
-import type { TagRef } from "./memories-tags";
 import type { VectorWrite } from "./memories-vector";
 
 export type MemoryOp = "create" | "update" | "rollback" | "restore" | "move";
@@ -34,7 +33,7 @@ export type MemoryWrite = {
 	type: string;
 	importance: number;
 	eventTime: number | null;
-	tags: TagRef[];
+	tags: Array<{ id: string; name: string }>;
 	actor: string;
 	sourceKeyId: string;
 	updatedByKeyId: string;

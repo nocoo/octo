@@ -240,4 +240,55 @@ describe("memory CRUD", () => {
 		});
 		expect(huge.status).toBe(413);
 	});
+
+	it("creates an auto own space on first write and rejects a taken slug", async () => {
+		const d1 = e2eD1();
+		assertTestMarker(d1);
+		const material = generateApiKeyMaterial();
+		const secretHash = await hashSecret(pepper, material.secret);
+		const now = Date.now();
+		const slug = `alice-${material.keyid.toLowerCase()}`;
+		d1([
+			"--command",
+			`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', '${slug}', '${secretHash}', 'project', 'r,w,u,d', 'own', '[]', 0, 1, NULL, ${now}, ${now})`,
+		]);
+		const created = await fetch(`${base}/api/v1/memories`, {
+			method: "POST",
+			headers: auth(material.plaintext),
+			body: JSON.stringify({
+				space: slug,
+				title: "t",
+				body: "b",
+				type: "note",
+				tags: [],
+			}),
+		});
+		expect(created.status).toBe(201);
+		expect(await created.json()).toMatchObject({ space: slug });
+
+		const taken = generateApiKeyMaterial();
+		const takenHash = await hashSecret(pepper, taken.secret);
+		const takenSlug = `taken-${taken.keyid.toLowerCase()}`;
+		d1([
+			"--command",
+			`INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES ('sp-${taken.keyid}', '${takenSlug}', 'Taken', '', 'other', ${now}, ${now})`,
+		]);
+		d1([
+			"--command",
+			`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${taken.keyid}', '${takenSlug}', '${takenHash}', 'project', 'r,w,u,d', 'own', '[]', 0, 1, NULL, ${now}, ${now})`,
+		]);
+		const rejected = await fetch(`${base}/api/v1/memories`, {
+			method: "POST",
+			headers: auth(taken.plaintext),
+			body: JSON.stringify({
+				space: takenSlug,
+				title: "t",
+				body: "b",
+				type: "note",
+				tags: [],
+			}),
+		});
+		expect(rejected.status).toBe(422);
+		expect(await rejected.json()).toMatchObject({ error: { code: "unprocessable" } });
+	});
 });
