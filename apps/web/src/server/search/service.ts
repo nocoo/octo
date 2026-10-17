@@ -125,6 +125,10 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 		vectorHits = await revalidateVectorHits(deps.db, raw, contentFilter);
 	}
 
+	const candidateIds = [...new Set([...ftsHits, ...vectorHits].map((hit) => hit.id))];
+	const memories = await loadMemoriesByIds(deps.db, candidateIds, contentFilter);
+	ftsHits = ftsHits.filter((hit) => memories.has(hit.id));
+	vectorHits = vectorHits.filter((hit) => memories.has(hit.id));
 	const ftsRanked: RankedChannel[] = ftsHits.map((h, i) => ({
 		id: h.id,
 		rank: i + 1,
@@ -142,12 +146,7 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 				? new Map(vecRanked.map((r) => [r.id, r.rawScore]))
 				: fuseChannels(ftsRanked, vecRanked, fusion);
 
-	let ordered = [...fusedScores.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
-	const memories = await loadMemoriesByIds(deps.db, ordered, contentFilter);
-	ftsHits = ftsHits.filter((hit) => memories.has(hit.id));
-	vectorHits = vectorHits.filter((hit) => memories.has(hit.id));
-	ordered = ordered
-		.filter((id) => memories.has(id))
+	const ordered = [...fusedScores.keys()]
 		.sort((a, b) => {
 			const fusedDiff = (fusedScores.get(b) ?? 0) - (fusedScores.get(a) ?? 0);
 			if (fusedDiff !== 0) {

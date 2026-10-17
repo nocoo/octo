@@ -169,6 +169,80 @@ describe("same-statement memory visibility", () => {
 		},
 	);
 
+	it.each(["weighted", "rrf"] as const)(
+		"rebuilds ranks and %s fusion from final visible candidates",
+		async (method) => {
+			const { db, sqlite } = fixture((sql) => {
+				if (sql.includes("m.body, m.type"))
+					sqlite.exec("UPDATE memories SET space_id='s2' WHERE id='m1'");
+			});
+			sqlite.exec(
+				"DELETE FROM memories_fts WHERE rowid=1; INSERT INTO memories_fts(rowid,title,body,tags) VALUES (1,'cloudflare','cloudflare',''); UPDATE memories SET title='cloudflare',body='cloudflare' WHERE id='m1'",
+			);
+			addMemory(sqlite, "m2", "cloudflare", 2);
+			addMemory(sqlite, "m3", "cloudflare", 3);
+			const result = await searchMemories(
+				authz,
+				{
+					query: "cloudflare",
+					vector: { profile: "te3-small-1536", values: [1, ...Array<number>(1535).fill(0)] },
+					mode: "hybrid",
+					fusion: { method, weights: { fts: 1, vector: 1 } },
+				},
+				{
+					db,
+					vectorStore: {
+						query: async () => [
+							{ id: "m1", score: 0.9 },
+							{ id: "m2", score: 0.6 },
+							{ id: "m3", score: 0.3 },
+						],
+					},
+				},
+			);
+			expect(result.items.map((item) => item.id)).toEqual(["m2", "m3"]);
+			expect(result.channels.fts.candidates).toBe(2);
+			expect(result.channels.vector.candidates).toBe(2);
+			for (const [i, item] of result.items.entries()) {
+				expect(item.scores.vector?.rank).toBe(i + 1);
+				expect(item.scores.fts?.rank).toBe(i + 1);
+				expect(item.scores.vector?.normalized).toBe(i === 0 ? 1 : 0);
+				expect(item.scores.fused).toBeCloseTo(method === "rrf" ? 2 / (61 + i) : 2 - i, 12);
+			}
+		},
+	);
+
+	it.each(["fts", "vector", "hybrid"] as const)(
+		"excludes concurrent move/delete/tag changes in %s",
+		async (mode) => {
+			for (const mutation of [
+				"UPDATE memories SET space_id='s2' WHERE id='m1'",
+				"UPDATE memories SET deleted_at=2 WHERE id='m1'",
+				"DELETE FROM memory_tags WHERE memory_id='m1'",
+			]) {
+				const { db, sqlite } = fixture((sql) => {
+					if (sql.includes("m.body, m.type")) sqlite.exec(mutation);
+				});
+				sqlite.exec(
+					"INSERT INTO tags VALUES ('t1','infra','Infra',NULL,1,1); INSERT INTO memory_tags VALUES ('m1','t1')",
+				);
+				const result = await searchMemories(
+					authz,
+					{
+						query: "cloudflare",
+						vector: { profile: "te3-small-1536", values: [1, ...Array<number>(1535).fill(0)] },
+						mode,
+						filters: { tags_all: ["infra"] },
+					},
+					{ db, vectorStore: { query: async () => [{ id: "m1", score: 1 }] } },
+				);
+				expect(result.items).toEqual([]);
+				expect(result.channels.fts.candidates).toBe(0);
+				expect(result.channels.vector.candidates).toBe(0);
+			}
+		},
+	);
+
 	it("does not return content moved to a hidden space after candidate validation", async () => {
 		const { db, sqlite } = fixture((sql) => {
 			if (sql.includes("m.body, m.type")) {

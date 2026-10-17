@@ -103,3 +103,11 @@ boundary; a method named `complete` or equal HTTP responses is not atomicity.
 During the regression-test rewrite, a lookup-error spy also intercepted the
 verification reads. Verify persisted state through the unmocked reader so fault
 injection remains limited to the operation under test.
+
+## 2026-10-17 — Search response snapshot gaps
+
+The first M4 remediation authorized the final content SELECT but fetched tags afterward and retained ranks/fusion calculated before final visibility pruning. A concurrent space move could therefore mix public content with newly hidden tags, or return inconsistent scores. Independent review identified both omissions; real SQLite interleaving tests reproduced them before correction. Content and tags now share one authorized SQL snapshot, and ranking/fusion run only after final candidate pruning.
+
+The production fail-closed vector factory also exposed missing explicit development mode in both local startup paths. Startup tests now assert the actual shared Wrangler arguments rather than relying on manually constructed test environments.
+
+Future search changes must trace every returned field through its read snapshot, derive all scores/counts from the same final candidate set, and verify environment selection through the real startup entrypoints.
