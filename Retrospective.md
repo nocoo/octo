@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — A literal idempotency fixture triggered secret scanning
+
+Removing only the authorized multipart variants made the remaining raw test's synthetic idempotency label a literal. Gitleaks classified that fixture as a generic API key and correctly blocked the range gate. It was not a credential; a shorter synthetic label preserves the test semantics without a scanner exemption. The unpublished introducing commit was amended so history scanning also passes. Keep the compensation integration before the amended test commit so its index-snapshot hooks retain all passing regressions; do not bypass hooks or assume a later deletion removes a historical scanner finding.
+
 ## 2026-10-17 — M5 rebase omitted compensation diagnostics
 
 Rebasing M5 onto `41d469f` required combining main's memory authorization, OCC hashes and safe error mapper with attachment hashing and R2 compensation. Reusing the shared mapper preserved recovery but initially dropped M5's request-ID-only cleanup failure log. The existing attachment transaction suite exposed three failures; restoring the diagnostic in the shared catch retained the original assertions without duplicating the mapper. Compensation still runs before saved-outcome recovery so a concurrent losing upload can remove its uncommitted blob; replay authorization still rechecks main's current memory and batch permissions. The fixture Worker now uses main's production memory routes rather than restoring the removed fake service. Zheng separately accepted the three documented local-proxy oversize scenario removals; that decision does not waive integration regressions or claim the SDK defect is fixed.

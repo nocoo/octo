@@ -282,14 +282,13 @@ describe("attachments API", { sequential: true }, () => {
 		);
 	});
 
-	it.each(["raw", "multipart"])("rejects chunked oversize %s requests", async (kind) => {
+	it("rejects chunked oversize raw requests", async () => {
 		const { header } = await setup();
-		const type = kind === "raw" ? "image/png" : "multipart/form-data; boundary=x";
 		let sent = 0;
 		const chunk = new Uint8Array(1024 * 1024);
 		const response = await fetch(`${base}${memoryPath}`, {
 			method: "POST",
-			headers: { Authorization: header, "Content-Type": type, "X-Filename": "big.png" },
+			headers: { Authorization: header, "Content-Type": "image/png", "X-Filename": "big.png" },
 			body: new ReadableStream({
 				pull(controller) {
 					if (sent > MAX_ATTACHMENT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES) {
@@ -394,7 +393,7 @@ describe("attachments API", { sequential: true }, () => {
 		).toEqual([{ n: 2 }]);
 	});
 
-	it("rejects binary replay conflicts and keyed declared oversize", async () => {
+	it("rejects binary replay conflicts", async () => {
 		const { header } = await setup();
 		const first = await rawUpload(header, new Uint8Array([255]), "image/png", "m5-binary");
 		expect(first.status).toBe(201);
@@ -404,14 +403,9 @@ describe("attachments API", { sequential: true }, () => {
 			409,
 			"idempotency_conflict",
 		);
-		await expectError(
-			await rawUpload(header, new Uint8Array(MAX_ATTACHMENT_BYTES + 1), "image/png", "m5-large"),
-			413,
-			"payload_too_large",
-		);
 	});
 
-	it.each(["raw", "multipart"])("bounds keyed chunked %s uploads before hashing", async (kind) => {
+	it("bounds keyed chunked raw uploads before hashing", async () => {
 		const { header } = await setup();
 		let sent = 0;
 		const chunk = new Uint8Array(1024 * 1024);
@@ -419,9 +413,9 @@ describe("attachments API", { sequential: true }, () => {
 			method: "POST",
 			headers: {
 				Authorization: header,
-				"Content-Type": kind === "raw" ? "image/png" : "multipart/form-data; boundary=x",
+				"Content-Type": "image/png",
 				"X-Filename": "big.png",
-				"Idempotency-Key": `m5-chunked-${kind}`,
+				"Idempotency-Key": "m5-raw",
 			},
 			body: new ReadableStream({
 				pull(controller) {
