@@ -368,6 +368,26 @@ The same failed-prefix starvation pattern also affected the bounded R2 purge
 queue. A 101-job regression now requires healthy later cleanup to progress;
 failed jobs retain their creation time but advance their last-attempt ordering.
 
+## M7 full-review contract corrections
+
+The independent full review found that key rotation compared only the secret
+hash while writing a revision calculated from an older row. With a fixed clock,
+intervening permission edits could be undone after that revision moved backward.
+Rotation and revocation now compare the observed `updated_at` as well; regression
+tests preserve newer restrictive permissions and reject stale edits.
+
+Idempotent error replay had the correct HTTP envelope but no current thrown
+error, causing audit to label a 409 conflict as `internal`. Replay now carries
+only an allowlisted error code in request context, and audit gives that final
+response code precedence over any earlier handled exception. Audit still never
+reads request or response streams. Real HTTP assertions use the fixture barrier,
+not retry-until-success polling.
+
+Management accepted 65-character space slugs and auto-owned key names that the
+memory API could never write to. Space creation/rename and auto-own-space key
+names now share the 64-character lowercase slug contract; ordinary display-only
+key names retain their longer limit.
+
 ## M7 purge fault-injection correction
 
 An initial preparation-failure test bound the original database method after installing its spy. The bound spy consumed the next injected failure during the initial lookup, so the test passed without exercising SQL preparation. Capturing the original method before installing the spy exposed an uncaught preparation failure. Purge now maps preparation and commit failures through the same safe 503 boundary, while its transactional guard rejects changed trash snapshots. Fault-injection tests must verify the failing phase, not merely the final status.

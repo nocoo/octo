@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { L2_ACCESS_AUD, l2AccessIss, loadJwksState, signAccessJwt } from "../../scripts/jwks-stub";
 import { assertAsyncTestMarker } from "../../scripts/local-d1";
 import { L2_JWKS_PORT } from "../../scripts/ports";
@@ -18,6 +18,7 @@ type AuditItem = {
 	route: string;
 	status: number;
 	request_id: string;
+	error_code: string | null;
 };
 type Page<T> = { items: T[]; next_cursor: string | null };
 type UsageItem = { day: string; key_id: string; calls: number };
@@ -114,41 +115,76 @@ describe("GET /api/admin/audit", () => {
 		expect(forbidden.status).toBe(403);
 		const missing = await fetch(`${base}/api/v1/${secret}`, { headers: bearer() });
 		expect(missing.status).toBe(404);
-		await vi.waitFor(
-			async () => {
-				const anonymous = (await (
-					await getAdmin(
-						"audit?actor=anonymous&action=/api/v1/embedding-profiles&status=401&limit=200",
-					)
-				).json()) as Page<AuditItem>;
-				expect(anonymous.items).toEqual(
-					expect.arrayContaining([
-						expect.objectContaining({
-							request_id: requestId,
-							route: "/api/v1/embedding-profiles",
-							status: 401,
-						}),
-					]),
-				);
-				expect(JSON.stringify(anonymous)).not.toContain(secret);
-				const keyDenied = (await (
-					await getAdmin(`audit?actor=key:${writer.id}&status=403`)
-				).json()) as Page<AuditItem>;
-				expect(keyDenied.items).toEqual(
-					expect.arrayContaining([
-						expect.objectContaining({ route: "/api/v1/embedding-profiles", status: 403 }),
-					]),
-				);
-				const notFound = (await (
-					await getAdmin(`audit?actor=key:${reader.id}&status=404`)
-				).json()) as Page<AuditItem>;
-				expect(notFound.items).toEqual(
-					expect.arrayContaining([expect.objectContaining({ route: "unmatched", status: 404 })]),
-				);
-				expect(JSON.stringify(notFound)).not.toContain(secret);
-			},
-			{ timeout: 10_000, interval: 50 },
+		expect((await fetch(`${base}/api/__test/background`, { method: "POST" })).status).toBe(200);
+		const anonymous = (await (
+			await getAdmin("audit?actor=anonymous&action=/api/v1/embedding-profiles&status=401&limit=200")
+		).json()) as Page<AuditItem>;
+		expect(anonymous.items).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					request_id: requestId,
+					route: "/api/v1/embedding-profiles",
+					status: 401,
+				}),
+			]),
 		);
+		expect(JSON.stringify(anonymous)).not.toContain(secret);
+		const keyDenied = (await (
+			await getAdmin(`audit?actor=key:${writer.id}&status=403`)
+		).json()) as Page<AuditItem>;
+		expect(keyDenied.items).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ route: "/api/v1/embedding-profiles", status: 403 }),
+			]),
+		);
+		const notFound = (await (
+			await getAdmin(`audit?actor=key:${reader.id}&status=404`)
+		).json()) as Page<AuditItem>;
+		expect(notFound.items).toEqual(
+			expect.arrayContaining([expect.objectContaining({ route: "unmatched", status: 404 })]),
+		);
+		expect(JSON.stringify(notFound)).not.toContain(secret);
+	});
+
+	it("records the same safe error code for an idempotent conflict replay", async () => {
+		const headers = {
+			...access(),
+			Origin: "https://octo.hexly.ai",
+			"Content-Type": "application/json",
+		};
+		const created = await fetch(`${base}/api/admin/memories`, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({
+				space: "kb",
+				title: "audit replay",
+				body: "body",
+				type: "note",
+				tags: [],
+			}),
+		});
+		expect(created.status).toBe(201);
+		const { id } = (await created.json()) as { id: string };
+		const requestIds = [crypto.randomUUID(), crypto.randomUUID()];
+		const idempotencyKey = crypto.randomUUID();
+		for (const requestId of requestIds) {
+			const response = await fetch(`${base}/api/admin/memories/${id}`, {
+				method: "PATCH",
+				headers: { ...headers, "Idempotency-Key": idempotencyKey, "X-Request-Id": requestId },
+				body: JSON.stringify({ title: "conflict", expected_version: 999 }),
+			});
+			expect(response.status).toBe(409);
+			expect(await response.json()).toMatchObject({ error: { code: "version_conflict" } });
+		}
+		expect((await fetch(`${base}/api/__test/background`, { method: "POST" })).status).toBe(200);
+		const audit = (await (
+			await getAdmin("audit?actor=admin:audit-l2@local&status=409")
+		).json()) as Page<AuditItem>;
+		expect(
+			audit.items
+				.filter((item) => requestIds.includes(item.request_id))
+				.map((item) => item.error_code),
+		).toEqual(["version_conflict", "version_conflict"]);
 	});
 
 	it("requires Access independently of API key auth", async () => {
