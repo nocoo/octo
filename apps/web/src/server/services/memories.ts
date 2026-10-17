@@ -57,6 +57,17 @@ export function expectedVersion(ifMatch: string | undefined, body?: number): num
 	return version;
 }
 
+function requireCurrentVersion(current: MemoryRecord, requested: number): number {
+	if (requested !== current.version) {
+		throw new ApiError(
+			"version_conflict",
+			`memory ${current.id} is at version ${current.version}, expected ${requested}`,
+			{ current_version: current.version },
+		);
+	}
+	return current.version;
+}
+
 export function parseInclude(raw: string | undefined): Set<string> {
 	if (!raw) {
 		return new Set();
@@ -285,7 +296,10 @@ export class MemoryService {
 		ifMatch: string | undefined,
 	): Promise<Record<string, unknown>> {
 		const current = await this.loadVisible(authz, id, "update", false);
-		const version = expectedVersion(ifMatch, input.expected_version);
+		const version = requireCurrentVersion(
+			current,
+			expectedVersion(ifMatch, input.expected_version),
+		);
 		let spaceId = current.space_id;
 		let op: "update" | "move" = "update";
 		if (input.space) {
@@ -411,7 +425,7 @@ export class MemoryService {
 		bodyVersion?: number,
 	): Promise<Record<string, unknown>> {
 		const current = await this.loadVisible(authz, id, "update", false);
-		const version = expectedVersion(ifMatch, bodyVersion);
+		const version = requireCurrentVersion(current, expectedVersion(ifMatch, bodyVersion));
 		const snapshot = await this.versions.get(id, toVersion);
 		if (!snapshot) {
 			throw new ApiError("unprocessable", "version does not exist");
