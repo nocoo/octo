@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { APIRequestContext, APIResponse, Page, TestInfo } from "@playwright/test";
 import { test as base, expect } from "@playwright/test";
+import { screenshotOptions } from "../../scripts/l3-screenshot";
 import { accessHeaders, assertL3Isolation } from "./setup";
 
 export interface TestMemory {
@@ -65,15 +66,7 @@ class AdminFixture {
 
 export async function capture(page: Page, info: TestInfo, name: string): Promise<string> {
 	const path = info.outputPath(`${name}.png`);
-	await page.screenshot({
-		path,
-		fullPage: true,
-		animations: "disabled",
-		mask: [
-			page.getByLabel("API key", { exact: true }),
-			page.getByLabel("Replacement API key", { exact: true }),
-		],
-	});
+	await page.screenshot(screenshotOptions(page, path));
 	await info.attach(name, { path, contentType: "image/png" });
 	console.log(`L3 screenshot: ${path}`);
 	return path;
