@@ -61,7 +61,6 @@ describe("branch harvest", () => {
 			apiKey: "k",
 			model: "m",
 			dims: 2,
-			userAgent: "octo/0.1.0",
 		});
 		const vectors = await embedder.embed(["a", "b"]);
 		expect(vectors).toHaveLength(2);

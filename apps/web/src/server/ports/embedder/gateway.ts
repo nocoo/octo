@@ -1,4 +1,5 @@
-import { l2Normalize } from "../../search/math";
+import { APP_VERSION, versionLabel } from "../../../lib/version";
+import { assertVectorValues } from "../../search/vector-write";
 import type { EmbedderConfig, QueryEmbedder } from "./types";
 
 export class GatewayEmbedder implements QueryEmbedder {
@@ -13,7 +14,7 @@ export class GatewayEmbedder implements QueryEmbedder {
 				headers: {
 					Authorization: `Bearer ${this.config.apiKey}`,
 					"Content-Type": "application/json",
-					"User-Agent": this.config.userAgent,
+					"User-Agent": versionLabel(APP_VERSION),
 				},
 				body: JSON.stringify({ model: this.config.model, input: texts }),
 				signal: controller.signal,
@@ -25,12 +26,7 @@ export class GatewayEmbedder implements QueryEmbedder {
 				data?: Array<{ embedding?: number[] }>;
 			};
 			const vectors = (body.data ?? []).map((row) => row.embedding ?? []);
-			return vectors.map((values) => {
-				if (values.length !== this.config.dims) {
-					throw new Error("vector dimension mismatch");
-				}
-				return l2Normalize(values);
-			});
+			return vectors.map((values) => assertVectorValues(values, this.config.dims));
 		} finally {
 			clearTimeout(timeout);
 		}

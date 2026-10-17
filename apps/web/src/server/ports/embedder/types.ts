@@ -4,7 +4,6 @@ export type EmbedderConfig = {
 	model: string;
 	dims: number;
 	timeoutMs?: number;
-	userAgent: string;
 };
 
 export interface QueryEmbedder {
