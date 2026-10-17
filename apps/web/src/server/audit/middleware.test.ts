@@ -30,12 +30,12 @@ describe("audit middleware", () => {
 		app.get("/api/v1/memories/:id", () => {
 			throw new ApiError("forbidden", "secret message");
 		});
-		app.get("/api/admin/final", (c) => c.json({ ok: true }));
-		app.use("/final", async (c, next) => {
+		app.get("/api/admin/final", (context) => context.json({ ok: true }));
+		app.use("/final", async (context, next) => {
 			await next();
-			c.res = new Response(null, { status: 202 });
+			context.res = new Response(null, { status: 202 });
 		});
-		app.get("/final", (c) => c.text("ok"));
+		app.get("/final", (context) => context.text("ok"));
 		const probes = [
 			["/api/v1/memories/raw-secret?key=query-secret", {}, 401],
 			["/api/v1/memories/raw-secret", { Authorization: `Bearer ${key.plaintext}` }, 403],
@@ -179,7 +179,7 @@ describe("audit middleware", () => {
 
 	it("returns before D1 completes and tolerates absent or failing waitUntil", async () => {
 		const { db, sqlite, env, app } = setup();
-		app.get("/ok", (c) => c.text("ok"));
+		app.get("/ok", (context) => context.text("ok"));
 		let release: () => void = () => {};
 		const blocked = new Promise<void>((resolve) => {
 			release = resolve;

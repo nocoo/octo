@@ -21,12 +21,12 @@ export function testEnv(db: D1Database): Env {
 export function testApp() {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
 	app.use("*", auditMiddleware);
-	app.use("*", async (c, next) => {
-		c.set("requestId", c.req.header("X-Request-Id") ?? crypto.randomUUID());
+	app.use("*", async (context, next) => {
+		context.set("requestId", context.req.header("X-Request-Id") ?? crypto.randomUUID());
 		await next();
 	});
-	app.onError((err, c) => toErrorResponse(err, c.get("requestId")));
-	app.notFound((c) => jsonError("not_found", "not found", c.get("requestId")));
+	app.onError((err, context) => toErrorResponse(err, context.get("requestId")));
+	app.notFound((context) => jsonError("not_found", "not found", context.get("requestId")));
 	app.use("/api/v1/*", bearerMiddleware);
 	app.use("/api/admin/*", accessMiddleware);
 	return app;
