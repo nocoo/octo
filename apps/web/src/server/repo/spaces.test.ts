@@ -51,6 +51,37 @@ describe("SpaceRepo", () => {
 		}
 		expect((await new SpaceRepo(asD1(many)).listVisible({ kind: "all" })).length).toBe(101);
 		expect((await new SpaceRepo(asD1(many)).listVisible({ kind: "ids", ids })).length).toBe(101);
+		const dupDb = new FakeD1();
+		dupDb.spaces.set("dup", {
+			id: "dup",
+			slug: "dup",
+			name: "dup",
+			description: "",
+			owner_key_id: null,
+			created_at: 1,
+			updated_at: 1,
+		});
+		for (let i = 0; i < 99; i++) {
+			const id = `other${i}`;
+			dupDb.spaces.set(id, {
+				id,
+				slug: id,
+				name: id,
+				description: "",
+				owner_key_id: null,
+				created_at: 1,
+				updated_at: 1,
+			});
+		}
+		dupDb.memories.set("m-dup", { id: "m-dup", space_id: "dup", deleted_at: null });
+		const spanning = ["dup", ...Array.from({ length: 99 }, (_, i) => `other${i}`), "dup"];
+		const listedDup = await new SpaceRepo(asD1(dupDb)).listVisible({
+			kind: "ids",
+			ids: spanning,
+		});
+		expect(listedDup).toHaveLength(100);
+		expect(listedDup.filter((s) => s.id === "dup")).toHaveLength(1);
+		expect(listedDup.find((s) => s.id === "dup")?.memory_count).toBe(1);
 		const noCount = new FakeD1();
 		noCount.spaces.set("s1", db.spaces.get("s1") as never);
 		noCount.exec = (sql: string, binds: unknown[]) => {

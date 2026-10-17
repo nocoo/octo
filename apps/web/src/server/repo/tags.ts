@@ -118,7 +118,7 @@ export class TagRepo {
 				map.set(row.tag_id, Number(row.n));
 			}
 		} else {
-			for (const ids of chunkBoundParams(visible.ids)) {
+			for (const ids of chunkBoundParams([...new Set(visible.ids)])) {
 				const placeholders = ids.map(() => "?").join(",");
 				const { results: counts } = await this.db
 					.prepare(

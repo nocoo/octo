@@ -122,6 +122,35 @@ describe("TagRepo", () => {
 		expect(await new TagRepo(asD1(many)).listWithCounts({ kind: "ids", ids })).toEqual([
 			{ id: "t1", name: "infra", display_name: "infra", use_count: 1 },
 		]);
+		const dupDb = new FakeD1();
+		dupDb.tags.set("t1", db.tags.get("t1") as never);
+		dupDb.spaces.set("dup", {
+			id: "dup",
+			slug: "dup",
+			name: "dup",
+			description: "",
+			owner_key_id: null,
+			created_at: 1,
+			updated_at: 1,
+		});
+		for (let i = 0; i < 99; i++) {
+			const id = `other${i}`;
+			dupDb.spaces.set(id, {
+				id,
+				slug: id,
+				name: id,
+				description: "",
+				owner_key_id: null,
+				created_at: 1,
+				updated_at: 1,
+			});
+		}
+		dupDb.memories.set("m-dup", { id: "m-dup", space_id: "dup", deleted_at: null });
+		dupDb.memoryTags.push({ memory_id: "m-dup", tag_id: "t1" });
+		const spanning = ["dup", ...Array.from({ length: 99 }, (_, i) => `other${i}`), "dup"];
+		expect(await new TagRepo(asD1(dupDb)).listWithCounts({ kind: "ids", ids: spanning })).toEqual([
+			{ id: "t1", name: "infra", display_name: "infra", use_count: 1 },
+		]);
 	});
 
 	it("renames or returns tag_conflict suggesting merge", async () => {
