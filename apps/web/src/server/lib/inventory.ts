@@ -22,4 +22,9 @@ export const TESTED_API_ROUTES: RouteKey[] = [
 	"GET /api/admin/whoami",
 	"GET /api/live",
 	"GET /api/v1/me",
+	"GET /api/v1/spaces",
+	"GET /api/v1/spaces/:slug",
+	"GET /api/v1/tags",
+	"POST /api/v1/tags/:name/merge",
+	"POST /api/v1/tags/:name/rename",
 ];

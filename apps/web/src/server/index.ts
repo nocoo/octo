@@ -9,6 +9,8 @@ import { accessMiddleware } from "./middleware/access";
 import { whoamiResponse } from "./routes/admin/whoami";
 import { liveResponse } from "./routes/live";
 import { meResponse } from "./routes/v1/me";
+import { spacesRoutes } from "./routes/v1/spaces";
+import { tagsRoutes } from "./routes/v1/tags";
 
 export function createApp(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
@@ -39,6 +41,8 @@ export function createApp(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	app.use("/api/admin/*", adminWriteOriginMiddleware);
 	app.get("/api/v1/me", (c) => meResponse(c));
 	app.get("/api/admin/whoami", (c) => whoamiResponse(c));
+	app.route("/api/v1/tags", tagsRoutes());
+	app.route("/api/v1/spaces", spacesRoutes());
 	return app;
 }
 
