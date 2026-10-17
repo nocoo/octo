@@ -189,6 +189,38 @@ export async function prepareE2eDb(
 	applyMigrations(d1);
 }
 
+export function stopProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
+	if (pid === undefined || pid <= 0) {
+		return;
+	}
+	try {
+		process.kill(-pid, signal);
+	} catch {
+		try {
+			process.kill(pid, signal);
+		} catch {
+			// already gone
+		}
+	}
+}
+
+export function killPortListeners(port: number): void {
+	const raw = occupyingPid(port);
+	if (raw === "unknown" || raw === "") {
+		return;
+	}
+	for (const pid of raw.split(",")) {
+		const n = Number(pid);
+		if (Number.isInteger(n) && n > 1) {
+			try {
+				process.kill(n, "SIGKILL");
+			} catch {
+				// already gone
+			}
+		}
+	}
+}
+
 export async function stopChild(child: ChildProcess, sleeper = sleep): Promise<void> {
 	if (child.exitCode !== null) {
 		return;
@@ -196,9 +228,11 @@ export async function stopChild(child: ChildProcess, sleeper = sleep): Promise<v
 	const exited = new Promise<void>((resolve) => {
 		child.once("exit", () => resolve());
 	});
+	stopProcessGroup(child.pid, "SIGTERM");
 	child.kill("SIGTERM");
 	await Promise.race([exited, sleeper(1_000)]);
 	if (child.exitCode === null) {
+		stopProcessGroup(child.pid, "SIGKILL");
 		child.kill("SIGKILL");
 		await exited;
 	}
@@ -265,10 +299,15 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	const args = wranglerDevArgs(port, persistTo, configPath, envFile);
 	const wrangler =
 		options.spawnWrangler?.(args) ??
-		spawn(wranglerBin, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+		spawn(wranglerBin, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"], detached: true });
 	wrangler.stdout?.on("data", (chunk) => process.stdout.write(chunk as Buffer));
 	wrangler.stderr?.on("data", (chunk) => process.stderr.write(chunk as Buffer));
 	const base = `http://127.0.0.1:${port}`;
+	const onSignal = (): void => {
+		void stopChild(wrangler).then(() => killPortListeners(port));
+	};
+	process.on("SIGINT", onSignal);
+	process.on("SIGTERM", onSignal);
 	try {
 		await (options.wait ?? waitLive)(base, 60_000);
 		const env = {
@@ -281,7 +320,10 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 		await (options.spawnVitest ?? spawnVitestProcess)(env);
 		return 0;
 	} finally {
+		process.off("SIGINT", onSignal);
+		process.off("SIGTERM", onSignal);
 		await stopChild(wrangler);
+		killPortListeners(port);
 		await jwks.close();
 	}
 }

@@ -11,6 +11,7 @@ import {
 	assertWranglerConfigLocal,
 	createExclusiveDir,
 	e2eEnvContents,
+	killPortListeners,
 	listenError,
 	listenErrorCode,
 	occupyingPid,
@@ -20,6 +21,7 @@ import {
 	runE2eApi,
 	spawnVitestProcess,
 	stopChild,
+	stopProcessGroup,
 	waitLive,
 	wranglerDevArgs,
 } from "./e2e";
@@ -253,6 +255,30 @@ describe("runE2eApi", () => {
 		Object.defineProperty(child, "exitCode", { writable: true, value: 0 });
 		await stopChild(child);
 		expect(occupyingPid(1)).toBe("unknown");
+	});
+
+	it("kills a process group and port listeners", () => {
+		stopProcessGroup(undefined, "SIGTERM");
+		stopProcessGroup(0, "SIGTERM");
+		const killed: Array<[number, string]> = [];
+		const spy = vi.spyOn(process, "kill").mockImplementation(((pid: number, signal?: string) => {
+			killed.push([pid, String(signal)]);
+			if (pid < 0) {
+				throw new Error("esrch");
+			}
+			return true;
+		}) as typeof process.kill);
+		stopProcessGroup(42, "SIGTERM");
+		expect(killed).toEqual([
+			[-42, "SIGTERM"],
+			[42, "SIGTERM"],
+		]);
+		spy.mockImplementation((() => {
+			throw new Error("gone");
+		}) as typeof process.kill);
+		stopProcessGroup(7, "SIGKILL");
+		killPortListeners(1);
+		spy.mockRestore();
 	});
 
 	it("force-kills a child that ignores SIGTERM", async () => {
