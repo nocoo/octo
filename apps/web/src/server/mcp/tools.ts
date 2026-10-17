@@ -149,6 +149,7 @@ async function commit(context: McpContext): Promise<void> {
 		} catch {}
 		throw mapped ?? new ApiError("unavailable", "write transaction failed");
 	}
+	context.set("mcpWrite", true);
 	try {
 		context.executionCtx.waitUntil(
 			runDerivedTasks(context.env).catch(() => {

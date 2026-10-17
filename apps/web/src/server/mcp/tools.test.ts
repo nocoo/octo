@@ -53,7 +53,12 @@ describe("MCP v1 service adapter", () => {
 		expect(created.isError).not.toBe(true);
 		expect(created.structuredContent).toMatchObject({ ...memoryInput, version: 1 });
 		expect(JSON.parse(created.content[0]?.text ?? "")).toEqual(created.structuredContent);
-		expect(batch).toHaveBeenCalledTimes(1);
+		const memoryBatches = batch.mock.calls.filter(([statements]) =>
+			statements.some((statement) =>
+				/INSERT INTO memories\s*\(/.test((statement as unknown as { sql: string }).sql),
+			),
+		);
+		expect(memoryBatches).toHaveLength(1);
 		const id = String(created.structuredContent.id);
 		expect(
 			sqlite.prepare("SELECT count(*) AS count FROM memory_versions WHERE memory_id = ?").get(id),

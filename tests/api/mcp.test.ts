@@ -103,6 +103,44 @@ async function tableCounts(d1: Awaited<ReturnType<typeof e2eD1>>) {
 }
 
 describe("stateless MCP Streamable HTTP", () => {
+	it("rolls up logical tool errors and committed writes instead of POST counts", async () => {
+		const d1 = await e2eD1();
+		const key = await seedKey(d1);
+		const space = await seedSpace(d1);
+		expect((await postMcp(key.token, rpcEnvelope("tools/list"))).status).toBe(200);
+		await toolError(await callTool(key.token, "get_memory", { id: "missing" }), "not_found");
+		await toolSuccess(
+			await callTool(key.token, "create_memory", {
+				space: space.slug,
+				title: "usage",
+				body: "usage",
+				type: "note",
+				tags: [],
+			}),
+		);
+		await query(d1, "SELECT 1");
+		expect((await fetch(`${base}/api/__test/cron`, { method: "POST" })).status).toBe(200);
+		expect(
+			await query(
+				d1,
+				`SELECT calls, errors, writes FROM usage_daily WHERE key_id = ${sqlText(key.id)}`,
+			),
+		).toEqual([{ calls: 3, errors: 1, writes: 1 }]);
+		for (const method of ["PUT", "PATCH", "OPTIONS"]) {
+			const response = await fetch(`${base}/mcp`, {
+				method,
+				headers: { Authorization: `Bearer ${key.token}` },
+			});
+			expect(response.status).toBe(405);
+			expect(
+				await query(
+					d1,
+					`SELECT route, error_code FROM audit_log WHERE request_id = ${sqlText(response.headers.get("X-Request-Id") ?? "")}`,
+				),
+			).toEqual([{ route: "/mcp", error_code: "validation_failed" }]);
+		}
+	});
+
 	it("initializes, accepts initialized notification, and lists all nine stable tool schemas", async () => {
 		const d1 = await e2eD1();
 		const full = await seedKey(d1);

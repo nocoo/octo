@@ -12,6 +12,8 @@ const STATUS_CODES: Record<number, string> = {
 	401: "unauthenticated",
 	403: "forbidden",
 	404: "not_found",
+	405: "validation_failed",
+	406: "validation_failed",
 	413: "payload_too_large",
 	415: "unsupported_media_type",
 	422: "unprocessable",
@@ -31,7 +33,7 @@ async function writeAudit(context: AuditContext, started: number): Promise<void>
 	const actor = email ? `admin:${email}` : key ? `key:${key.id}` : "anonymous";
 	const route = matchedRoutes(context)
 		.reverse()
-		.find((entry) => entry.method !== "ALL");
+		.find((entry) => entry.method !== "ALL" || entry.path === "/mcp");
 	const template = route ? route.path.replace(/\{[^}]*\}/g, "") : "unmatched";
 	const status = context.res.status;
 	const errorCode =
@@ -53,26 +55,33 @@ async function writeAudit(context: AuditContext, started: number): Promise<void>
 	const ip = context.req.raw.headers.get("CF-Connecting-IP");
 	const pepper = context.env.API_KEY_PEPPER;
 	const ipHash = ip && pepper ? await hashSecret(pepper, ip) : null;
-	await context.env.DB.prepare(
+	const auditId = newUlid(started);
+	const statement = context.env.DB.prepare(
 		`INSERT INTO audit_log
 		(id, at, actor, method, route, status, error_code, request_id, duration_ms, bytes_in, bytes_out, ip_hash)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-	)
-		.bind(
-			newUlid(started),
-			started,
-			actor,
-			METHODS.has(context.req.method) ? context.req.method : "OTHER",
-			template,
-			status,
-			errorCode,
-			safeRequestId,
-			duration,
-			input,
-			output,
-			ipHash,
-		)
-		.run();
+	).bind(
+		auditId,
+		started,
+		actor,
+		METHODS.has(context.req.method) ? context.req.method : "OTHER",
+		template,
+		status,
+		errorCode,
+		safeRequestId,
+		duration,
+		input,
+		output,
+		ipHash,
+	);
+	if (context.get("mcpWrite")) {
+		await context.env.DB.batch([
+			statement,
+			context.env.DB.prepare("INSERT INTO mcp_audit_writes (audit_id) VALUES (?)").bind(auditId),
+		]);
+	} else {
+		await statement.run();
+	}
 }
 
 export const auditMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> = async (

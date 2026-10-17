@@ -537,3 +537,20 @@ seven-way UNION count query exceeded workerd D1's compound SELECT limit. Seven
 scalar COUNT subqueries retain all table-level rollback assertions without
 changing production code, adding retries, or reducing the fixture. Native
 SQLite unit helpers are not evidence of D1 SQL-limit compatibility.
+
+## 2026-10-18 — Audit logical MCP outcomes, not only HTTP
+
+Independent MAX review reproduced two integration errors after the initial MCP
+suite passed: HTTP 200 tool failures disappeared from usage errors, all POST
+reads counted as writes, and unsupported methods were logged as unmatched
+internal failures. Regressions now exercise the complete audit-to-rollup path,
+including real workerd HTTP and cron, instead of only individual audit rows.
+The rollup uses redacted error codes and an atomic audit marker for committed
+MCP writes; every method rejection keeps the fixed `/mcp` route.
+
+An initial audit-column implementation exposed that the local migration runner
+reapplies post-core SQL. Rather than expand this milestone into a migration
+runner rewrite, the additive, idempotent `mcp_audit_writes` extension table
+stores only the audit row ID and joins the audit insert's D1 batch. Existing
+REST history and schema remain intact; no compatibility fallback, request body,
+tool name, key, or session is stored in the marker.

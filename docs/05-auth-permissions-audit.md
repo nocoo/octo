@@ -88,6 +88,10 @@ CREATE TABLE audit_log (
 );
 CREATE INDEX audit_at ON audit_log(at);
 CREATE INDEX audit_actor_at ON audit_log(actor, at);
+
+CREATE TABLE mcp_audit_writes (
+  audit_id TEXT PRIMARY KEY REFERENCES audit_log(id) ON DELETE CASCADE
+) WITHOUT ROWID;
 ```
 
 - 在响应发出后用 `ctx.waitUntil` 写入，不阻塞请求；写失败记到 observability 日志。

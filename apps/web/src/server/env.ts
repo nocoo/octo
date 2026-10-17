@@ -11,6 +11,7 @@ export type AppVars = {
 	apiKey: ApiPrincipal;
 	adminEmail: string;
 	responseErrorCode: ErrorCode;
+	mcpWrite: boolean;
 };
 
 export interface Env extends CloudflareBindings {

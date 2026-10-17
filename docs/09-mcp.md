@@ -36,6 +36,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 - 标签名称是 v1 的全局字典；`list_tags` 与同 key 的 REST 列表完全一致，不可见 space 的引用不计入 use_count（可以为 0），不把全局标签误当成按 space 私有的资源。
 - 写工具复用 v1 的 staged `memoryService()`，并在返回成功前执行一次 D1 batch（memory、版本、tags、FTS、change event 等同批提交）。失败不提交残留 statements；成功后按 v1 的机制调度派生索引任务。
 - 外层 audit middleware 对每个 HTTP 调用记录一次 `route=/mcp`、actor、HTTP status、request id、耗时和字节数。不记录工具 arguments、响应正文、key、原始 URL 或任意客户端提供的工具名。HTTP `200` 的工具失败仍记录 Octo `error_code`，不能误报为成功。
+- 审计用扩展表 `mcp_audit_writes(audit_id)` 标识已提交的 MCP 写操作（仅 memory D1 batch 成功后，在审计 batch 中同时写入 audit_log 和标记）。usage 汇总同时检查 error_code，MCP initialize、通知、读工具和失败写入均不计为 writes；REST 的现有方法分类保持不变。新增 migration `0005_mcp_audit.sql` 只创建幂等的审计扩展表，不存 session 或工具参数；本功能尚未部署，无历史 MCP 记录需要回填。
 
 ## 3. 工具输入 schema
 
