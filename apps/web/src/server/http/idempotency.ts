@@ -14,7 +14,12 @@ function replayResponse(outcome: { status: number; body: string }): Response {
 
 export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> {
 	return async (c, next) => {
-		if (c.req.method === "GET" || !c.req.path.startsWith("/api/v1/")) {
+		if (
+			c.req.method === "GET" ||
+			!c.req.path.startsWith("/api/v1/") ||
+			(c.req.method === "POST" &&
+				(c.req.path === "/api/v1/search" || c.req.path === "/api/v1/memories:batchGet"))
+		) {
 			await next();
 			return;
 		}

@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Read-only POST replay bypassed current authorization
+
+M6's generic non-GET replay middleware captured M4 search and batchGet. Real M1-authenticated unit and HTTP regressions confirmed that identical keyed requests replayed content after scope or read-permission revocation; changed query/IDs returned 409 instead of fresh results. These reads also persisted response bodies in idempotency records/chunks, violating search's audit-only write contract. The two exact read-only POST paths now bypass write idempotency before key parsing, body hashing or storage lookup, while still passing through bearer and current route authorization. Tests reject any replay-storage access, ignore irrelevant malformed idempotency keys, exercise changed input and revoked/restored access, and assert zero stored read outcomes. Existing M6 write/tag replay, transaction, cursor and rollback tests remain intact. New routes must be classified by operation semantics, not HTTP verb alone.
+
 ## 2026-10-17 — M4 integration onto M6
 
 Rebasing M4 onto `d774ee5` preserved M6's injected batch-write service, idempotency middleware, scheduled cleanup, cursor code and all M3 routes. The earlier node-SQLite migration helper commit was redundant with main's identical implementation and was dropped; main's async D1 helpers were retained unchanged. The FTS vocabulary regression now uses M6's awaited marker-checked fixture/query helpers. Conflict resolution retained both milestone narratives and the combined endpoint inventory. Full L1 exposed two stale test assumptions: M4's local-config test still expected the production entrypoint rather than M6's explicit fixture Worker, and M6's no-write-service test incorrectly included independent read-only batchGet among absent write routes. Exact assertions now protect the fixture entrypoint, mounted batchGet and absent batch writes rather than changing either runtime contract.

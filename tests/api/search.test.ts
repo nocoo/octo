@@ -5,6 +5,7 @@ import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/au
 import { encodeFloat32Vector, l2Normalize } from "../../apps/web/src/server/search/math";
 import { root } from "../../scripts/e2e";
 import { assertAsyncTestMarker, createAsyncD1Exec } from "../../scripts/local-d1";
+import { query, sqlText } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const pepper = "change-me-api-key-pepper";
@@ -17,6 +18,7 @@ const memoryIds = [VISIBLE, HIDDEN, TRASHED];
 const quotedIds = [...memoryIds, ACCENT, PLAIN].map((id) => `'${id}'`).join(",");
 const vector = { profile: "te3-small-1536", values: [3, 4, ...Array<number>(1534).fill(0)] };
 const tokens: Record<string, string> = {};
+const keyIds: Record<string, string> = {};
 
 function e2eD1() {
 	const persist = process.env.OCTO_PERSIST;
@@ -38,6 +40,8 @@ DELETE FROM memories_fts_map WHERE memory_id IN (${quotedIds});
 DELETE FROM memories WHERE id IN (${quotedIds});
 DELETE FROM tags WHERE id IN ('tag_srch_alias','tag_srch_infra');
 DELETE FROM spaces WHERE id IN ('sp_srch_l2_vis','sp_srch_l2_hid');
+DELETE FROM idempotency_response_chunks WHERE key_id IN (SELECT id FROM api_keys WHERE name LIKE 'search-l2-%');
+DELETE FROM idempotency_records WHERE key_id IN (SELECT id FROM api_keys WHERE name LIKE 'search-l2-%');
 DELETE FROM audit_log WHERE actor IN (SELECT id FROM api_keys WHERE name LIKE 'search-l2-%');
 DELETE FROM usage_daily WHERE key_id IN (SELECT id FROM api_keys WHERE name LIKE 'search-l2-%');
 DELETE FROM api_keys WHERE name LIKE 'search-l2-%';`,
@@ -53,6 +57,7 @@ beforeAll(async () => {
 	const keySpecs = [
 		{ name: "admin", ops: "r,w,u,d", scope: "all", ids: [] },
 		{ name: "scoped", ops: "r", scope: "spaces", ids: ["sp_srch_l2_vis"] },
+		{ name: "replay-reader", ops: "r", scope: "spaces", ids: ["sp_srch_l2_vis"] },
 		{ name: "write", ops: "w", scope: "all", ids: [] },
 		{ name: "empty", ops: "r", scope: "own", ids: [] },
 		{ name: "empty-write", ops: "w", scope: "own", ids: [] },
@@ -61,6 +66,7 @@ beforeAll(async () => {
 	for (const spec of keySpecs) {
 		const material = generateApiKeyMaterial();
 		tokens[spec.name] = material.plaintext;
+		keyIds[spec.name] = material.keyid;
 		if (spec.name === "admin") source = material.keyid;
 		const hash = await hashSecret(pepper, material.secret);
 		commands.push(`INSERT INTO api_keys (id,name,secret_hash,role,ops,scope,space_ids_json,own_entries_only,auto_own_space,created_at,updated_at)
@@ -97,12 +103,13 @@ afterAll(async () => {
 	await cleanup();
 });
 
-async function post(path: string, body: unknown, key = "scoped", raw = false) {
+async function post(path: string, body: unknown, key = "scoped", raw = false, idemKey?: string) {
 	return fetch(`${base}/api/v1/${path}`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
 			...(key ? { Authorization: `Bearer ${tokens[key] ?? "invalid"}` } : {}),
+			...(idemKey === undefined ? {} : { "Idempotency-Key": idemKey }),
 		},
 		body: raw ? String(body) : JSON.stringify(body),
 	});
@@ -295,6 +302,72 @@ describe("POST /api/v1/memories:batchGet", () => {
 		const res = await post("memories:batchGet", { ids: [VISIBLE, HIDDEN] }, "empty");
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ items: [], missing: [VISIBLE, HIDDEN] });
+	});
+});
+
+describe.each(["search", "memories:batchGet"])("%s read-only idempotency boundary", (path) => {
+	const original = path === "search" ? { query: "部署", mode: "fts" } : { ids: [VISIBLE] };
+	const changed =
+		path === "search" ? { query: "definitelyabsent", mode: "fts" } : { ids: [HIDDEN] };
+	async function assertNoOutcome() {
+		const d1 = e2eD1();
+		await assertAsyncTestMarker(d1);
+		const counts = await query<{ records: number; chunks: number }>(
+			d1,
+			`SELECT
+(SELECT count(*) FROM idempotency_records WHERE key_id = ${sqlText(keyIds["replay-reader"] as string)}) AS records,
+(SELECT count(*) FROM idempotency_response_chunks WHERE key_id = ${sqlText(keyIds["replay-reader"] as string)}) AS chunks`,
+		);
+		expect(counts).toEqual([{ records: 0, chunks: 0 }]);
+	}
+
+	it("returns fresh results for changed input with the same idempotency key", async () => {
+		const key = crypto.randomUUID();
+		const first = await post(path, original, "replay-reader", false, key);
+		expect(first.status).toBe(200);
+		expect(first.headers.get("Idempotent-Replayed")).toBeNull();
+		expect(await first.json()).toMatchObject({ items: [{ id: VISIBLE }] });
+		const second = await post(path, changed, "replay-reader", false, key);
+		expect(second.status).toBe(200);
+		expect(second.headers.get("Idempotent-Replayed")).toBeNull();
+		expect(await second.json()).toMatchObject({ items: [] });
+		await assertNoOutcome();
+	});
+
+	it.each(["scope", "ops"])("honors %s revocation instead of replaying a read", async (field) => {
+		const key = crypto.randomUUID();
+		const first = await post(path, original, "replay-reader", false, key);
+		expect(first.status).toBe(200);
+		expect(await first.json()).toMatchObject({ items: [{ id: VISIBLE }] });
+		const d1 = e2eD1();
+		await assertAsyncTestMarker(d1);
+		const id = sqlText(keyIds["replay-reader"] as string);
+		try {
+			await d1([
+				"--command",
+				field === "scope"
+					? `UPDATE api_keys SET space_ids_json = '[]' WHERE id = ${id}`
+					: `UPDATE api_keys SET ops = 'w' WHERE id = ${id}`,
+			]);
+			const second = await post(path, original, "replay-reader", false, key);
+			expect(second.status).toBe(field === "scope" ? 200 : 403);
+			expect(second.headers.get("Idempotent-Replayed")).toBeNull();
+			expect(await second.json()).toMatchObject(
+				field === "scope"
+					? { items: [], ...(path === "memories:batchGet" ? { missing: [VISIBLE] } : {}) }
+					: { error: { code: "forbidden" } },
+			);
+		} finally {
+			await d1([
+				"--command",
+				`UPDATE api_keys SET space_ids_json = '["sp_srch_l2_vis"]', ops = 'r' WHERE id = ${id}`,
+			]);
+		}
+		const restored = await post(path, original, "replay-reader", false, key);
+		expect(restored.status).toBe(200);
+		expect(restored.headers.get("Idempotent-Replayed")).toBeNull();
+		expect(await restored.json()).toMatchObject({ items: [{ id: VISIBLE }] });
+		await assertNoOutcome();
 	});
 });
 
