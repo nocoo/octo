@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runIfMain } from "./cli";
 
 export type SpawnResult = { exitCode: number; stdout: string; stderr: string };
@@ -55,11 +58,54 @@ export function securityTasks(
 	return tasks;
 }
 
+export async function runGitleaksSelfTest(
+	spawn: SpawnFn,
+	repoConfig = join(process.cwd(), ".gitleaks.toml"),
+): Promise<boolean> {
+	const slack = ["xoxb", "123456789012", "123456789012", "abcdefghijklmnopqrstuvwx"].join("-");
+	const dirty = await mkdtemp(join(tmpdir(), "octo-gitleaks-dirty-"));
+	const clean = await mkdtemp(join(tmpdir(), "octo-gitleaks-clean-"));
+	const emptyCfg = join(dirty, "empty.toml");
+	try {
+		await writeFile(join(dirty, "leak.txt"), `token = ${slack}\n`);
+		await writeFile(join(clean, "ok.txt"), "hello\n");
+		await writeFile(emptyCfg, 'title = "fixture"\n');
+		const empty = await spawn(gitleaksDetectArgs(dirty, emptyCfg));
+		if (empty.exitCode !== 0) {
+			console.error("gitleaks empty config must not detect");
+			return false;
+		}
+		const hit = await spawn(gitleaksDetectArgs(dirty, repoConfig));
+		if (hit.exitCode !== 1) {
+			console.error("gitleaks repo config must detect synthetic token");
+			return false;
+		}
+		const cleanHit = await spawn(gitleaksDetectArgs(clean, repoConfig));
+		if (cleanHit.exitCode !== 0) {
+			console.error("gitleaks repo config must pass a clean tree");
+			return false;
+		}
+		console.log("gitleaks self-test: passed");
+		return true;
+	} catch {
+		console.error("gitleaks self-test: tool not installed.");
+		return false;
+	} finally {
+		await rm(dirty, { recursive: true, force: true });
+		await rm(clean, { recursive: true, force: true });
+	}
+}
+
 export async function runGateSecurity(
 	arg: string | undefined,
 	envRanges: string | undefined,
 	spawn: SpawnFn,
 ): Promise<number> {
+	if (arg !== "--deps") {
+		if (!(await runGitleaksSelfTest(spawn))) {
+			return 1;
+		}
+	}
 	const tasks = securityTasks(arg, gitleaksRanges(arg, envRanges));
 	const results = await Promise.all(tasks.map((task) => runNamed(task.cmd, task.label, spawn)));
 	if (!results.every(Boolean)) {

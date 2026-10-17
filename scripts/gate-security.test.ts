@@ -1,6 +1,3 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
 	bunSpawn,
@@ -9,8 +6,38 @@ import {
 	main,
 	runGateSecurity,
 	runNamed,
+	type SpawnFn,
+	type SpawnResult,
 	securityTasks,
 } from "./gate-security";
+
+const ok: SpawnResult = { exitCode: 0, stdout: "", stderr: "" };
+
+function mockScanner(selfTest: "pass" | "empty-hit" | "miss" | "clean-hit" | "throw"): SpawnFn {
+	return async (cmd) => {
+		if (selfTest === "throw") {
+			throw new Error("missing");
+		}
+		if (cmd.includes("--no-git")) {
+			const config = cmd.find((part) => part.startsWith("--config=")) ?? "";
+			const source = cmd.find((part) => part.startsWith("--source=")) ?? "";
+			if (selfTest === "empty-hit") {
+				return { exitCode: 1, stdout: "", stderr: "" };
+			}
+			if (config.includes("empty")) {
+				return ok;
+			}
+			if (selfTest === "miss") {
+				return ok;
+			}
+			if (source.includes("clean")) {
+				return selfTest === "clean-hit" ? { exitCode: 1, stdout: "", stderr: "" } : ok;
+			}
+			return { exitCode: 1, stdout: "", stderr: "" };
+		}
+		return ok;
+	};
+}
 
 describe("gate:security", () => {
 	it("builds gitleaks and osv tasks from stdin ranges", () => {
@@ -33,27 +60,31 @@ describe("gate:security", () => {
 				label: "gitleaks HEAD",
 			},
 		]);
+		expect(gitleaksDetectArgs("src", "cfg.toml")).toEqual([
+			"gitleaks",
+			"detect",
+			"--no-banner",
+			"--redact",
+			"--no-git",
+			"--source=src",
+			"--config=cfg.toml",
+		]);
 	});
 
-	it("detects a synthetic slack token with default rules and misses it with an empty config", async () => {
-		const slack = ["xoxb", "123456789012", "123456789012", "abcdefghijklmnopqrstuvwx"].join("-");
-		const dirty = join(tmpdir(), `octo-gitleaks-${Date.now()}`);
-		const clean = join(tmpdir(), `octo-gitleaks-clean-${Date.now()}`);
-		await mkdir(dirty);
-		await mkdir(clean);
-		await writeFile(join(dirty, "leak.txt"), `token = ${slack}\n`);
-		await writeFile(join(clean, "ok.txt"), "hello\n");
-		const emptyCfg = join(dirty, "empty.toml");
-		await writeFile(emptyCfg, 'title = "fixture"\n');
-		const repoCfg = join(process.cwd(), ".gitleaks.toml");
-		try {
-			expect((await bunSpawn(gitleaksDetectArgs(dirty, emptyCfg))).exitCode).toBe(0);
-			expect((await bunSpawn(gitleaksDetectArgs(dirty, repoCfg))).exitCode).toBe(1);
-			expect((await bunSpawn(gitleaksDetectArgs(clean, repoCfg))).exitCode).toBe(0);
-		} finally {
-			await rm(dirty, { recursive: true, force: true });
-			await rm(clean, { recursive: true, force: true });
-		}
+	it("self-tests gitleaks rules through mocked scanner calls", async () => {
+		const spawn = vi.fn(mockScanner("pass"));
+		expect(await runGateSecurity(undefined, "HEAD", spawn)).toBe(0);
+		expect(spawn.mock.calls.filter((call) => call[0].includes("--no-git"))).toHaveLength(3);
+		const deps = vi.fn(mockScanner("pass"));
+		expect(await runGateSecurity("--deps", undefined, deps)).toBe(0);
+		expect(deps.mock.calls.some((call) => call[0].includes("--no-git"))).toBe(false);
+	});
+
+	it("fails G2 when the gitleaks self-test contract is broken", async () => {
+		expect(await runGateSecurity(undefined, "HEAD", mockScanner("empty-hit"))).toBe(1);
+		expect(await runGateSecurity(undefined, "HEAD", mockScanner("miss"))).toBe(1);
+		expect(await runGateSecurity(undefined, "HEAD", mockScanner("clean-hit"))).toBe(1);
+		expect(await runGateSecurity(undefined, "HEAD", mockScanner("throw"))).toBe(1);
 	});
 
 	it("fails when a tool is missing or exits non-zero", async () => {
@@ -69,7 +100,7 @@ describe("gate:security", () => {
 				stderr: "err",
 			})),
 		).toBe(false);
-		const spawn = vi.fn(async () => ({ exitCode: 0, stdout: "", stderr: "" }));
+		const spawn = vi.fn(mockScanner("pass"));
 		expect(await runGateSecurity(undefined, "origin/main..HEAD", spawn)).toBe(0);
 		expect(spawn).toHaveBeenCalled();
 		expect(
