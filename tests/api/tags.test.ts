@@ -1,24 +1,12 @@
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
-import { root } from "../../scripts/e2e";
-import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
+import { e2eD1 } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const pepper = "change-me-api-key-pepper";
 
-function e2eD1(): D1Exec {
-	const persist = process.env.OCTO_PERSIST;
-	const config = process.env.OCTO_CONFIG;
-	if (!persist || !config) {
-		throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	}
-	return createD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-}
-
-function d1(sql: string, json = false): string {
-	const exec = e2eD1();
-	assertTestMarker(exec);
+async function d1(sql: string, json = false): Promise<string> {
+	const exec = await e2eD1();
 	return exec(json ? ["--json", "--command", sql] : ["--command", sql]);
 }
 
@@ -41,7 +29,7 @@ async function mint(over: {
 	const scope = over.scope ?? "all";
 	const spaceIds = over.space_ids_json ?? "[]";
 	const role = over.role ?? "admin";
-	d1(
+	await d1(
 		`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', 'e2e-${material.keyid}', '${secretHash}', '${role}', '${ops}', '${scope}', '${spaceIds}', 0, 0, NULL, ${now}, ${now})`,
 	);
 	return {
@@ -52,27 +40,27 @@ async function mint(over: {
 
 describe("tags api", () => {
 	it("covers list, rename, merge, auth, and d1 effects", async () => {
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO spaces (id, slug, name, description, created_at, updated_at) VALUES ('sp1', 'm3-vis', 'vis', '', 1, 1)`,
 		);
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO spaces (id, slug, name, description, created_at, updated_at) VALUES ('sp2', 'm3-hid', 'hid', '', 1, 1)`,
 		);
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO tags (id, name, display_name, created_at, updated_at) VALUES ('tg1', 'alpha', 'alpha', 1, 1)`,
 		);
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO tags (id, name, display_name, created_at, updated_at) VALUES ('tg2', 'beta', 'beta', 1, 1)`,
 		);
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at) VALUES ('mm1', 'sp1', 't', 'b', 'note', 0.5, 'k', 1, 'h', 1, 1)`,
 		);
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at) VALUES ('mm2', 'sp2', 't', 'b', 'note', 0.5, 'k', 1, 'h', 1, 1)`,
 		);
-		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg1')`);
-		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm2', 'tg1')`);
-		d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg2')`);
+		await d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg1')`);
+		await d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm2', 'tg1')`);
+		await d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg2')`);
 		const drop = await mint({ ops: "w" });
 		const reader = await mint({
 			ops: "r",
@@ -162,9 +150,8 @@ describe("tags api", () => {
 		expect(merged.status).toBe(200);
 		expect(await merged.json()).toMatchObject({ memories: 2 });
 
-		await new Promise((resolve) => setTimeout(resolve, 500));
 		const links = rows<{ memory_id: string; tag_id: string }>(
-			d1(
+			await d1(
 				"SELECT memory_id, tag_id FROM memory_tags WHERE memory_id IN ('mm1','mm2') ORDER BY memory_id, tag_id",
 				true,
 			),
@@ -174,19 +161,19 @@ describe("tags api", () => {
 			{ memory_id: "mm2", tag_id: "tg2" },
 		]);
 		const versions = rows<{ version: number }>(
-			d1("SELECT version FROM memories WHERE id IN ('mm1','mm2')", true),
+			await d1("SELECT version FROM memories WHERE id IN ('mm1','mm2')", true),
 		);
 		expect(versions.every((row) => row.version === 1)).toBe(true);
 		const changes = rows<{ entity_id: string }>(
-			d1("SELECT entity_id FROM changes WHERE op = 'tag_merged' ORDER BY entity_id", true),
+			await d1("SELECT entity_id FROM changes WHERE op = 'tag_merged' ORDER BY entity_id", true),
 		);
 		expect(changes.map((row) => row.entity_id)).toEqual(["mm1", "mm2"]);
 		const gammaHits = rows<{ n: number }>(
-			d1("SELECT COUNT(*) AS n FROM memories_fts WHERE memories_fts MATCH 'gamma'", true),
+			await d1("SELECT COUNT(*) AS n FROM memories_fts WHERE memories_fts MATCH 'gamma'", true),
 		);
 		expect(Number(gammaHits[0]?.n ?? 0)).toBe(0);
 		const betaHits = rows<{ n: number }>(
-			d1("SELECT COUNT(*) AS n FROM memories_fts WHERE memories_fts MATCH 'beta'", true),
+			await d1("SELECT COUNT(*) AS n FROM memories_fts WHERE memories_fts MATCH 'beta'", true),
 		);
 		expect(Number(betaHits[0]?.n ?? 0)).toBeGreaterThan(0);
 	});

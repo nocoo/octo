@@ -18,6 +18,21 @@ own_entries_only forbids tag_global, but M1 explicitly checks only all-space
 scope and update permission for that operation. Read the actual authorization
 contract before asserting a new policy, and keep M1 unchanged during integration.
 
+## M6: newly merged HTTP fixtures need the same async boundary
+
+M3 added two more L2 files after M6's async fixture repair. Both still called
+synchronous Wrangler and tags used a fixed sleep before observations. A regression
+now imports their actual sources against in-process production routes, real M1
+credentials and SQLite while rejecting the sync executor and deferring async
+execution. Shared awaited marker/seed/query work replaces both sync paths and the
+sleep, preserving exact side-effect assertions without any server or HTTP retry.
+
+The expanded FTS journey also exposed Node SQLite throwing on an internal FTS
+last-insert rowid larger than Number.MAX_SAFE_INTEGER. The test-only adapter now
+uses setReadBigInts(true) when executing statements, exactly like M3's existing
+adapter, and converts only the bounded changes count. Do not change SQL rowids,
+FTS fallback rules or production behavior to accommodate test transport metadata.
+
 ## M6: synchronous fixture CLI work can stale HTTP sockets
 
 M5's controlled local-Worker probe proved that eight synchronous Wrangler D1

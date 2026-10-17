@@ -13,7 +13,9 @@ export function sqliteD1() {
 	sqlite.exec(MEMORY_FIXTURE_SQL);
 	type Bound = { sql: string; params: (string | number | null)[] };
 	const result = (bound: Bound) => {
-		const info = sqlite.prepare(bound.sql).run(...bound.params);
+		const statement = sqlite.prepare(bound.sql);
+		statement.setReadBigInts(true);
+		const info = statement.run(...bound.params);
 		return { success: true, meta: { changes: Number(info.changes) }, results: [] };
 	};
 	const prepare = (sql: string, params: Bound["params"] = []) => ({

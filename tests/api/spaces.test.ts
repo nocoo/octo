@@ -1,25 +1,13 @@
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
-import { root } from "../../scripts/e2e";
-import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
+import { e2eD1 } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const pepper = "change-me-api-key-pepper";
 
-function e2eD1(): D1Exec {
-	const persist = process.env.OCTO_PERSIST;
-	const config = process.env.OCTO_CONFIG;
-	if (!persist || !config) {
-		throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	}
-	return createD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-}
-
-function d1(sql: string): void {
-	const exec = e2eD1();
-	assertTestMarker(exec);
-	exec(["--command", sql]);
+async function d1(sql: string): Promise<void> {
+	const exec = await e2eD1();
+	await exec(["--command", sql]);
 }
 
 async function mint(over: {
@@ -35,7 +23,7 @@ async function mint(over: {
 	const scope = over.scope ?? "all";
 	const spaceIds = over.space_ids_json ?? "[]";
 	const role = over.role ?? "admin";
-	d1(
+	await d1(
 		`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', 'e2e-${material.keyid}', '${secretHash}', '${role}', '${ops}', '${scope}', '${spaceIds}', 0, 0, NULL, ${now}, ${now})`,
 	);
 	return { Authorization: `Bearer ${material.plaintext}` };
@@ -43,13 +31,13 @@ async function mint(over: {
 
 describe("spaces api", () => {
 	it("lists and gets only visible spaces", async () => {
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO spaces (id, slug, name, description, created_at, updated_at) VALUES ('sp-vis', 'visible-room', 'Visible', '', 1, 1)`,
 		);
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO spaces (id, slug, name, description, created_at, updated_at) VALUES ('sp-hid', 'hidden-room', 'Hidden', '', 1, 1)`,
 		);
-		d1(
+		await d1(
 			`INSERT OR IGNORE INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at) VALUES ('mem-vis', 'sp-vis', 't', 'b', 'note', 0.5, 'k', 1, 'h', 1, 1)`,
 		);
 
