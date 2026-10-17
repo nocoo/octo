@@ -123,10 +123,16 @@ export class UsageModel extends Store<
 		const filters = parseUsageFilters(search);
 		const revision = ++this.revision;
 		if (reversed(filters)) {
-			this.set({ error: "Start time must not follow end time.", loading: false });
+			this.set({
+				filters,
+				daily: [],
+				error: "Start time must not follow end time.",
+				loading: false,
+			});
 			return;
 		}
-		this.set({ filters, loading: true, error: null });
+		const changed = usageQuery(filters) !== usageQuery(this.state.filters);
+		this.set({ filters, daily: changed ? [] : this.state.daily, loading: true, error: null });
 		try {
 			const result = await this.api.request<UsageResponse>(endpoint("/usage", usageQuery(filters)));
 			if (revision === this.revision)
@@ -215,7 +221,14 @@ export class AuditModel extends Store<{
 		const filters = parseAuditFilters(search);
 		const revision = ++this.revision;
 		if (reversed(filters)) {
-			this.set({ error: "Start time must not follow end time.", loading: false });
+			this.set({
+				filters,
+				items: [],
+				nextCursor: null,
+				loadingMore: false,
+				error: "Start time must not follow end time.",
+				loading: false,
+			});
 			return;
 		}
 		const changed = auditQuery(filters) !== auditQuery(this.state.filters);
@@ -256,6 +269,10 @@ export class AuditModel extends Store<{
 	}
 	async exportCsv(): Promise<string | null> {
 		if (this.state.exporting) return null;
+		if (reversed(this.state.filters)) {
+			this.set({ error: "Start time must not follow end time." });
+			return null;
+		}
 		const revision = this.revision;
 		const filters = this.state.filters;
 		this.set({ exporting: true, error: null });

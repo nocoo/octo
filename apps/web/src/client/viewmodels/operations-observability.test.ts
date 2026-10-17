@@ -104,6 +104,8 @@ describe("usage health model", () => {
 		expect(model.state.error).toBe("Unable to load usage and health.");
 		await model.load("from=2026-10-18&to=2026-10-01");
 		expect(request).toHaveBeenCalledTimes(2);
+		expect(model.state.filters.from).toBe("2026-10-18");
+		expect(model.state.daily).toEqual([]);
 		request
 			.mockImplementationOnce(
 				() =>
@@ -226,6 +228,10 @@ describe("audit query, virtualization and CSV", () => {
 		expect(model.state.items).toEqual([]);
 		await model.load("from=2026-10-18&to=2026-10-01");
 		expect(model.state.error).toBe("Start time must not follow end time.");
+		expect(model.state.items).toEqual([]);
+		const before = request.mock.calls.length;
+		expect(await model.exportCsv()).toBeNull();
+		expect(request).toHaveBeenCalledTimes(before);
 	});
 
 	it("ignores stale page/export responses and locks duplicate in-flight calls", async () => {
