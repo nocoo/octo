@@ -398,7 +398,7 @@ memory API could never write to. Space creation/rename and auto-own-space key
 names now share the 64-character lowercase slug contract; ordinary display-only
 key names retain their longer limit.
 
-## M7 blocked by the local Wrangler proxy
+## M7 local Wrangler proxy blocker — resolved 2026-10-18
 
 A final cleanup inspection accidentally named its zsh loop variable `path`,
 which shadows zsh's special executable-search array and made command lookup
@@ -432,11 +432,23 @@ A disposable installation of Wrangler 4.151.1, Miniflare
 repository dependencies and lockfile remain unchanged. No remote Cloudflare
 resources were used. These diagnostic comparisons are not acceptance retries.
 
-The failing assertion remains intact. No sleeps, automatic retries, shortened
+The failing assertion remained intact. No sleeps, automatic retries, shortened
 request body, production drain/cancel workaround, disabled hook or test exclusion
-was introduced. This blocks branch publication and full milestone approval until
+was introduced. This blocked branch publication and full milestone approval until
 the upstream proxy is fixed or a native-workerd L2 transport change is explicitly
 accepted. Successful application-level and L1 checks do not establish L2 success.
+
+Zheng approved the direct Miniflare migration, merged into `origin/main` at
+`1a691a0`. M7 rebased onto that revision without conflicts. The application now
+receives L2 traffic through its direct workerd socket, preserving the isolated
+D1/R2 fixtures and exact background-work barriers. After installing the locked
+direct Miniflare dependency, the complete real-HTTP suite passes all 212 tests
+across 22 files, including the unchanged unauthenticated/readonly/writeonly
+vector PUT sequence and restored oversized-upload assertions. The full L1 index
+snapshot passes 1,142 tests with statements 98.83%, branches 95.86%, functions
+99.20%, and lines 99.21%. This resolves the transport blocker; the earlier probe
+failures remain historical evidence, not current acceptance results. No assertion,
+production body handling, hook, or resource-isolation rule was relaxed.
 
 ## M7 purge fault-injection correction
 
