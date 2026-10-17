@@ -4,23 +4,19 @@ import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 const state = vi.hoisted(() => ({
 	exec: vi.fn<(args: string[]) => Promise<string>>(),
 	create: vi.fn(),
+	dispose: vi.fn(async () => {}),
 }));
-vi.mock("../../../../../scripts/local-d1", async (importOriginal) => ({
-	...(await importOriginal<typeof import("../../../../../scripts/local-d1")>()),
-	createD1Exec: () => {
-		throw new Error("attachment fixtures must remain asynchronous");
-	},
-	createAsyncD1Exec: (...args: string[]) => {
-		state.create(...args);
-		return state.exec;
-	},
+vi.mock("../../../../../scripts/fixture-d1", () => ({
+	openFixtureD1: (...args: string[]) => state.create(...args),
 }));
 let f: ReturnType<typeof sqliteD1>;
 let fixtures: typeof import("../../../../../tests/fixtures/attachments");
+let disposeE2eD1: typeof import("../../../../../tests/fixtures/l2-batch").disposeE2eD1;
 beforeEach(async () => {
 	vi.resetModules();
-	state.create.mockClear();
+	state.create.mockReset().mockResolvedValue({ exec: state.exec, dispose: state.dispose });
 	state.exec.mockReset();
+	state.dispose.mockClear();
 	vi.stubEnv("OCTO_PERSIST", "attachment-owned-run");
 	vi.stubEnv("OCTO_CONFIG", "attachment-owned.toml");
 	f = sqliteD1();
@@ -34,11 +30,18 @@ beforeEach(async () => {
 		f.sqlite.exec(sql);
 		return "";
 	});
+	({ disposeE2eD1 } = await import("../../../../../tests/fixtures/l2-batch"));
 	fixtures = await import("../../../../../tests/fixtures/attachments");
 });
-afterEach(() => {
-	vi.unstubAllEnvs();
-	f.sqlite.close();
+afterEach(async () => {
+	try {
+		await disposeE2eD1();
+		await disposeE2eD1();
+		expect(state.dispose).toHaveBeenCalledTimes(state.create.mock.calls.length);
+	} finally {
+		vi.unstubAllEnvs();
+		f.sqlite.close();
+	}
 });
 const count = (table: string) => f.sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n;
 
@@ -47,14 +50,13 @@ describe("attachment suite fixture lifecycle", () => {
 		await fixtures.setupAttachmentFixtures();
 		expect(state.exec).toHaveBeenCalledTimes(4);
 		expect(state.create).toHaveBeenCalledExactlyOnceWith(
-			expect.stringContaining("wrangler"),
-			expect.any(String),
 			"attachment-owned-run",
 			"attachment-owned.toml",
 		);
 		await fixtures.cleanupAttachmentFixtures();
 		expect(state.exec).toHaveBeenCalledTimes(5);
 		expect(state.create).toHaveBeenCalledOnce();
+		expect(state.dispose).not.toHaveBeenCalled();
 		expect(count("api_keys")).toBe(0);
 		expect(f.sqlite.prepare("SELECT id FROM spaces WHERE id = 'unrelated'").get()).toMatchObject({
 			id: "unrelated",
@@ -175,6 +177,7 @@ describe("attachment suite fixture lifecycle", () => {
 		);
 		await begin;
 		expect(done).toBe(false);
+		expect(state.dispose).not.toHaveBeenCalled();
 		expect(count("api_keys")).toBe(1);
 		release();
 		await expect(close).rejects.toThrow("cleanup failed");
