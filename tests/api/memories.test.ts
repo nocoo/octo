@@ -1,28 +1,16 @@
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
-import { root } from "../../scripts/e2e";
-import { type AsyncD1Exec, assertAsyncTestMarker, createAsyncD1Exec } from "../../scripts/local-d1";
+import { e2eD1 } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const pepper = "change-me-api-key-pepper";
-
-function e2eD1(): AsyncD1Exec {
-	const persist = process.env.OCTO_PERSIST;
-	const config = process.env.OCTO_CONFIG;
-	if (!persist || !config) {
-		throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	}
-	return createAsyncD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-}
 
 function auth(token: string, extra: Record<string, string> = {}) {
 	return { Authorization: `Bearer ${token}`, "content-type": "application/json", ...extra };
 }
 
 async function seed(ops = "r,w,u,d") {
-	const d1 = e2eD1();
-	await assertAsyncTestMarker(d1);
+	const d1 = await e2eD1();
 	const material = generateApiKeyMaterial();
 	const secretHash = await hashSecret(pepper, material.secret);
 	const now = Date.now();
@@ -55,8 +43,7 @@ beforeAll(async () => {
 	reader = await seed("r");
 	writer = await seed("w");
 	admin = await seed();
-	const d1 = e2eD1();
-	await assertAsyncTestMarker(d1);
+	const d1 = await e2eD1();
 	const material = generateApiKeyMaterial();
 	const secretHash = await hashSecret(pepper, material.secret);
 	const taken = generateApiKeyMaterial();

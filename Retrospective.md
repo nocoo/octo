@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — M2 rebase restored obsolete fixture processes
+
+Replaying M2's final pre-M6 commit reintroduced per-command Wrangler fixture processes after main had replaced them with an isolated, cached SDK session. A failing source-import harness rejected the old executor before all three M2 suites migrated to the shared awaited `e2eD1` boundary. The harness now runs every M2 HTTP fixture test, checks one cached session and eight awaited marker checks, and the obsolete executor is removed. Conflict resolution must compare lifecycle contracts, not only preserve independently compiling symbols. The historical tags 30/31 failure was separate: its global `tag_merged` query counted M6's legitimate unrelated event; main's `d774ee5` scopes that observation to `mm1` and `mm2` and seeds an unrelated event in its regression harness.
+
 ## 2026-10-17 — Nested storage links bypassed fixture isolation
 
 The proxy guard canonicalized the run and v3 roots but not their storage descendants. A real SDK A/B regression confirmed that symlinking B's d1 root or database directory to A let B mutate A's canary despite both markers being env=test. SQLite-leaf symlinks and hardlinks also reached SDK startup, even where SQLite subsequently rejected them. Before importing or starting the SDK, fixture initialization now walks v3 with lstat, rejects every symlink and rejects regular files with nlink greater than one. This protects database files and sidecars without following aliases or adding a filesystem abstraction; normal directories and singly linked files remain supported. Unit tests assert zero SDK calls for all four nested-link variants; fresh temporary real-SDK tests verify the same boundary and unchanged A canary, plus ordinary independent A/B writes. Root containment and a reusable test marker are not proof of ownership of the actual backing files. The first probe used invalid uppercase Worker names; correcting the configuration was necessary before treating any failure as isolation evidence.
