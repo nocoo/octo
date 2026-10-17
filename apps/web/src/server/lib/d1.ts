@@ -8,6 +8,13 @@ export function chunkBoundParams<T>(items: readonly T[]): T[][] {
 	return chunks;
 }
 
+export function d1Results<T>(row: { results?: T[] } | null | undefined): T[] {
+	if (row?.results) {
+		return row.results;
+	}
+	return [];
+}
+
 export async function probeD1(db: D1Database): Promise<boolean> {
 	try {
 		const row = await db.prepare("SELECT 1 AS n").first<{ n: number }>();

@@ -12,6 +12,7 @@ import { whoamiResponse } from "./routes/admin/whoami";
 import { liveResponse } from "./routes/live";
 import { createV1Routes } from "./routes/v1";
 import { meResponse } from "./routes/v1/me";
+import { mountV1SearchRoutes } from "./routes/v1/search";
 import { spacesRoutes } from "./routes/v1/spaces";
 import { tagsRoutes, tagWriteAuthorization } from "./routes/v1/tags";
 import type { MemoryService } from "./services/memories";
@@ -53,6 +54,7 @@ export function createApp(memoryService?: MemoryService): Hono<{
 	if (memoryService) {
 		app.route("/api/v1", createV1Routes(memoryService));
 	}
+	mountV1SearchRoutes(app);
 	app.get("/api/admin/whoami", (c) => whoamiResponse(c));
 	app.route("/api/v1/tags", tagsRoutes());
 	app.route("/api/v1/spaces", spacesRoutes());

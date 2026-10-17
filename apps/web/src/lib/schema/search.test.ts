@@ -11,4 +11,8 @@ describe("searchRequestSchema", () => {
 	it("rejects a request without query or vector", () => {
 		expect(searchRequestSchema.safeParse({ limit: 10 }).success).toBe(false);
 	});
+
+	it("rejects unknown fields", () => {
+		expect(searchRequestSchema.safeParse({ query: "x", extra: true }).success).toBe(false);
+	});
 });

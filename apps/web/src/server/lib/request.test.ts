@@ -9,6 +9,12 @@ describe("newRequestId", () => {
 		expect(id).toBe("abc");
 	});
 
+	it("generates a uuid for blank incoming ids", () => {
+		expect(
+			newRequestId(new Request("http://octo.local", { headers: { "X-Request-Id": "   " } })),
+		).toMatch(/^[0-9a-f-]{36}$/i);
+	});
+
 	it("generates a uuid when missing or too long", () => {
 		expect(newRequestId(new Request("http://octo.local"))).toMatch(
 			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
