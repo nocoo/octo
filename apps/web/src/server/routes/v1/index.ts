@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppVars, Env } from "../../env";
-import type { MemoryService } from "../../services/memories";
+import type { MemoryService } from "../../services/batch-memories";
 import { createBatchRoutes } from "./batch";
 
 export function createV1Routes(memoryService: MemoryService): Hono<{

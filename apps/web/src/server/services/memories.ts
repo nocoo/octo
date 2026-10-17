@@ -1,42 +1,520 @@
+import type { MemoryFilters } from "../../lib/schema/filters";
 import type { MemoryCreate, MemoryPatch } from "../../lib/schema/memory";
+import {
+	type ApiPrincipal,
+	type AuthzOp,
+	type AuthzTarget,
+	authorize,
+	visibleSpaceIds,
+} from "../auth/authorize";
+import { ApiError } from "../lib/errors";
+import { newUlid } from "../lib/ulid";
+import { ChangeRepo } from "../repo/changes";
+import { type MemoryRecord, MemoryRepo } from "../repo/memories";
+import { encodeCursor, parseChangeCursor, parseMemoryCursor } from "../repo/memories-cursor";
+import { InlineTagRepo, normalizeTag, type TagRepo } from "../repo/memories-tags";
+import { resolveVectorWrite } from "../repo/memories-vector";
+import { diffVersions, VersionRepo } from "../repo/versions";
 
-export type MemoryRecord = {
-	id: string;
-	space: string;
-	space_id: string;
-	source_key_id: string;
-	title: string;
-	body: string;
-	type: string;
-	tags: string[];
-	importance: number;
-	version: number;
-	created_at: string;
-	updated_at: string;
-};
-
-export type MemoryServiceContext = {
-	keyId: string;
+export type Authz = {
+	principal: ApiPrincipal;
 	actor: string;
-	db: D1Database;
-	statements: D1PreparedStatement[];
+	denyUnless(op: AuthzOp, target: AuthzTarget): void;
+	visible(): ReturnType<typeof visibleSpaceIds>;
 };
 
-export type MemoryServiceError = {
-	code: "validation_failed" | "not_found" | "version_conflict" | "forbidden";
-	message: string;
-	details?: Record<string, unknown>;
-};
+export function authzFrom(principal: ApiPrincipal): Authz {
+	return {
+		principal,
+		actor: `key:${principal.id}`,
+		denyUnless(op, target) {
+			const result = authorize(principal, op, target);
+			if (result.allow) {
+				return;
+			}
+			if (result.reason === "not_found") {
+				throw new ApiError("not_found", "not found");
+			}
+			throw new ApiError("forbidden", "forbidden");
+		},
+		visible: () => visibleSpaceIds(principal),
+	};
+}
 
-// Mutations prepare SQL only; the HTTP boundary owns the sole D1 batch commit.
-export interface MemoryService {
-	resolveSpace(slug: string, ctx: MemoryServiceContext): Promise<string>;
-	get(id: string, ctx: MemoryServiceContext): Promise<MemoryRecord | null>;
-	create(input: MemoryCreate, ctx: MemoryServiceContext): Promise<MemoryRecord>;
-	update(
+export function expectedVersion(ifMatch: string | undefined, body?: number): number {
+	const trimmed = ifMatch?.trim().replaceAll('"', "");
+	const headerVer = trimmed && /^\d+$/.test(trimmed) ? Number(trimmed) : undefined;
+	if (headerVer != null && body != null && headerVer !== body) {
+		throw new ApiError("validation_failed", "If-Match does not match expected_version");
+	}
+	const version = body ?? headerVer;
+	if (version == null) {
+		throw new ApiError("validation_failed", "expected_version is required");
+	}
+	return version;
+}
+
+export function parseInclude(raw: string | undefined): Set<string> {
+	if (!raw) {
+		return new Set();
+	}
+	return new Set(
+		raw
+			.split(",")
+			.map((part) => part.trim())
+			.filter((part) => part.length > 0),
+	);
+}
+
+function iso(ms: number | null): string | null {
+	if (ms == null) {
+		return null;
+	}
+	return new Date(ms).toISOString();
+}
+
+export function publicMemory(
+	row: MemoryRecord,
+	tags: string[],
+	extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+	const item: Record<string, unknown> = {
+		id: row.id,
+		space: row.space_slug,
+		title: row.title,
+		body: row.body,
+		type: row.type,
+		tags,
+		importance: row.importance,
+		event_time: iso(row.event_time),
+		version: row.version,
+		content_hash: row.content_hash,
+		source_key_id: row.source_key_id,
+		updated_by_key_id: row.updated_by_key_id,
+		created_at: iso(row.created_at),
+		updated_at: iso(row.updated_at),
+		...extra,
+	};
+	if (row.deleted_at != null) {
+		item.deleted_at = iso(row.deleted_at);
+		item.deleted_by = row.deleted_by;
+	}
+	return item;
+}
+
+export function publicVersion(
+	row: {
+		memory_id: string;
+		version: number;
+		title: string;
+		type: string;
+		importance: number;
+		tags_json: string;
+		event_time: number | null;
+		space_id: string;
+		actor: string;
+		op: string;
+		rollback_of: number | null;
+		created_at: number;
+		body?: string;
+	},
+	includeBody: boolean,
+): Record<string, unknown> {
+	let tags: string[] = [];
+	try {
+		const parsed: unknown = JSON.parse(row.tags_json);
+		if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
+			tags = parsed;
+		}
+	} catch {
+		tags = [];
+	}
+	const item: Record<string, unknown> = {
+		memory_id: row.memory_id,
+		version: row.version,
+		title: row.title,
+		type: row.type,
+		importance: row.importance,
+		tags,
+		event_time: iso(row.event_time),
+		space_id: row.space_id,
+		actor: row.actor,
+		op: row.op,
+		rollback_of: row.rollback_of,
+		created_at: iso(row.created_at),
+	};
+	if (includeBody) {
+		item.body = row.body;
+	}
+	return item;
+}
+
+export class MemoryService {
+	constructor(
+		private readonly db: D1Database,
+		private readonly tags: TagRepo = new InlineTagRepo(db),
+		private readonly now: () => number = Date.now,
+		private readonly id: () => string = newUlid,
+		private readonly memories = new MemoryRepo(db),
+		private readonly versions = new VersionRepo(db),
+		private readonly changes = new ChangeRepo(db),
+	) {}
+
+	async create(authz: Authz, input: MemoryCreate): Promise<Record<string, unknown>> {
+		const space = await this.requireSpace(input.space);
+		authz.denyUnless("write", { spaceId: space.id });
+		const tags = await this.tags.resolveMany(input.tags);
+		const vector = input.vector ? await resolveVectorWrite(this.db, input.vector) : undefined;
+		const row = await this.memories.write({
+			id: this.id(),
+			spaceId: space.id,
+			title: input.title,
+			body: input.body,
+			type: input.type,
+			importance: input.importance ?? 0.5,
+			eventTime: input.event_time ? Date.parse(input.event_time) : null,
+			tags,
+			actor: authz.actor,
+			sourceKeyId: authz.principal.id,
+			updatedByKeyId: authz.principal.id,
+			op: "create",
+			now: this.now(),
+			...(vector ? { vector } : {}),
+		});
+		return publicMemory(
+			row,
+			tags.map((tag) => tag.name),
+		);
+	}
+
+	async get(authz: Authz, id: string, include: Set<string>): Promise<Record<string, unknown>> {
+		const row = await this.loadVisible(authz, id, "read", include.has("trashed"));
+		const tags = (await this.memories.tagNamesByMemory([row.id])).get(row.id) ?? [];
+		const extra: Record<string, unknown> = {};
+		if (include.has("versions_count")) {
+			extra.versions_count = await this.memories.versionsCount(row.id);
+		}
+		if (include.has("attachments")) {
+			extra.attachments = (await this.memories.attachments(row.id)).map((att) => ({
+				...att,
+				created_at: iso(att.created_at),
+			}));
+		}
+		if (include.has("vector_status")) {
+			extra.vector_status = await this.memories.vectorStatus(row.id, row.content_hash);
+		}
+		return publicMemory(row, tags, extra);
+	}
+
+	async list(
+		authz: Authz,
+		opts: {
+			filters: MemoryFilters;
+			include: Set<string>;
+			cursor?: string | undefined;
+			limit: number;
+			trashedOnly?: boolean | undefined;
+		},
+	): Promise<{ items: Record<string, unknown>[]; next_cursor: string | null }> {
+		if (!authz.principal.ops.has(opts.trashedOnly ? "d" : "r")) {
+			throw new ApiError("forbidden", "forbidden");
+		}
+		if (opts.include.has("trashed") && !authz.principal.ops.has("d")) {
+			throw new ApiError("forbidden", "forbidden");
+		}
+		const visible = authz.visible();
+		const spaceIds = await this.filterSpaceIds(opts.filters.spaces, visible);
+		const tagAllIds = opts.filters.tags_all
+			? await this.requireTagIds(opts.filters.tags_all, true)
+			: undefined;
+		const tagAnyIds = opts.filters.tags_any
+			? await this.requireTagIds(opts.filters.tags_any, false)
+			: undefined;
+		const listed = await this.memories.list({
+			filters: opts.filters,
+			visible,
+			spaceIds,
+			tagAllIds,
+			tagAnyIds,
+			includeTrashed: opts.include.has("trashed"),
+			trashedOnly: opts.trashedOnly,
+			ownSourceKeyId:
+				opts.trashedOnly && authz.principal.ownEntriesOnly ? authz.principal.id : undefined,
+			cursor: opts.cursor ? parseMemoryCursor(opts.cursor) : undefined,
+			limit: opts.limit,
+		});
+		const tagMap = await this.memories.tagNamesByMemory(listed.items.map((item) => item.id));
+		return {
+			items: listed.items.map((item) => publicMemory(item, tagMap.get(item.id) ?? [])),
+			next_cursor: listed.next_cursor,
+		};
+	}
+
+	async patch(
+		authz: Authz,
 		id: string,
-		patch: MemoryPatch & { expected_version: number },
-		ctx: MemoryServiceContext,
-	): Promise<MemoryRecord>;
-	delete(id: string, ctx: MemoryServiceContext): Promise<{ trashed_at: string }>;
+		input: MemoryPatch,
+		ifMatch: string | undefined,
+	): Promise<Record<string, unknown>> {
+		const current = await this.loadVisible(authz, id, "update", false);
+		const version = expectedVersion(ifMatch, input.expected_version);
+		let spaceId = current.space_id;
+		let op: "update" | "move" = "update";
+		if (input.space) {
+			const dest = await this.requireSpace(input.space);
+			if (dest.id !== current.space_id) {
+				authz.denyUnless("move", {
+					spaceId: current.space_id,
+					destSpaceId: dest.id,
+					sourceKeyId: current.source_key_id,
+				});
+				spaceId = dest.id;
+				op = "move";
+			}
+		}
+		if (op === "update") {
+			authz.denyUnless("update", { spaceId: current.space_id, sourceKeyId: current.source_key_id });
+		}
+		const tags =
+			input.tags !== undefined
+				? await this.tags.resolveMany(input.tags)
+				: await this.currentTags(current.id);
+		let vector: Awaited<ReturnType<typeof resolveVectorWrite>> | null | undefined;
+		if (input.vector === null) {
+			vector = null;
+		} else if (input.vector) {
+			vector = await resolveVectorWrite(this.db, input.vector);
+		}
+		const row = await this.memories.write({
+			id: current.id,
+			spaceId,
+			title: input.title ?? current.title,
+			body: input.body ?? current.body,
+			type: input.type ?? current.type,
+			importance: input.importance ?? current.importance,
+			eventTime:
+				input.event_time === undefined
+					? current.event_time
+					: input.event_time === null
+						? null
+						: Date.parse(input.event_time),
+			tags,
+			actor: authz.actor,
+			sourceKeyId: current.source_key_id,
+			updatedByKeyId: authz.principal.id,
+			op,
+			expectedVersion: version,
+			now: this.now(),
+			...(vector !== undefined ? { vector } : {}),
+		});
+		return publicMemory(
+			row,
+			tags.map((tag) => tag.name),
+		);
+	}
+
+	async remove(authz: Authz, id: string): Promise<{ trashed_at: string }> {
+		const current = await this.loadVisible(authz, id, "delete", false);
+		const row = await this.memories.trash(current.id, authz.actor, this.now());
+		return { trashed_at: iso(row.deleted_at) ?? new Date(this.now()).toISOString() };
+	}
+
+	async restore(authz: Authz, id: string): Promise<Record<string, unknown>> {
+		const current = await this.loadVisible(authz, id, "delete", true);
+		if (current.deleted_at == null) {
+			throw new ApiError("not_found", "not found");
+		}
+		const tags = await this.currentTags(current.id);
+		const row = await this.memories.write({
+			id: current.id,
+			spaceId: current.space_id,
+			title: current.title,
+			body: current.body,
+			type: current.type,
+			importance: current.importance,
+			eventTime: current.event_time,
+			tags,
+			actor: authz.actor,
+			sourceKeyId: current.source_key_id,
+			updatedByKeyId: authz.principal.id,
+			op: "restore",
+			expectedVersion: current.version,
+			now: this.now(),
+		});
+		return publicMemory(
+			row,
+			tags.map((tag) => tag.name),
+		);
+	}
+
+	async listVersions(authz: Authz, id: string): Promise<Record<string, unknown>[]> {
+		await this.loadVisible(authz, id, "read", false);
+		const rows = await this.versions.list(id);
+		return rows.map((row) => publicVersion(row, false));
+	}
+
+	async getVersion(authz: Authz, id: string, version: number): Promise<Record<string, unknown>> {
+		await this.loadVisible(authz, id, "read", false);
+		const row = await this.versions.get(id, version);
+		if (!row) {
+			throw new ApiError("not_found", "not found");
+		}
+		return publicVersion(row, true);
+	}
+
+	async diff(authz: Authz, id: string, from: number, to: number): Promise<unknown> {
+		await this.loadVisible(authz, id, "read", false);
+		const left = await this.versions.get(id, from);
+		const right = await this.versions.get(id, to);
+		if (!left || !right) {
+			throw new ApiError("unprocessable", "version does not exist");
+		}
+		return diffVersions(left, right);
+	}
+
+	async rollback(
+		authz: Authz,
+		id: string,
+		toVersion: number,
+		ifMatch: string | undefined,
+		bodyVersion?: number,
+	): Promise<Record<string, unknown>> {
+		const current = await this.loadVisible(authz, id, "update", false);
+		const version = expectedVersion(ifMatch, bodyVersion);
+		const snapshot = await this.versions.get(id, toVersion);
+		if (!snapshot) {
+			throw new ApiError("unprocessable", "version does not exist");
+		}
+		let tags: Array<{ id: string; name: string; display_name: string; merged_into: string | null }>;
+		try {
+			const names: unknown = JSON.parse(snapshot.tags_json);
+			tags = Array.isArray(names)
+				? await this.tags.resolveMany(names.filter((item) => typeof item === "string"))
+				: [];
+		} catch {
+			tags = [];
+		}
+		const row = await this.memories.write({
+			id: current.id,
+			spaceId: snapshot.space_id,
+			title: snapshot.title,
+			body: snapshot.body,
+			type: snapshot.type,
+			importance: snapshot.importance,
+			eventTime: snapshot.event_time,
+			tags,
+			actor: authz.actor,
+			sourceKeyId: current.source_key_id,
+			updatedByKeyId: authz.principal.id,
+			op: "rollback",
+			rollbackOf: toVersion,
+			expectedVersion: version,
+			now: this.now(),
+		});
+		return publicMemory(
+			row,
+			tags.map((tag) => tag.name),
+		);
+	}
+
+	async listChanges(
+		authz: Authz,
+		opts: { cursor?: string | undefined; limit: number; spaces?: string[] | undefined },
+	): Promise<{ items: Record<string, unknown>[]; next_cursor: string | null }> {
+		if (!authz.principal.ops.has("r")) {
+			throw new ApiError("forbidden", "forbidden");
+		}
+		const visible = authz.visible();
+		const spaceIds = await this.filterSpaceIds(opts.spaces, visible);
+		const listed = await this.changes.list(visible, {
+			cursor: opts.cursor ? parseChangeCursor(opts.cursor) : undefined,
+			limit: opts.limit,
+			spaceIds,
+		});
+		return {
+			items: listed.items.map((item) => this.changes.publicItem(item)),
+			next_cursor: listed.next_cursor,
+		};
+	}
+
+	async changesHead(authz: Authz, spaces?: string[] | undefined): Promise<{ cursor: string }> {
+		if (!authz.principal.ops.has("r")) {
+			throw new ApiError("forbidden", "forbidden");
+		}
+		const visible = authz.visible();
+		const spaceIds = await this.filterSpaceIds(spaces, visible);
+		const seq = await this.changes.head(visible, spaceIds);
+		return { cursor: encodeCursor({ s: seq }) };
+	}
+
+	private async loadVisible(
+		authz: Authz,
+		id: string,
+		op: AuthzOp,
+		allowTrashed: boolean,
+	): Promise<MemoryRecord> {
+		const row = await this.memories.get(id);
+		if (!row) {
+			throw new ApiError("not_found", "not found");
+		}
+		if (row.deleted_at != null && !allowTrashed) {
+			throw new ApiError("not_found", "not found");
+		}
+		authz.denyUnless(op, { spaceId: row.space_id, sourceKeyId: row.source_key_id });
+		return row;
+	}
+
+	private async requireSpace(slug: string): Promise<{ id: string; slug: string; name: string }> {
+		const space = await this.memories.spaceBySlug(slug);
+		if (!space) {
+			throw new ApiError("not_found", "not found");
+		}
+		return space;
+	}
+
+	private async currentTags(
+		memoryId: string,
+	): Promise<
+		Array<{ id: string; name: string; display_name: string; merged_into: string | null }>
+	> {
+		const names = (await this.memories.tagNamesByMemory([memoryId])).get(memoryId) ?? [];
+		return this.tags.resolveMany(names);
+	}
+
+	private async filterSpaceIds(
+		slugs: string[] | undefined,
+		visible: ReturnType<typeof visibleSpaceIds>,
+	): Promise<string[] | undefined> {
+		if (!slugs) {
+			return undefined;
+		}
+		const ids: string[] = [];
+		for (const slug of slugs) {
+			const space = await this.memories.spaceBySlug(slug);
+			if (!space) {
+				continue;
+			}
+			if (visible.kind === "all" || visible.ids.includes(space.id)) {
+				ids.push(space.id);
+			}
+		}
+		return ids;
+	}
+
+	private async requireTagIds(names: string[], all: boolean): Promise<string[]> {
+		const unique: string[] = [];
+		const seen = new Set<string>();
+		for (const raw of names) {
+			const name = normalizeTag(raw);
+			if (!seen.has(name)) {
+				seen.add(name);
+				unique.push(name);
+			}
+		}
+		const resolved = await this.tags.lookupMany(unique);
+		if (all && resolved.length !== unique.length) {
+			return [];
+		}
+		return resolved.map((tag) => tag.id);
+	}
 }

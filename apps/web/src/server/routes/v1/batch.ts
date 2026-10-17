@@ -10,7 +10,7 @@ import { type AuthzOp, type AuthzTarget, authorize } from "../../auth/authorize"
 import type { AppVars, Env } from "../../env";
 import { ApiError } from "../../lib/errors";
 import { parseStrict } from "../../lib/validate";
-import type { MemoryService, MemoryServiceContext } from "../../services/memories";
+import type { MemoryService, MemoryServiceContext } from "../../services/batch-memories";
 import { parseJsonBody } from "./json-body";
 
 type BatchOk<T> = { ok: true; item: T };

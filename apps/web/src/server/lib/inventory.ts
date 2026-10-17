@@ -19,12 +19,24 @@ export function listedRoutes(app: Hono<{ Bindings: Env; Variables: AppVars }>): 
 }
 
 export const TESTED_API_ROUTES: RouteKey[] = [
+	"DELETE /api/v1/memories/:id",
 	"GET /api/admin/whoami",
 	"GET /api/live",
+	"GET /api/v1/changes",
+	"GET /api/v1/changes/head",
 	"GET /api/v1/me",
+	"GET /api/v1/memories",
+	"GET /api/v1/memories/:id",
+	"GET /api/v1/memories/:id/diff",
+	"GET /api/v1/memories/:id/versions",
+	"GET /api/v1/memories/:id/versions/:v",
 	"GET /api/v1/spaces",
 	"GET /api/v1/spaces/:slug",
 	"GET /api/v1/tags",
+	"GET /api/v1/trash",
+	"PATCH /api/v1/memories/:id",
+	"POST /api/v1/memories",
+	"POST /api/v1/memories/:id/rollback",
 	"POST /api/v1/memories:batchCreate",
 	"POST /api/v1/memories:batchDelete",
 	"POST /api/v1/memories:batchGet",
@@ -32,4 +44,5 @@ export const TESTED_API_ROUTES: RouteKey[] = [
 	"POST /api/v1/search",
 	"POST /api/v1/tags/:name/merge",
 	"POST /api/v1/tags/:name/rename",
+	"POST /api/v1/trash/:id/restore",
 ];

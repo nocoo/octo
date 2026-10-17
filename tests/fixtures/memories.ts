@@ -4,7 +4,7 @@ import type {
 	MemoryRecord,
 	MemoryService,
 	MemoryServiceContext,
-} from "../../apps/web/src/server/services/memories";
+} from "../../apps/web/src/server/services/batch-memories";
 
 export const MEMORY_FIXTURE_SQL = `CREATE TABLE IF NOT EXISTS _m6_memories (id TEXT PRIMARY KEY, record_json TEXT NOT NULL, deleted_at TEXT);
 INSERT OR IGNORE INTO spaces (id, slug, name, created_at, updated_at) VALUES ('space:kb', 'kb', 'kb', 0, 0), ('space:s', 's', 's', 0, 0), ('space:dest', 'dest', 'dest', 0, 0), ('space:other', 'other', 'other', 0, 0);`;

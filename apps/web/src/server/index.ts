@@ -11,11 +11,14 @@ import { accessMiddleware } from "./middleware/access";
 import { whoamiResponse } from "./routes/admin/whoami";
 import { liveResponse } from "./routes/live";
 import { createV1Routes } from "./routes/v1";
+import { changesRoutes } from "./routes/v1/changes";
 import { meResponse } from "./routes/v1/me";
+import { memoriesRoutes } from "./routes/v1/memories";
 import { mountV1SearchRoutes } from "./routes/v1/search";
 import { spacesRoutes } from "./routes/v1/spaces";
 import { tagsRoutes, tagWriteAuthorization } from "./routes/v1/tags";
-import type { MemoryService } from "./services/memories";
+import { trashRoutes } from "./routes/v1/trash";
+import type { MemoryService } from "./services/batch-memories";
 
 export function createApp(memoryService?: MemoryService): Hono<{
 	Bindings: Env;
@@ -55,6 +58,9 @@ export function createApp(memoryService?: MemoryService): Hono<{
 		app.route("/api/v1", createV1Routes(memoryService));
 	}
 	mountV1SearchRoutes(app);
+	app.route("/api/v1/memories", memoriesRoutes());
+	app.route("/api/v1/trash", trashRoutes());
+	app.route("/api/v1/changes", changesRoutes());
 	app.get("/api/admin/whoami", (c) => whoamiResponse(c));
 	app.route("/api/v1/tags", tagsRoutes());
 	app.route("/api/v1/spaces", spacesRoutes());

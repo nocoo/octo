@@ -7,7 +7,7 @@ import { createBatchRoutes } from "../../apps/web/src/server/routes/v1/batch";
 import type {
 	MemoryService,
 	MemoryServiceContext,
-} from "../../apps/web/src/server/services/memories";
+} from "../../apps/web/src/server/services/batch-memories";
 import { testApiPrincipal } from "../../apps/web/src/server/test-principal";
 import { TestMemoryService } from "./memories";
 import { sqliteD1 } from "./sqlite-d1";
