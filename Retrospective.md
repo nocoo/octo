@@ -588,3 +588,7 @@ The final populated overview screenshot exposed `restored` in otherwise Chinese 
 ### 2026-10-18 — Validate the merged lockfile with Bun
 
 The MCP rebase had additive lockfile conflicts. Combining the conflict blocks preserved both dependency sets, but three shared packages with identical versions and different integrity encodings appeared twice outside those blocks. JSONC parsing accepted duplicate keys; Bun's frozen installer correctly rejected duplicate package paths. Removing the duplicate dashboard entries retained main's locked artifacts, and the approved temporary mirror then installed the MCP SDK with `--frozen-lockfile`. A generic JSON parser is not a package-manager lockfile validator; always run the frozen installer after resolving dependency conflicts.
+
+### 2026-10-18 — Clear hidden permission fields at submission
+
+MAX review found that switching an existing custom key from selected spaces to all or owned spaces hid the field but still submitted its old IDs. Real browser regressions failed for both transitions against M7's correct rejection, while selected-space preservation passed. The common form payload now includes IDs only for selected-space scope. Hidden fields may retain useful editing state, but submitted permissions must match the currently selected mode; never weaken server validation to accept stale form fields.

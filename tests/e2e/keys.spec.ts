@@ -1,6 +1,53 @@
 import { randomUUID } from "node:crypto";
 import { capture, expect, test } from "./fixtures";
 
+for (const [scope, label] of [
+	["all", "全部空间"],
+	["own", "自有空间"],
+	["spaces", "指定空间"],
+] as const) {
+	test(`edit a custom key from spaces to ${scope} using real permissions`, async ({
+		page,
+		admin,
+	}) => {
+		const name = `l3-scope-${randomUUID()}`;
+		const space = await admin.json<{ id: string }>("/spaces", "POST", {
+			slug: name,
+			name,
+			description: "Isolated key scope fixture",
+		});
+		const created = await admin.json<{ key: { id: string } }>("/keys", "POST", {
+			name,
+			role: "custom",
+			ops: "r",
+			scope: "spaces",
+			space_ids: [space.id],
+			own_entries_only: false,
+			auto_own_space: false,
+		});
+		await page.goto("/keys");
+		await page.getByRole("button", { name: `编辑 ${name}`, exact: true }).click();
+		const editor = page.getByRole("dialog", { name: "编辑接口密钥", exact: true });
+		await editor.getByRole("combobox", { name: "空间范围", exact: true }).click();
+		await page.getByRole("option", { name: label, exact: true }).click();
+		const submitted = page.waitForRequest(
+			(request) =>
+				request.method() === "PATCH" && request.url().endsWith(`/keys/${created.key.id}`),
+		);
+		await editor.getByRole("button", { name: "保存权限", exact: true }).click();
+		const expectedIds = scope === "spaces" ? [space.id] : [];
+		expect((await submitted).postDataJSON()).toMatchObject({ scope, space_ids: expectedIds });
+		await expect(editor).not.toBeVisible();
+		const listed = await admin.json<{
+			items: { id: string; scope: string; space_ids: string[] }[];
+		}>("/keys");
+		expect(listed.items.find((key) => key.id === created.key.id)).toMatchObject({
+			scope,
+			space_ids: expectedIds,
+		});
+	});
+}
+
 test("mint once, copy, close, refresh, and revoke a real API key", async ({
 	page,
 	context,

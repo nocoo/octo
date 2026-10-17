@@ -116,10 +116,13 @@ function KeyForm({
 					expires_at: expiry ? new Date(expiry).toISOString() : null,
 					permissions: {
 						...permissions,
-						space_ids: spaces
-							.split(",")
-							.map((space) => space.trim())
-							.filter(Boolean),
+						space_ids:
+							permissions.scope === "spaces"
+								? spaces
+										.split(",")
+										.map((space) => space.trim())
+										.filter(Boolean)
+								: [],
 					},
 				});
 			}}
