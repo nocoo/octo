@@ -90,7 +90,7 @@ CREATE INDEX audit_actor_at ON audit_log(actor, at);
 
 - 在响应发出后用 `ctx.waitUntil` 写入，不阻塞请求；写失败记到 observability 日志。
 - 绝不记录请求体、正文或 key。
-- 保留期待定（见 99），默认永久保留。
+- 永久保留（Zheng 2026-10-17 决定）；dashboard 健康页监控 D1 体积。
 
 ## 6. 用量统计（替代速率限制）
 

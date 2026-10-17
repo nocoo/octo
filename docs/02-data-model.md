@@ -187,4 +187,4 @@ D1 提交后，再写 Vectorize（upsert 或 delete），成功后回填 `indexe
 ## 8. R2 键
 
 - `att/<memory_id>/<attachment_id>`；对象 metadata 存 `sha256`、`content_type`。
-- 上传经过 Worker（单个附件 ≤ 50 MB，低于 Workers 付费版的请求体上限）。下载默认由 Worker 鉴权后从 R2 流式返回；以后的 CDN 方案见 99。
+- 上传经过 Worker（单个附件 ≤ 50 MB，低于 Workers 付费版的请求体上限）。下载用**短时签名 URL**：鉴权后的 `GET /attachments/:id/url` 返回 `…/files/<r2_key>?exp=<unix>&sig=<HMAC-SHA256(ATTACHMENT_URL_SECRET, r2_key|exp)>`，有效期默认 5 分钟；校验签名后从 R2 流式返回。现在由 Worker 的 `/files/*` 路由校验；以后 Zheng 配好 CDN 域名，只需要把 URL 的 host 换成 CDN 域名，由 CDN 侧一个很薄的 Worker 用同一个 secret 校验，客户端不用改。

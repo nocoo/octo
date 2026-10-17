@@ -33,7 +33,7 @@
 | L2 | Worker `17059`；JWKS stub 在 L2 范围内另外分配 | `.wrangler/e2e/<run-id>` |
 | L3 | Worker `27059` | `.wrangler/e2e-pw/<run-id>` |
 
-- **端口 7059 是提议值，还没有正式预留。** 现有记录：7057 = rhino，7058 已被 workflow Caddyfile 占用。开工第一步要：在 nmem 查最新的预留情况，确认 7059 / 17059 / 27059 / 37059 都能 bind，再在 nmem 记录 `octo-local-ports`，并在 `/opt/homebrew/etc/Caddyfile` 和 `workflow/caddy/Caddyfile` 同时加上 `octo.dev.hexly.ai` 的映射（照 `system0-dev-machine-caddy` 的模板：HTTP → HTTPS 跳转 + mkcert 证书 + `reverse_proxy localhost:7059`）。改 workflow 仓库要走它自己的维护流程，本仓库不改。
+- **端口 7059 系列已获 Zheng 批准（2026-10-17）**，nmem 记录 `octo-local-ports`。`octo.dev.hexly.ai` 的映射写在本机 `/opt/homebrew/etc/Caddyfile`（照 `system0-dev-machine-caddy` 的模板：HTTP → HTTPS 跳转 + mkcert 证书 + `reverse_proxy localhost:7059`）；`workflow/caddy/Caddyfile` 副本由 workflow 维护 bot 同步，本仓库不改 workflow。
 - `*.dev.hexly.ai` 通配证书已经覆盖了这个域名，不需要动证书。
 - 日常开发、截图、验收都用 HTTPS 域名；loopback 只作为内部上游和自动化测试的端点。
 - `bun run dev` 同时启动 Vite 和 wrangler sidecar，跑在 herdr 同一个 space 里名为 `dev server` 的 tab 中（机器规则：不在后台跑）。

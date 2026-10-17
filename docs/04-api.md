@@ -99,7 +99,8 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 |---|---|---|---|
 | POST | `/memories/:id/attachments` | update | `multipart/form-data` 或原始 body + `Content-Type` + `X-Filename`；返回附件元数据和 markdown 引用 `![](octo://att/<id>)` |
 | GET | `/memories/:id/attachments` | read | 列表 |
-| GET | `/attachments/:id/content` | read | 流式返回；`Content-Disposition`、`ETag`=sha256；SVG 强制 `attachment` 下载 |
+| GET | `/attachments/:id/url` | read | 返回短时签名 URL `{url, expires_at}`（默认 5 分钟，见 02 §8） |
+| GET | `/files/<r2_key>?exp&sig` | 签名 | 不需要 API key；签名和有效期校验通过后流式返回；`Content-Disposition`、`ETag`=sha256；SVG 强制 `attachment` 下载 |
 | DELETE | `/attachments/:id` | delete | 软删除（随 memory purge 时物理删除） |
 
 ### 回收站

@@ -43,7 +43,7 @@ Details: [docs/07-dev-workflow.md](docs/07-dev-workflow.md).
 
 ## Resources and isolation
 
-| Lane | Ports (proposed, pending reservation) | Boundary |
+| Lane | Ports (approved 2026-10-17, nmem `octo-local-ports`) | Boundary |
 |---|---|---|
 | Daily dev | Vite 7059, Worker 37059 | Caddy `octo.dev.hexly.ai`; local D1/R2 |
 | L2 | 17059 | per-run `.wrangler/e2e/<run-id>` |
