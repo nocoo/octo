@@ -19,7 +19,7 @@ export class GatewayEmbedder implements QueryEmbedder {
 		try {
 			const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}/v1/embeddings`, {
 				method: "POST",
-				redirect: "error",
+				redirect: "manual",
 				headers: {
 					Authorization: `Bearer ${this.config.apiKey}`,
 					"Content-Type": "application/json",

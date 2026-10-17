@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GatewayEmbedder } from "./gateway";
 
 const config = { baseUrl: "http://127.0.0.1:9/", apiKey: "k", model: "m", dims: 2 };
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+});
 
 describe("GatewayEmbedder", () => {
 	it("strips a trailing slash from the base URL", async () => {
@@ -21,6 +24,29 @@ describe("GatewayEmbedder", () => {
 		);
 		await expect(new GatewayEmbedder(config).embed(["x"])).rejects.toThrow("embedder status 500");
 	});
+
+	it.each([300, 301, 302, 303, 304, 305, 307, 308, 399])(
+		"rejects status %i without following Location or reading its body",
+		async (status) => {
+			const response = new Response(status === 304 ? null : "untrusted upstream body", {
+				status,
+				headers: { Location: "https://untrusted.example/private" },
+			});
+			const readBody = vi.spyOn(response, "json");
+			const fetcher = vi.fn(async (_input: RequestInfo, init: RequestInit) => {
+				expect(init.redirect).toBe("manual");
+				return response;
+			});
+			vi.stubGlobal("fetch", fetcher);
+			await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toEqual(
+				new Error(`embedder status ${status}`),
+			);
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			expect(String(fetcher.mock.calls[0]?.[0])).toBe("http://127.0.0.1:9/v1/embeddings");
+			expect(readBody).not.toHaveBeenCalled();
+			expect(response.bodyUsed).toBe(false);
+		},
+	);
 
 	it("rejects a missing embedding", async () => {
 		vi.stubGlobal(
@@ -100,7 +126,7 @@ it("blocks credential-bearing redirects and exposes only safe dimension metadata
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async (_input: RequestInfo, init: RequestInit) => {
-			expect(init.redirect).toBe("error");
+			expect(init.redirect).toBe("manual");
 			expect(new Headers(init.headers).get("User-Agent")).toMatch(/^octo\//);
 			return Response.json({ data: [{ embedding: [1, 2, 3] }] });
 		}),
