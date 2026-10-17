@@ -9,7 +9,7 @@ test("search, read, edit, resolve a real stale-version conflict, and rollback", 
 	const path = `/memories/${encodeURIComponent(memory.id)}`;
 	await page.goto("/search");
 	await page.getByRole("textbox", { name: "搜索记忆", exact: true }).fill(memory.title);
-	await page.getByRole("button", { name: "搜索", exact: true }).click();
+	await page.getByRole("main").getByRole("button", { name: "搜索", exact: true }).click();
 	await page.getByRole("link", { name: memory.title, exact: true }).click();
 	await expect(page).toHaveURL(new RegExp(`${path}$`));
 	await expect(page.getByRole("heading", { name: memory.title, exact: true })).toBeVisible();

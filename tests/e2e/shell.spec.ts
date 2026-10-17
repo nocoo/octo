@@ -88,6 +88,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 			const errors: string[] = [];
 			page.on("pageerror", (error) => errors.push(error.message));
 			await page.getByRole("button", { name: "搜索与命令", exact: true }).click();
+			await expect(page.getByRole("listbox")).toHaveAccessibleName("搜索结果");
 			await page.getByRole("combobox", { name: "搜索页面或记忆", exact: true }).fill("设置");
 			await page.getByRole("option", { name: "设置", exact: true }).click();
 			await expect(page).toHaveURL(/\/settings$/);

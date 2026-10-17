@@ -331,7 +331,7 @@ export function AppShell() {
 					value={query}
 					onValueChange={setQuery}
 				/>
-				<CommandList>
+				<CommandList label="搜索结果">
 					<CommandEmpty>没有匹配页面，按搜索命令查找记忆。</CommandEmpty>
 					<CommandGroup heading="页面">
 						{navigation.map((item) => (
