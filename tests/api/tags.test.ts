@@ -7,7 +7,7 @@ const pepper = "change-me-api-key-pepper";
 
 async function d1(sql: string, json = false): Promise<string> {
 	const exec = await e2eD1();
-	return exec(json ? ["--json", "--command", sql] : ["--command", sql]);
+	return exec(json ? ["--command", sql, "--json"] : ["--command", sql]);
 }
 
 function rows<T>(stdout: string): T[] {

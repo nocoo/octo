@@ -8,9 +8,11 @@ const state = vi.hoisted(() => ({
 		throw new Error("fixture not initialized");
 	},
 }));
-vi.mock("../../../../../scripts/local-d1", async (importOriginal) => ({
-	...(await importOriginal<typeof import("../../../../../scripts/local-d1")>()),
-	createAsyncD1Exec: () => async (args: string[]) => state.exec(args),
+vi.mock("../../../../../scripts/fixture-d1", () => ({
+	openFixtureD1: async () => ({
+		exec: async (args: string[]) => state.exec(args),
+		dispose: async () => {},
+	}),
 }));
 let fixture: ReturnType<typeof sqliteD1>;
 beforeAll(() => {

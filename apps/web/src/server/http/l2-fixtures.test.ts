@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	disposeE2eD1,
 	e2eD1,
 	effectCount,
 	query,
@@ -11,21 +12,22 @@ import {
 const state = vi.hoisted(() => ({
 	exec: vi.fn<(args: string[]) => Promise<string>>(),
 	create: vi.fn(),
+	dispose: vi.fn(async () => {}),
 }));
-vi.mock("../../../../../scripts/local-d1", async (importOriginal) => ({
-	...(await importOriginal<typeof import("../../../../../scripts/local-d1")>()),
-	createAsyncD1Exec: (...args: string[]) => {
-		state.create(...args);
-		return state.exec;
-	},
+vi.mock("../../../../../scripts/fixture-d1", () => ({
+	openFixtureD1: (...args: string[]) => state.create(...args),
 }));
 beforeEach(() => {
 	state.exec.mockReset();
-	state.create.mockClear();
+	state.create.mockReset().mockResolvedValue({ exec: state.exec, dispose: state.dispose });
+	state.dispose.mockClear();
 	vi.stubEnv("OCTO_PERSIST", "isolated-run");
 	vi.stubEnv("OCTO_CONFIG", "isolated.toml");
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(async () => {
+	await disposeE2eD1();
+	vi.unstubAllEnvs();
+});
 
 function deferred() {
 	let resolve!: (stdout: string) => void;
@@ -44,6 +46,33 @@ async function remainsPending(promise: Promise<unknown>) {
 }
 
 describe("L2 async fixture call sites", () => {
+	it("reuses one local runtime for repeated fixture access in an isolated process", async () => {
+		state.exec.mockResolvedValue('[{"results":[{"value":"test"}]}]');
+		await e2eD1();
+		await e2eD1();
+		expect(state.create).toHaveBeenCalledTimes(1);
+	});
+	it("disposes once after access, including a failed marker check", async () => {
+		state.exec.mockResolvedValue('[{"results":[{"value":"production"}]}]');
+		await expect(e2eD1()).rejects.toThrow("env=test");
+		await disposeE2eD1();
+		await disposeE2eD1();
+		expect(state.dispose).toHaveBeenCalledTimes(1);
+	});
+	it("propagates startup failures without retrying or inventing a runtime to dispose", async () => {
+		state.create.mockRejectedValueOnce(new Error("runtime failed"));
+		await expect(e2eD1()).rejects.toThrow("runtime failed");
+		await disposeE2eD1();
+		expect(state.create).toHaveBeenCalledTimes(1);
+		expect(state.dispose).not.toHaveBeenCalled();
+	});
+	it("refuses switching a live session to a different run", async () => {
+		state.exec.mockResolvedValue('[{"results":[{"value":"test"}]}]');
+		await e2eD1();
+		vi.stubEnv("OCTO_PERSIST", "other-run");
+		await expect(e2eD1()).rejects.toThrow("cannot change isolated runs");
+		expect(state.create).toHaveBeenCalledTimes(1);
+	});
 	it("does not expose an executor until the isolated marker check completes", async () => {
 		const marker = deferred();
 		state.exec.mockReturnValueOnce(marker.promise).mockResolvedValue("[]");
@@ -55,12 +84,7 @@ describe("L2 async fixture call sites", () => {
 			"SELECT value FROM _test_marker WHERE key = 'env'",
 			"--json",
 		]);
-		expect(state.create).toHaveBeenCalledWith(
-			expect.stringContaining("wrangler"),
-			expect.any(String),
-			"isolated-run",
-			"isolated.toml",
-		);
+		expect(state.create).toHaveBeenCalledExactlyOnceWith("isolated-run", "isolated.toml");
 		marker.resolve('[{"results":[{"value":"test"}]}]');
 		const d1 = await pending;
 		await seedKey(d1);

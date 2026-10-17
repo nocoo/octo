@@ -1,11 +1,9 @@
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { APP_VERSION } from "../../apps/web/src/lib/version";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { encodeFloat32Vector, l2Normalize } from "../../apps/web/src/server/search/math";
-import { root } from "../../scripts/e2e";
-import { assertAsyncTestMarker, createAsyncD1Exec } from "../../scripts/local-d1";
-import { query, sqlText } from "../fixtures/l2-batch";
+import { assertAsyncTestMarker } from "../../scripts/local-d1";
+import { e2eD1, query, sqlText } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const pepper = "change-me-api-key-pepper";
@@ -20,15 +18,8 @@ const vector = { profile: "te3-small-1536", values: [3, 4, ...Array<number>(1534
 const tokens: Record<string, string> = {};
 const keyIds: Record<string, string> = {};
 
-function e2eD1() {
-	const persist = process.env.OCTO_PERSIST;
-	const config = process.env.OCTO_CONFIG;
-	if (!persist || !config) throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	return createAsyncD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-}
-
 async function cleanup() {
-	const d1 = e2eD1();
+	const d1 = await e2eD1();
 	await assertAsyncTestMarker(d1);
 	await d1([
 		"--command",
@@ -50,7 +41,7 @@ DELETE FROM api_keys WHERE name LIKE 'search-l2-%';`,
 
 beforeAll(async () => {
 	await cleanup();
-	const d1 = e2eD1();
+	const d1 = await e2eD1();
 	await assertAsyncTestMarker(d1);
 	const now = Date.now();
 	const commands: string[] = [];
@@ -310,7 +301,7 @@ describe.each(["search", "memories:batchGet"])("%s read-only idempotency boundar
 	const changed =
 		path === "search" ? { query: "definitelyabsent", mode: "fts" } : { ids: [HIDDEN] };
 	async function assertNoOutcome() {
-		const d1 = e2eD1();
+		const d1 = await e2eD1();
 		await assertAsyncTestMarker(d1);
 		const counts = await query<{ records: number; chunks: number }>(
 			d1,
@@ -339,7 +330,7 @@ describe.each(["search", "memories:batchGet"])("%s read-only idempotency boundar
 		const first = await post(path, original, "replay-reader", false, key);
 		expect(first.status).toBe(200);
 		expect(await first.json()).toMatchObject({ items: [{ id: VISIBLE }] });
-		const d1 = e2eD1();
+		const d1 = await e2eD1();
 		await assertAsyncTestMarker(d1);
 		const id = sqlText(keyIds["replay-reader"] as string);
 		try {

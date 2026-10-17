@@ -13,10 +13,15 @@ vi.mock("../../../../../scripts/local-d1", async (importOriginal) => ({
 	createD1Exec: () => {
 		throw new Error("M3 HTTP fixtures must use the awaited async executor");
 	},
-	createAsyncD1Exec: () => async (args: string[]) => {
-		await new Promise<void>((resolve) => setImmediate(resolve));
-		return state.exec(args);
-	},
+}));
+vi.mock("../../../../../scripts/fixture-d1", () => ({
+	openFixtureD1: async () => ({
+		exec: async (args: string[]) => {
+			await new Promise<void>((resolve) => setImmediate(resolve));
+			return state.exec(args);
+		},
+		dispose: async () => {},
+	}),
 }));
 let fixture: ReturnType<typeof sqliteD1>;
 beforeAll(() => {

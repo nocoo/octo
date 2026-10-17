@@ -1,7 +1,7 @@
-import { join } from "node:path";
+import { afterAll } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
-import { root } from "../../scripts/e2e";
-import { type AsyncD1Exec, assertAsyncTestMarker, createAsyncD1Exec } from "../../scripts/local-d1";
+import { type FixtureD1Session, openFixtureD1 } from "../../scripts/fixture-d1";
+import { type AsyncD1Exec, assertAsyncTestMarker } from "../../scripts/local-d1";
 
 export const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 export const input = { space: "kb", title: "title", body: "body", type: "note", tags: [] };
@@ -12,13 +12,31 @@ export type BatchBody = {
 		error?: { code: string };
 	}>;
 };
+let session: { persist: string; config: string; opened: Promise<FixtureD1Session> } | undefined;
+
+export async function disposeE2eD1(): Promise<void> {
+	const active = session;
+	session = undefined;
+	if (active)
+		await active.opened.then(
+			(runtime) => runtime.dispose(),
+			() => {},
+		);
+}
+
+afterAll(disposeE2eD1);
+
 export async function e2eD1(): Promise<AsyncD1Exec> {
 	const persist = process.env.OCTO_PERSIST;
 	const config = process.env.OCTO_CONFIG;
 	if (!persist || !config) throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	const d1 = createAsyncD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-	await assertAsyncTestMarker(d1);
-	return d1;
+	if (session && (session.persist !== persist || session.config !== config)) {
+		throw new Error("fixture D1 cannot change isolated runs before disposal");
+	}
+	session ??= { persist, config, opened: openFixtureD1(persist, config) };
+	const runtime = await session.opened;
+	await assertAsyncTestMarker(runtime.exec);
+	return runtime.exec;
 }
 export function sqlText(value: string): string {
 	return `'${value.replaceAll("'", "''")}'`;

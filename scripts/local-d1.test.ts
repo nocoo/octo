@@ -8,7 +8,6 @@ import {
 	applyMigrations,
 	assertAsyncTestMarker,
 	assertTestMarker,
-	createAsyncD1Exec,
 	createD1Exec,
 	ensureLocalSchema,
 	readTestMarkerValue,
@@ -19,12 +18,8 @@ import {
 import { migrationSqlForNode } from "./sqlite-test";
 
 const execute = vi.hoisted(() => vi.fn(() => "[]"));
-const executeAsync = vi.hoisted(() => vi.fn(async () => ({ stdout: "[]" })));
 vi.mock("node:child_process", () => ({
 	execFileSync: execute,
-	execFile: Object.assign(vi.fn(), {
-		[Symbol.for("nodejs.util.promisify.custom")]: executeAsync,
-	}),
 }));
 
 describe("local-d1", () => {
@@ -121,20 +116,6 @@ describe("local-d1", () => {
 		expect(d1(["--json"])).toBe("[]");
 		expect(execute).toHaveBeenCalled();
 		ensureLocalSchema();
-	});
-
-	it("executes fixture commands without blocking the event loop", async () => {
-		const syncCalls = execute.mock.calls.length;
-		const d1 = createAsyncD1Exec("/bin/wrangler", "/repo", "isolated", "cfg.toml");
-		expect(await d1(["--command", "SELECT 1"])).toBe("[]");
-		expect(executeAsync).toHaveBeenCalledWith(
-			"/bin/wrangler",
-			wranglerD1Args(["--command", "SELECT 1"], "isolated", "cfg.toml"),
-			{ cwd: "/repo", encoding: "utf8" },
-		);
-		expect(execute.mock.calls.length).toBe(syncCalls);
-		executeAsync.mockRejectedValueOnce(new Error("fixture command failed"));
-		await expect(d1(["--json"])).rejects.toThrow("fixture command failed");
 	});
 
 	it("requires the async fixture marker before mutations", async () => {
