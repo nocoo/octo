@@ -73,8 +73,13 @@ describe("spaces routes", () => {
 		const app = createApp();
 		const listed = await app.request("/api/v1/spaces", { headers }, envFor(db));
 		expect(listed.status).toBe(200);
-		const body = (await listed.json()) as { spaces: Array<{ slug: string }> };
-		expect(body.spaces.map((s) => s.slug)).toEqual(["kb-bot"]);
+		const body = (await listed.json()) as {
+			items: Array<{ slug: string; created_at: string }>;
+			next_cursor: string | null;
+		};
+		expect(body.next_cursor).toBeNull();
+		expect(body.items.map((s) => s.slug)).toEqual(["kb-bot"]);
+		expect(body.items[0]?.created_at).toBe("1970-01-01T00:00:00.001Z");
 		const one = await app.request("/api/v1/spaces/kb-bot", { headers }, envFor(db));
 		expect(one.status).toBe(200);
 		const hidden = await app.request("/api/v1/spaces/secret", { headers }, envFor(db));

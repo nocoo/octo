@@ -49,9 +49,16 @@ export class FakeD1 {
 	tags = new Map<string, TagRec>();
 	spaces = new Map<string, SpaceRec>();
 	keys = new Map<string, KeyRec>();
-	memories = new Map<string, { id: string; space_id: string; deleted_at: number | null }>();
+	memories = new Map<
+		string,
+		{ id: string; space_id: string; deleted_at: number | null; title?: string; body?: string }
+	>();
 	memoryTags: Array<{ memory_id: string; tag_id: string }> = [];
 	changes: Array<Record<string, unknown>> = [];
+	fts = new Map<string, string>();
+	hiddenNames = new Set<string>();
+	blockMerge = false;
+	hideSlug = false;
 
 	prepare(sql: string): Stmt {
 		const self = this;
@@ -125,8 +132,21 @@ export class FakeD1 {
 			return [];
 		}
 		if (sql.includes("FROM tags WHERE name = ?")) {
-			const found = [...this.tags.values()].find((t) => t.name === binds[0]);
+			const name = String(binds[0]);
+			if (this.hiddenNames.has(name)) {
+				return [];
+			}
+			const found = [...this.tags.values()].find((t) => t.name === name);
 			return found ? [found] : [];
+		}
+		if (sql.includes("stale_tag_merge")) {
+			const fromId = String(binds[0]);
+			const intoId = String(binds[1]);
+			const tag = this.tags.get(fromId);
+			if (tag?.merged_into !== intoId) {
+				throw new Error("stale_tag_merge");
+			}
+			return [{ 1: 1 }];
 		}
 		if (sql.includes("FROM tags WHERE id = ?")) {
 			const found = this.tags.get(String(binds[0]));
@@ -161,6 +181,10 @@ export class FakeD1 {
 		}
 		if (sql.includes("UPDATE tags SET name = ?")) {
 			const [name, display, updated, id] = binds as [string, string, number, string];
+			const clash = [...this.tags.values()].find((t) => t.name === name && t.id !== id);
+			if (clash) {
+				throw new Error("UNIQUE constraint failed: tags.name");
+			}
 			const tag = this.tags.get(id);
 			if (tag) {
 				tag.name = name;
@@ -170,11 +194,70 @@ export class FakeD1 {
 			return [];
 		}
 		if (sql.includes("UPDATE tags SET merged_into = ?")) {
-			const [into, updated, id] = binds as [string, number, string];
+			const [into, updated, id, intoCheck] = binds as [string, number, string, string?];
 			const tag = this.tags.get(id);
-			if (tag) {
+			const target = this.tags.get(intoCheck ?? into);
+			if (
+				!this.blockMerge &&
+				tag &&
+				tag.merged_into === null &&
+				target &&
+				target.merged_into === null
+			) {
 				tag.merged_into = into;
 				tag.updated_at = updated;
+			}
+			return [];
+		}
+		if (sql.includes("INSERT INTO changes") && sql.includes("SELECT 'memory'")) {
+			const [actor, ts, fromId] = binds as [string, number, string];
+			for (const link of this.memoryTags) {
+				if (link.tag_id !== fromId) {
+					continue;
+				}
+				const mem = this.memories.get(link.memory_id);
+				if (mem) {
+					this.changes.push({
+						op: "tag_merged",
+						entity_id: mem.id,
+						space_id: mem.space_id,
+						actor,
+						at: ts,
+					});
+				}
+			}
+			return [];
+		}
+		if (sql.includes("FROM changes WHERE op = 'tag_merged'")) {
+			const [actor, ts] = binds as [string, number];
+			const n = this.changes.filter(
+				(row) => row.op === "tag_merged" && row.actor === actor && row.at === ts,
+			).length;
+			return [{ n }];
+		}
+		if (sql.includes("DELETE FROM memories_fts_map")) {
+			return [];
+		}
+		if (sql.includes("DELETE FROM memories_fts")) {
+			const tagIds = new Set(binds.map(String));
+			for (const link of this.memoryTags) {
+				if (tagIds.has(link.tag_id)) {
+					this.fts.delete(link.memory_id);
+				}
+			}
+			return [];
+		}
+		if (sql.includes("INSERT INTO memories_fts")) {
+			const tagIds = new Set(binds.map(String));
+			const memIds = new Set(
+				this.memoryTags.filter((link) => tagIds.has(link.tag_id)).map((link) => link.memory_id),
+			);
+			for (const memId of memIds) {
+				const names = this.memoryTags
+					.filter((link) => link.memory_id === memId)
+					.map((link) => this.tags.get(link.tag_id)?.name)
+					.filter((name): name is string => Boolean(name));
+				this.fts.set(memId, names.join(" "));
 			}
 			return [];
 		}
@@ -202,6 +285,30 @@ export class FakeD1 {
 			this.changes.push({ sql, binds: [...binds] });
 			return [];
 		}
+		if (sql.includes("INSERT INTO spaces") && sql.includes("ON CONFLICT")) {
+			const [id, slug, name, description, owner, created, updated] = binds as [
+				string,
+				string,
+				string,
+				string,
+				string | null,
+				number,
+				number,
+			];
+			if ([...this.spaces.values()].some((space) => space.slug === slug)) {
+				return [];
+			}
+			this.spaces.set(id, {
+				id,
+				slug,
+				name,
+				description,
+				owner_key_id: owner,
+				created_at: created,
+				updated_at: updated,
+			});
+			return [];
+		}
 		if (sql.includes("INSERT INTO spaces")) {
 			const [id, slug, name, description, owner, created, updated] = binds as [
 				string,
@@ -227,6 +334,9 @@ export class FakeD1 {
 			return [...this.spaces.values()].filter((s) => s.owner_key_id === binds[0]);
 		}
 		if (sql.includes("FROM spaces WHERE slug = ?")) {
+			if (this.hideSlug) {
+				return [];
+			}
 			const found = [...this.spaces.values()].find((s) => s.slug === binds[0]);
 			return found ? [found] : [];
 		}

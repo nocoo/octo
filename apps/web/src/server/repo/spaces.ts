@@ -68,36 +68,22 @@ export async function ensureAutoOwnSpace(
 	if (owned) {
 		return owned;
 	}
-	const bySlug = await db
+	const ts = now();
+	await db
+		.prepare(
+			"INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(slug) DO NOTHING",
+		)
+		.bind(id(), key.name, key.name, "", key.id, ts, ts)
+		.run();
+	const row = await db
 		.prepare("SELECT * FROM spaces WHERE slug = ?")
 		.bind(key.name)
 		.first<SpaceRow>();
-	if (bySlug) {
+	if (!row) {
+		throw new ApiError("internal", "failed to ensure own space");
+	}
+	if (row.owner_key_id !== key.id) {
 		throw new ApiError("unprocessable", "own space slug is taken");
 	}
-	const ts = now();
-	const row: SpaceRow = {
-		id: id(),
-		slug: key.name,
-		name: key.name,
-		description: "",
-		owner_key_id: key.id,
-		created_at: ts,
-		updated_at: ts,
-	};
-	await db
-		.prepare(
-			"INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		)
-		.bind(
-			row.id,
-			row.slug,
-			row.name,
-			row.description,
-			row.owner_key_id,
-			row.created_at,
-			row.updated_at,
-		)
-		.run();
 	return row;
 }

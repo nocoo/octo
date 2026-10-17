@@ -57,6 +57,15 @@ describe("createApp", () => {
 });
 
 describe("worker", () => {
+	it("refuses v1 keys outside the test injector", async () => {
+		const res = await createApp().request(
+			"/api/v1/tags",
+			{ headers: { Authorization: "Bearer octo_abcdefghijkl_secret" } },
+			env(),
+		);
+		expect(res.status).toBe(401);
+	});
+
 	it("delegates fetch to the app", async () => {
 		const res = await worker.fetch(
 			new Request("http://octo.local/api/live"),

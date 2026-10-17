@@ -7,6 +7,11 @@ export async function probeD1(db: D1Database): Promise<boolean> {
 	}
 }
 
+export function isUniqueConstraint(err: unknown, table: string): boolean {
+	const msg = err instanceof Error ? err.message : String(err);
+	return /UNIQUE constraint failed/i.test(msg) && msg.includes(table);
+}
+
 export async function readTestMarker(db: D1Database): Promise<string | null> {
 	try {
 		const row = await db

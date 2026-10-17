@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { visibleSpaceIds } from "../../auth/authorize";
 import type { AppVars, Env } from "../../env";
 import { ApiError, jsonOk } from "../../lib/errors";
+import { listEnvelope, serializeSpace } from "../../lib/http";
 import { SpaceRepo } from "../../repo/spaces";
 
 async function listedIds(db: D1Database, key: AppVars["apiKey"]): Promise<string[]> {
@@ -22,7 +23,7 @@ export function spacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			throw new ApiError("forbidden", "forbidden");
 		}
 		const spaces = await new SpaceRepo(c.env.DB).listVisible(await listedIds(c.env.DB, key));
-		return jsonOk({ spaces });
+		return jsonOk(listEnvelope(spaces.map(serializeSpace)));
 	});
 
 	app.get("/:slug", async (c) => {
@@ -37,7 +38,7 @@ export function spacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		if (!space) {
 			throw new ApiError("not_found", "not found");
 		}
-		return jsonOk({ space });
+		return jsonOk(serializeSpace(space));
 	});
 
 	return app;

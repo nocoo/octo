@@ -92,4 +92,31 @@ describe("ensureAutoOwnSpace", () => {
 			ensureAutoOwnSpace(asD1(db), { id: "k1", name: "kb-bot", auto_own_space: 1 }),
 		).rejects.toMatchObject({ code: "unprocessable" });
 	});
+
+	it("returns the space created by a concurrent insert of the same key", async () => {
+		const db = new FakeD1();
+		db.spaces.set("s", {
+			id: "s",
+			slug: "kb-bot",
+			name: "kb-bot",
+			description: "",
+			owner_key_id: "k1",
+			created_at: 1,
+			updated_at: 1,
+		});
+		const row = await ensureAutoOwnSpace(asD1(db), {
+			id: "k1",
+			name: "kb-bot",
+			auto_own_space: 1,
+		});
+		expect(row?.id).toBe("s");
+	});
+
+	it("fails closed if the slug row cannot be read", async () => {
+		const db = new FakeD1();
+		db.hideSlug = true;
+		await expect(
+			ensureAutoOwnSpace(asD1(db), { id: "k1", name: "kb-bot", auto_own_space: 1 }),
+		).rejects.toMatchObject({ code: "internal" });
+	});
 });

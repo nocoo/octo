@@ -1,3 +1,4 @@
+import { isUniqueConstraint } from "../lib/d1";
 import { ApiError } from "../lib/errors";
 import { newUlid } from "../lib/ulid";
 
@@ -132,16 +133,27 @@ export class TagRepo {
 			});
 		}
 		const ts = this.now();
-		await this.db.batch([
-			this.db
-				.prepare("UPDATE tags SET name = ?, display_name = ?, updated_at = ? WHERE id = ?")
-				.bind(toName, toDisplay, ts, from.id),
-			this.db
-				.prepare(
-					"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) VALUES ('tag', ?, NULL, 'tag_renamed', NULL, ?, ?)",
-				)
-				.bind(from.id, actor, ts),
-		]);
+		try {
+			await this.db.batch([
+				this.db
+					.prepare("UPDATE tags SET name = ?, display_name = ?, updated_at = ? WHERE id = ?")
+					.bind(toName, toDisplay, ts, from.id),
+				this.db
+					.prepare(
+						"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) VALUES ('tag', ?, NULL, 'tag_renamed', NULL, ?, ?)",
+					)
+					.bind(from.id, actor, ts),
+				...this.ftsRebuildStmts(from.id),
+			]);
+		} catch (err) {
+			if (isUniqueConstraint(err, "tags")) {
+				throw new ApiError("tag_conflict", "tag name already exists", {
+					suggest: "merge",
+					into: toName,
+				});
+			}
+			throw err;
+		}
 		return { ...from, name: toName, display_name: toDisplay, updated_at: ts };
 	}
 
@@ -160,35 +172,65 @@ export class TagRepo {
 		if (from.id === into.id) {
 			throw new ApiError("validation_failed", "cannot merge a tag into itself");
 		}
-		const { results } = await this.db
-			.prepare(
-				"SELECT mt.memory_id AS memory_id, m.space_id AS space_id FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?",
-			)
-			.bind(from.id)
-			.all<{ memory_id: string; space_id: string }>();
-		const affected = results;
 		const ts = this.now();
-		const stmts: D1PreparedStatement[] = [
-			this.db
-				.prepare(
-					"DELETE FROM memory_tags WHERE tag_id = ? AND memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id = ?)",
-				)
-				.bind(from.id, into.id),
-			this.db.prepare("UPDATE memory_tags SET tag_id = ? WHERE tag_id = ?").bind(into.id, from.id),
-			this.db
-				.prepare("UPDATE tags SET merged_into = ?, updated_at = ? WHERE id = ?")
-				.bind(into.id, ts, from.id),
-		];
-		for (const mem of affected) {
-			stmts.push(
+		try {
+			await this.db.batch([
 				this.db
 					.prepare(
-						"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) VALUES ('memory', ?, ?, 'tag_merged', NULL, ?, ?)",
+						"UPDATE tags SET merged_into = ?, updated_at = ? WHERE id = ? AND merged_into IS NULL AND EXISTS (SELECT 1 FROM tags t WHERE t.id = ? AND t.merged_into IS NULL)",
 					)
-					.bind(mem.memory_id, mem.space_id, actor, ts),
-			);
+					.bind(into.id, ts, from.id, into.id),
+				this.db
+					.prepare(
+						"SELECT CASE WHEN (SELECT merged_into FROM tags WHERE id = ?) = ? THEN 1 ELSE RAISE(ABORT, 'stale_tag_merge') END",
+					)
+					.bind(from.id, into.id),
+				this.db
+					.prepare(
+						"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', mt.memory_id, m.space_id, 'tag_merged', NULL, ?, ? FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?",
+					)
+					.bind(actor, ts, from.id),
+				this.db
+					.prepare(
+						"DELETE FROM memory_tags WHERE tag_id = ? AND memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id = ?)",
+					)
+					.bind(from.id, into.id),
+				this.db
+					.prepare("UPDATE memory_tags SET tag_id = ? WHERE tag_id = ?")
+					.bind(into.id, from.id),
+				...this.ftsRebuildStmts(into.id, from.id),
+			]);
+		} catch (err) {
+			if (String(err).includes("stale_tag_merge")) {
+				throw new ApiError("unprocessable", "tag merge is stale");
+			}
+			throw err;
 		}
-		await this.db.batch(stmts);
-		return { from, into, memories: affected.length };
+		const count = await this.db
+			.prepare("SELECT COUNT(*) AS n FROM changes WHERE op = 'tag_merged' AND actor = ? AND at = ?")
+			.bind(actor, ts)
+			.first<{ n: number }>();
+		return { from, into, memories: Number(count?.n ?? 0) };
+	}
+
+	private ftsRebuildStmts(...tagIds: string[]): D1PreparedStatement[] {
+		const placeholders = tagIds.map(() => "?").join(",");
+		return [
+			this.db
+				.prepare(
+					`DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id IN (${placeholders})))`,
+				)
+				.bind(...tagIds),
+			this.db
+				.prepare(
+					`DELETE FROM memories_fts_map WHERE memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id IN (${placeholders}))`,
+				)
+				.bind(...tagIds),
+			this.db
+				.prepare(
+					`INSERT INTO memories_fts (title, body, tags) SELECT IFNULL(m.title, ''), IFNULL(m.body, ''), IFNULL((SELECT GROUP_CONCAT(t.name, ' ') FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id = m.id), '') FROM memories m WHERE m.id IN (SELECT memory_id FROM memory_tags WHERE tag_id IN (${placeholders}))`,
+				)
+				.bind(...tagIds),
+		];
 	}
 }

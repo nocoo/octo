@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { probeD1, readTestMarker } from "./d1";
+import { isUniqueConstraint, probeD1, readTestMarker } from "./d1";
 
 function stubD1(first: unknown | (() => never)): D1Database {
 	return {
@@ -21,6 +21,17 @@ function stubD1(first: unknown | (() => never)): D1Database {
 		}),
 	} as unknown as D1Database;
 }
+
+describe("isUniqueConstraint", () => {
+	it("detects sqlite unique failures for a table", () => {
+		expect(isUniqueConstraint(new Error("UNIQUE constraint failed: tags.name"), "tags")).toBe(true);
+		expect(isUniqueConstraint("UNIQUE constraint failed: spaces.slug", "spaces")).toBe(true);
+		expect(isUniqueConstraint(new Error("UNIQUE constraint failed: tags.name"), "spaces")).toBe(
+			false,
+		);
+		expect(isUniqueConstraint(new Error("boom"), "tags")).toBe(false);
+	});
+});
 
 describe("probeD1", () => {
 	it("returns true only for SELECT 1", async () => {

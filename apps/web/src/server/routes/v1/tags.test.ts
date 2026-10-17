@@ -66,7 +66,8 @@ describe("tags routes", () => {
 		);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({
-			tags: [{ id: "t1", name: "infra", display_name: "infra", use_count: 0 }],
+			items: [{ id: "t1", name: "infra", display_name: "infra", use_count: 0 }],
+			next_cursor: null,
 		});
 	});
 
@@ -133,6 +134,17 @@ describe("tags routes", () => {
 			envFor(db),
 		);
 		expect(badJson.status).toBe(400);
+		const padded = ` ${"n".repeat(64)} `;
+		const longOk = await app.request(
+			"/api/v1/tags/into/rename",
+			{
+				method: "POST",
+				headers,
+				body: JSON.stringify({ new_name: padded }),
+			},
+			envFor(db),
+		);
+		expect(longOk.status).toBe(200);
 	});
 
 	it("returns 401 when mounted without authz", async () => {

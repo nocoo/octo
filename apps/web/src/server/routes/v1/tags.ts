@@ -3,11 +3,12 @@ import { z } from "zod";
 import { authorize, visibleSpaceIds } from "../../auth/authorize";
 import type { AppVars, Env } from "../../env";
 import { ApiError, jsonOk } from "../../lib/errors";
+import { listEnvelope, serializeTag } from "../../lib/http";
 import { parseStrict, readJson } from "../../lib/validate";
 import { TagRepo } from "../../repo/tags";
 
-const renameSchema = z.strictObject({ new_name: z.string().min(1).max(64) });
-const mergeSchema = z.strictObject({ into: z.string().min(1).max(64) });
+const renameSchema = z.strictObject({ new_name: z.string().min(1) });
+const mergeSchema = z.strictObject({ into: z.string().min(1) });
 
 async function listedIds(db: D1Database, key: AppVars["apiKey"]): Promise<string[]> {
 	const vis = visibleSpaceIds(key);
@@ -27,7 +28,7 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			throw new ApiError("forbidden", "forbidden");
 		}
 		const tags = await new TagRepo(c.env.DB).listWithCounts(await listedIds(c.env.DB, key));
-		return jsonOk({ tags });
+		return jsonOk(listEnvelope(tags.map(serializeTag)));
 	});
 
 	app.post("/:name/rename", async (c) => {
@@ -42,7 +43,7 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			body.new_name,
 			`key:${key.id}`,
 		);
-		return jsonOk({ tag });
+		return jsonOk(serializeTag(tag));
 	});
 
 	app.post("/:name/merge", async (c) => {
@@ -58,8 +59,8 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			`key:${key.id}`,
 		);
 		return jsonOk({
-			from: result.from,
-			into: result.into,
+			from: serializeTag(result.from),
+			into: serializeTag(result.into),
 			memories: result.memories,
 		});
 	});

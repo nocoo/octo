@@ -16,7 +16,7 @@ describe("normalizeTag", () => {
 		expect(() => normalizeTag("   ")).toThrow(ApiError);
 		expect(() => normalizeTag("")).toThrow(ApiError);
 		expect(() => normalizeTag("x".repeat(65))).toThrow(ApiError);
-		expect(normalizeTag("x".repeat(64))).toBe("x".repeat(64));
+		expect(normalizeTag(` ${"x".repeat(64)} `)).toBe("x".repeat(64));
 	});
 });
 
@@ -133,6 +133,10 @@ describe("TagRepo", () => {
 		expect(db.changes).toHaveLength(1);
 		const same = await repo.rename("new", "NEW", "key:1");
 		expect(same.id).toBe("a");
+		db.hiddenNames.add("taken");
+		await expect(repo.rename("new", "taken", "key:1")).rejects.toMatchObject({
+			code: "tag_conflict",
+		});
 	});
 
 	it("merges tags in one batch with dedupe and change rows", async () => {
@@ -175,6 +179,20 @@ describe("TagRepo", () => {
 		await expect(repo.merge("missing", "into", "key:1")).rejects.toMatchObject({
 			code: "not_found",
 		});
+		expect(db.fts.get("m1")).toContain("into");
+		expect(db.fts.get("m2")).toContain("into");
+		db.blockMerge = true;
+		db.tags.set("c", {
+			id: "c",
+			name: "other",
+			display_name: "other",
+			merged_into: null,
+			created_at: 1,
+			updated_at: 1,
+		});
+		await expect(repo.merge("other", "into", "key:1")).rejects.toMatchObject({
+			code: "unprocessable",
+		});
 	});
 
 	it("rejects broken and cyclic redirects", async () => {
@@ -210,6 +228,32 @@ describe("TagRepo", () => {
 		await expect(repo.follow(db.tags.get("b1") as never)).rejects.toMatchObject({
 			code: "unprocessable",
 		});
+	});
+
+	it("rethrows unexpected rename and merge failures", async () => {
+		const db = new FakeD1();
+		db.tags.set("a", {
+			id: "a",
+			name: "old",
+			display_name: "old",
+			merged_into: null,
+			created_at: 1,
+			updated_at: 1,
+		});
+		db.tags.set("b", {
+			id: "b",
+			name: "into",
+			display_name: "into",
+			merged_into: null,
+			created_at: 1,
+			updated_at: 1,
+		});
+		const boom = asD1(db);
+		boom.batch = async () => {
+			throw new Error("boom");
+		};
+		await expect(new TagRepo(boom, () => 1).rename("old", "new", "key:1")).rejects.toThrow("boom");
+		await expect(new TagRepo(boom, () => 1).merge("old", "into", "key:1")).rejects.toThrow("boom");
 	});
 
 	it("throws when insert does not become readable", async () => {
