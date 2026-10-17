@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { StubMemoryService } from "./stub-memories";
 
 describe("StubMemoryService", () => {
+	it("gets stored memories by id", async () => {
+		const svc = new StubMemoryService();
+		const ctx = { keyId: "kid", actor: "key:kid" };
+		const created = await svc.create(
+			{ space: "s", title: "t", body: "b", type: "note", tags: [] },
+			ctx,
+		);
+		expect(await svc.get(created.id, ctx)).toEqual(created);
+		expect(await svc.get("missing", ctx)).toBeNull();
+	});
+
 	it("creates updates and deletes memories", async () => {
 		const svc = new StubMemoryService();
 		const ctx = { keyId: "kid", actor: "key:kid" };

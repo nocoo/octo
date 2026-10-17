@@ -43,6 +43,13 @@ describe("createApp", () => {
 		expect(await res.text()).toBe("spa");
 	});
 
+	it("does not mount batch routes without an injected memory service", () => {
+		const paths = createApp()
+			.routes.filter((route) => route.path.includes("batch"))
+			.map((route) => route.path);
+		expect(paths).toEqual([]);
+	});
+
 	it("maps thrown ApiError through onError", async () => {
 		const app = createApp();
 		app.get("/api/boom", () => {

@@ -25,6 +25,7 @@ export type MemoryServiceError = {
 };
 
 export interface MemoryService {
+	get(id: string, ctx: MemoryServiceContext): Promise<MemoryRecord | null>;
 	create(input: MemoryCreate, ctx: MemoryServiceContext): Promise<MemoryRecord>;
 	update(
 		id: string,

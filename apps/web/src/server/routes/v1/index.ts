@@ -1,10 +1,9 @@
 import { Hono } from "hono";
 import type { AppVars, Env } from "../../env";
 import type { MemoryService } from "../../services/memories";
-import { StubMemoryService } from "../../services/stub-memories";
 import { createBatchRoutes } from "./batch";
 
-export function createV1Routes(memoryService: MemoryService = new StubMemoryService()): Hono<{
+export function createV1Routes(memoryService: MemoryService): Hono<{
 	Bindings: Env;
 	Variables: AppVars;
 }> {

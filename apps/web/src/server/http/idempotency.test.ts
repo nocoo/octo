@@ -7,6 +7,7 @@ import { newRequestId, withOctoHeaders } from "../lib/request";
 import { testApiPrincipal } from "../test-principal";
 import { idempotencyMiddleware } from "./idempotency";
 import type { IdempotencyRecord } from "./idempotency-repo";
+import { IDEMPOTENCY_PENDING_STATUS } from "./idempotency-storage";
 import { requestHash } from "./request-hash";
 
 function mockEnv(records: Map<string, IdempotencyRecord>): Env {
@@ -27,7 +28,6 @@ function mockEnv(records: Map<string, IdempotencyRecord>): Env {
 							idemKey: string,
 							hash: string,
 							status: number,
-							responseJson: string,
 							createdAt: number,
 						) => ({
 							run: async () => {
@@ -40,9 +40,54 @@ function mockEnv(records: Map<string, IdempotencyRecord>): Env {
 									idem_key: idemKey,
 									request_hash: hash,
 									status,
-									response_json: responseJson,
+									response_json: "",
 									created_at: createdAt,
 								});
+								return { success: true, meta: { changes: 1 } };
+							},
+						}),
+					};
+				}
+				if (sql.startsWith("UPDATE") && sql.includes("idempotency_records")) {
+					return {
+						bind: (
+							status: number,
+							responseJson: string,
+							keyId: string,
+							idemKey: string,
+							hash: string,
+							pendingStatus: number,
+						) => ({
+							run: async () => {
+								const key = `${keyId}:${idemKey}`;
+								const row = records.get(key);
+								if (
+									!row ||
+									row.request_hash !== hash ||
+									row.status !== pendingStatus ||
+									pendingStatus !== IDEMPOTENCY_PENDING_STATUS
+								) {
+									return { success: true, meta: { changes: 0 } };
+								}
+								records.set(key, {
+									...row,
+									status,
+									response_json: responseJson,
+								});
+								return { success: true, meta: { changes: 1 } };
+							},
+						}),
+					};
+				}
+				if (sql.startsWith("DELETE") && sql.includes("idempotency_records")) {
+					return {
+						bind: (keyId: string, idemKey: string, hash: string, pendingStatus: number) => ({
+							run: async () => {
+								const key = `${keyId}:${idemKey}`;
+								const row = records.get(key);
+								if (row?.request_hash === hash && row.status === pendingStatus) {
+									records.delete(key);
+								}
 								return { success: true, meta: { changes: 1 } };
 							},
 						}),

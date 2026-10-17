@@ -27,19 +27,27 @@ async function seedWriteKey(d1: D1Exec): Promise<string> {
 	return material.plaintext;
 }
 
+function batchCreateHeaders(token: string, idemKey: string) {
+	return {
+		Authorization: `Bearer ${token}`,
+		"Content-Type": "application/json",
+		"Idempotency-Key": idemKey,
+	};
+}
+
+function batchCreateBody(title: string) {
+	return JSON.stringify({
+		items: [{ space: "kb", title, body: "b", type: "note", tags: [] }],
+	});
+}
+
 describe("idempotency", () => {
 	it("replays batch writes for the same Idempotency-Key", async () => {
 		const d1 = e2eD1();
 		assertTestMarker(d1);
 		const token = await seedWriteKey(d1);
-		const body = JSON.stringify({
-			items: [{ space: "kb", title: "idem", body: "b", type: "note", tags: [] }],
-		});
-		const headers = {
-			Authorization: `Bearer ${token}`,
-			"Content-Type": "application/json",
-			"Idempotency-Key": "batch-create-1",
-		};
+		const body = batchCreateBody("idem");
+		const headers = batchCreateHeaders(token, "batch-create-1");
 		const first = await fetch(`${base}/api/v1/memories:batchCreate`, {
 			method: "POST",
 			headers,
@@ -60,24 +68,16 @@ describe("idempotency", () => {
 		const d1 = e2eD1();
 		assertTestMarker(d1);
 		const token = await seedWriteKey(d1);
-		const headers = {
-			Authorization: `Bearer ${token}`,
-			"Content-Type": "application/json",
-			"Idempotency-Key": "batch-create-conflict",
-		};
+		const headers = batchCreateHeaders(token, "batch-create-conflict");
 		await fetch(`${base}/api/v1/memories:batchCreate`, {
 			method: "POST",
 			headers,
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "a", body: "b", type: "note", tags: [] }],
-			}),
+			body: batchCreateBody("a"),
 		});
 		const conflict = await fetch(`${base}/api/v1/memories:batchCreate`, {
 			method: "POST",
 			headers,
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "b", body: "b", type: "note", tags: [] }],
-			}),
+			body: batchCreateBody("b"),
 		});
 		expect(conflict.status).toBe(409);
 		const envelope = (await conflict.json()) as { error: { code: string } };
@@ -95,10 +95,97 @@ describe("idempotency", () => {
 				"Content-Type": "application/json",
 				"Idempotency-Key": "bad\tkey",
 			},
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-			}),
+			body: batchCreateBody("x"),
 		});
 		expect(res.status).toBe(400);
+	});
+
+	it("rejects an empty Idempotency-Key header", async () => {
+		const d1 = e2eD1();
+		assertTestMarker(d1);
+		const token = await seedWriteKey(d1);
+		const res = await fetch(`${base}/api/v1/memories:batchCreate`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Content-Type": "application/json",
+				"Idempotency-Key": "",
+			},
+			body: batchCreateBody("x"),
+		});
+		expect(res.status).toBe(400);
+	});
+
+	it("replays concurrent requests that share the same idempotency key", async () => {
+		const d1 = e2eD1();
+		assertTestMarker(d1);
+		const token = await seedWriteKey(d1);
+		const headers = batchCreateHeaders(token, `concurrent-${Date.now()}`);
+		const body = batchCreateBody("concurrent");
+		const responses = await Promise.all(
+			Array.from({ length: 8 }, () =>
+				fetch(`${base}/api/v1/memories:batchCreate`, { method: "POST", headers, body }),
+			),
+		);
+		for (const res of responses) {
+			expect(res.status).toBe(200);
+		}
+		const replayed = responses.filter((res) => res.headers.get("Idempotent-Replayed") === "true");
+		expect(replayed.length).toBeGreaterThanOrEqual(1);
+		const bodies = await Promise.all(responses.map((res) => res.json()));
+		for (const parsed of bodies) {
+			expect(parsed).toEqual(bodies[0]);
+		}
+	});
+
+	it("conflicts concurrent hash-mismatch retries on the same key", async () => {
+		const d1 = e2eD1();
+		assertTestMarker(d1);
+		const token = await seedWriteKey(d1);
+		const idemKey = `hash-mismatch-${Date.now()}`;
+		const headers = {
+			Authorization: `Bearer ${token}`,
+			"Content-Type": "application/json",
+			"Idempotency-Key": idemKey,
+		};
+		const [first, second] = await Promise.all([
+			fetch(`${base}/api/v1/memories:batchCreate`, {
+				method: "POST",
+				headers,
+				body: batchCreateBody("one"),
+			}),
+			fetch(`${base}/api/v1/memories:batchCreate`, {
+				method: "POST",
+				headers,
+				body: batchCreateBody("two"),
+			}),
+		]);
+		const statuses = [first.status, second.status].sort();
+		expect(statuses).toEqual([200, 409]);
+	});
+
+	it("does not cross-isolate idempotency keys", async () => {
+		const d1 = e2eD1();
+		assertTestMarker(d1);
+		const tokenA = await seedWriteKey(d1);
+		const tokenB = await seedWriteKey(d1);
+		const idemKey = `cross-key-${Date.now()}`;
+		const body = batchCreateBody("isolated");
+		const resA = await fetch(`${base}/api/v1/memories:batchCreate`, {
+			method: "POST",
+			headers: batchCreateHeaders(tokenA, idemKey),
+			body,
+		});
+		const resB = await fetch(`${base}/api/v1/memories:batchCreate`, {
+			method: "POST",
+			headers: batchCreateHeaders(tokenB, idemKey),
+			body,
+		});
+		expect(resA.status).toBe(200);
+		expect(resB.status).toBe(200);
+		expect(resB.headers.get("Idempotent-Replayed")).not.toBe("true");
+		const bodyA = (await resA.json()) as { results: Array<{ item?: { id: string } }> };
+		const bodyB = (await resB.json()) as { results: Array<{ item?: { id: string } }> };
+		expect(bodyA.results[0]?.item?.id).not.toBe(bodyB.results[0]?.item?.id);
 	});
 });

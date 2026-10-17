@@ -1,22 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { findIdempotencyRecord, insertIdempotencyRecord } from "./idempotency-repo";
+import { claimIdempotencyKey, findIdempotencyRecord } from "./idempotency-repo";
+import { IDEMPOTENCY_PENDING_STATUS } from "./idempotency-storage";
 
 describe("idempotency race handling", () => {
-	it("returns false when the insert conflicts", async () => {
-		const db = {
-			prepare: () => ({
-				bind: () => ({ run: async () => ({ success: false, meta: { changes: 0 } }) }),
-			}),
-		} as unknown as D1Database;
-		const ok = await insertIdempotencyRecord(db, {
+	it("returns conflict when the insert loses the race", async () => {
+		const row = {
 			key_id: "k",
 			idem_key: "i",
 			request_hash: "h",
-			status: 200,
-			response_json: "{}",
+			status: IDEMPOTENCY_PENDING_STATUS,
+			response_json: "",
 			created_at: 1,
-		});
-		expect(ok).toBe(false);
+		};
+		const db = {
+			prepare: (sql: string) => {
+				if (sql.startsWith("INSERT")) {
+					return {
+						bind: () => ({ run: async () => ({ success: true, meta: { changes: 0 } }) }),
+					};
+				}
+				if (sql.startsWith("SELECT")) {
+					return {
+						bind: () => ({ first: async () => row }),
+					};
+				}
+				throw new Error(sql);
+			},
+		} as unknown as D1Database;
+		const claim = await claimIdempotencyKey(db, "k", "i", "h", 1);
+		expect(claim.kind).toBe("conflict");
 	});
 
 	it("loads stored records", async () => {

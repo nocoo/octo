@@ -3,6 +3,7 @@ import { APP_VERSION } from "../lib/version";
 import { bearerMiddleware } from "./auth/bearer";
 import { adminWriteOriginMiddleware } from "./auth/origin";
 import type { AppVars, Env } from "./env";
+import { resourceEnv } from "./env";
 import { runScheduledTasks } from "./http/cron";
 import { idempotencyMiddleware } from "./http/idempotency";
 import { jsonError, toErrorResponse } from "./lib/errors";
@@ -17,7 +18,7 @@ import { tagsRoutes } from "./routes/v1/tags";
 import type { MemoryService } from "./services/memories";
 import { StubMemoryService } from "./services/stub-memories";
 
-export function createApp(memoryService: MemoryService = new StubMemoryService()): Hono<{
+export function createApp(memoryService?: MemoryService): Hono<{
 	Bindings: Env;
 	Variables: AppVars;
 }> {
@@ -49,18 +50,29 @@ export function createApp(memoryService: MemoryService = new StubMemoryService()
 	app.use("/api/admin/*", accessMiddleware);
 	app.use("/api/admin/*", adminWriteOriginMiddleware);
 	app.get("/api/v1/me", (c) => meResponse(c));
-	app.route("/api/v1", createV1Routes(memoryService));
+	if (memoryService) {
+		app.route("/api/v1", createV1Routes(memoryService));
+	}
 	app.get("/api/admin/whoami", (c) => whoamiResponse(c));
 	app.route("/api/v1/tags", tagsRoutes());
 	app.route("/api/v1/spaces", spacesRoutes());
 	return app;
 }
 
-const app = createApp();
+const productionApp = createApp();
+let testBatchApp: ReturnType<typeof createApp> | null = null;
+
+function appForEnv(env: Env) {
+	if (resourceEnv(env.RESOURCE_ENV) === "test") {
+		testBatchApp ??= createApp(new StubMemoryService());
+		return testBatchApp;
+	}
+	return productionApp;
+}
 
 export const worker = {
 	fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
-		return app.fetch(request, env, ctx);
+		return appForEnv(env).fetch(request, env, ctx);
 	},
 	scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
 		ctx.waitUntil(runScheduledTasks(env));

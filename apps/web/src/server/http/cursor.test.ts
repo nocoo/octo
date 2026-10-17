@@ -21,10 +21,19 @@ describe("cursor codec", () => {
 
 	it("rejects tampered cursors", async () => {
 		const cursor = await encodeCursor(secret, { s: 1 });
-		const parts = cursor.split(".");
-		const tampered = `${parts[0]}.${parts[1]}?.${parts[2]}`;
+		const tampered = `${cursor.slice(0, -2)}xx`;
 		await expect(decodeCursor(secret, tampered)).rejects.toBeInstanceOf(ApiError);
 		await expect(decodeCursor(secret, tampered)).rejects.toMatchObject({
+			code: "validation_failed",
+		});
+	});
+
+	it("rejects cursors with the wrong version", async () => {
+		const { base64UrlEncode } = await import("./base64url");
+		const blob = base64UrlEncode(
+			new TextEncoder().encode(JSON.stringify({ v: 9, p: "x", m: "y" })),
+		);
+		await expect(decodeCursor(secret, blob)).rejects.toMatchObject({
 			code: "validation_failed",
 		});
 	});
@@ -38,9 +47,10 @@ describe("cursor codec", () => {
 	it("rejects array payloads", async () => {
 		const { base64UrlEncode } = await import("./base64url");
 		const { hmacSha256Base64Url } = await import("./crypto");
-		const body = base64UrlEncode(new TextEncoder().encode("[]"));
-		const mac = await hmacSha256Base64Url(secret, `c1:${body}`);
-		await expect(decodeCursor(secret, `c1.${body}.${mac}`)).rejects.toMatchObject({
+		const p = base64UrlEncode(new TextEncoder().encode("[]"));
+		const m = await hmacSha256Base64Url(secret, `1:${p}`);
+		const blob = base64UrlEncode(new TextEncoder().encode(JSON.stringify({ v: 1, p, m })));
+		await expect(decodeCursor(secret, blob)).rejects.toMatchObject({
 			code: "validation_failed",
 		});
 	});

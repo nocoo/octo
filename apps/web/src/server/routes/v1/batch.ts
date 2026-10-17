@@ -6,6 +6,7 @@ import {
 	batchUpdateBodySchema,
 } from "../../../lib/schema/batch";
 import type { ErrorCode } from "../../../lib/schema/errors";
+import { type AuthzOp, type AuthzTarget, authorize } from "../../auth/authorize";
 import type { AppVars, Env } from "../../env";
 import { ApiError } from "../../lib/errors";
 import { parseStrict } from "../../lib/validate";
@@ -41,6 +42,22 @@ function mapServiceError(err: unknown): BatchErr {
 	return { ok: false, error: { code: "internal", message: "internal error" } };
 }
 
+function batchAuthDenied(
+	c: { get: (key: "apiKey") => import("../../auth/authorize").ApiPrincipal },
+	op: AuthzOp,
+	target: AuthzTarget,
+): BatchErr | null {
+	const result = authorize(c.get("apiKey"), op, target);
+	if (result.allow) {
+		return null;
+	}
+	const code: ErrorCode = result.reason === "not_found" ? "not_found" : "forbidden";
+	return {
+		ok: false,
+		error: { code, message: code === "forbidden" ? "forbidden" : "not found" },
+	};
+}
+
 export function createBatchRoutes(
 	memoryService: MemoryService,
 ): Hono<{ Bindings: Env; Variables: AppVars }> {
@@ -54,6 +71,11 @@ export function createBatchRoutes(
 		const ctx = serviceCtx(c);
 		const results: BatchResult<Awaited<ReturnType<MemoryService["create"]>>>[] = [];
 		for (const item of body.items) {
+			const denied = batchAuthDenied(c, "write", { spaceId: item.space });
+			if (denied) {
+				results.push(denied);
+				continue;
+			}
 			try {
 				results.push({ ok: true, item: await memoryService.create(item, ctx) });
 			} catch (err) {
@@ -72,6 +94,29 @@ export function createBatchRoutes(
 		const results: BatchResult<Awaited<ReturnType<MemoryService["update"]>>>[] = [];
 		for (const item of body.items) {
 			const { id, expected_version, ...patch } = item;
+			const existing = await memoryService.get(id, ctx);
+			if (!existing) {
+				results.push({
+					ok: false,
+					error: { code: "not_found", message: "not found" },
+				});
+				continue;
+			}
+			const denied = batchAuthDenied(c, "update", { spaceId: existing.space });
+			if (denied) {
+				results.push(denied);
+				continue;
+			}
+			if (patch.space && patch.space !== existing.space) {
+				const moveDenied = batchAuthDenied(c, "move", {
+					spaceId: existing.space,
+					destSpaceId: patch.space,
+				});
+				if (moveDenied) {
+					results.push(moveDenied);
+					continue;
+				}
+			}
 			try {
 				results.push({
 					ok: true,
@@ -92,6 +137,19 @@ export function createBatchRoutes(
 		const ctx = serviceCtx(c);
 		const results: BatchResult<{ trashed_at: string }>[] = [];
 		for (const id of body.ids) {
+			const existing = await memoryService.get(id, ctx);
+			if (!existing) {
+				results.push({
+					ok: false,
+					error: { code: "not_found", message: "not found" },
+				});
+				continue;
+			}
+			const denied = batchAuthDenied(c, "delete", { spaceId: existing.space });
+			if (denied) {
+				results.push(denied);
+				continue;
+			}
 			try {
 				results.push({ ok: true, item: await memoryService.delete(id, ctx) });
 			} catch (err) {

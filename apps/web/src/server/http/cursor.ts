@@ -2,28 +2,36 @@ import { ApiError } from "../lib/errors";
 import { base64UrlDecode, base64UrlEncode } from "./base64url";
 import { hmacSha256Base64Url, timingSafeEqual } from "./crypto";
 
-const VERSION = "c1";
+const VERSION = 1;
+
+type CursorWire = { v: number; p: string; m: string };
 
 export type CursorPayload = Record<string, unknown>;
 
 export async function encodeCursor(secret: string, payload: CursorPayload): Promise<string> {
-	const body = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
-	const mac = await hmacSha256Base64Url(secret, `${VERSION}:${body}`);
-	return `${VERSION}.${body}.${mac}`;
+	const p = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+	const m = await hmacSha256Base64Url(secret, `${VERSION}:${p}`);
+	const wire: CursorWire = { v: VERSION, p, m };
+	return base64UrlEncode(new TextEncoder().encode(JSON.stringify(wire)));
 }
 
 export async function decodeCursor(secret: string, cursor: string): Promise<CursorPayload> {
-	const parts = cursor.split(".");
-	if (parts.length !== 3 || parts[0] !== VERSION || !parts[1] || !parts[2]) {
+	let wire: CursorWire;
+	try {
+		const json = new TextDecoder().decode(base64UrlDecode(cursor));
+		wire = JSON.parse(json) as CursorWire;
+	} catch {
 		throw new ApiError("validation_failed", "invalid cursor");
 	}
-	const expected = await hmacSha256Base64Url(secret, `${VERSION}:${parts[1]}`);
-	if (!timingSafeEqual(expected, parts[2])) {
+	if (wire.v !== VERSION || typeof wire.p !== "string" || typeof wire.m !== "string") {
+		throw new ApiError("validation_failed", "invalid cursor");
+	}
+	const expected = await hmacSha256Base64Url(secret, `${VERSION}:${wire.p}`);
+	if (!timingSafeEqual(expected, wire.m)) {
 		throw new ApiError("validation_failed", "invalid cursor");
 	}
 	try {
-		const json = new TextDecoder().decode(base64UrlDecode(parts[1]));
-		const parsed = JSON.parse(json) as unknown;
+		const parsed = JSON.parse(new TextDecoder().decode(base64UrlDecode(wire.p))) as unknown;
 		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
 			throw new ApiError("validation_failed", "invalid cursor");
 		}

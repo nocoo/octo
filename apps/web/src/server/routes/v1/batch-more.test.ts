@@ -38,6 +38,21 @@ function appWith(service: MemoryService) {
 describe("batch routes edge cases", () => {
 	it("returns payload_too_large and maps service failures", async () => {
 		const service: MemoryService = {
+			get: async (id) =>
+				id === "m1"
+					? {
+							id: "m1",
+							space: "kb",
+							title: "t",
+							body: "b",
+							type: "note",
+							tags: [],
+							importance: 0.5,
+							version: 1,
+							created_at: "t",
+							updated_at: "t",
+						}
+					: null,
 			create: async () => {
 				throw new ApiError("validation_failed", "bad", { issues: [] });
 			},

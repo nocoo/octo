@@ -7,7 +7,7 @@ describe("parseIdempotencyKey", () => {
 	});
 
 	it("rejects empty and non-printable keys", () => {
-		expect(parseIdempotencyKey("")).toBeNull();
+		expect(() => parseIdempotencyKey("")).toThrow(/invalid Idempotency-Key/);
 		expect(() => parseIdempotencyKey("a\nb")).toThrow(/invalid Idempotency-Key/);
 		expect(() => parseIdempotencyKey("a".repeat(129))).toThrow(/invalid Idempotency-Key/);
 	});

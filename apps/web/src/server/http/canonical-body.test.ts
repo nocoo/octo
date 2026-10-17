@@ -17,4 +17,10 @@ describe("canonicalBody", () => {
 	it("canonicalizes objects inside arrays", () => {
 		expect(canonicalBody('[{"b":2,"a":1}]')).toBe('[{"a":1,"b":2}]');
 	});
+
+	it("ignores unsafe prototype keys when hashing", () => {
+		const withProto = '{"__proto__":{"polluted":true},"a":1}';
+		const without = '{"a":1}';
+		expect(canonicalBody(withProto)).toBe(canonicalBody(without));
+	});
 });

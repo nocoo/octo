@@ -19,6 +19,10 @@ function newId(): string {
 export class StubMemoryService implements MemoryService {
 	private readonly store = new Map<string, MemoryRecord>();
 
+	async get(id: string, _ctx: MemoryServiceContext): Promise<MemoryRecord | null> {
+		return this.store.get(id) ?? null;
+	}
+
 	async create(input: MemoryCreate, _ctx: MemoryServiceContext): Promise<MemoryRecord> {
 		const id = newId();
 		const ts = nowIso();
