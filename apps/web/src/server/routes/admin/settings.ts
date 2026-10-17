@@ -10,18 +10,20 @@ import {
 
 export function settingsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
-	app.get("/embedding", async (c) => jsonOk(await getEmbeddingSettings(c.env)));
-	app.put("/embedding", async (c) =>
+	app.get("/embedding", async (context) => jsonOk(await getEmbeddingSettings(context.env)));
+	app.put("/embedding", async (context) =>
 		jsonOk(
 			await saveEmbeddingSettings(
-				c.env,
-				await readJsonLimited(c.req.raw, 16_384),
-				`admin:${c.get("adminEmail")}`,
+				context.env,
+				await readJsonLimited(context.req.raw, 16_384),
+				`admin:${context.get("adminEmail")}`,
 			),
 		),
 	);
-	app.post("/embedding/test", async (c) =>
-		jsonOk(await testEmbeddingSettings(c.env, await readJsonLimited(c.req.raw, 16_384))),
+	app.post("/embedding/test", async (context) =>
+		jsonOk(
+			await testEmbeddingSettings(context.env, await readJsonLimited(context.req.raw, 16_384)),
+		),
 	);
 	return app;
 }
