@@ -45,6 +45,85 @@ async function fixture() {
 }
 
 describe("memory HTTP transaction boundary", () => {
+	it.each([
+		["single", "concurrent"],
+		["single", "lost-ack"],
+		["batch", "concurrent"],
+		["batch", "lost-ack"],
+	] as const)("recovers the first owned-space %s create after %s", async (kind, mode) => {
+		const { db, sqlite, request, keyId } = await fixture();
+		await db
+			.prepare(
+				"UPDATE api_keys SET name = 'first-own', auto_own_space = 1, scope = 'own' WHERE id = ?",
+			)
+			.bind(keyId)
+			.run();
+		const item = { space: "first-own", title: "title", body: "body", type: "note", tags: [] };
+		const path = kind === "single" ? "/memories" : "/memories:batchCreate";
+		const body = kind === "single" ? item : { items: [item] };
+		if (mode === "lost-ack") {
+			const batch = db.batch.bind(db);
+			vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+				await batch(statements);
+				throw new Error("committed acknowledgment lost");
+			});
+		}
+		const responses = await Promise.all(
+			Array.from({ length: mode === "concurrent" ? 8 : 1 }, () =>
+				request(path, "POST", body, "first-own"),
+			),
+		);
+		expect(responses.map((response) => response.status)).toEqual(
+			Array(responses.length).fill(kind === "single" ? 201 : 200),
+		);
+		expect(new Set(await Promise.all(responses.map((response) => response.text()))).size).toBe(1);
+		expect(
+			responses.filter((response) => response.headers.get("Idempotent-Replayed") === "true"),
+		).toHaveLength(mode === "concurrent" ? 7 : 1);
+		for (const table of ["memories", "idempotency_records"])
+			expect(sqlite.prepare(`SELECT count(*) AS count FROM ${table}`).get()).toMatchObject({
+				count: 1,
+			});
+		expect(
+			sqlite.prepare("SELECT count(*) AS count FROM spaces WHERE owner_key_id = ?").get(keyId),
+		).toMatchObject({ count: 1 });
+	});
+
+	it.each(["single", "batch"])(
+		"rejects recovered %s own-space output after ownership changes",
+		async (kind) => {
+			const { db, sqlite, request, keyId } = await fixture();
+			await db
+				.prepare(
+					"UPDATE api_keys SET name = 'transferred', auto_own_space = 1, scope = 'own' WHERE id = ?",
+				)
+				.bind(keyId)
+				.run();
+			const batch = db.batch.bind(db);
+			vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+				await batch(statements);
+				sqlite
+					.prepare("UPDATE spaces SET owner_key_id = 'another-key' WHERE slug = 'transferred'")
+					.run();
+				throw new Error("committed acknowledgment lost");
+			});
+			const item = {
+				space: "transferred",
+				title: "title",
+				body: "private body",
+				type: "note",
+				tags: [],
+			};
+			const response = await request(
+				kind === "single" ? "/memories" : "/memories:batchCreate",
+				"POST",
+				kind === "single" ? item : { items: [item] },
+				"transferred",
+			);
+			expect(response.status).toBe(kind === "single" ? 422 : 404);
+			expect(await response.text()).not.toContain("private body");
+		},
+	);
 	it("returns the one committed item to all eight concurrent same-key creates", async () => {
 		const { sqlite, request } = await fixture();
 		const responses = await Promise.all(Array.from({ length: 8 }, () => request()));

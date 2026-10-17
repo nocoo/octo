@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — First-use replay authorization retained an empty own-space list
+
+Final MAX review combined first-use space creation with lost acknowledgements and concurrent idempotent requests. Although the transaction had committed exactly once, replay authorization still used the bearer-time empty owned-space list and returned 404. Single-memory and batch authorization now derive own-scope space IDs from committed D1 ownership before checking the saved response. Four red/green cases cover both endpoints under eight-way contention and lost acknowledgements; two negative cases transfer ownership after commit and prove that recovery does not trust a staged authorization overlay or disclose the saved body. Updating only the writer's authorization clone is not sufficient for another request or recovery path.
+
 ## 2026-10-17 — Production batch integration and recovery used incomplete boundaries
 
 The rebased application still mounted M6 writes only through a fake injected memory service. Real batch routes now reuse M2's staged transaction, retain per-request row/tag-ID overlays, and roll back SQL plus predicted state after individual failures. L2 observes production memory/version/tag/FTS/change effects rather than `_m6_memories`. Error mapping reads persisted state and the initial version, not a later predicted batch version.

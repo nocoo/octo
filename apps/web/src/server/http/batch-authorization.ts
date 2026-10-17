@@ -9,8 +9,8 @@ import type { AppVars, Env } from "../env";
 import { ApiError } from "../lib/errors";
 import { JSON_BODY_MAX_BYTES, parseStrict } from "../lib/validate";
 import { MemoryRepo } from "../repo/memories";
-import { authzFrom } from "../services/memories";
 import { readAuthorizationBody } from "./authorization-body";
+import { currentMemoryAuthz } from "./memory-authorization";
 
 const BATCH_JSON_BODY_MAX_BYTES = BATCH_MAX_ITEMS * JSON_BODY_MAX_BYTES;
 const operations: Record<string, "write" | "update" | "delete"> = {
@@ -71,7 +71,7 @@ export async function authorizeBatchReplay(
 		).items.map((item) => item.id);
 	}
 	const repo = new MemoryRepo(c.env.DB);
-	const authz = authzFrom(c.get("apiKey"));
+	const authz = await currentMemoryAuthz(c);
 	for (const [index, result] of cached.data.results.entries()) {
 		if (!result.ok && result.error?.code !== "version_conflict") continue;
 		const id = op === "delete" || !result.ok ? ids[index] : result.item?.id;

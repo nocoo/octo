@@ -6,6 +6,15 @@ import { VersionRepo } from "../repo/versions";
 import { authzFrom } from "../services/memories";
 import { readAuthorizationBody } from "./authorization-body";
 
+export async function currentMemoryAuthz(c: Context<{ Bindings: Env; Variables: AppVars }>) {
+	const principal = c.get("apiKey");
+	if (principal.scope !== "own") return authzFrom(principal);
+	const { results } = await c.env.DB.prepare("SELECT id FROM spaces WHERE owner_key_id = ?")
+		.bind(principal.id)
+		.all<{ id: string }>();
+	return authzFrom({ ...principal, ownedSpaceIds: results.map((space) => space.id) });
+}
+
 export async function authorizeMemoryRequest(
 	c: Context<{ Bindings: Env; Variables: AppVars }>,
 	outcome?: { status: number; body: string },
@@ -19,7 +28,7 @@ export async function authorizeMemoryRequest(
 	const remove = memory && method === "DELETE" && !memory[2];
 	if (!create && !update && !remove && !restore) return;
 	const principal = c.get("apiKey");
-	const authz = authzFrom(principal);
+	const authz = await currentMemoryAuthz(c);
 	const repo = new MemoryRepo(c.env.DB);
 	if (create) {
 		const payload = await readAuthorizationBody(c);
