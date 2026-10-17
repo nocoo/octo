@@ -19,11 +19,8 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 		tag: "",
 		memory: "",
 		cluster: "",
-		text: "",
 		link: "",
 		selected: "",
-		font: 12,
-		fontFamily: "",
 	});
 	const data = useMemo(
 		() => ({
@@ -55,11 +52,8 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 				tag: color("chart-1"),
 				memory: color("chart-3"),
 				cluster: color("chart-5"),
-				text: color("foreground"),
 				link: color("muted-foreground"),
 				selected: color("primary"),
-				font: Number.parseFloat(style.fontSize),
-				fontFamily: style.fontFamily,
 			});
 		};
 		const motion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -89,7 +83,7 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 					适应画布
 				</Button>
 				<span className="text-basalt-sm text-basalt-muted-foreground">
-					拖动平移，滚动缩放。也可通过节点表格使用键盘浏览。
+					拖动平移，滚动缩放。悬停或选择节点查看名称，也可通过节点表格使用键盘浏览。
 				</span>
 			</Grid>
 			<GridItem
@@ -118,19 +112,13 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 						onEngineStop={() => force.current?.zoomToFit(0, 24)}
 						onNodeHover={(node) => setHover(node?.label ?? "")}
 						onNodeClick={(node) => setParams(updateLibraryUrl(params, "node", node.id))}
-						nodeCanvasObjectMode={() => "after"}
-						nodeCanvasObject={(node, context, scale) => {
-							if (node.x === undefined || node.y === undefined) return;
-							context.font = `${colors.font / scale}px ${colors.fontFamily}`;
-							context.fillStyle = colors.text;
-							context.textAlign = "center";
-							context.fillText(node.label, node.x, node.y + 12 / scale);
-						}}
 					/>
 				)}
 			</GridItem>
-			<p className="text-basalt-sm text-basalt-muted-foreground" aria-live="polite">
-				{hover || "蓝色：标签；绿色：记忆；灰色：聚合节点。"}
+			<p className="break-words text-basalt-sm text-basalt-muted-foreground" aria-live="polite">
+				{hover ||
+					graph.nodes.find((node) => node.id === params.get("node"))?.label ||
+					"蓝色：标签；绿色：记忆；灰色：聚合节点。"}
 			</p>
 		</Grid>
 	);

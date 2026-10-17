@@ -19,3 +19,21 @@ it("hosts the specialist canvas in a real Basalt surface with Chinese guidance a
 	expect(html).toContain("蓝色：标签；绿色：记忆；灰色：聚合节点。");
 	expect(html).not.toContain('class="library-');
 });
+
+it("shows the selected node's complete name outside the canvas", () => {
+	const label = "A long memory title ".repeat(5);
+	const html = renderToStaticMarkup(
+		<MemoryRouter initialEntries={["/graph?node=memory-1"]}>
+			<LibraryGraphCanvas
+				graph={{
+					nodes: [{ id: "memory-1", label, kind: "memory", count: 1, href: "/memories/memory-1" }],
+					links: [],
+					clustered: 0,
+				}}
+			/>
+		</MemoryRouter>,
+	);
+	expect(html).toContain(label);
+	expect(html).toContain("悬停或选择节点查看名称");
+	expect(html).toContain("break-words");
+});
