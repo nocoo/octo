@@ -1,0 +1,12 @@
+{
+	"name": "@octo/web",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "bun --cwd ../.. run build"
+	},
+	"dependencies": {
+		"hono": "^4.13.12",
+		"zod": "^4.5.0-canary.20260825T041357"
+	}
+}

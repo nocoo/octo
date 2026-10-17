@@ -1,0 +1,43 @@
+{
+	"name": "octo",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun run scripts/dev.ts",
+		"dev:server": "bun run scripts/dev-server.ts",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.scripts.json",
+		"build": "vite build",
+		"lint": "biome check --error-on-warnings .",
+		"lint:fix": "biome check --write .",
+		"test": "vitest run",
+		"test:coverage": "vitest run --coverage",
+		"test:e2e:api": "bun run scripts/run-e2e.ts",
+		"gate:test-skip": "bun run scripts/gate-test-skip.ts",
+		"gate:no-remote": "bun run scripts/gate-no-remote.ts",
+		"gate:wrangler-vars": "bun run scripts/gate-wrangler-vars.ts",
+		"gate:security": "bun run scripts/gate-security.ts",
+		"prepare": "husky"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.15",
+		"@cloudflare/workers-types": "5.20260930.2",
+		"@types/bun": "^1.4.2",
+		"@vitest/coverage-v8": "5.0.3",
+		"husky": "9.1.7",
+		"typescript": "7.0.2",
+		"vite": "^8.3.1",
+		"vitest": "5.0.3",
+		"wrangler": "4.145.0"
+	},
+	"overrides": {
+		"sharp": "0.35.5"
+	},
+	"workspaces": [
+		"apps/*"
+	],
+	"dependencies": {
+		"hono": "^4.13.12",
+		"zod": "^4.5.0-canary.20260825T041357"
+	}
+}
