@@ -219,7 +219,7 @@ describe("runE2eApi", () => {
 		const generatedPath = vitest.mock.calls[0]?.[0].OCTO_CONFIG as string;
 		const generated = parse(await readFile(generatedPath, "utf8"));
 		expect(generated.vectorize).toBeUndefined();
-		expect(generated.main).toBe(join(root, "apps/web/src/server/index.ts"));
+		expect(generated.main).toBe(join(root, "tests/fixtures/worker.ts"));
 		expect(generated.assets).toMatchObject({
 			directory: join(dirname(generatedPath), "dist/client"),
 			binding: "ASSETS",

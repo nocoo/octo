@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — M4 integration onto M6
+
+Rebasing M4 onto `d774ee5` preserved M6's injected batch-write service, idempotency middleware, scheduled cleanup, cursor code and all M3 routes. The earlier node-SQLite migration helper commit was redundant with main's identical implementation and was dropped; main's async D1 helpers were retained unchanged. The FTS vocabulary regression now uses M6's awaited marker-checked fixture/query helpers. Conflict resolution retained both milestone narratives and the combined endpoint inventory. Full L1 exposed two stale test assumptions: M4's local-config test still expected the production entrypoint rather than M6's explicit fixture Worker, and M6's no-write-service test incorrectly included independent read-only batchGet among absent write routes. Exact assertions now protect the fixture entrypoint, mounted batchGet and absent batch writes rather than changing either runtime contract.
+
 ## M6: shared-run observations must be fixture-scoped
 
 M3's tag test queried every tag_merged event and expected only its two memories.
