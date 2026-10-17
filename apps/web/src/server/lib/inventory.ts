@@ -18,4 +18,8 @@ export function listedRoutes(app: Hono<{ Bindings: Env; Variables: AppVars }>): 
 	return [...keys].sort();
 }
 
-export const TESTED_API_ROUTES: RouteKey[] = ["GET /api/live"];
+export const TESTED_API_ROUTES: RouteKey[] = [
+	"GET /api/admin/whoami",
+	"GET /api/live",
+	"GET /api/v1/me",
+];
