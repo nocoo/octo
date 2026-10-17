@@ -33,7 +33,8 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 					await c.env.DB.batch(writes);
 				} catch (err) {
 					throw (
-						c.get("writeError")?.(err) ?? new ApiError("unavailable", "write transaction failed")
+						(await c.get("writeError")?.(err)) ??
+						new ApiError("unavailable", "write transaction failed")
 					);
 				}
 			}
@@ -72,7 +73,7 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 				if (err instanceof ApiError) throw err;
 			}
 			throw (
-				c.get("writeError")?.(commitError) ??
+				(await c.get("writeError")?.(commitError)) ??
 				new ApiError("unavailable", "write transaction unavailable; retry with the same key")
 			);
 		}

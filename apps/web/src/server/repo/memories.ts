@@ -42,7 +42,13 @@ export type MemoryWrite = {
 	expectedVersion?: number;
 	vector?: VectorWrite | null;
 	now: number;
+	previous?: MemoryRecord;
 };
+
+export type MemoryWriteStage = (
+	statements: D1PreparedStatement[],
+	mapError: (error: unknown) => Promise<ApiError | undefined>,
+) => void;
 
 export type ListQuery = {
 	filters: MemoryFilters;
@@ -94,7 +100,10 @@ function firstChanges(result: unknown): number {
 }
 
 export class MemoryRepo {
-	constructor(private readonly db: D1Database) {}
+	constructor(
+		private readonly db: D1Database,
+		private readonly stage?: MemoryWriteStage,
+	) {}
 
 	async spaceBySlug(slug: string): Promise<{ id: string; slug: string; name: string } | null> {
 		return this.db
@@ -188,19 +197,39 @@ export class MemoryRepo {
 			this.changeStmt(input, nextVersion),
 			...this.vectorStmts(input, nextVersion, hash),
 		];
+		if (this.stage) {
+			const space = await this.db
+				.prepare("SELECT slug FROM spaces WHERE id = ?")
+				.bind(input.spaceId)
+				.first<{ slug: string }>();
+			if (!space) throw new ApiError("not_found", "not found");
+			this.stage(stmts, () =>
+				this.conflict(input.id, input.expectedVersion, input.op === "restore"),
+			);
+			return {
+				id: input.id,
+				space_id: input.spaceId,
+				space_slug: space.slug,
+				title: input.title,
+				body: input.body,
+				type: input.type,
+				importance: input.importance,
+				source_key_id: input.sourceKeyId,
+				updated_by_key_id: input.updatedByKeyId,
+				event_time: input.eventTime,
+				version: nextVersion,
+				content_hash: hash,
+				created_at: input.previous?.created_at ?? input.now,
+				updated_at: input.now,
+				deleted_at: null,
+				deleted_by: null,
+			};
+		}
 		let results: unknown[];
 		try {
 			results = await this.db.batch(stmts);
 		} catch (err) {
-			const current = await this.get(input.id);
-			if (current && input.expectedVersion != null && current.version !== input.expectedVersion) {
-				throw new ApiError(
-					"version_conflict",
-					`memory ${input.id} is at version ${current.version}, expected ${input.expectedVersion}`,
-					{ current_version: current.version },
-				);
-			}
-			throw err;
+			throw (await this.conflict(input.id, input.expectedVersion, input.op === "restore")) ?? err;
 		}
 		if (firstChanges(results[0]) === 0) {
 			const current = await this.get(input.id);
@@ -226,7 +255,7 @@ export class MemoryRepo {
 		now: number,
 		expected: { version: number; spaceId: string },
 	): Promise<MemoryRecord> {
-		const results = await this.db.batch([
+		const statements = [
 			this.db
 				.prepare(
 					"UPDATE memories SET deleted_at = ?, deleted_by = ?, updated_at = ? WHERE id = ? AND version = ? AND space_id = ? AND deleted_at IS NULL",
@@ -234,15 +263,27 @@ export class MemoryRepo {
 				.bind(now, actor, now, id, expected.version, expected.spaceId),
 			this.db
 				.prepare(
-					"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', id, space_id, 'trashed', version, ?, ? FROM memories WHERE id = ? AND changes() > 0",
+					"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) VALUES ('memory', CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, 'trashed', ?, ?, ?)",
 				)
-				.bind(actor, now, id),
+				.bind(id, expected.spaceId, expected.version, actor, now),
 			this.db
 				.prepare(
 					"DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?) AND changes() > 0",
 				)
 				.bind(id),
-		]);
+		];
+		if (this.stage) {
+			const current = await this.get(id);
+			if (!current) throw new ApiError("not_found", "not found");
+			this.stage(statements, () => this.conflict(id, expected.version, false));
+			return { ...current, deleted_at: now, deleted_by: actor, updated_at: now };
+		}
+		let results: unknown[];
+		try {
+			results = await this.db.batch(statements);
+		} catch (error) {
+			throw (await this.conflict(id, expected.version, false)) ?? error;
+		}
 		if (firstChanges(results[0]) === 0) {
 			const current = await this.get(id);
 			if (!current || current.deleted_at != null) {
@@ -257,6 +298,22 @@ export class MemoryRepo {
 			throw new ApiError("internal", "trash did not persist");
 		}
 		return row;
+	}
+
+	private async conflict(
+		id: string,
+		version: number | undefined,
+		restore: boolean,
+	): Promise<ApiError | undefined> {
+		if (version === undefined) return undefined;
+		const current = await this.get(id);
+		if (!current || (!restore && current.deleted_at !== null))
+			return new ApiError("not_found", "not found");
+		if (current.version !== version)
+			return new ApiError("version_conflict", "memory changed before commit", {
+				current_version: current.version,
+			});
+		return undefined;
 	}
 
 	async list(query: ListQuery): Promise<{ items: MemoryRecord[]; next_cursor: string | null }> {
@@ -352,7 +409,7 @@ export class MemoryRepo {
 				`INSERT INTO memory_versions (
           memory_id, version, title, body, type, importance, tags_json, event_time,
           space_id, actor, op, rollback_of, created_at
-        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)`,
+        ) VALUES (CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.bind(
 				input.id,
@@ -367,9 +424,6 @@ export class MemoryRepo {
 				input.actor,
 				input.op,
 				input.rollbackOf ?? null,
-				input.now,
-				input.id,
-				version,
 				input.now,
 			);
 	}

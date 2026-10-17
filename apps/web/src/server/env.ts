@@ -4,7 +4,7 @@ import type { ApiError } from "./lib/errors";
 export type AppVars = {
 	requestId: string;
 	writeStatements: D1PreparedStatement[];
-	writeError: (error: unknown) => ApiError | undefined;
+	writeError: (error: unknown) => ApiError | undefined | Promise<ApiError | undefined>;
 	apiKey: ApiPrincipal;
 	adminEmail: string;
 };

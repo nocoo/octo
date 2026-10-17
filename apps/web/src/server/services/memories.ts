@@ -329,6 +329,7 @@ export class MemoryService {
 		}
 		const row = await this.memories.write({
 			id: current.id,
+			previous: current,
 			spaceId,
 			title: input.title ?? current.title,
 			body: input.body ?? current.body,
@@ -372,6 +373,7 @@ export class MemoryService {
 		const tags = await this.currentTags(current.id);
 		const row = await this.memories.write({
 			id: current.id,
+			previous: current,
 			spaceId: current.space_id,
 			title: current.title,
 			body: current.body,
@@ -449,6 +451,7 @@ export class MemoryService {
 		const tags = await this.tags.resolveMany(names);
 		const row = await this.memories.write({
 			id: current.id,
+			previous: current,
 			spaceId: snapshot.space_id,
 			title: snapshot.title,
 			body: snapshot.body,

@@ -12,6 +12,7 @@ import { ApiError, jsonOk } from "../../lib/errors";
 import { parseStrict, readJsonLimited } from "../../lib/validate";
 import { parseLimit } from "../../repo/memories-cursor";
 import { authzFrom, MemoryService, parseInclude } from "../../services/memories";
+import { memoryService } from "./memory-service";
 
 const rollbackSchema = z.strictObject({
 	to_version: z.number().int().positive(),
@@ -116,7 +117,7 @@ export function memoriesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 
 	app.post("/", async (c) => {
 		const body = parseStrict(memoryCreateSchema, await readMemoryJson(c.req.raw));
-		const item = await service(c.env.DB).create(authzFrom(c.get("apiKey")), body);
+		const item = await memoryService(c).create(authzFrom(c.get("apiKey")), body);
 		return jsonOk(item, 201);
 	});
 
@@ -159,7 +160,7 @@ export function memoriesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 
 	app.post("/:id/rollback", async (c) => {
 		const body = parseStrict(rollbackSchema, await readJsonLimited(c.req.raw));
-		const item = await service(c.env.DB).rollback(
+		const item = await memoryService(c).rollback(
 			authzFrom(c.get("apiKey")),
 			c.req.param("id"),
 			body.to_version,
@@ -181,7 +182,7 @@ export function memoriesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 
 	app.patch("/:id", async (c) => {
 		const body = parseStrict(memoryPatchSchema, await readMemoryJson(c.req.raw));
-		const item = await service(c.env.DB).patch(
+		const item = await memoryService(c).patch(
 			authzFrom(c.get("apiKey")),
 			c.req.param("id"),
 			body,
@@ -191,7 +192,7 @@ export function memoriesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	});
 
 	app.delete("/:id", async (c) => {
-		const item = await service(c.env.DB).remove(authzFrom(c.get("apiKey")), c.req.param("id"));
+		const item = await memoryService(c).remove(authzFrom(c.get("apiKey")), c.req.param("id"));
 		return jsonOk(item);
 	});
 

@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Memory writes preceded their replay transaction
+
+After integrating M6, M2 still committed its own D1 batch before the middleware saved the idempotent outcome. A forced replay-storage failure returned 503 while the new memory remained. HTTP mutations now stage their full memory transaction for the middleware's sole batch; a guarded version snapshot or trash event aborts the batch if the authorized CAS changes no row. Tests cover every mutation's single commit and effect-free replay, persistence failure rollback, and concurrent moves before PATCH/DELETE commit. Unit setup initially omitted the replay-chunk migration and then reused an existing fixture slug; the corrected tests use the shared fully migrated database. Check the actual schema and fixture identities before attributing a harness failure to production behavior.
+
 ## 2026-10-17 — M2 rebase restored obsolete fixture processes
 
 Replaying M2's final pre-M6 commit reintroduced per-command Wrangler fixture processes after main had replaced them with an isolated, cached SDK session. A failing source-import harness rejected the old executor before all three M2 suites migrated to the shared awaited `e2eD1` boundary. The harness now runs every M2 HTTP fixture test, checks one cached session and eight awaited marker checks, and the obsolete executor is removed. Conflict resolution must compare lifecycle contracts, not only preserve independently compiling symbols. The historical tags 30/31 failure was separate: its global `tag_merged` query counted M6's legitimate unrelated event; main's `d774ee5` scopes that observation to `mm1` and `mm2` and seeds an unrelated event in its regression harness.

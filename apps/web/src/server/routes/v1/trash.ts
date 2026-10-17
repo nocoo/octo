@@ -4,6 +4,7 @@ import { jsonOk } from "../../lib/errors";
 import { parseLimit } from "../../repo/memories-cursor";
 import { authzFrom, MemoryService, parseInclude } from "../../services/memories";
 import { filtersFromQuery } from "./memories";
+import { memoryService } from "./memory-service";
 
 export function trashRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
@@ -21,10 +22,7 @@ export function trashRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	});
 
 	app.post("/:id/restore", async (c) => {
-		const item = await new MemoryService(c.env.DB).restore(
-			authzFrom(c.get("apiKey")),
-			c.req.param("id"),
-		);
+		const item = await memoryService(c).restore(authzFrom(c.get("apiKey")), c.req.param("id"));
 		return jsonOk(item);
 	});
 
