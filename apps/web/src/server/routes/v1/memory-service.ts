@@ -4,18 +4,20 @@ import { MemoryRepo } from "../../repo/memories";
 import { TagRepo } from "../../repo/tags";
 import { MemoryService } from "../../services/memories";
 
-export function memoryService(c: Context<{ Bindings: Env; Variables: AppVars }>): MemoryService {
+export function memoryService(
+	context: Context<{ Bindings: Env; Variables: AppVars }>,
+): MemoryService {
 	return new MemoryService(
-		c.env.DB,
-		new TagRepo(c.env.DB, undefined, undefined, c.get("writeStatements")),
+		context.env.DB,
+		new TagRepo(context.env.DB, undefined, undefined, context.get("writeStatements")),
 		undefined,
 		undefined,
-		new MemoryRepo(c.env.DB, (statements, mapError) => {
-			c.get("writeStatements").push(...statements);
-			c.set("writeError", mapError);
+		new MemoryRepo(context.env.DB, (statements, mapError) => {
+			context.get("writeStatements").push(...statements);
+			context.set("writeError", mapError);
 		}),
 		undefined,
 		undefined,
-		c.get("writeStatements"),
+		context.get("writeStatements"),
 	);
 }

@@ -31,10 +31,10 @@ async function fixture() {
 	) => {
 		const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
 		app.onError((err) => toErrorResponse(err, "test"));
-		app.all("*", async (c) => {
-			c.set("apiKey", principal);
-			await authorizeBatchReplay(c, { status, body });
-			return c.json({ authorized: true });
+		app.all("*", async (context) => {
+			context.set("apiKey", principal);
+			await authorizeBatchReplay(context, { status, body });
+			return context.json({ authorized: true });
 		});
 		return app.request(
 			path,

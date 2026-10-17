@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Final instruction checks must include delegated tests
+
+The final instruction pass found newly added one-letter fixture, counter and context identifiers after functional approval and the first branch push. They were renamed without changing assertions or behavior, and the new revision was sent through hooks and independent signoff again. Review all additions for repository instructions as well as behavior before declaring the branch final.
+
 ## 2026-10-17 — First-use replay authorization retained an empty own-space list
 
 Final MAX review combined first-use space creation with lost acknowledgements and concurrent idempotent requests. Although the transaction had committed exactly once, replay authorization still used the bearer-time empty owned-space list and returned 404. Single-memory and batch authorization now derive own-scope space IDs from committed D1 ownership before checking the saved response. Four red/green cases cover both endpoints under eight-way contention and lost acknowledgements; two negative cases transfer ownership after commit and prove that recovery does not trust a staged authorization overlay or disclose the saved body. Updating only the writer's authorization clone is not sufficient for another request or recovery path.

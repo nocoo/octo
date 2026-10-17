@@ -20,11 +20,11 @@ const operations: Record<string, "write" | "update" | "delete"> = {
 };
 
 export async function prepareBatchAuthorization(
-	c: Context<{ Bindings: Env; Variables: AppVars }>,
+	context: Context<{ Bindings: Env; Variables: AppVars }>,
 ): Promise<void> {
-	const op = operations[c.req.path];
-	if (c.req.method === "POST" && (op === "update" || op === "delete")) {
-		await readAuthorizationBody(c, BATCH_JSON_BODY_MAX_BYTES);
+	const op = operations[context.req.path];
+	if (context.req.method === "POST" && (op === "update" || op === "delete")) {
+		await readAuthorizationBody(context, BATCH_JSON_BODY_MAX_BYTES);
 	}
 }
 
@@ -45,11 +45,11 @@ const cachedBatchSchema = z.object({
 });
 
 export async function authorizeBatchReplay(
-	c: Context<{ Bindings: Env; Variables: AppVars }>,
+	context: Context<{ Bindings: Env; Variables: AppVars }>,
 	outcome: { status: number; body: string },
 ): Promise<void> {
-	const op = operations[c.req.path];
-	if (c.req.method !== "POST" || !op || outcome.status >= 400) return;
+	const op = operations[context.req.path];
+	if (context.req.method !== "POST" || !op || outcome.status >= 400) return;
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(outcome.body);
@@ -62,16 +62,16 @@ export async function authorizeBatchReplay(
 	if (op === "delete") {
 		ids = parseStrict(
 			batchDeleteBodySchema,
-			await readAuthorizationBody(c, BATCH_JSON_BODY_MAX_BYTES),
+			await readAuthorizationBody(context, BATCH_JSON_BODY_MAX_BYTES),
 		).ids;
 	} else if (op === "update") {
 		ids = parseStrict(
 			batchUpdateBodySchema,
-			await readAuthorizationBody(c, BATCH_JSON_BODY_MAX_BYTES),
+			await readAuthorizationBody(context, BATCH_JSON_BODY_MAX_BYTES),
 		).items.map((item) => item.id);
 	}
-	const repo = new MemoryRepo(c.env.DB);
-	const authz = await currentMemoryAuthz(c);
+	const repo = new MemoryRepo(context.env.DB);
+	const authz = await currentMemoryAuthz(context);
 	for (const [index, result] of cached.data.results.entries()) {
 		if (!result.ok && result.error?.code !== "version_conflict") continue;
 		const id = op === "delete" || !result.ok ? ids[index] : result.item?.id;

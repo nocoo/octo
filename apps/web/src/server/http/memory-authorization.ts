@@ -6,32 +6,32 @@ import { VersionRepo } from "../repo/versions";
 import { authzFrom } from "../services/memories";
 import { readAuthorizationBody } from "./authorization-body";
 
-export async function currentMemoryAuthz(c: Context<{ Bindings: Env; Variables: AppVars }>) {
-	const principal = c.get("apiKey");
+export async function currentMemoryAuthz(context: Context<{ Bindings: Env; Variables: AppVars }>) {
+	const principal = context.get("apiKey");
 	if (principal.scope !== "own") return authzFrom(principal);
-	const { results } = await c.env.DB.prepare("SELECT id FROM spaces WHERE owner_key_id = ?")
+	const { results } = await context.env.DB.prepare("SELECT id FROM spaces WHERE owner_key_id = ?")
 		.bind(principal.id)
 		.all<{ id: string }>();
 	return authzFrom({ ...principal, ownedSpaceIds: results.map((space) => space.id) });
 }
 
 export async function authorizeMemoryRequest(
-	c: Context<{ Bindings: Env; Variables: AppVars }>,
+	context: Context<{ Bindings: Env; Variables: AppVars }>,
 	outcome?: { status: number; body: string },
 ): Promise<void> {
-	const path = c.req.path.replace(/\/$/, "");
-	const method = c.req.method;
+	const path = context.req.path.replace(/\/$/, "");
+	const method = context.req.method;
 	const create = method === "POST" && path === "/api/v1/memories";
 	const memory = /^\/api\/v1\/memories\/([^/]+)(\/rollback)?$/.exec(path);
 	const restore = method === "POST" && /^\/api\/v1\/trash\/([^/]+)\/restore$/.exec(path);
 	const update = memory && ((method === "PATCH" && !memory[2]) || (method === "POST" && memory[2]));
 	const remove = memory && method === "DELETE" && !memory[2];
 	if (!create && !update && !remove && !restore) return;
-	const principal = c.get("apiKey");
-	const authz = await currentMemoryAuthz(c);
-	const repo = new MemoryRepo(c.env.DB);
+	const principal = context.get("apiKey");
+	const authz = await currentMemoryAuthz(context);
+	const repo = new MemoryRepo(context.env.DB);
 	if (create) {
-		const payload = await readAuthorizationBody(c);
+		const payload = await readAuthorizationBody(context);
 		if (
 			!payload ||
 			typeof payload !== "object" ||
@@ -46,7 +46,7 @@ export async function authorizeMemoryRequest(
 			principal.ops.has("w") &&
 			payload.space === principal.name
 		) {
-			const owner = await c.env.DB.prepare("SELECT owner_key_id FROM spaces WHERE id = ?")
+			const owner = await context.env.DB.prepare("SELECT owner_key_id FROM spaces WHERE id = ?")
 				.bind(space.id)
 				.first<{ owner_key_id: string | null }>();
 			if (owner?.owner_key_id !== principal.id)
@@ -75,7 +75,7 @@ export async function authorizeMemoryRequest(
 		return;
 	}
 	authz.denyUnless("update", target);
-	const payload = await readAuthorizationBody(c);
+	const payload = await readAuthorizationBody(context);
 	if (!payload || typeof payload !== "object") return;
 	let destination: string | undefined;
 	if (method === "PATCH" && "space" in payload && typeof payload.space === "string") {
@@ -84,7 +84,8 @@ export async function authorizeMemoryRequest(
 		destination = space.id;
 	}
 	if (method === "POST" && "to_version" in payload && typeof payload.to_version === "number") {
-		destination = (await new VersionRepo(c.env.DB).get(id, payload.to_version, current))?.space_id;
+		destination = (await new VersionRepo(context.env.DB).get(id, payload.to_version, current))
+			?.space_id;
 	}
 	if (destination && destination !== current.space_id)
 		authz.denyUnless("move", { ...target, destSpaceId: destination });

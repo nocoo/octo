@@ -47,7 +47,7 @@ describe("batch authorization regression", () => {
 		const f = batchFixture(svc);
 		const ctx = f.ctx();
 		const rows: Array<Awaited<ReturnType<typeof svc.create>>> = [];
-		for (let i = 0; i < 3; i++) rows.push(await svc.create(memoryInput, ctx));
+		for (let index = 0; index < 3; index++) rows.push(await svc.create(memoryInput, ctx));
 		await f.db.batch(ctx.statements);
 		const get = svc.get.bind(svc);
 		vi.spyOn(svc, "get").mockImplementation((id, c) => {

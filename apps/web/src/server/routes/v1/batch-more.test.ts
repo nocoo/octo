@@ -10,9 +10,9 @@ import { BatchMemoryService } from "../../services/batch-memories";
 describe("batch item isolation", () => {
 	it("rolls back predicted memory, tags and SQL when an item fails after staging", async () => {
 		const svc = new BatchMemoryService();
-		const f = batchFixture(svc);
+		const scenario = batchFixture(svc);
 		const created = (await (
-			await f.post("Create", { items: [memoryInput] })
+			await scenario.post("Create", { items: [memoryInput] })
 		).json()) as BatchResponse;
 		const id = created.results[0]?.item?.id;
 		const update = svc.update.bind(svc);
@@ -20,7 +20,7 @@ describe("batch item isolation", () => {
 			await update(...args);
 			throw new Error("failed after staging");
 		});
-		const response = await f.post("Update", {
+		const response = await scenario.post("Update", {
 			items: [
 				{ id, title: "discarded", body: "discarded", tags: ["Discarded"], expected_version: 1 },
 				{ id, title: "accepted", expected_version: 1 },
@@ -33,23 +33,22 @@ describe("batch item isolation", () => {
 				{ ok: true, item: { title: "accepted", body: "b", tags: [], version: 2 } },
 			],
 		});
-		expect(f.sqlite.prepare("SELECT * FROM tags").all()).toEqual([]);
-		expect(f.sqlite.prepare("SELECT title, body, version FROM memories").get()).toEqual({
+		expect(scenario.sqlite.prepare("SELECT * FROM tags").all()).toEqual([]);
+		expect(scenario.sqlite.prepare("SELECT title, body, version FROM memories").get()).toEqual({
 			title: "accepted",
 			body: "b",
 			version: 2,
 		});
-		expect(f.sqlite.prepare("SELECT title FROM memory_versions ORDER BY version").all()).toEqual([
-			{ title: "t" },
-			{ title: "accepted" },
-		]);
-		expect(f.sqlite.prepare("SELECT * FROM changes").all()).toHaveLength(2);
-		f.sqlite.close();
+		expect(
+			scenario.sqlite.prepare("SELECT title FROM memory_versions ORDER BY version").all(),
+		).toEqual([{ title: "t" }, { title: "accepted" }]);
+		expect(scenario.sqlite.prepare("SELECT * FROM changes").all()).toHaveLength(2);
+		scenario.sqlite.close();
 	});
 
 	it("forgets a failed tag resolution before another item creates that same tag", async () => {
-		const f = batchFixture();
-		const response = await f.post("Create", {
+		const scenario = batchFixture();
+		const response = await scenario.post("Create", {
 			items: [
 				{ ...memoryInput, tags: ["RetryTag"], vector: { profile: "missing", values: [1] } },
 				{ ...memoryInput, tags: ["RetryTag"] },
@@ -62,20 +61,20 @@ describe("batch item isolation", () => {
 				{ ok: true, item: { tags: ["retrytag"] } },
 			],
 		});
-		expect(f.sqlite.prepare("SELECT name FROM tags").all()).toEqual([{ name: "retrytag" }]);
-		expect(f.sqlite.prepare("SELECT * FROM memory_tags").all()).toHaveLength(1);
-		f.sqlite.close();
+		expect(scenario.sqlite.prepare("SELECT name FROM tags").all()).toEqual([{ name: "retrytag" }]);
+		expect(scenario.sqlite.prepare("SELECT * FROM memory_tags").all()).toHaveLength(1);
+		scenario.sqlite.close();
 	});
 
 	it("shares staged creates, updates and deletes without executing a private transaction", async () => {
-		const f = batchFixture();
-		const ctx = f.ctx();
-		const first = await f.service.create({ ...memoryInput, tags: ["Shared"] }, ctx);
-		const second = await f.service.create({ ...memoryInput, tags: ["SHARED"] }, ctx);
-		await f.service.update(first.id, { title: "changed", expected_version: 1 }, ctx);
-		await f.service.delete(first.id, ctx);
-		expect(await f.service.get(first.id, ctx)).toBeNull();
-		expect((await f.service.get(second.id, ctx))?.tags).toEqual(["shared"]);
+		const scenario = batchFixture();
+		const ctx = scenario.ctx();
+		const first = await scenario.service.create({ ...memoryInput, tags: ["Shared"] }, ctx);
+		const second = await scenario.service.create({ ...memoryInput, tags: ["SHARED"] }, ctx);
+		await scenario.service.update(first.id, { title: "changed", expected_version: 1 }, ctx);
+		await scenario.service.delete(first.id, ctx);
+		expect(await scenario.service.get(first.id, ctx)).toBeNull();
+		expect((await scenario.service.get(second.id, ctx))?.tags).toEqual(["shared"]);
 		for (const table of [
 			"memories",
 			"memory_versions",
@@ -84,19 +83,19 @@ describe("batch item isolation", () => {
 			"memories_fts",
 			"changes",
 		])
-			expect(f.sqlite.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
-		await f.db.batch(ctx.statements);
-		expect(await f.service.get(first.id, f.ctx())).toBeNull();
+			expect(scenario.sqlite.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
+		await scenario.db.batch(ctx.statements);
+		expect(await scenario.service.get(first.id, scenario.ctx())).toBeNull();
 		expect(
-			f.sqlite
+			scenario.sqlite
 				.prepare("SELECT title, version, deleted_at FROM memories WHERE id = ?")
 				.get(first.id),
 		).toMatchObject({ title: "changed", version: 2, deleted_at: expect.any(Number) });
-		expect(f.sqlite.prepare("SELECT name FROM tags").all()).toEqual([{ name: "shared" }]);
-		expect(f.sqlite.prepare("SELECT * FROM memory_versions").all()).toHaveLength(3);
-		expect(f.sqlite.prepare("SELECT * FROM memories_fts").all()).toHaveLength(1);
-		expect(f.sqlite.prepare("SELECT * FROM changes").all()).toHaveLength(4);
-		f.sqlite.close();
+		expect(scenario.sqlite.prepare("SELECT name FROM tags").all()).toEqual([{ name: "shared" }]);
+		expect(scenario.sqlite.prepare("SELECT * FROM memory_versions").all()).toHaveLength(3);
+		expect(scenario.sqlite.prepare("SELECT * FROM memories_fts").all()).toHaveLength(1);
+		expect(scenario.sqlite.prepare("SELECT * FROM changes").all()).toHaveLength(4);
+		scenario.sqlite.close();
 	});
 
 	it("reports an unresolved space per item and still creates the next item", async () => {

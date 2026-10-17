@@ -15,13 +15,13 @@ function replayResponse(outcome: { status: number; body: string }): Response {
 }
 
 async function writeFailure(
-	c: Context<{ Bindings: Env; Variables: AppVars }>,
+	context: Context<{ Bindings: Env; Variables: AppVars }>,
 	error: unknown,
 	message: string,
 ): Promise<ApiError> {
 	const unavailable = new ApiError("unavailable", message);
 	try {
-		return (await c.get("writeError")?.(error)) ?? unavailable;
+		return (await context.get("writeError")?.(error)) ?? unavailable;
 	} catch {
 		return unavailable;
 	}

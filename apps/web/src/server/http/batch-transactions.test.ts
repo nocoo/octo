@@ -227,7 +227,7 @@ describe("production batch HTTP transactions", () => {
 		const first = await scenario.post("Create", payload, "partial");
 		expect(first.status).toBe(200);
 		const body = (await first.json()) as BatchBody;
-		expect(body.results.map((r) => r.ok)).toEqual([false, true]);
+		expect(body.results.map((result) => result.ok)).toEqual([false, true]);
 		const replay = await scenario.post("Create", payload, "partial");
 		expect(replay.status).toBe(200);
 		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
@@ -385,7 +385,7 @@ describe("production batch HTTP transactions", () => {
 		);
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as BatchBody;
-		expect(body.results.map((r) => r.ok)).toEqual([true, true]);
+		expect(body.results.map((result) => result.ok)).toEqual([true, true]);
 		expect(batch).toHaveBeenCalledTimes(1);
 		for (const table of [
 			"memories",
@@ -439,7 +439,7 @@ describe("production batch HTTP transactions", () => {
 		);
 		expect(response.status).toBe(200);
 		const body = (await response.json()) as BatchBody;
-		expect(body.results.map((r) => r.ok)).toEqual([true, true, false, true]);
+		expect(body.results.map((result) => result.ok)).toEqual([true, true, false, true]);
 		expect(body.results[2]).toMatchObject({
 			error: { code: "version_conflict", details: { current_version: 3 } },
 		});
