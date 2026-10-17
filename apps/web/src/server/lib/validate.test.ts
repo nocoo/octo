@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { memoryCreateSchema } from "../../lib/schema/memory";
 import { ApiError } from "./errors";
-import { parseStrict, readJson } from "./validate";
+import { parseStrict, readJson, readJsonLimited } from "./validate";
 
 describe("parseStrict", () => {
 	it("returns parsed data", () => {
@@ -36,5 +36,28 @@ describe("readJson", () => {
 		await expect(
 			readJson(new Request("http://x", { method: "POST", body: "nope" })),
 		).rejects.toBeInstanceOf(ApiError);
+	});
+});
+
+describe("readJsonLimited", () => {
+	it("rejects oversized payloads and invalid json", async () => {
+		expect(
+			await readJsonLimited(new Request("http://x", { method: "POST", body: '{"ok":true}' })),
+		).toEqual({ ok: true });
+		await expect(
+			readJsonLimited(new Request("http://x", { method: "POST", body: "nope" })),
+		).rejects.toMatchObject({ code: "validation_failed" });
+		await expect(
+			readJsonLimited(
+				new Request("http://x", {
+					method: "POST",
+					headers: { "content-length": "2000000" },
+					body: "{}",
+				}),
+			),
+		).rejects.toMatchObject({ code: "payload_too_large" });
+		await expect(
+			readJsonLimited(new Request("http://x", { method: "POST", body: '{"a":1}' }), 3),
+		).rejects.toMatchObject({ code: "payload_too_large" });
 	});
 });

@@ -67,3 +67,30 @@ export function migratedSqlite(): { raw: DatabaseSync; d1: D1Database } {
 	);
 	return { raw, d1: sqliteD1(raw) };
 }
+
+export function openTestD1(): D1Database {
+	const { raw, d1 } = migratedSqlite();
+	raw.exec("PRAGMA foreign_keys = ON;");
+	return d1;
+}
+
+export async function insertSpace(
+	db: D1Database,
+	row: { id: string; slug: string; name?: string; ownerKeyId?: string | null; now?: number },
+): Promise<void> {
+	const now = row.now ?? 1;
+	await db
+		.prepare(
+			"INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES (?, ?, ?, '', ?, ?, ?)",
+		)
+		.bind(row.id, row.slug, row.name ?? row.slug, row.ownerKeyId ?? null, now, now)
+		.run();
+}
+
+export async function insertTinyProfile(db: D1Database): Promise<void> {
+	await db
+		.prepare(
+			"INSERT INTO embedding_profiles (id, model, dims, metric, vectorize_index, active, created_at) VALUES ('tiny-3', 'tiny', 3, 'cosine', 'x', 0, 1)",
+		)
+		.run();
+}

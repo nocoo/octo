@@ -1,9 +1,30 @@
 import type { ZodType } from "zod";
 import { ApiError } from "./errors";
 
+export const JSON_BODY_MAX_BYTES = 1_100_000;
+
 export async function readJson(request: Request): Promise<unknown> {
 	try {
 		return await request.json();
+	} catch {
+		throw new ApiError("validation_failed", "invalid json");
+	}
+}
+
+export async function readJsonLimited(
+	request: Request,
+	maxBytes = JSON_BODY_MAX_BYTES,
+): Promise<unknown> {
+	const header = request.headers.get("content-length");
+	if (header && Number(header) > maxBytes) {
+		throw new ApiError("payload_too_large", "payload too large");
+	}
+	const buf = await request.arrayBuffer();
+	if (buf.byteLength > maxBytes) {
+		throw new ApiError("payload_too_large", "payload too large");
+	}
+	try {
+		return JSON.parse(new TextDecoder().decode(buf)) as unknown;
 	} catch {
 		throw new ApiError("validation_failed", "invalid json");
 	}
