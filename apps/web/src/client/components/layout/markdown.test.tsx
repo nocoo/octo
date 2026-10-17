@@ -17,9 +17,20 @@ it("renders installed Basalt TOC items directly under the list with indentation 
 	for (const [index, entry] of entries.entries()) {
 		expect(items[index]).toContain(`href="#${entry.id}"`);
 		expect(items[index]).toContain(
-			`<span class="octo-memory-toc-indent" data-depth="${entry.depth}">${entry.text || "Untitled section"}</span>`,
+			`<span class="octo-memory-toc-indent" data-depth="${entry.depth}">${entry.text || "未命名章节"}</span>`,
 		);
 	}
+});
+
+it("localizes prose controls without translating user content", () => {
+	const html = renderToStaticMarkup(
+		<Markdown source={"# User title\n- [x] Done\n- [ ] Todo\n\n![](octo://att/a1)"} />,
+	);
+	expect(html).toContain('aria-label="已完成任务"');
+	expect(html).toContain('aria-label="未完成任务"');
+	expect(html).toContain("正在加载附件");
+	expect(html).toContain("User title");
+	expect(renderToStaticMarkup(<MarkdownContents entries={[]} />)).toContain("本页目录");
 });
 
 it("matches every rendered TOC href to its actual Markdown heading id", () => {

@@ -1,12 +1,4 @@
 .octo-search-query {
-	display: flex;
-	align-items: flex-end;
-	gap: var(--basalt-space-lg);
-}
-.octo-search-query-field {
-	flex: 1;
-	min-width: 0;
-}
-.octo-search-query > button {
-	flex-shrink: 0;
+	width: clamp(16rem, 34vw, 32rem);
+	max-width: 100%;
 }

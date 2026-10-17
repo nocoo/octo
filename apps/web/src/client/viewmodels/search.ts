@@ -30,7 +30,7 @@ export function searchFromUrl(params: URLSearchParams): SearchRequest {
 	const query = (params.get("q") ?? "").trim();
 	const fts = Number(params.get("fts_weight") ?? 1);
 	const vector = Number(params.get("vector_weight") ?? 1);
-	if (fts === 0 && vector === 0) throw new Error("At least one channel weight must be positive");
+	if (fts === 0 && vector === 0) throw new Error("至少一个搜索通道的权重须大于零。");
 	return searchRequestSchema.parse({
 		query,
 		mode: params.get("mode") ?? "hybrid",

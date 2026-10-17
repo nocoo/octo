@@ -19,8 +19,10 @@ import {
 } from "@nocoo/basalt";
 import { Banner } from "@nocoo/basalt/components/banner";
 import { FileDropzone } from "@nocoo/basalt/components/file-dropzone";
+import { Grid } from "@nocoo/basalt/components/grid";
 import { InputArea } from "@nocoo/basalt/components/input-area";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Table,
 	TableBody,
@@ -29,6 +31,20 @@ import {
 	TableHeader,
 	TableRow,
 } from "@nocoo/basalt/components/table";
+import {
+	BookOpen,
+	ChevronRight,
+	ChevronsLeft,
+	CircleAlert,
+	GitMerge,
+	History,
+	ListTree,
+	Paperclip,
+	Pencil,
+	RotateCcw,
+	Save,
+	SearchX,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
 	Link,
@@ -42,7 +58,16 @@ import { MEMORY_TYPES } from "../../lib/schema/memory";
 import { Markdown, MarkdownContents } from "../components/layout/markdown";
 import { useModel } from "../components/layout/use-model";
 import { selectedIds, setSelection } from "../viewmodels/library";
-import { HistoryModel, MemoriesModel, type Memory, MemoryModel } from "../viewmodels/memories";
+import {
+	filterKeys,
+	HistoryModel,
+	MemoriesModel,
+	type Memory,
+	MemoryModel,
+	memoryFieldLabels,
+	memoryOperationLabels,
+	memoryTypeLabels,
+} from "../viewmodels/memories";
 import { EditorModel } from "../viewmodels/memories-editor";
 import { diffLines, markdownContents } from "../viewmodels/memories-markdown";
 import { LibraryBulkActions } from "./library-bulk";
@@ -63,14 +88,20 @@ function Feedback({
 			{error && (
 				<Banner
 					variant="error"
-					title="Request failed"
+					icon={<CircleAlert aria-hidden="true" />}
+					title="请求失败"
 					description={error}
-					action={<Banner.Action onClick={retry}>Retry</Banner.Action>}
+					action={
+						<Banner.Action onClick={retry}>
+							<RotateCcw aria-hidden="true" />
+							重试
+						</Banner.Action>
+					}
 				/>
 			)}
 			{loading && (
 				<p role="status" className="octo-muted">
-					Loading...
+					正在加载…
 				</p>
 			)}
 		</>
@@ -79,15 +110,22 @@ function Feedback({
 
 function MemoryTags({ memory }: { memory: Pick<Memory, "tags" | "space" | "type"> }) {
 	return (
-		<div className="octo-actions">
+		<Grid
+			columns={1}
+			gap="sm"
+			style={{
+				gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+				alignItems: "center",
+			}}
+		>
 			<Badge variant="outline">{memory.space}</Badge>
-			<Badge variant="secondary">{memory.type}</Badge>
+			<Badge variant="secondary">{memoryTypeLabels[memory.type] ?? "未知类型"}</Badge>
 			{memory.tags.map((tag) => (
 				<Badge key={tag} variant="outline">
 					{tag}
 				</Badge>
 			))}
-		</div>
+		</Grid>
 	);
 }
 
@@ -112,7 +150,7 @@ export function MemoriesPage() {
 		return (
 			<>
 				<Checkbox
-					aria-label={`Select ${memory.title}`}
+					aria-label={`选择 ${memory.title}`}
 					checked={selected.includes(memory.id)}
 					onCheckedChange={(checked) => select(memory.id, checked === true)}
 				/>
@@ -149,27 +187,28 @@ export function MemoriesPage() {
 		return () => document.removeEventListener("keydown", key);
 	}, [params, setParams, state.items]);
 	return (
-		<div className="octo-page">
+		<Grid columns={1}>
 			<PageHeader
-				title="Memories"
-				description="Your private knowledge, across every space."
+				title="记忆库"
 				actions={
-					<SegmentControl
-						legend="View"
-						value={cards ? "cards" : "list"}
-						options={[
-							{ value: "list", label: "List" },
-							{ value: "cards", label: "Cards" },
-						]}
-						onValueChange={(value) => {
-							const next = new URLSearchParams(params);
-							next.set("view", value);
-							setParams(next);
-						}}
-					/>
+					<>
+						<MemoryFilters params={params} onChange={setParams} />
+						<SegmentControl
+							legend="显示方式"
+							value={cards ? "cards" : "list"}
+							options={[
+								{ value: "list", label: "列表" },
+								{ value: "cards", label: "卡片" },
+							]}
+							onValueChange={(value) => {
+								const next = new URLSearchParams(params);
+								next.set("view", value);
+								setParams(next);
+							}}
+						/>
+					</>
 				}
 			/>
-			<MemoryFilters params={params} onChange={setParams} />
 			<LibraryBulkActions
 				memories={state.items}
 				selected={selected}
@@ -188,39 +227,58 @@ export function MemoriesPage() {
 				loading={state.loading}
 				retry={() => void model.load(new URLSearchParams(query))}
 			/>
-			{!state.loading && !state.error && !state.items.length && (
+			{state.loaded && !state.loading && !state.error && !state.items.length && (
 				<LayerCard>
 					<LayerCard.Empty
-						title="No memories found"
-						description="Try clearing filters or choosing a different space."
+						icon={<SearchX aria-hidden="true" />}
+						title="没有找到记忆"
+						description="清除筛选或刷新列表后再试。"
+						action={
+							<Button
+								onClick={() => {
+									const next = new URLSearchParams(params);
+									for (const key of filterKeys) next.delete(key);
+									next.delete("cursor");
+									next.delete("selected");
+									setParams(next);
+									void model.load(next);
+								}}
+							>
+								<RotateCcw aria-hidden="true" />
+								刷新列表
+							</Button>
+						}
 					/>
 				</LayerCard>
 			)}
 			{cards ? (
-				<div className="octo-memory-cards">
+				<Grid
+					columns={1}
+					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 19rem), 1fr))" }}
+				>
 					{state.items.map((memory) => (
 						<LayerCard key={memory.id}>
-							<LayerCard.Header className="octo-actions">{row(memory)}</LayerCard.Header>
-							<LayerCard.Body className="octo-memory-stack">
+							<LayerCard.Header>{row(memory)}</LayerCard.Header>
+							<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 								<MemoryTags memory={memory} />
 								<p>{memory.body.slice(0, 180)}</p>
 								<time className="octo-muted" dateTime={memory.updated_at}>
-									{new Date(memory.updated_at).toLocaleString()}
+									{new Date(memory.updated_at).toLocaleString("zh-CN")}
 								</time>
 							</LayerCard.Body>
 						</LayerCard>
 					))}
-				</div>
+				</Grid>
 			) : (
 				state.items.length > 0 && (
 					<LayerCard>
-						<div className="octo-memory-overflow">
-							<Table aria-label="Memories">
+						<LayerCard.Well className="octo-memory-overflow">
+							<Table aria-label="记忆">
 								<TableHeader>
 									<TableRow>
 										<TableHead>
 											<Checkbox
-												aria-label="Select current page"
+												aria-label="选择当前页"
 												checked={state.items.every((item) => selected.includes(item.id))}
 												onCheckedChange={(checked) =>
 													setParams(
@@ -236,9 +294,9 @@ export function MemoriesPage() {
 												}
 											/>
 										</TableHead>
-										<TableHead>Title</TableHead>
-										<TableHead>Space / tags</TableHead>
-										<TableHead>Updated</TableHead>
+										<TableHead>标题</TableHead>
+										<TableHead>空间 / 标签</TableHead>
+										<TableHead>更新时间</TableHead>
 									</TableRow>
 								</TableHeader>
 								<TableBody>
@@ -249,7 +307,7 @@ export function MemoriesPage() {
 										>
 											<TableCell>
 												<Checkbox
-													aria-label={`Select ${memory.title}`}
+													aria-label={`选择 ${memory.title}`}
 													checked={selected.includes(memory.id)}
 													onCheckedChange={(checked) => select(memory.id, checked === true)}
 												/>
@@ -268,21 +326,28 @@ export function MemoriesPage() {
 											</TableCell>
 											<TableCell>
 												<time dateTime={memory.updated_at}>
-													{new Date(memory.updated_at).toLocaleString()}
+													{new Date(memory.updated_at).toLocaleString("zh-CN")}
 												</time>
 											</TableCell>
 										</TableRow>
 									))}
 								</TableBody>
 							</Table>
-						</div>
+						</LayerCard.Well>
 					</LayerCard>
 				)
 			)}
-			<div className="octo-actions">
-				<span className="octo-muted">{state.items.length} on this page</span>
+			<Grid
+				columns={1}
+				gap="sm"
+				style={{
+					gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+					alignItems: "center",
+				}}
+			>
+				<span className="octo-muted">本页 {state.items.length} 条</span>
 				<Choice
-					label="Page size"
+					label="每页条数"
 					value={params.get("limit") ?? "50"}
 					options={["20", "50", "100", "200"]}
 					onChange={(limit) => {
@@ -302,7 +367,8 @@ export function MemoriesPage() {
 						setParams(next);
 					}}
 				>
-					First page
+					<ChevronsLeft aria-hidden="true" />
+					第一页
 				</Button>
 				<Button
 					variant="outline"
@@ -314,10 +380,11 @@ export function MemoriesPage() {
 						setParams(next);
 					}}
 				>
-					Next page
+					<ChevronRight aria-hidden="true" />
+					下一页
 				</Button>
-			</div>
-		</div>
+			</Grid>
+		</Grid>
 	);
 }
 
@@ -358,18 +425,24 @@ export function MemoryPage() {
 	}, [id, navigate]);
 	const memory = state.memory;
 	return (
-		<div className="octo-page">
+		<Grid columns={1}>
 			<PageHeader
 				size="xl"
-				title={<span style={memoryTransition(id)}>{memory?.title ?? cachedTitle ?? "Memory"}</span>}
-				description={memory ? `Version ${memory.version} / ${memory.space}` : "Private knowledge"}
+				title={<span style={memoryTransition(id)}>{memory?.title ?? cachedTitle ?? "记忆"}</span>}
+				description={memory ? `第 ${memory.version} 版 / ${memory.space}` : "私有知识"}
 				actions={
 					<>
 						<Button asChild variant="outline">
-							<Link to={`/memories/${id}/history`}>Version history</Link>
+							<Link to={`/memories/${id}/history`}>
+								<History aria-hidden="true" />
+								版本历史
+							</Link>
 						</Button>
 						<Button asChild>
-							<Link to={`/memories/${id}/edit`}>Edit memory</Link>
+							<Link to={`/memories/${id}/edit`}>
+								<Pencil aria-hidden="true" />
+								编辑记忆
+							</Link>
 						</Button>
 					</>
 				}
@@ -378,12 +451,17 @@ export function MemoryPage() {
 			{memory && (
 				<>
 					<MemoryTags memory={memory} />
-					<div className="octo-memory-mobile">
+					<Grid columns={1} className="octo-memory-mobile">
 						<Button variant="outline" onClick={() => setTocOpen(true)}>
-							On this page
+							<ListTree aria-hidden="true" />
+							本页目录
 						</Button>
-					</div>
-					<div className="octo-memory-layout">
+					</Grid>
+					<Grid
+						columns={1}
+						className="octo-memory-layout"
+						style={{ gridTemplateColumns: "var(--octo-memory-columns)", alignItems: "start" }}
+					>
 						<LayerCard>
 							<LayerCard.Body>
 								<Markdown
@@ -393,56 +471,67 @@ export function MemoryPage() {
 								/>
 							</LayerCard.Body>
 						</LayerCard>
-						<aside className="octo-memory-aside">
-							<div className="octo-memory-desktop octo-memory-toc">
+						<Grid columns={1} className="octo-memory-aside">
+							<Grid columns={1} className="octo-memory-desktop octo-memory-toc">
 								<MarkdownContents entries={entries} />
-							</div>
+							</Grid>
 							<LayerCard>
-								<LayerCard.Header>Details</LayerCard.Header>
+								<LayerCard.Header>详细信息</LayerCard.Header>
 								<LayerCard.Body>
 									<DescriptionList columns={1}>
-										<DescriptionList.Item term="Importance">
-											{memory.importance}
+										<DescriptionList.Item term="重要性">{memory.importance}</DescriptionList.Item>
+										<DescriptionList.Item term="创建时间">
+											{new Date(memory.created_at).toLocaleString("zh-CN")}
 										</DescriptionList.Item>
-										<DescriptionList.Item term="Created">
-											{new Date(memory.created_at).toLocaleString()}
+										<DescriptionList.Item term="更新时间">
+											{new Date(memory.updated_at).toLocaleString("zh-CN")}
 										</DescriptionList.Item>
-										<DescriptionList.Item term="Updated">
-											{new Date(memory.updated_at).toLocaleString()}
+										<DescriptionList.Item term="事件时间">
+											{memory.event_time ?? "未设置"}
 										</DescriptionList.Item>
-										<DescriptionList.Item term="Event time">
-											{memory.event_time ?? "Not set"}
-										</DescriptionList.Item>
-										<DescriptionList.Item term="Source">
-											{memory.source_key_id ?? "Dashboard"}
+										<DescriptionList.Item term="来源">
+											{memory.source_key_id ?? "控制台"}
 										</DescriptionList.Item>
 									</DescriptionList>
 								</LayerCard.Body>
 							</LayerCard>
 							<LayerCard>
-								<LayerCard.Header>Attachments</LayerCard.Header>
-								<LayerCard.Body className="octo-memory-stack">
-									{(memory.attachments ?? []).map((attachment) => (
-										<Button
-											key={attachment.id}
-											variant="link"
-											onClick={() => {
-												void model
-													.attachmentUrl(attachment.id)
-													.then((url) => window.location.assign(url))
-													.catch(() => toast.error("Unable to load attachment"));
-											}}
-										>
-											{attachment.filename} ({Math.ceil(attachment.size_bytes / 1024)} KB)
-										</Button>
-									))}
-									{!memory.attachments?.length && (
-										<span className="octo-muted">No attachments</span>
-									)}
-								</LayerCard.Body>
+								<LayerCard.Header>附件</LayerCard.Header>
+								{memory.attachments?.length ? (
+									<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
+										{(memory.attachments ?? []).map((attachment) => (
+											<Button
+												key={attachment.id}
+												variant="link"
+												onClick={() => {
+													void model
+														.attachmentUrl(attachment.id)
+														.then((url) => window.location.assign(url))
+														.catch(() => toast.error("无法加载附件"));
+												}}
+											>
+												{attachment.filename} ({Math.ceil(attachment.size_bytes / 1024)} KB)
+											</Button>
+										))}
+									</LayerCard.Body>
+								) : (
+									<LayerCard.Empty
+										icon={<Paperclip aria-hidden="true" />}
+										title="暂无附件"
+										description="添加图片或 PDF，补充这条记忆。"
+										action={
+											<Button asChild>
+												<Link to={`/memories/${id}/edit`}>
+													<Paperclip aria-hidden="true" />
+													添加附件
+												</Link>
+											</Button>
+										}
+									/>
+								)}
 							</LayerCard>
 							<LayerCard>
-								<LayerCard.Header>Version timeline</LayerCard.Header>
+								<LayerCard.Header>版本时间线</LayerCard.Header>
 								<LayerCard.Body>
 									<ol>
 										{[...state.versions].reverse().map((version) => (
@@ -450,27 +539,29 @@ export function MemoryPage() {
 												<Link
 													to={`/memories/${id}/history?from=${Math.max(1, version.version - 1)}&to=${version.version}`}
 												>
-													v{version.version} / {version.op}
+													第 {version.version} 版 /{" "}
+													{memoryOperationLabels[version.op] ?? "其他操作"}
 												</Link>
 												<p className="octo-muted">
-													{version.actor} / {new Date(version.created_at).toLocaleString()}
+													{version.actor === "admin" ? "管理员" : version.actor} /{" "}
+													{new Date(version.created_at).toLocaleString("zh-CN")}
 												</p>
 											</li>
 										))}
 									</ol>
 								</LayerCard.Body>
 							</LayerCard>
-						</aside>
-					</div>
+						</Grid>
+					</Grid>
 					<Sheet open={tocOpen} onOpenChange={setTocOpen}>
 						<SheetContent>
-							<SheetTitle>On this page</SheetTitle>
+							<SheetTitle>本页目录</SheetTitle>
 							<MarkdownContents entries={entries} onNavigate={() => setTocOpen(false)} />
 						</SheetContent>
 					</Sheet>
 				</>
 			)}
-		</div>
+		</Grid>
 	);
 }
 
@@ -485,50 +576,68 @@ function ConflictDialog({ model }: { model: EditorModel }) {
 			}}
 		>
 			<DialogContent size="xl" disablePointerDismissal>
-				<DialogTitle>Resolve version conflict</DialogTitle>
+				<DialogTitle>解决版本冲突</DialogTitle>
 				<DialogDescription>
-					Your original version, unsaved edits and the latest server version. Independent changes
-					are merged; resolve every overlapping field before saving.
+					对比原始版本、未保存的修改和服务器上的最新版本。互不冲突的修改会自动合并；请处理所有冲突字段后再保存。
 				</DialogDescription>
 				{conflict && (
-					<div className="octo-memory-stack">
+					<Grid columns={1}>
 						{conflict.fields.map((field) => (
 							<LayerCard key={field}>
 								<LayerCard.Header>
-									{field}
-									{conflict.unresolved.includes(field) ? " / needs resolution" : " / resolved"}
+									{memoryFieldLabels[field]}
+									{conflict.unresolved.includes(field) ? " / 待处理" : " / 已解决"}
 								</LayerCard.Header>
-								<LayerCard.Body className="octo-memory-stack">
-									<div className="octo-memory-conflict-grid">
+								<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
+									<Grid
+										columns={1}
+										className="octo-memory-conflict-grid"
+										style={{
+											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
+										}}
+									>
 										{(["base", "mine", "theirs"] as const).map((side) => (
-											<section key={side}>
-												<strong>{side}</strong>
-												<pre>
-													{typeof conflict[side][field] === "string"
-														? conflict[side][field]
-														: JSON.stringify(conflict[side][field], null, 2)}
-												</pre>
-											</section>
+											<SectionRule
+												key={side}
+												title={{ base: "原始版本", mine: "我的修改", theirs: "最新版本" }[side]}
+											>
+												<LayerCard.Well>
+													<pre>
+														{field === "type"
+															? (memoryTypeLabels[conflict[side].type] ?? "未知类型")
+															: typeof conflict[side][field] === "string"
+																? conflict[side][field]
+																: JSON.stringify(conflict[side][field], null, 2)}
+													</pre>
+												</LayerCard.Well>
+											</SectionRule>
 										))}
-									</div>
-									<div className="octo-actions">
+									</Grid>
+									<Grid
+										columns={1}
+										gap="sm"
+										style={{
+											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+											alignItems: "center",
+										}}
+									>
 										<Button
 											variant="outline"
-											aria-label={`Use mine: ${field}`}
+											aria-label={`使用我的修改：${memoryFieldLabels[field]}`}
 											onClick={() => model.resolveField(field, conflict.mine[field])}
 										>
-											Use mine
+											使用我的修改
 										</Button>
 										<Button
 											variant="outline"
-											aria-label={`Use theirs: ${field}`}
+											aria-label={`使用最新版本：${memoryFieldLabels[field]}`}
 											onClick={() => model.resolveField(field, conflict.theirs[field])}
 										>
-											Use theirs
+											使用最新版本
 										</Button>
-									</div>
+									</Grid>
 									{field === "body" && (
-										<Field label="Merged body" htmlFor="merged-body">
+										<Field label="合并后的正文" htmlFor="merged-body">
 											<InputArea
 												id="merged-body"
 												value={conflict.merged.body}
@@ -540,13 +649,12 @@ function ConflictDialog({ model }: { model: EditorModel }) {
 								</LayerCard.Body>
 							</LayerCard>
 						))}
-						{!conflict.fields.length && (
-							<p>All changes merge cleanly. Apply the merge, review, then save.</p>
-						)}
+						{!conflict.fields.length && <p>所有修改均可自动合并。应用合并后，请检查内容并保存。</p>}
 						<Button disabled={conflict.unresolved.length > 0} onClick={() => model.finishMerge()}>
-							Apply merge
+							<GitMerge aria-hidden="true" />
+							应用合并
 						</Button>
-					</div>
+					</Grid>
 				)}
 			</DialogContent>
 		</Dialog>
@@ -597,25 +705,29 @@ export function EditorPage() {
 		await reader.load();
 	}
 	return (
-		<div className="octo-page">
+		<Grid columns={1}>
 			<PageHeader
-				title="Edit memory"
+				title="编辑记忆"
 				description={
 					state.base
-						? `Based on version ${state.base.version}${state.dirty ? " / unsaved changes" : ""}`
-						: "Markdown editor"
+						? `基于第 ${state.base.version} 版${state.dirty ? " / 有未保存的修改" : ""}`
+						: "Markdown 编辑器"
 				}
 				actions={
 					<>
 						<Button asChild variant="outline">
-							<Link to={`/memories/${id}`}>Read memory</Link>
+							<Link to={`/memories/${id}`}>
+								<BookOpen aria-hidden="true" />
+								查看记忆
+							</Link>
 						</Button>
 						<Button
 							onClick={() => void model.save()}
 							loading={state.saving}
 							disabled={!draft || state.uploading || Boolean(state.conflict)}
 						>
-							Save memory
+							<Save aria-hidden="true" />
+							保存记忆
 						</Button>
 					</>
 				}
@@ -630,8 +742,14 @@ export function EditorPage() {
 			/>
 			{draft && (
 				<>
-					<div className="octo-memory-fields">
-						<Field label="Title" htmlFor="memory-title" required>
+					<Grid
+						columns={1}
+						style={{
+							gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
+							alignItems: "end",
+						}}
+					>
+						<Field label="标题" htmlFor="memory-title" required>
 							<Input
 								id="memory-title"
 								value={draft.title}
@@ -640,7 +758,7 @@ export function EditorPage() {
 								onChange={(event) => model.update({ title: event.target.value })}
 							/>
 						</Field>
-						<Field label="Space" htmlFor="memory-space" required>
+						<Field label="空间" htmlFor="memory-space" required>
 							<Input
 								id="memory-space"
 								value={draft.space}
@@ -649,12 +767,12 @@ export function EditorPage() {
 							/>
 						</Field>
 						<Choice
-							label="Type"
+							label="类型"
 							value={draft.type}
 							options={MEMORY_TYPES}
 							onChange={(type) => model.update({ type })}
 						/>
-						<Field label="Tags" htmlFor="memory-tags">
+						<Field label="标签" htmlFor="memory-tags">
 							<Input
 								key={`${id}-${state.base?.version}`}
 								id="memory-tags"
@@ -669,7 +787,7 @@ export function EditorPage() {
 								}
 							/>
 						</Field>
-						<Field label="Importance" htmlFor="memory-importance">
+						<Field label="重要性" htmlFor="memory-importance">
 							<Input
 								id="memory-importance"
 								type="number"
@@ -681,9 +799,9 @@ export function EditorPage() {
 							/>
 						</Field>
 						<Field
-							label="Event time (UTC)"
+							label="事件时间（UTC）"
 							htmlFor="memory-event"
-							hint="ISO 8601 UTC, blank clears it"
+							hint="使用 ISO 8601 UTC 格式，留空即清除"
 						>
 							<Input
 								id="memory-event"
@@ -691,14 +809,14 @@ export function EditorPage() {
 								onChange={(event) => model.update({ event_time: event.target.value || null })}
 							/>
 						</Field>
-					</div>
-					<div className="octo-memory-mobile">
+					</Grid>
+					<Grid columns={1} className="octo-memory-mobile">
 						<SegmentControl
-							legend="Editor pane"
+							legend="编辑面板"
 							value={params.get("pane") ?? "write"}
 							options={[
-								{ value: "write", label: "Write" },
-								{ value: "preview", label: "Preview" },
+								{ value: "write", label: "编辑" },
+								{ value: "preview", label: "预览" },
 							]}
 							onValueChange={(pane) => {
 								const next = new URLSearchParams(params);
@@ -706,9 +824,14 @@ export function EditorPage() {
 								setParams(next, { replace: true });
 							}}
 						/>
-					</div>
-					<div className="octo-memory-editor" data-pane={params.get("pane") ?? "write"}>
-						<Field label="Markdown body" htmlFor="memory-body" required>
+					</Grid>
+					<Grid
+						columns={1}
+						className="octo-memory-editor"
+						style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 24rem), 1fr))" }}
+						data-pane={params.get("pane") ?? "write"}
+					>
+						<Field label="Markdown 正文" htmlFor="memory-body" required>
 							<InputArea
 								id="memory-body"
 								value={draft.body}
@@ -734,7 +857,7 @@ export function EditorPage() {
 							/>
 						</Field>
 						<LayerCard>
-							<LayerCard.Header>Live preview</LayerCard.Header>
+							<LayerCard.Header>实时预览</LayerCard.Header>
 							<LayerCard.Body>
 								<Markdown
 									source={draft.body}
@@ -743,16 +866,27 @@ export function EditorPage() {
 								/>
 							</LayerCard.Body>
 						</LayerCard>
-					</div>
+					</Grid>
 					<FileDropzone
-						label="Upload attachments"
-						description="Paste or drop images and PDF files. Up to 50 MiB each."
+						label="上传附件"
+						description="粘贴或拖入图片、PDF 文件，每个文件不超过 50 MiB。"
+						browseLabel="选择文件"
+						dropLabel="将文件拖到这里"
+						formatRejection={({ file, code }) =>
+							`${file.name}：${
+								{
+									"file-invalid-type": "不支持的文件类型",
+									"file-too-large": "文件大小不能超过 50 MiB",
+									"too-many-files": "文件数量过多",
+								}[code]
+							}`
+						}
 						accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,application/pdf"
 						maxSize={50 * 1024 * 1024}
 						disabled={state.uploading || state.saving || Boolean(state.conflict)}
 						onFilesAccepted={(files) => void upload(files)}
 					/>
-					{state.uploading && <p role="status">Uploading attachment...</p>}
+					{state.uploading && <p role="status">正在上传附件…</p>}
 				</>
 			)}
 			<ConflictDialog model={model} />
@@ -761,17 +895,17 @@ export function EditorPage() {
 				onOpenChange={(open) => {
 					if (!open && blocker.state === "blocked") blocker.reset();
 				}}
-				title="Discard unsaved changes?"
-				description="Your unsaved draft will be lost. Stay here to review or save it."
-				confirmLabel="Discard changes"
-				cancelLabel="Keep editing"
+				title="放弃未保存的修改？"
+				description="未保存的草稿将丢失。你可以留在当前页面检查或保存。"
+				confirmLabel="放弃修改"
+				cancelLabel="继续编辑"
 				variant="destructive"
 				loading={state.saving || state.uploading}
 				onConfirm={() => {
 					if (blocker.state === "blocked") blocker.proceed();
 				}}
 			/>
-		</div>
+		</Grid>
 	);
 }
 
@@ -800,13 +934,16 @@ export function HistoryPage() {
 		if (state.notice) toast.success(state.notice);
 	}, [state.notice]);
 	return (
-		<div className="octo-page">
+		<Grid columns={1}>
 			<PageHeader
-				title="Version history"
-				description={state.current?.title ?? "Every write is a recoverable snapshot."}
+				title="版本历史"
+				description={state.current?.title ?? "每次写入都会保留可恢复的版本快照。"}
 				actions={
 					<Button asChild variant="outline">
-						<Link to={`/memories/${id}`}>Read memory</Link>
+						<Link to={`/memories/${id}`}>
+							<BookOpen aria-hidden="true" />
+							查看记忆
+						</Link>
 					</Button>
 				}
 			/>
@@ -815,9 +952,16 @@ export function HistoryPage() {
 				loading={state.loading}
 				retry={() => void model.loadFromUrl(params)}
 			/>
-			<div className="octo-actions">
+			<Grid
+				columns={1}
+				gap="sm"
+				style={{
+					gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+					alignItems: "center",
+				}}
+			>
 				<Choice
-					label="From version"
+					label="起始版本"
 					value={String(from || state.versions[0]?.version || 1)}
 					options={state.versions.map((version) => String(version.version))}
 					onChange={(value) => {
@@ -828,7 +972,7 @@ export function HistoryPage() {
 					}}
 				/>
 				<Choice
-					label="To version"
+					label="目标版本"
 					value={String(to || state.current?.version || 1)}
 					options={state.versions.map((version) => String(version.version))}
 					onChange={(value) => {
@@ -839,11 +983,11 @@ export function HistoryPage() {
 					}}
 				/>
 				<SegmentControl
-					legend="Diff layout"
+					legend="差异显示方式"
 					value={params.get("diff") ?? "inline"}
 					options={[
-						{ value: "inline", label: "Inline" },
-						{ value: "split", label: "Side by side" },
+						{ value: "inline", label: "行内" },
+						{ value: "split", label: "并排" },
 					]}
 					onValueChange={(value) => {
 						const next = new URLSearchParams(params);
@@ -851,37 +995,54 @@ export function HistoryPage() {
 						setParams(next, { replace: true });
 					}}
 				/>
-			</div>
+			</Grid>
 			{state.diff && (
 				<LayerCard>
 					<LayerCard.Header>
-						Changes / v{state.diff.from} to v{state.diff.to}
+						变更 / 第 {state.diff.from} 版至第 {state.diff.to} 版
 					</LayerCard.Header>
-					<LayerCard.Body className="octo-memory-stack">
+					<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 						{state.diff.fields
 							.filter((field) => field.field !== "body")
 							.map((field) => (
-								<section key={field.field}>
-									<strong>{field.field}</strong>
-									<div className="octo-memory-editor">
-										<pre>{JSON.stringify(field.from, null, 2)}</pre>
-										<pre>{JSON.stringify(field.to, null, 2)}</pre>
-									</div>
-								</section>
+								<SectionRule key={field.field} title={memoryFieldLabels[field.field] ?? "其他字段"}>
+									<Grid
+										columns={1}
+										className="octo-memory-editor"
+										style={{
+											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 24rem), 1fr))",
+										}}
+									>
+										<LayerCard.Well>
+											<pre>
+												{field.field === "type"
+													? (memoryTypeLabels[String(field.from)] ?? "未知类型")
+													: JSON.stringify(field.from, null, 2)}
+											</pre>
+										</LayerCard.Well>
+										<LayerCard.Well>
+											<pre>
+												{field.field === "type"
+													? (memoryTypeLabels[String(field.to)] ?? "未知类型")
+													: JSON.stringify(field.to, null, 2)}
+											</pre>
+										</LayerCard.Well>
+									</Grid>
+								</SectionRule>
 							))}
-						<div className="octo-memory-overflow">
-							<Table className="octo-memory-diff" aria-label="Body diff">
+						<Grid columns={1} className="octo-memory-overflow">
+							<Table className="octo-memory-diff" aria-label="正文差异">
 								<TableHeader>
 									<TableRow>
-										<TableHead>Old</TableHead>
-										<TableHead>New</TableHead>
+										<TableHead>旧行号</TableHead>
+										<TableHead>新行号</TableHead>
 										{params.get("diff") === "split" ? (
 											<>
-												<TableHead>Before</TableHead>
-												<TableHead>After</TableHead>
+												<TableHead>修改前</TableHead>
+												<TableHead>修改后</TableHead>
 											</>
 										) : (
-											<TableHead>Change</TableHead>
+											<TableHead>变更</TableHead>
 										)}
 									</TableRow>
 								</TableHeader>
@@ -911,32 +1072,42 @@ export function HistoryPage() {
 									))}
 								</TableBody>
 							</Table>
-						</div>
-						{!state.diff.fields.length && <p>No changes between these versions.</p>}
+						</Grid>
+						{!state.diff.fields.length && <p>这两个版本之间没有差异。</p>}
 					</LayerCard.Body>
 				</LayerCard>
 			)}
 			<LayerCard>
-				<LayerCard.Header>Snapshots</LayerCard.Header>
-				<LayerCard.Body className="octo-memory-stack">
+				<LayerCard.Header>版本快照</LayerCard.Header>
+				<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 					{[...state.versions].reverse().map((version) => (
-						<div className="octo-actions" key={version.version}>
-							<strong>v{version.version}</strong>
+						<Grid
+							columns={1}
+							gap="sm"
+							style={{
+								gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+								alignItems: "center",
+							}}
+							key={version.version}
+						>
+							<strong>第 {version.version} 版</strong>
 							<span>
-								{version.op} / {version.actor}
+								{memoryOperationLabels[version.op] ?? "其他操作"} /{" "}
+								{version.actor === "admin" ? "管理员" : version.actor}
 							</span>
 							<time dateTime={version.created_at}>
-								{new Date(version.created_at).toLocaleString()}
+								{new Date(version.created_at).toLocaleString("zh-CN")}
 							</time>
 							<Button
 								variant="outline"
-								aria-label={`Rollback to version ${version.version}`}
+								aria-label={`回滚到第 ${version.version} 版`}
 								disabled={version.version === state.current?.version || state.saving}
 								onClick={() => model.requestRollback(version.version)}
 							>
-								Rollback
+								<RotateCcw aria-hidden="true" />
+								回滚
 							</Button>
-						</div>
+						</Grid>
 					))}
 				</LayerCard.Body>
 			</LayerCard>
@@ -945,14 +1116,15 @@ export function HistoryPage() {
 				onOpenChange={(open) => {
 					if (!open) model.cancelRollback();
 				}}
-				title={`Rollback to version ${state.rollbackTarget}?`}
+				title={`回滚到第 ${state.rollbackTarget} 版？`}
 				description={
 					<>
-						This creates a new version; existing history is retained.
+						此操作会创建新版本，已有历史记录将保留。
 						{state.error && <span role="alert">{state.error}</span>}
 					</>
 				}
-				confirmLabel="Confirm rollback"
+				confirmLabel="确认回滚"
+				cancelLabel="取消"
 				loading={state.saving}
 				onConfirm={async () => {
 					const target = model.state.rollbackTarget;
@@ -965,6 +1137,6 @@ export function HistoryPage() {
 					}
 				}}
 			/>
-		</div>
+		</Grid>
 	);
 }

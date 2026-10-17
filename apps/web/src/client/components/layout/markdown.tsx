@@ -1,4 +1,5 @@
 import { Checkbox } from "@nocoo/basalt";
+import { Grid } from "@nocoo/basalt/components/grid";
 import { TableOfContents, TableOfContentsItem } from "@nocoo/basalt/components/table-of-contents";
 import { useEffect, useMemo } from "react";
 import ReactMarkdown, { type Components, defaultUrlTransform } from "react-markdown";
@@ -20,11 +21,11 @@ export function MarkdownContents({
 		return () => window.removeEventListener("hashchange", onNavigate);
 	}, [onNavigate]);
 	return (
-		<TableOfContents title="On this page">
+		<TableOfContents title="本页目录">
 			{entries.map((entry) => (
 				<TableOfContentsItem key={entry.id} href={`#${entry.id}`}>
 					<span className="octo-memory-toc-indent" data-depth={entry.depth}>
-						{entry.text || "Untitled section"}
+						{entry.text || "未命名章节"}
 					</span>
 				</TableOfContentsItem>
 			))}
@@ -48,7 +49,7 @@ export function Markdown({
 				<Checkbox
 					checked={Boolean(checked)}
 					disabled
-					aria-label={checked ? "Completed task" : "Incomplete task"}
+					aria-label={checked ? "已完成任务" : "未完成任务"}
 				/>
 			),
 			a: ({ node: _node, href, children, ...props }) => {
@@ -93,7 +94,7 @@ export function Markdown({
 						}
 					/>
 				) : (
-					<span className="octo-muted">{alt || "Attachment loading"}</span>
+					<span className="octo-muted">{alt || "正在加载附件"}</span>
 				);
 			},
 		};
@@ -111,7 +112,7 @@ export function Markdown({
 		return result;
 	}, [entries, urls, onAttachment]);
 	return (
-		<article className="octo-markdown">
+		<Grid columns={1} gap="sm" className="octo-markdown">
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm]}
 				rehypePlugins={[rehypeHighlight]}
@@ -122,6 +123,6 @@ export function Markdown({
 			>
 				{source}
 			</ReactMarkdown>
-		</article>
+		</Grid>
 	);
 }

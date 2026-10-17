@@ -132,7 +132,7 @@ describe("EditorModel", () => {
 			},
 			headers: { "If-Match": "2" },
 		});
-		expect(model.state.notice).toBe("Saved version 3");
+		expect(model.state.notice).toBe("已保存第 3 版");
 		expect(model.state.dirty).toBe(false);
 	});
 	it("retains typing done while save is pending", async () => {
@@ -221,18 +221,18 @@ describe("EditorModel", () => {
 		model.update({ title: "ignored" });
 		api.request.mockRejectedValueOnce(new Error("load"));
 		await model.load();
-		expect(model.state.error).toBe("load");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		api.request.mockResolvedValueOnce(memory);
 		await model.load();
 		model.update({ body: "Unsaved" });
 		api.request.mockRejectedValueOnce(new Error("offline"));
 		await model.save();
-		expect(model.state.error).toBe("offline");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		api.request
 			.mockRejectedValueOnce(new ApiError(409, "version_conflict"))
 			.mockRejectedValueOnce(new Error("refresh failed"));
 		await model.save();
-		expect(model.state.error).toBe("refresh failed");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		expect(model.state.draft?.body).toBe("Unsaved");
 	});
 	it("uploads one-part multipart bodies (including Unicode filenames) and inserts safe octo references", async () => {
@@ -267,7 +267,7 @@ describe("EditorModel", () => {
 		expect((pdfForm.get("file") as File).name).toBe(pdf.name);
 		api.request.mockRejectedValueOnce(new Error("upload failed"));
 		await model.upload(file);
-		expect(model.state.error).toBe("upload failed");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 	});
 	it("rejects oversize or unsupported attachments before making requests", async () => {
 		const api = client();
@@ -281,7 +281,7 @@ describe("EditorModel", () => {
 		await model.upload(
 			Object.assign(new Blob(["x"], { type: "application/javascript" }), { name: "x.js" }),
 		);
-		expect(model.state.error).toContain("image or PDF");
+		expect(model.state.error).toContain("图片或 PDF");
 		expect(api.request).toHaveBeenCalledTimes(1);
 	});
 	it("ignores overlapping stale loads so a late response cannot erase the current draft", async () => {

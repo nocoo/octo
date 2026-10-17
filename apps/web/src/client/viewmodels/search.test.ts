@@ -116,7 +116,7 @@ describe("SearchModel", () => {
 			throw new Error("offline");
 		});
 		await model.load(new URLSearchParams("q=worker"));
-		expect(model.state.error).toBe("offline");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		request.mockResolvedValueOnce({
 			items: [],
 			channels: {

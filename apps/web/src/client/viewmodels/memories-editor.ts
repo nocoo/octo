@@ -178,7 +178,7 @@ export class EditorModel extends Store<{
 				base: current,
 				draft: next,
 				dirty: !same(next, toDraft(current)),
-				notice: `Saved version ${current.version}`,
+				notice: `已保存第 ${current.version} 版`,
 			});
 		} catch (error) {
 			if (error instanceof ApiError && error.code === "version_conflict") {
@@ -226,7 +226,7 @@ export class EditorModel extends Store<{
 			draft: conflict.merged,
 			dirty: true,
 			conflict: null,
-			notice: "Merged against the latest version. Review and save.",
+			notice: "已与最新版本合并，请检查后保存。",
 		});
 	}
 	cancelMerge(): void {
@@ -236,7 +236,7 @@ export class EditorModel extends Store<{
 		if (!this.state.draft || this.state.uploading || this.state.conflict) return;
 		this.set({ uploading: true, error: null });
 		try {
-			if (file.size > 50 * 1024 * 1024) throw new Error("Attachment exceeds 50 MiB");
+			if (file.size > 50 * 1024 * 1024) throw new Error("附件大小不能超过 50 MiB。");
 			if (
 				![
 					"image/png",
@@ -247,7 +247,7 @@ export class EditorModel extends Store<{
 					"application/pdf",
 				].includes(file.type)
 			)
-				throw new Error("Choose a supported image or PDF");
+				throw new Error("请选择支持的图片或 PDF 文件。");
 			const body = new FormData();
 			body.append("file", file, file.name);
 			const attachment = await this.api.request<Attachment>(

@@ -1,6 +1,7 @@
+import { ZodError } from "zod";
 import type { MemoryFilters } from "../../lib/schema/filters";
 import { memoryFiltersSchema } from "../../lib/schema/filters";
-import { type AdminClient, adminApi } from "../lib/api";
+import { type AdminClient, ApiError, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
 
 export interface Attachment {
@@ -79,9 +80,65 @@ export const filterKeys = [
 	"importance_max",
 ] as const;
 
+const errorLabels: Record<string, string> = {
+	access_denied: "无权访问，请检查登录状态。",
+	unauthenticated: "请重新登录后再试。",
+	forbidden: "无权执行此操作。",
+	not_found: "内容不存在或无权访问。",
+	version_conflict: "版本已更新，请刷新后重试。",
+	tag_conflict: "标签已变更，请刷新后重试。",
+	validation_failed: "输入格式不正确，请检查填写内容。",
+	unprocessable: "无法处理此操作，请检查提交内容。",
+	unavailable: "服务暂不可用，请稍后重试。",
+	embedder_unavailable: "嵌入服务暂不可用，请检查网关设置。",
+	vector_dimension_mismatch: "向量维度与当前配置不一致。",
+	payload_too_large: "提交内容过大，请缩小后重试。",
+};
+const validationMessages = new Set([
+	"重要性下限不能超过上限。",
+	"起始时间不能晚于结束时间。",
+	"每页条数须为 1 至 200 的整数。",
+	"附件大小不能超过 50 MiB。",
+	"请选择支持的图片或 PDF 文件。",
+	"至少一个搜索通道的权重须大于零。",
+]);
+
 export function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "request_failed";
+	if (error instanceof ZodError) return "输入格式不正确，请检查填写内容。";
+	if (error instanceof Error) {
+		const code = error instanceof ApiError ? error.code : error.message;
+		if (Object.hasOwn(errorLabels, code)) return errorLabels[code] as string;
+		if (!(error instanceof ApiError) && validationMessages.has(error.message)) return error.message;
+	}
+	return "请求失败，请稍后重试。";
 }
+
+export const memoryTypeLabels: Record<string, string> = {
+	fact: "事实",
+	preference: "偏好",
+	decision: "决策",
+	procedure: "流程",
+	event: "事件",
+	log: "日志",
+	note: "笔记",
+};
+export const memoryFieldLabels: Record<string, string> = {
+	title: "标题",
+	body: "正文",
+	space: "空间",
+	space_id: "空间",
+	type: "类型",
+	tags: "标签",
+	importance: "重要性",
+	event_time: "事件时间",
+};
+export const memoryOperationLabels: Record<string, string> = {
+	create: "创建",
+	update: "更新",
+	rollback: "回滚",
+	restore: "恢复",
+	move: "移动",
+};
 
 export function filtersFromUrl(params: URLSearchParams): MemoryFilters {
 	const raw: Record<string, unknown> = {};
@@ -107,19 +164,20 @@ export function filtersFromUrl(params: URLSearchParams): MemoryFilters {
 		filters.importance.max !== undefined &&
 		filters.importance.min > filters.importance.max
 	)
-		throw new Error("Minimum importance exceeds maximum");
+		throw new Error("重要性下限不能超过上限。");
 	if (
 		filters.time?.from &&
 		filters.time.to &&
 		Date.parse(filters.time.from) > Date.parse(filters.time.to)
 	)
-		throw new Error("Start time exceeds end time");
+		throw new Error("起始时间不能晚于结束时间。");
 	return filters;
 }
 
 export function pageLimit(params: URLSearchParams): number {
 	const limit = Number(params.get("limit") ?? 50);
-	if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error("Limit must be 1–200");
+	if (!Number.isInteger(limit) || limit < 1 || limit > 200)
+		throw new Error("每页条数须为 1 至 200 的整数。");
 	return limit;
 }
 
@@ -139,6 +197,7 @@ export function memoryQuery(params: URLSearchParams): string {
 
 export class MemoriesModel extends Store<{
 	items: Memory[];
+	loaded: boolean;
 	nextCursor: string | null;
 	loading: boolean;
 	error: string | null;
@@ -146,7 +205,7 @@ export class MemoriesModel extends Store<{
 	private generation = 0;
 	private cache = new Map<string, { items: Memory[]; next_cursor: string | null }>();
 	constructor(private readonly api: AdminClient = adminApi) {
-		super({ items: [], nextCursor: null, loading: false, error: null });
+		super({ items: [], loaded: false, nextCursor: null, loading: false, error: null });
 	}
 	async load(params: URLSearchParams): Promise<void> {
 		const generation = ++this.generation;
@@ -164,7 +223,12 @@ export class MemoriesModel extends Store<{
 			);
 			this.cache.set(query, result);
 			if (generation === this.generation)
-				this.set({ items: result.items, nextCursor: result.next_cursor, loading: false });
+				this.set({
+					items: result.items,
+					nextCursor: result.next_cursor,
+					loading: false,
+					loaded: true,
+				});
 		} catch (error) {
 			if (generation === this.generation) this.set({ loading: false, error: errorMessage(error) });
 		}
@@ -322,7 +386,7 @@ export class HistoryModel extends Store<{
 			this.set({
 				current,
 				rollbackTarget: null,
-				notice: `Rollback created version ${current.version}`,
+				notice: `回滚已生成第 ${current.version} 版`,
 			});
 			await this.load();
 		} catch (error) {

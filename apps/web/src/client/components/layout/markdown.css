@@ -5,15 +5,11 @@
 	line-height: var(--basalt-leading-relaxed);
 	overflow-wrap: anywhere;
 }
-.octo-markdown > :first-child {
-	margin-top: 0;
-}
-.octo-markdown > :last-child {
-	margin-bottom: 0;
+.octo-markdown > * {
+	margin-block: unset;
 }
 .octo-markdown :is(h1, h2, h3, h4, h5, h6) {
 	scroll-margin-block-start: var(--basalt-space-layout-xl);
-	margin-block: var(--basalt-space-layout-lg) var(--basalt-space-layout-sm);
 	line-height: var(--basalt-leading-tight);
 }
 .octo-markdown h1 {
@@ -24,9 +20,6 @@
 }
 .octo-markdown h3 {
 	font-size: var(--basalt-text-lg);
-}
-.octo-markdown p {
-	margin-block: var(--basalt-space-layout);
 }
 .octo-markdown :is(img, video) {
 	display: block;
@@ -54,7 +47,7 @@
 	color: hsl(var(--basalt-primary));
 }
 .octo-markdown blockquote {
-	margin-inline: 0;
+	margin-inline: unset;
 	padding-inline-start: var(--basalt-space-layout);
 	border-inline-start: 1px solid hsl(var(--basalt-border));
 	color: hsl(var(--basalt-muted-foreground));
@@ -90,50 +83,16 @@
 	color: hsl(var(--basalt-warning));
 }
 .octo-memory-layout {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(13rem, 18rem);
-	align-items: start;
-	gap: var(--basalt-space-layout-lg);
+	--octo-memory-columns: minmax(0, 1fr) minmax(13rem, 18rem);
 }
 .octo-memory-aside {
-	display: flex;
-	flex-direction: column;
-	gap: var(--basalt-space-layout);
 	position: sticky;
 	top: var(--basalt-space-layout);
 	min-width: 0;
 }
-.octo-memory-stack {
-	display: flex;
-	flex-direction: column;
-	gap: var(--basalt-space-layout);
-	min-width: 0;
-}
-.octo-memory-fields {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-	gap: var(--basalt-space-layout);
-	align-items: end;
-}
-.octo-memory-cards {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
-	gap: var(--basalt-space-layout);
-}
-.octo-memory-editor {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-	gap: var(--basalt-space-layout);
-}
 .octo-memory-editor textarea {
 	resize: vertical;
-	min-height: 26rem;
 	font-family: var(--font-mono);
-}
-.octo-memory-conflict-grid {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: var(--basalt-space-layout);
 }
 .octo-memory-conflict-grid pre {
 	white-space: pre-wrap;
@@ -156,11 +115,6 @@
 .octo-memory-diff [data-change="hunk"] {
 	color: hsl(var(--basalt-primary));
 }
-.octo-memory-scores {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: var(--basalt-space-layout);
-}
 .octo-memory-mobile {
 	display: none;
 }
@@ -180,15 +134,9 @@
 .octo-memory-toc-indent[data-depth="6"] {
 	padding-inline-start: var(--basalt-space-layout);
 }
-.octo-memory-selected {
-	background: hsl(var(--basalt-selected));
-	color: hsl(var(--basalt-selected-foreground));
-}
 @media (max-width: 767px) {
-	.octo-memory-layout,
-	.octo-memory-editor,
-	.octo-memory-conflict-grid {
-		grid-template-columns: minmax(0, 1fr);
+	.octo-memory-layout {
+		--octo-memory-columns: minmax(0, 1fr);
 	}
 	.octo-memory-aside {
 		position: static;
@@ -204,8 +152,5 @@
 	}
 	.octo-memory-editor[data-pane="preview"] > :first-child {
 		display: none;
-	}
-	.octo-memory-scores {
-		grid-template-columns: minmax(0, 1fr);
 	}
 }

@@ -1,7 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../lib/api";
 import { client, memory } from "./__tests__/memories-fixtures";
-import { filtersFromUrl, HistoryModel, MemoriesModel, MemoryModel, memoryQuery } from "./memories";
+import {
+	errorMessage,
+	filtersFromUrl,
+	HistoryModel,
+	MemoriesModel,
+	MemoryModel,
+	memoryQuery,
+} from "./memories";
+
+it("localizes API and validation errors without exposing server diagnostics", () => {
+	expect(errorMessage(new ApiError(403, "access_denied"))).toBe("无权访问，请检查登录状态。");
+	expect(errorMessage(new ApiError(500, "sensitive diagnostic"))).toBe("请求失败，请稍后重试。");
+	expect(errorMessage(new Error("private upstream response"))).toBe("请求失败，请稍后重试。");
+	expect(errorMessage(new Error("重要性下限不能超过上限。"))).toBe("重要性下限不能超过上限。");
+	try {
+		filtersFromUrl(new URLSearchParams("types=invalid"));
+	} catch (error) {
+		expect(errorMessage(error)).toBe("输入格式不正确，请检查填写内容。");
+	}
+});
 
 describe("memory filters", () => {
 	it("round-trips every supported filter, pagination and URL-only display state", () => {
@@ -72,7 +91,7 @@ describe("MemoriesModel", () => {
 			throw new Error("offline");
 		});
 		await model.load(new URLSearchParams());
-		expect(model.state.error).toBe("offline");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		expect(model.state.nextCursor).toBe("next");
 		await model.load(new URLSearchParams("importance_min=bad"));
 		expect(model.state.error).toBeTruthy();
@@ -179,10 +198,10 @@ describe("MemoryModel", () => {
 			.mockRejectedValueOnce(new ApiError(404, "not_found"))
 			.mockResolvedValueOnce({ items: [] });
 		await model.load();
-		expect(model.state.error).toBe("not_found");
+		expect(model.state.error).toBe("内容不存在或无权访问。");
 		api.request.mockRejectedValueOnce("broken").mockResolvedValueOnce({ items: [] });
 		await model.load();
-		expect(model.state.error).toBe("request_failed");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 	});
 });
 
@@ -202,7 +221,7 @@ describe("HistoryModel", () => {
 			.mockResolvedValueOnce({ items: [{ version: 1 }, { version: 2 }] })
 			.mockRejectedValueOnce(new Error("diff unavailable"));
 		await model.loadFromUrl(params);
-		expect(model.state.error).toBe("diff unavailable");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		expect(model.state.diff).toBeNull();
 		api.request
 			.mockResolvedValueOnce(memory)
@@ -322,7 +341,7 @@ describe("HistoryModel", () => {
 			headers: { "If-Match": "2" },
 		});
 		expect(model.state.current?.version).toBe(3);
-		expect(model.state.notice).toBe("Rollback created version 3");
+		expect(model.state.notice).toBe("回滚已生成第 3 版");
 	});
 	it("handles single-version histories and failed compare/load/rollback", async () => {
 		const api = client();
@@ -332,17 +351,17 @@ describe("HistoryModel", () => {
 		expect(model.state.diff).toBeNull();
 		api.request.mockRejectedValueOnce(new Error("diff failed"));
 		await model.compare(1, 2);
-		expect(model.state.error).toBe("diff failed");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		model.requestRollback(1);
 		api.request.mockRejectedValueOnce(new ApiError(409, "version_conflict"));
 		await model.rollback();
-		expect(model.state.error).toBe("version_conflict");
+		expect(model.state.error).toBe("版本已更新，请刷新后重试。");
 		expect(model.state.rollbackTarget).toBe(1);
 		api.request
 			.mockRejectedValueOnce(new Error("load failed"))
 			.mockResolvedValueOnce({ items: [] });
 		await model.load();
-		expect(model.state.error).toBe("load failed");
+		expect(model.state.error).toBe("请求失败，请稍后重试。");
 		const empty = new HistoryModel("m1", api.api);
 		empty.requestRollback(1);
 		await empty.rollback();
