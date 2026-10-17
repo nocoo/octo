@@ -106,7 +106,8 @@ it("renders only real M7 metrics with rollup scope, change actors and unavailabl
 	expect(html).toContain("今日写入次数 · UTC 小时汇总");
 	expect(html).toContain("今日调用密钥 · UTC 小时汇总");
 	expect(html).toContain("回收站记忆数");
-	expect(html).toContain("M7 未提供向量同步积压、D1 体积和定时任务最近运行时间");
+	expect(html).toContain("当前接口未提供向量同步积压、D1 体积和定时任务最近运行时间");
+	expect(html).not.toContain("待同步向量");
 	expect(html).toContain("admin:owner@example.com");
 	expect(html).toMatch(/dateTime="2026-10-18T01:00:00.000Z"/i);
 	expect(html).toContain("未提供");

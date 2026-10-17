@@ -125,12 +125,11 @@ export function OverviewPage() {
 					{ label: "今日写入次数 · UTC 小时汇总", value: state.writesToday ?? "—" },
 					{ label: "今日调用密钥 · UTC 小时汇总", value: state.activeKeysToday ?? "—" },
 					{ label: "回收站记忆数", value: state.trashCount ?? "—" },
-					{ label: "待同步向量", value: "未提供" },
 				]}
 			/>
 			<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
-				调用与写入次数来自本年度 UTC 小时汇总，非实时数据，也不等同于新增记忆数。 M7
-				未提供向量同步积压、D1 体积和定时任务最近运行时间。
+				调用与写入次数来自本年度 UTC 小时汇总，非实时数据，也不等同于新增记忆数。
+				当前接口未提供向量同步积压、D1 体积和定时任务最近运行时间。
 			</p>
 			<LayerCard>
 				<LayerCard.Header>
