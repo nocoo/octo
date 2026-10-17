@@ -32,10 +32,21 @@ M2 integration must satisfy all of these before route mounting:
    for post-commit processing in the same SQL transaction.
 5. Prove the above with M2's real D1 invariants and concurrent mutations. The
    simplified test service is not evidence that M2 integration is complete.
+6. Authorize replay access against the current M1 principal before reading a
+   saved memory outcome. Permission/scope changes must not expose an outcome
+   which the current principal can no longer access. M3's global-tag preflight
+   is integrated now; per-resource/batch memory replay authorization remains
+   part of the production-unmounted M2 integration boundary.
 
 ## M3 tag writes
 
-M3 tags/spaces remain mounted in production. `TagRepo.rename` and `merge` now
+M3 tags/spaces remain mounted in production. The two global-tag POST paths run
+M1's `tag_global` authorization after bearer authentication and before the
+idempotency middleware, including every replay. Removing update permission or
+all-space scope takes effect immediately; restoring permission can replay the
+original outcome without another mutation. No M1 implementation is changed.
+
+`TagRepo.rename` and `merge` now
 return a `TagWrite` plan, never execute it. Routes stage its statements and
 register its transaction-error mapping with the HTTP middleware. Tag changes,
 links, mapped-rowid FTS rebuilds and replay chunks commit in one D1 batch.

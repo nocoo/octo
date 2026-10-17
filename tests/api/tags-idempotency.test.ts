@@ -105,6 +105,27 @@ describe("tag mutation idempotency", () => {
 		expect(replay.status).toBe(200);
 		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
 		expect(await replay.text()).toBe(bodies[0]);
+		for (const [scope, ops] of [
+			["all", "r"],
+			["spaces", "u"],
+		] as const) {
+			await db([
+				"--command",
+				`UPDATE api_keys SET scope = ${sqlText(scope)}, ops = ${sqlText(ops)} WHERE id = ${sqlText(admin.id)}`,
+			]);
+			const denied = await post();
+			expect(denied.status).toBe(403);
+			expect(denied.headers.get("Idempotent-Replayed")).toBeNull();
+			expect(await denied.json()).toMatchObject({ error: { code: "forbidden" } });
+		}
+		await db([
+			"--command",
+			`UPDATE api_keys SET scope = 'all', ops = 'u' WHERE id = ${sqlText(admin.id)}`,
+		]);
+		const restoredReplay = await post();
+		expect(restoredReplay.status).toBe(200);
+		expect(restoredReplay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await restoredReplay.text()).toBe(bodies[0]);
 		const mismatch = await post({ ...body, extra: true });
 		expect(mismatch.status).toBe(409);
 		expect(await mismatch.json()).toMatchObject({ error: { code: "idempotency_conflict" } });

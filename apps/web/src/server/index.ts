@@ -13,7 +13,7 @@ import { liveResponse } from "./routes/live";
 import { createV1Routes } from "./routes/v1";
 import { meResponse } from "./routes/v1/me";
 import { spacesRoutes } from "./routes/v1/spaces";
-import { tagsRoutes } from "./routes/v1/tags";
+import { tagsRoutes, tagWriteAuthorization } from "./routes/v1/tags";
 import type { MemoryService } from "./services/memories";
 
 export function createApp(memoryService?: MemoryService): Hono<{
@@ -44,6 +44,8 @@ export function createApp(memoryService?: MemoryService): Hono<{
 	});
 	app.get("/api/live", (c) => liveResponse(c.env));
 	app.use("/api/v1/*", bearerMiddleware);
+	app.use("/api/v1/tags/:name/rename", tagWriteAuthorization);
+	app.use("/api/v1/tags/:name/merge", tagWriteAuthorization);
 	app.use("/api/v1/*", idempotencyMiddleware());
 	app.use("/api/admin/*", accessMiddleware);
 	app.use("/api/admin/*", adminWriteOriginMiddleware);

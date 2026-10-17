@@ -18,6 +18,17 @@ own_entries_only forbids tag_global, but M1 explicitly checks only all-space
 scope and update permission for that operation. Read the actual authorization
 contract before asserting a new policy, and keep M1 unchanged during integration.
 
+## M6: authorization must run before replay lookup
+
+A saved M3 tag outcome bypassed the route-level permission check: after a key
+lost update permission or all-space scope, the same idempotency request still
+returned 200 and its saved global-tag response. RED tests reproduced both tag
+paths with real M1 credentials. Global-tag authorization now precedes replay
+lookup for both POST routes, without changing M1's policy. Restore permission
+and the original outcome still replays without another effect. Any future
+resource route must establish its replay-access authorization before mounting
+behind the generic middleware; bearer authentication alone is insufficient.
+
 ## M6: newly merged HTTP fixtures need the same async boundary
 
 M3 added two more L2 files after M6's async fixture repair. Both still called

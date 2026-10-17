@@ -119,6 +119,38 @@ describe("M3 mutations at the M6 HTTP transaction boundary", () => {
 			}
 		},
 	);
+	it.each(["rename", "merge"])("rechecks current authorization before replaying %s", async (op) => {
+		const f = await fixture();
+		try {
+			const body = op === "rename" ? { new_name: "gamma" } : { into: "beta" };
+			const first = await f.post(op, body);
+			expect(first.status).toBe(200);
+			const saved = await first.text();
+			for (const [scope, ops] of [
+				["all", "r"],
+				["spaces", "u"],
+				["own", "u"],
+			]) {
+				f.sqlite
+					.prepare("UPDATE api_keys SET scope = ?, ops = ? WHERE id = ?")
+					.run(scope ?? "", ops ?? "", f.material.keyid);
+				const denied = await f.post(op, body);
+				expect(denied.status).toBe(403);
+				expect(denied.headers.get("Idempotent-Replayed")).toBeNull();
+				expect(await denied.json()).toMatchObject({ error: { code: "forbidden" } });
+			}
+			f.sqlite
+				.prepare("UPDATE api_keys SET scope = 'all', ops = 'u' WHERE id = ?")
+				.run(f.material.keyid);
+			const replay = await f.post(op, body);
+			expect(replay.status).toBe(200);
+			expect(await replay.text()).toBe(saved);
+			expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+			expect(f.rows("SELECT * FROM changes")).toHaveLength(1);
+		} finally {
+			f.sqlite.close();
+		}
+	});
 	it("rejects a stale rename without renaming the concurrent winner", async () => {
 		const f = await fixture();
 		try {
