@@ -58,5 +58,5 @@
 ## 6. 多 agent 并行开发
 
 - 主控在 herdr 的 `octo` workspace 里调度，受控 agent 在主控 pane 右侧开；按 workflow 的「启动参数」和「调度规范」选择 agent 和 reasoning level；review 用固定组合（Codex `group/auto-gpt-6-astra` `high`）。
-- MacBook 和 Mac Studio 并行时，每台机器各领 08 里互不冲突的工作包；共享契约（02 schema、04 schema、05 判定）先合入，之后再扇出。
+- 并行用 MacBook herdr 和 Cursor cloud agents，各自领 08 里互不冲突的工作包；共享契约（02 schema、04 schema、05 判定）先合入，之后再扇出。
 - 项目的长期规则写在根目录 `AGENTS.md`；事故复盘写在 `Retrospective.md`。

@@ -6,7 +6,7 @@
 
 | 入口 | 认证 | 身份 |
 |---|---|---|
-| `/api/v1/*`、`/mcp`（阶段 3） | `Authorization: Bearer octo_<keyid>_<secret>` | API key = agent |
+| `/api/v1/*`、`/mcp`（阶段 2） | `Authorization: Bearer octo_<keyid>_<secret>` | API key = agent |
 | `/`（SPA）、`/api/admin/*` | Cloudflare Access JWT | Zheng（`admin:<email>`），拥有全部权限 |
 
 ## 2. Cloudflare Access（已配置）

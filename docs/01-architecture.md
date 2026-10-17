@@ -12,7 +12,7 @@
 | 权限 | key 即 agent 身份；read/write/update/delete 可组合；范围：全部 / 指定 space / 仅自己的 space；可选「只能改 / 删自己的条目」；默认拒绝，无权访问的 space 不可见；每次调用都写审计；key 可过期 / 轮换 / 吊销，明文只显示一次；删除进回收站，永不自动清除；硬删除只能在 dashboard 做 |
 | Dashboard | Cloudflare Access 保护、全部权限：key 管理、Markdown 阅读、编辑、diff、回滚、标签 / space / 回收站、批量操作、可视化、审计查询 |
 
-**Zheng 已调整的范围：** 不做速率限制（需求里的 rate limits 删掉）；不用 Durable Objects；R2 以后挂到 Zheng 配置的 CDN 域名下；MCP 放到阶段 3。
+**Zheng 已调整的范围：** 不做速率限制（需求里的 rate limits 删掉）；不用 Durable Objects；R2 以后挂到 Zheng 配置的 CDN 域名下；MCP 放到阶段 2。从 Nowledge Mem 迁移数据由知识库 bot 负责，不在 octo 范围内。
 
 ## 2. 拓扑
 

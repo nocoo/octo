@@ -9,9 +9,10 @@
 | 阶段 | 内容 | 退出条件 |
 |---|---|---|
 | 0 脚手架 | 仓库骨架、门禁、端口和 Caddy、spike | L1 hook 能拦截失败；`/api/live` 本地通过 HTTPS 返回 200 |
-| 1 API | 04 中所有 v1 端点 + admin key 管理的最小 API | L2 覆盖 100% 端点 × 方法；生产部署；知识库 bot 跑通迁移冒烟 |
-| 2 Dashboard | 06 的全部页面 | L3 关键路径通过；Basalt 设计审计通过 |
-| 3 MCP | `/mcp` 无状态 Streamable HTTP，工具映射到 v1 能力，用同一套 API key 和权限 | MCP 契约测试；知识库 bot 能接入 |
+| 1 API | 04 中所有 v1 端点 + admin key 管理的最小 API | L2 覆盖 100% 端点 × 方法；生产部署；知识库 bot 用 v1 API 跑通冒烟 |
+| 2 MCP + Dashboard | `/mcp` 无状态 Streamable HTTP（工具映射到 v1 能力，用同一套 API key 和权限）；06 的全部页面 | MCP 契约测试且知识库 bot 能接入；L3 关键路径通过；Basalt 设计审计通过 |
+
+**范围外：** 从 Nowledge Mem 迁移数据由知识库 bot 负责，用普通的 v1 API 完成；octo 不提供迁移专用的字段或接口（例如 `external_id`、时间戳覆盖）。
 
 ## 阶段 0 / 1 里程碑（为并行 agent 拆分）
 
@@ -43,9 +44,9 @@
 
 - review：固定组合 Codex `group/auto-gpt-6-astra` `high`。
 - 实现：先用 workflow 的 `system1-quick-decide` 决定；参考做法是 M1 / M4 这类逻辑密集的包用较高档位，M3 / M5 / M6 这类模式明确的包用较低档位。
-- 两台机器：MacBook 领 M1 / M2 / M4，Studio 领 M3 / M5 / M6 / M7（以实际在线情况为准）；每个包一个分支或 worktree，PR 合并到 main。
+- 并行方式：MacBook 上的 herdr `octo` workspace（主控右侧开受控 pane）+ Cursor cloud agents（仓库 `https://github.com/nocoo/octo`）。每个包一个分支或 worktree，PR 合并到 main。Mac Studio 不参与。
 
-## 阶段 2 / 3 预览
+## 阶段 2 预览
 
-- 阶段 2 拆成：壳与导航 → 记忆库与阅读 → 编辑 / diff / 回滚 → 搜索 → key / 用量 / 审计 → 可视化（图、时间线）→ 回收站与批量操作 → 动效打磨和 Basalt 审计。
-- 阶段 3 的 MCP 不用 Durable Objects：使用 MCP TypeScript SDK 的无状态 Streamable HTTP 传输（需在实现时核实 SDK 当前对无状态模式的支持），工具是 `search` / `get` / `create` / `update` / `list_changes` / `tags` 等，复用 v1 服务层和 `authorize()`。
+- Dashboard 拆成：壳与导航 → 记忆库与阅读 → 编辑 / diff / 回滚 → 搜索 → key / 用量 / 审计 → 可视化（图、时间线）→ 回收站与批量操作 → 动效打磨和 Basalt 审计。
+- MCP 先于 Dashboard 交付，不用 Durable Objects：使用 MCP TypeScript SDK 的无状态 Streamable HTTP 传输（需在实现时核实 SDK 当前对无状态模式的支持），工具是 `search` / `get` / `create` / `update` / `list_changes` / `tags` 等，复用 v1 服务层和 `authorize()`。
