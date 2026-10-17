@@ -209,3 +209,18 @@ it("guards profile changes between validation and the atomic save", async () => 
 	});
 	expect(raw.prepare("SELECT COUNT(*) AS n FROM settings").get()?.n).toBe(0);
 });
+
+it("lets an admin replace a formerly-local URL after entering production", async () => {
+	const { env } = fixture();
+	await saveEmbeddingSettings(
+		env,
+		{ ...SETTINGS, base_url: "http://127.0.0.1:9000" },
+		"admin:e@local",
+	);
+	env.RESOURCE_ENV = "production";
+	await expect(loadEmbeddingConfig(env)).rejects.toMatchObject({ code: "unavailable" });
+	await expect(
+		saveEmbeddingSettings(env, { base_url: "https://gateway.example" }, "admin:e@local"),
+	).resolves.toMatchObject({ base_url: "https://gateway.example" });
+	expect(await loadEmbeddingConfig(env)).toMatchObject({ baseUrl: "https://gateway.example" });
+});

@@ -74,12 +74,6 @@ export async function readEmbeddingState(env: Env): Promise<EmbeddingState> {
 	const model = values.get("embedding.model") ?? profile.model;
 	const dims = Number(values.get("embedding.dims") ?? profile.dims);
 	const base = values.get("embedding.base_url") ?? null;
-	let baseUrl: string | null = null;
-	try {
-		baseUrl = base === null ? null : validateEmbeddingUrl(base, env.RESOURCE_ENV);
-	} catch {
-		throw settingsUnavailable();
-	}
 	return {
 		profile,
 		rows,
@@ -95,7 +89,7 @@ export async function readEmbeddingState(env: Env): Promise<EmbeddingState> {
 			]),
 		),
 		settings: {
-			base_url: baseUrl,
+			base_url: base,
 			model,
 			dims,
 			backfill_enabled: values.get("embedding.backfill_enabled") === "true",
@@ -116,16 +110,12 @@ async function storedApiKey(env: Env, state: EmbeddingState): Promise<string | n
 }
 
 function mergedSettings(env: Env, state: EmbeddingState, input: SettingsInput) {
+	const base = input.base_url === undefined ? state.settings.base_url : input.base_url;
 	const settings = {
 		model: input.model ?? state.settings.model,
 		dims: input.dims ?? state.settings.dims,
 		backfill_enabled: input.backfill_enabled ?? state.settings.backfill_enabled,
-		base_url:
-			input.base_url === undefined
-				? state.settings.base_url
-				: input.base_url === null
-					? null
-					: validateEmbeddingUrl(input.base_url, env.RESOURCE_ENV),
+		base_url: base === null ? null : validateEmbeddingUrl(base, env.RESOURCE_ENV),
 	};
 	if (settings.model !== state.profile.model || settings.dims !== state.profile.dims) {
 		throw new ApiError(
@@ -157,8 +147,14 @@ export async function configFromState(
 	if (!state.settings.base_url || !apiKey) return null;
 	if (state.settings.model !== state.profile.model || state.settings.dims !== state.profile.dims)
 		throw settingsUnavailable();
+	let baseUrl: string;
+	try {
+		baseUrl = validateEmbeddingUrl(state.settings.base_url, env.RESOURCE_ENV);
+	} catch {
+		throw settingsUnavailable();
+	}
 	return {
-		baseUrl: state.settings.base_url,
+		baseUrl,
 		apiKey,
 		model: state.settings.model,
 		dims: state.settings.dims,
