@@ -251,6 +251,7 @@ describe("admin parity real HTTP", () => {
 				`SELECT actor FROM changes WHERE entity_id = ${sqlText(id)} AND op = 'purged'`,
 			),
 		).toEqual([{ actor: "admin:parity@local" }]);
-		await expect.poll(async () => (await fetch(localUrl)).status).toBe(404);
+		expect((await fetch(`${base}/api/__test/background`, { method: "POST" })).status).toBe(200);
+		expect((await fetch(localUrl)).status).toBe(404);
 	});
 });

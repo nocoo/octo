@@ -3,6 +3,7 @@ import { worker } from "../../apps/web/src/server/index";
 import { MEMORY_FIXTURE_SQL } from "./memories";
 
 const initialized = new WeakSet<D1Database>();
+const background = new Set<Promise<unknown>>();
 const uploadReads = new Map<
 	string,
 	{
@@ -26,6 +27,30 @@ export default {
 		if (!initialized.has(env.DB)) {
 			await env.DB.exec(MEMORY_FIXTURE_SQL);
 			initialized.add(env.DB);
+		}
+		const execution = new Proxy(ctx, {
+			get(target, property) {
+				if (property === "waitUntil")
+					return (promise: Promise<unknown>) => {
+						background.add(promise);
+						void promise.then(
+							() => background.delete(promise),
+							() => background.delete(promise),
+						);
+						target.waitUntil(promise);
+					};
+				const value = Reflect.get(target, property);
+				return typeof value === "function" ? value.bind(target) : value;
+			},
+		});
+		const pathname = new URL(request.url).pathname;
+		if (
+			request.method === "POST" &&
+			["/api/__test/background", "/api/__test/cron"].includes(pathname)
+		) {
+			if (pathname === "/api/__test/cron") worker.scheduled({} as ScheduledEvent, env, execution);
+			while (background.size > 0) await Promise.all([...background]);
+			return Response.json({ drained: true });
 		}
 		const probe = request.headers.get("X-Test-Upload-Probe");
 		if (probe && new URL(request.url).pathname === "/api/__test/upload-reads") {
@@ -64,7 +89,7 @@ export default {
 				},
 			});
 		}
-		const response = await worker.fetch(request, env, ctx);
+		const response = await worker.fetch(request, env, execution);
 		if (observe) ctx.waitUntil(observe());
 		return response;
 	},
