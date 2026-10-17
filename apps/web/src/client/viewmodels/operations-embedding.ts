@@ -12,6 +12,7 @@ export interface EmbeddingConfig extends EmbeddingFields {
 	api_key_set: boolean;
 	api_key_mask: string | null;
 }
+type EmbeddingResponse = Omit<EmbeddingConfig, "base_url"> & { base_url: string | null };
 export interface EmbeddingTestResult {
 	latency_ms: number;
 	dims: number | null;
@@ -27,10 +28,10 @@ interface EmbeddingState {
 	testResult: EmbeddingTestResult | null;
 }
 
-function readable(config: EmbeddingConfig): EmbeddingConfig {
+function readable(config: EmbeddingResponse): EmbeddingConfig {
 	const { base_url, model, dims, backfill_enabled, api_key_set, api_key_mask } = config;
 	return {
-		base_url,
+		base_url: base_url ?? "",
 		model,
 		dims,
 		backfill_enabled,
@@ -104,7 +105,7 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 		const revision = ++this.revision;
 		this.set({ loading: true, error: null });
 		try {
-			const config = await this.api.request<EmbeddingConfig>("/settings/embedding");
+			const config = await this.api.request<EmbeddingResponse>("/settings/embedding");
 			if (this.alive && revision === this.revision)
 				this.set({ config: readable(config), loading: false, loaded: true });
 		} catch (error) {
@@ -115,10 +116,21 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 
 	async save(fields: EmbeddingFields, secret?: string | null): Promise<boolean> {
 		if (!this.prepare(fields, secret)) return false;
+		return this.persist(payload(fields, secret));
+	}
+
+	async clearKey(): Promise<boolean> {
+		if (!this.prepare()) return false;
+		return this.persist({ api_key: null });
+	}
+
+	private async persist(
+		json: Partial<EmbeddingFields> & { api_key?: string | null },
+	): Promise<boolean> {
 		try {
 			await this.api.request("/settings/embedding", {
 				method: "PUT",
-				json: payload(fields, secret),
+				json,
 			});
 			if (!this.alive) return false;
 			await this.load();
@@ -159,9 +171,9 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 		this.set({ pending: false, loading: false });
 	}
 
-	private prepare(fields: EmbeddingFields, secret?: string | null): boolean {
+	private prepare(fields?: EmbeddingFields, secret?: string | null): boolean {
 		if (!this.alive || !this.state.loaded || this.state.pending) return false;
-		if (!valid(fields, secret)) {
+		if (fields && !valid(fields, secret)) {
 			this.set({
 				error: "请填写有效的网关地址、模型、维度（1 至 1536）和非空替换密钥。",
 			});

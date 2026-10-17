@@ -10,6 +10,35 @@ const fields = {
 const saved = { ...fields, api_key_set: true, api_key_mask: "****abcd" };
 
 describe("embedding settings", () => {
+	it("normalizes the nullable wire address for a controlled form", async () => {
+		const request = vi.fn().mockResolvedValue({ ...saved, base_url: null });
+		const model = new EmbeddingModel({ request });
+		await model.load();
+		expect(model.state.config.base_url).toBe("");
+		expect(model.state.config.api_key_set).toBe(true);
+	});
+
+	it("clears only the saved key even without a configured gateway", async () => {
+		const request = vi.fn().mockResolvedValue({ ...saved, base_url: null });
+		const model = new EmbeddingModel({ request });
+		expect(await model.clearKey()).toBe(false);
+		expect(request).not.toHaveBeenCalled();
+		await model.load();
+		request.mockResolvedValue({ ...saved, base_url: null, api_key_set: false, api_key_mask: null });
+		expect(await model.clearKey()).toBe(true);
+		expect(request).toHaveBeenCalledWith("/settings/embedding", {
+			method: "PUT",
+			json: { api_key: null },
+		});
+		expect(model.state.config).toMatchObject({
+			base_url: "",
+			api_key_set: false,
+			api_key_mask: null,
+		});
+		model.dispose();
+		expect(await model.clearKey()).toBe(false);
+	});
+
 	it("keeps configuration unknown after an initial read failure and blocks changes without hiding the error", async () => {
 		const request = vi.fn().mockRejectedValue(new Error("private"));
 		const model = new EmbeddingModel({ request });

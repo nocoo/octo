@@ -274,7 +274,7 @@ export function EmbeddingPage() {
 				loading={state.pending}
 				onConfirm={async () => {
 					takeSecret();
-					if (await model.save(state.config, null)) {
+					if (await model.clearKey()) {
 						setClearing(false);
 						toast.success("已清除保存的接口密钥。");
 					}

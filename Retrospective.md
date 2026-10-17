@@ -592,3 +592,7 @@ The MCP rebase had additive lockfile conflicts. Combining the conflict blocks pr
 ### 2026-10-18 — Clear hidden permission fields at submission
 
 MAX review found that switching an existing custom key from selected spaces to all or owned spaces hid the field but still submitted its old IDs. Real browser regressions failed for both transitions against M7's correct rejection, while selected-space preservation passed. The common form payload now includes IDs only for selected-space scope. Hidden fields may retain useful editing state, but submitted permissions must match the currently selected mode; never weaken server validation to accept stale form fields.
+
+### 2026-10-18 — Separate credential clearing from gateway validation
+
+MAX review identified a legal M7 configuration with a saved key and null gateway URL. The consumer assumed a non-null string and routed credential clearing through full gateway validation, so the clear action never reached the server. Two failing regressions now cover nullable wire-to-form projection and a minimal `{ api_key: null }` update guarded by the existing lifecycle. Clearing a credential must not depend on unrelated configuration validity. The browser credential fixture also used a logged `fill` action despite the documented write-only evidence rule; direct input evaluation now avoids putting the replacement value in a Playwright step title.

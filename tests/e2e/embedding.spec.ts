@@ -19,7 +19,9 @@ test("embedding defaults, write-only masking, real connection test, and clear", 
 		expect((await replacement.inputValue()) === "").toBe(true);
 		await page.getByRole("textbox", { name: "网关地址", exact: true }).fill(gateway.url);
 		await expect(replacement).toBeEditable();
-		await replacement.fill(secret);
+		await replacement.evaluate((input: HTMLInputElement, value) => {
+			input.value = value;
+		}, secret);
 		await page.getByRole("button", { name: "保存设置", exact: true }).click();
 		await expect(page.getByRole("status").filter({ hasText: "已配置" })).toContainText("abcd");
 		expect((await replacement.inputValue()) === "").toBe(true);
@@ -87,4 +89,34 @@ test("embedding defaults, write-only masking, real connection test, and clear", 
 	} finally {
 		await gateway.close();
 	}
+});
+
+test("clear a saved embedding key without a configured gateway", async ({ page, admin }) => {
+	await admin.json("/settings/embedding", "PUT", {
+		base_url: null,
+		api_key: `l3-clear-${randomUUID()}`,
+	});
+	const warnings: string[] = [];
+	page.on("console", (message) => {
+		if (["error", "warning"].includes(message.type())) warnings.push(message.text());
+	});
+	await page.goto("/settings/embedding");
+	await expect(page.getByRole("textbox", { name: "网关地址", exact: true })).toHaveValue("");
+	await expect(page.getByRole("button", { name: "清除已保存密钥", exact: true })).toBeEnabled();
+	await page.getByRole("button", { name: "清除已保存密钥", exact: true }).click();
+	const submitted = page.waitForRequest(
+		(request) => request.method() === "PUT" && request.url().endsWith("/settings/embedding"),
+	);
+	await page
+		.getByRole("alertdialog")
+		.getByRole("button", { name: "清除密钥", exact: true })
+		.click();
+	expect((await submitted).postDataJSON()).toEqual({ api_key: null });
+	await expect(page.getByText("尚未配置接口密钥", { exact: true })).toBeVisible();
+	expect(await admin.json("/settings/embedding")).toMatchObject({
+		base_url: null,
+		api_key_set: false,
+		api_key_mask: null,
+	});
+	expect(warnings).toEqual([]);
 });
