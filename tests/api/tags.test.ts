@@ -154,6 +154,7 @@ describe("tags api", () => {
 		expect(merged.status).toBe(200);
 		expect(await merged.json()).toMatchObject({ memories: 2 });
 
+		await new Promise((resolve) => setTimeout(resolve, 500));
 		const links = rows<{ memory_id: string; tag_id: string }>(
 			d1(
 				"SELECT memory_id, tag_id FROM memory_tags WHERE memory_id IN ('mm1','mm2') ORDER BY memory_id, tag_id",
