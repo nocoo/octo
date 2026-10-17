@@ -267,6 +267,94 @@ describe("v1 search routes", () => {
 		});
 	});
 
+	it("partitions complete production filters under the Vectorize byte limit", async () => {
+		const ids = Array.from({ length: 100 }, (_, i) => `project-${i}-knowledge-base`);
+		const { db } = keyDb(ids);
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "bot",
+			role: "admin",
+			ops: "r",
+			scope: "all",
+		});
+		const sources = Array.from({ length: 100 }, (_, i) => `source-${i}-𠮷野-"\\`);
+		const types = Array.from({ length: 50 }, (_, i) => `type-${i}-配置-"\\`);
+		const query = vi.fn(async (vector: number[], options: VectorizeQueryOptions) => {
+			expect(vector).toEqual([0.6, 0.8]);
+			expect(options.topK).toBe(100);
+			expect(new TextEncoder().encode(JSON.stringify(options.filter)).length).toBeLessThan(2048);
+			expect(options.filter).toMatchObject({
+				importance: { $gte: 0.2, $lte: 0.8 },
+				updated: { $gte: 0, $lte: 1000 },
+			});
+			return { matches: [] };
+		});
+		const response = await createApp().request(
+			"/api/v1/search",
+			{
+				method: "POST",
+				headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+				body: JSON.stringify({
+					mode: "vector",
+					vector: { profile: "p1", values: [3, 4] },
+					filters: {
+						sources,
+						types,
+						importance: { min: 0.2, max: 0.8 },
+						time: { field: "updated", from: "1970-01-01T00:00:00Z", to: "1970-01-01T00:00:01Z" },
+					},
+				}),
+			},
+			{ ...envFor(db), VEC: { query } as never },
+		);
+		expect(response.status).toBe(200);
+		expect(query.mock.calls.length).toBeGreaterThan(1);
+		expect(query.mock.calls.length).toBeLessThanOrEqual(128);
+		const combinations = new Set<string>();
+		for (const [, options] of query.mock.calls) {
+			const filter = options.filter as Record<string, { $in: string[] }>;
+			expect(filter.space?.$in.every((value) => ids.some((id) => value === `slug-${id}`))).toBe(
+				true,
+			);
+			expect(filter.source?.$in.every((value) => sources.includes(value))).toBe(true);
+			expect(filter.type?.$in.every((value) => types.includes(value))).toBe(true);
+			for (const space of filter.space?.$in ?? []) {
+				for (const source of filter.source?.$in ?? []) {
+					for (const type of filter.type?.$in ?? []) {
+						combinations.add(JSON.stringify([space, source, type]));
+					}
+				}
+			}
+		}
+		expect(combinations.size).toBe(ids.length * sources.length * types.length);
+	});
+
+	it("returns unavailable without querying when a production singleton cannot fit", async () => {
+		const { db } = keyDb(["s1"]);
+		const { plaintext } = await mintApiKey(db, "pepper", {
+			name: "bot",
+			role: "admin",
+			ops: "r",
+			scope: "all",
+		});
+		const query = vi.fn(async () => ({ matches: [] }));
+		const response = await createApp().request(
+			"/api/v1/search",
+			{
+				method: "POST",
+				headers: { Authorization: `Bearer ${plaintext}`, "Content-Type": "application/json" },
+				body: JSON.stringify({
+					mode: "vector",
+					vector: { profile: "p1", values: [3, 4] },
+					filters: { sources: ["𠮷".repeat(600)] },
+				}),
+			},
+			{ ...envFor(db), VEC: { query } as never },
+		);
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({ error: { code: "unavailable" } });
+		expect(query).not.toHaveBeenCalled();
+	});
+
 	it.each(["vector", "hybrid"] as const)(
 		"does not query Vectorize for an empty visible set in %s mode",
 		async (mode) => {
