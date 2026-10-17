@@ -295,9 +295,9 @@ export function MemoriesPage() {
 												}
 											/>
 										</TableHead>
-										<TableHead>标题</TableHead>
-										<TableHead>空间 / 标签</TableHead>
-										<TableHead>更新时间</TableHead>
+										<TableHead style={{ minWidth: "28ch" }}>标题</TableHead>
+										<TableHead style={{ minWidth: "28ch" }}>空间 / 标签</TableHead>
+										<TableHead style={{ minWidth: "24ch" }}>更新时间</TableHead>
 									</TableRow>
 								</TableHeader>
 								<TableBody>
@@ -313,7 +313,7 @@ export function MemoriesPage() {
 													onCheckedChange={(checked) => select(memory.id, checked === true)}
 												/>
 											</TableCell>
-											<TableCell>
+											<TableCell style={{ minWidth: "28ch" }}>
 												<MemoryLink
 													memoryId={memory.id}
 													memoryTitle={memory.title}
@@ -322,10 +322,10 @@ export function MemoriesPage() {
 													{memory.title}
 												</MemoryLink>
 											</TableCell>
-											<TableCell>
+											<TableCell style={{ minWidth: "28ch" }}>
 												<MemoryTags memory={memory} />
 											</TableCell>
-											<TableCell>
+											<TableCell style={{ minWidth: "24ch" }}>
 												<time dateTime={memory.updated_at}>
 													{new Date(memory.updated_at).toLocaleString("zh-CN")}
 												</time>

@@ -47,6 +47,21 @@ function render(Page: () => React.JSX.Element, path: string) {
 }
 
 describe("memory pages use installed Basalt layouts and Chinese copy", () => {
+	it("preserves readable metadata beside long titles in the scrolling list", () => {
+		overrides.list = {
+			items: [
+				{
+					...memory,
+					title: "Long title ".repeat(12),
+					space: "s".repeat(64),
+					tags: ["t".repeat(64)],
+				},
+			],
+		};
+		const html = render(MemoriesPage, "/memories");
+		expect(html).toMatch(/<th[^>]*style="min-width:28ch"[^>]*>空间 \/ 标签<\/th>/);
+		expect(html).toMatch(/<td[^>]*style="min-width:28ch"[^>]*><div[^>]*><span[^>]*>s{64}<\/span>/);
+	});
 	it.each(["/memories", "/memories?view=cards"])(
 		"wraps unbroken space and tag values inside their badges at %s",
 		(path) => {
