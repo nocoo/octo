@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { APP_VERSION } from "../lib/version";
 import type { Env } from "./env";
 import { createApp, worker } from "./index";
@@ -73,5 +73,22 @@ describe("worker", () => {
 			{} as ExecutionContext,
 		);
 		expect(res.status).toBe(200);
+	});
+
+	it("schedules idempotency purge tasks", () => {
+		const waitUntil = vi.fn((promise: Promise<unknown>) => promise);
+		const stmt = {
+			bind: () => ({
+				run: async () => ({ success: true, meta: { changes: 0 } }),
+			}),
+		};
+		const scheduledEnv = {
+			...env(),
+			DB: { prepare: () => stmt } as unknown as D1Database,
+		};
+		worker.scheduled({} as ScheduledEvent, scheduledEnv, {
+			waitUntil,
+		} as unknown as ExecutionContext);
+		expect(waitUntil).toHaveBeenCalled();
 	});
 });

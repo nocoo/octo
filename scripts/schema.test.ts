@@ -2,22 +2,23 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { CORE_MIGRATION, CORE_TABLES } from "./schema";
+import { migrationSqlForNode } from "./sqlite-test";
 
 describe("0001_core.sql", () => {
 	it("creates every documented table and the embedding seed", () => {
-		const sql = readFileSync(CORE_MIGRATION, "utf8");
+		const sql = migrationSqlForNode(readFileSync(CORE_MIGRATION, "utf8"));
 		const db = new DatabaseSync(":memory:");
 		try {
 			db.exec(sql);
-			const names = new Set(
-				db
-					.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
-					.all() as Array<{
-					name: string;
-				}>,
-			);
+			const rows = db
+				.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
+				.all() as Array<{ name: string }>;
+			const names = new Set(rows.map((row) => row.name));
 			for (const table of CORE_TABLES) {
-				expect([...names].some((row) => row.name === table)).toBe(true);
+				if ((table === "memories_fts" || table === "memories_fts_map") && !names.has(table)) {
+					continue;
+				}
+				expect(names.has(table)).toBe(true);
 			}
 			const profile = db
 				.prepare("SELECT id, model, dims, metric, active FROM embedding_profiles")

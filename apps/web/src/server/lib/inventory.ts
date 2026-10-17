@@ -25,6 +25,9 @@ export const TESTED_API_ROUTES: RouteKey[] = [
 	"GET /api/v1/spaces",
 	"GET /api/v1/spaces/:slug",
 	"GET /api/v1/tags",
+	"POST /api/v1/memories:batchCreate",
+	"POST /api/v1/memories:batchDelete",
+	"POST /api/v1/memories:batchUpdate",
 	"POST /api/v1/tags/:name/merge",
 	"POST /api/v1/tags/:name/rename",
 ];

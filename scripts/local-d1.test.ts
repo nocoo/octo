@@ -14,6 +14,7 @@ import {
 	wranglerD1Args,
 	writeTestMarker,
 } from "./local-d1";
+import { migrationSqlForNode } from "./sqlite-test";
 
 const execute = vi.hoisted(() => vi.fn(() => "[]"));
 vi.mock("node:child_process", () => ({ execFileSync: execute }));
@@ -45,7 +46,12 @@ describe("local-d1", () => {
 		const d1 = (args: string[]): string => {
 			const file = args.find((arg) => arg.startsWith("--file="));
 			if (file) {
-				db.exec(readFileSync(file.slice("--file=".length), "utf8"));
+				const path = file.slice("--file=".length);
+				let sql = readFileSync(path, "utf8");
+				if (path.endsWith("0001_core.sql")) {
+					sql = migrationSqlForNode(sql);
+				}
+				db.exec(sql);
 				return "";
 			}
 			const query = args[args.indexOf("--command") + 1];
