@@ -473,3 +473,25 @@ it. A real-coordinator regression first failed with zero claimed jobs instead of
 expired-lease recovery, and stale-owner completion without overwriting the newer
 acknowledgement. Mocking the synchronizer in coordinator tests hid this boundary;
 interruption tests must exercise the complete path before every external call.
+
+## 2026-10-18 — Preserve an early HTTP response in the L2 client
+
+After the backfill claim fix, the full direct-Miniflare suite passed 211 of 212
+cases: the restored raw 50 MiB plus one byte assertion failed with `write EPIPE`.
+The unchanged vector authorization sequence passed. A separate minimal Worker
+containing no Octo code returned an immediate JSON 413. Node 26.11.1 Fetch
+(bundled Undici 8.11.2) rejected two of five fixed diagnostic trials with EPIPE;
+Undici 7.29.1 Fetch rejected four of five. Native HTTP observed the 413 headers
+in all five trials, followed by upload-side EPIPE or ECONNRESET. Undici's request
+API preserved the complete 413 response in all five trials. These comparisons
+were diagnostics, not acceptance retries.
+
+The existing attachment L2 request wrapper now uses the already locked Undici
+request API, declared as a direct dev dependency. It forwards the same byte or
+multipart body and bridges chunked request/response streams, rather than adding
+drains, delays, retries, shortened payloads or exception suppression. Tests retain
+all original upload and native-owner assertions; the vector auth test and all
+production body handling are unchanged. The first wrapper unit run exhausted
+memory because a deep mock-call matcher enumerated the 50 MiB typed array.
+The regression now checks body identity instead, preserving the full size
+without increasing the heap limit or weakening the transport assertions.

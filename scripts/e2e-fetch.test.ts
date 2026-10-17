@@ -1,41 +1,117 @@
-import { describe, expect, it, vi } from "vitest";
+import { Readable } from "node:stream";
+import { request } from "undici";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { e2eFetch } from "./e2e-fetch";
 
-describe("e2e fetch diagnostics", () => {
-	it("preserves responses and status codes without retrying", async () => {
-		const response = new Response("failure", { status: 500 });
-		const fetch = vi.fn().mockResolvedValue(response);
-		vi.stubGlobal("fetch", fetch);
-		const init = { method: "POST", body: "x" };
-		expect(await e2eFetch("http://127.0.0.1:9/upload", init)).toBe(response);
-		expect(fetch).toHaveBeenCalledExactlyOnceWith("http://127.0.0.1:9/upload", init);
+vi.mock("undici", () => ({ request: vi.fn() }));
+
+function response(statusCode: number, contents = "failure") {
+	return {
+		statusCode,
+		headers: {
+			"content-type": "text/plain",
+			"x-test": ["first", "second"],
+			"x-missing": undefined,
+		},
+		body: Readable.from([Buffer.from(contents)]),
+	} as unknown as Awaited<ReturnType<typeof request>>;
+}
+
+afterEach(() => {
+	vi.resetAllMocks();
+	vi.unstubAllGlobals();
+});
+
+describe("L2 HTTP response ownership", () => {
+	it("preserves a delivered early error and the complete declared upload without retrying", async () => {
+		const body = new Uint8Array(50 * 1024 * 1024 + 1);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response("wrong transport")),
+		);
+		vi.mocked(request).mockResolvedValue(response(413));
+		const result = await e2eFetch("http://127.0.0.1:9/upload", {
+			method: "POST",
+			headers: { "Content-Type": "image/png" },
+			body,
+		});
+		expect(result.status).toBe(413);
+		expect(await result.text()).toBe("failure");
+		expect(result.headers.get("x-test")).toBe("first, second");
+		expect(request).toHaveBeenCalledOnce();
+		const call = vi.mocked(request).mock.calls[0];
+		expect(call?.[0]).toBe("http://127.0.0.1:9/upload");
+		expect(call?.[1]?.body).toBe(body);
+		expect(call?.[1]?.method).toBe("POST");
+		expect(call?.[1]?.headers).toEqual({ "content-type": "image/png" });
+		expect(call?.[1]?.signal).toBeNull();
+		expect(fetch).not.toHaveBeenCalled();
 	});
 
-	it("labels requests without an explicit method as GET", async () => {
-		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
-		await expect(e2eFetch("http://127.0.0.1:9/api/live")).rejects.toThrow(
-			"L2 request failed: GET http://127.0.0.1:9/api/live",
-		);
+	it("preserves multipart bodies and abort signals", async () => {
+		const body = new FormData();
+		body.set("file", new File(["contents"], "file.png", { type: "image/png" }));
+		const controller = new AbortController();
+		vi.mocked(request).mockResolvedValue(response(500));
+		expect(
+			(
+				await e2eFetch("http://127.0.0.1:9/upload", {
+					method: "POST",
+					body,
+					signal: controller.signal,
+				})
+			).status,
+		).toBe(500);
+		expect(request).toHaveBeenCalledOnce();
+		expect(vi.mocked(request).mock.calls[0]?.[1]).toMatchObject({
+			body,
+			signal: controller.signal,
+		});
+	});
+
+	it("streams chunked request and response bytes without buffering the upload", async () => {
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new Uint8Array([1, 2]));
+				controller.close();
+			},
+		});
+		vi.mocked(request).mockImplementation(async (_url, options) => {
+			expect(options?.body).toBeInstanceOf(Readable);
+			const chunks: Uint8Array[] = [];
+			if (!options?.body) throw new Error("expected a request body");
+			for await (const chunk of options.body as Readable) chunks.push(chunk);
+			expect(Buffer.concat(chunks)).toEqual(Buffer.from([1, 2]));
+			return response(200, "streamed");
+		});
+		expect(
+			await (await e2eFetch("http://127.0.0.1:9/upload", { method: "POST", body })).text(),
+		).toBe("streamed");
+	});
+
+	it.each([204, 205, 304])("preserves bodyless HTTP %s responses", async (statusCode) => {
+		vi.mocked(request).mockResolvedValue(response(statusCode, ""));
+		const result = await e2eFetch("http://127.0.0.1:9/upload");
+		expect(result.status).toBe(statusCode);
+		expect(result.body).toBeNull();
 	});
 
 	it.each(["GET", "POST"])(
-		"identifies failed %s requests without leaking queries or auth",
+		"propagates failed %s requests without retries or leaking queries/auth",
 		async (method) => {
-			const cause = new TypeError("fetch failed", { cause: new Error("ECONNRESET") });
-			const fetch = vi.fn().mockRejectedValue(cause);
-			vi.stubGlobal("fetch", fetch);
+			const cause = new Error("write EPIPE");
+			vi.mocked(request).mockRejectedValue(cause);
 			const url = new URL("http://127.0.0.1:9/files/att/m/a?sig=private&exp=1");
-			try {
-				await e2eFetch(url, { method, headers: { Authorization: "Bearer private" } });
-				throw new Error("expected fetch to fail");
-			} catch (error) {
-				expect(error).toBeInstanceOf(Error);
-				expect((error as Error).message).toBe(
-					`L2 request failed: ${method} http://127.0.0.1:9/files/att/m/a`,
-				);
-				expect((error as Error).cause).toBe(cause);
-			}
-			expect(fetch).toHaveBeenCalledOnce();
+			await expect(
+				e2eFetch(url, {
+					...(method === "GET" ? {} : { method }),
+					headers: { Authorization: "Bearer private" },
+				}),
+			).rejects.toMatchObject({
+				message: `L2 request failed: ${method} http://127.0.0.1:9/files/att/m/a`,
+				cause,
+			});
+			expect(request).toHaveBeenCalledOnce();
 		},
 	);
 });
