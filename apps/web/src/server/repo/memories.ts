@@ -112,12 +112,11 @@ export class MemoryRepo {
 		if (ids.length === 0) {
 			return map;
 		}
-		const placeholders = ids.map(() => "?").join(",");
 		const { results } = await this.db
 			.prepare(
-				`SELECT mt.memory_id AS memory_id, t.name AS name FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id IN (${placeholders}) ORDER BY t.name`,
+				"SELECT mt.memory_id AS memory_id, t.name AS name FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id IN (SELECT value FROM json_each(?)) ORDER BY t.name",
 			)
-			.bind(...ids)
+			.bind(JSON.stringify(ids))
 			.all<{ memory_id: string; name: string }>();
 		for (const row of results) {
 			const list = map.get(row.memory_id) ?? [];
@@ -384,18 +383,19 @@ export class MemoryRepo {
 		if (input.tags.length === 0) {
 			return [del];
 		}
-		const selects = input.tags.map(() => "SELECT ? AS memory_id, ? AS tag_id").join(" UNION ALL ");
-		const binds: unknown[] = [];
-		for (const tag of input.tags) {
-			binds.push(input.id, tag.id);
-		}
 		return [
 			del,
 			this.db
 				.prepare(
-					`INSERT INTO memory_tags (memory_id, tag_id) SELECT v.memory_id, v.tag_id FROM (${selects}) AS v WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)`,
+					"INSERT INTO memory_tags (memory_id, tag_id) SELECT ?, value FROM json_each(?) WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)",
 				)
-				.bind(...binds, input.id, version, input.now),
+				.bind(
+					input.id,
+					JSON.stringify(input.tags.map((tag) => tag.id)),
+					input.id,
+					version,
+					input.now,
+				),
 		];
 	}
 
@@ -506,12 +506,12 @@ export class MemoryRepo {
 			where.push("m.deleted_at IS NULL");
 		}
 		if (query.visible.kind === "ids") {
-			where.push(`m.space_id IN (${query.visible.ids.map(() => "?").join(",")})`);
-			binds.push(...query.visible.ids);
+			where.push("m.space_id IN (SELECT value FROM json_each(?))");
+			binds.push(JSON.stringify(query.visible.ids));
 		}
 		if (query.spaceIds) {
-			where.push(`m.space_id IN (${query.spaceIds.map(() => "?").join(",")})`);
-			binds.push(...query.spaceIds);
+			where.push("m.space_id IN (SELECT value FROM json_each(?))");
+			binds.push(JSON.stringify(query.spaceIds));
 		}
 		if (query.ownSourceKeyId) {
 			where.push("m.source_key_id = ?");
@@ -519,27 +519,25 @@ export class MemoryRepo {
 		}
 		const types = query.filters.types;
 		if (types && types.length > 0) {
-			where.push(`m.type IN (${types.map(() => "?").join(",")})`);
-			binds.push(...types);
+			where.push("m.type IN (SELECT value FROM json_each(?))");
+			binds.push(JSON.stringify(types));
 		}
 		const sources = query.filters.sources;
 		if (sources && sources.length > 0) {
-			where.push(`m.source_key_id IN (${sources.map(() => "?").join(",")})`);
-			binds.push(...sources);
+			where.push("m.source_key_id IN (SELECT value FROM json_each(?))");
+			binds.push(JSON.stringify(sources));
 		}
 		if (query.tagAllIds) {
-			for (const tagId of query.tagAllIds) {
-				where.push(
-					"EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND mt.tag_id = ?)",
-				);
-				binds.push(tagId);
-			}
+			where.push(
+				"NOT EXISTS (SELECT 1 FROM json_each(?) required WHERE NOT EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND mt.tag_id = required.value))",
+			);
+			binds.push(JSON.stringify(query.tagAllIds));
 		}
 		if (query.tagAnyIds) {
 			where.push(
-				`EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND mt.tag_id IN (${query.tagAnyIds.map(() => "?").join(",")}))`,
+				"EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memory_id = m.id AND mt.tag_id IN (SELECT value FROM json_each(?)))",
 			);
-			binds.push(...query.tagAnyIds);
+			binds.push(JSON.stringify(query.tagAnyIds));
 		}
 		const time = query.filters.time;
 		if (time) {

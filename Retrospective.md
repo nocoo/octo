@@ -163,6 +163,10 @@ The first M4 remediation authorized the final content SELECT but fetched tags af
 The production fail-closed vector factory also exposed missing explicit development mode in both local startup paths. Startup tests now assert the actual shared Wrangler arguments rather than relying on manually constructed test environments.
 
 Future search changes must trace every returned field through its read snapshot, derive all scores/counts from the same final candidate set, and verify environment selection through the real startup entrypoints.
+## M2 draft D1 parameter overruns
+
+Valid requests with 100 tags, 200-item pages, or combined scope and filters exceeded D1's 100-bound-parameter ceiling. The SQLite test adapter had not enforced that production limit. It now does; collection predicates and tag insertion use SQLite `json_each` with one JSON parameter per collection, preserving atomic writes and global cursor ordering without reducing public limits.
+
 ## M2 draft transition atomicity failures
 
 Trash updated by ID alone after authorization and emitted duplicate events when the state transition changed no row. It now binds the authorized version and space, and SQLite `changes()` gates the immediately following event and FTS deletion in the same batch. Ordinary batch failures were also mislabeled as conflicts by comparing timestamps; only a changed version establishes that conflict. Retained vectors now become pending on restore, move, and rollback so the M4 integration can rebuild derived metadata without losing the stored vector.

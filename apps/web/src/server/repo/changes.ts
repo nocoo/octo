@@ -81,12 +81,12 @@ export class ChangeRepo {
 		const where: string[] = [];
 		const binds: unknown[] = [];
 		if (visible.kind === "ids") {
-			where.push(`space_id IN (${visible.ids.map(() => "?").join(",")})`);
-			binds.push(...visible.ids);
+			where.push("space_id IN (SELECT value FROM json_each(?))");
+			binds.push(JSON.stringify(visible.ids));
 		}
 		if (spaceIds) {
-			where.push(`space_id IN (${spaceIds.map(() => "?").join(",")})`);
-			binds.push(...spaceIds);
+			where.push("space_id IN (SELECT value FROM json_each(?))");
+			binds.push(JSON.stringify(spaceIds));
 		}
 		if (cursor) {
 			where.push("seq > ?");

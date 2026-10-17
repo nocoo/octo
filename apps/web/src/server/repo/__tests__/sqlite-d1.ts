@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { CORE_MIGRATION } from "../../../../../../scripts/schema";
+import { D1_MAX_BOUND_PARAMS } from "../../lib/d1";
 
 type Bound = {
 	sql: string;
@@ -19,6 +20,9 @@ export function sqliteD1(db: DatabaseSync): D1Database {
 			sql,
 			binds: [],
 			bind(...args: SQLInputValue[]) {
+				if (args.length > D1_MAX_BOUND_PARAMS) {
+					throw new Error(`D1 bound parameter limit exceeded: ${args.length}`);
+				}
 				this.binds = args;
 				return this;
 			},
