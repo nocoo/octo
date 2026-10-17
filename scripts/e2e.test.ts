@@ -56,6 +56,8 @@ describe("e2e helpers", () => {
 		expect(e2eEnvContents(17057)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:17059");
 		expect(e2eEnvContents(17057, 18059)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:18059");
 		expect(e2eEnvContents(17057)).toContain("RESOURCE_ENV=test");
+		const settingsKey = e2eEnvContents(17057).match(/^OCTO_SETTINGS_KEY=(.+)$/m)?.[1] ?? "";
+		expect(Buffer.from(settingsKey, "base64").length).toBe(32);
 		expect(e2eEnvContents(17057)).toContain("http://127.0.0.1:17057/cdn-cgi/access/certs");
 		expect(() => assertWranglerConfigLocal("name = 'octo'\n")).not.toThrow();
 		expect(() => assertWranglerConfigLocal(`[[d1_databases]]\nremote${"=true"}\n`)).toThrow(

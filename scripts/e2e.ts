@@ -222,7 +222,7 @@ export function e2eEnvContents(jwksPort = L2_JWKS_PORT, workerPort = L2_WORKER_P
 		"API_KEY_PEPPER=change-me-api-key-pepper",
 		"ATTACHMENT_URL_SECRET=change-me-attachment-url-secret",
 		`ATTACHMENT_URL_HOST=http://127.0.0.1:${workerPort}`,
-		"OCTO_SETTINGS_KEY=change-me-octo-settings-key",
+		`OCTO_SETTINGS_KEY=${Buffer.alloc(32, 0x42).toString("base64")}`,
 		"RESOURCE_ENV=test",
 		`CF_ACCESS_TEAM_DOMAIN=${iss}`,
 		`CF_ACCESS_AUD=${L2_ACCESS_AUD}`,
