@@ -33,6 +33,12 @@ uses setReadBigInts(true) when executing statements, exactly like M3's existing
 adapter, and converts only the bounded changes count. Do not change SQL rowids,
 FTS fallback rules or production behavior to accommodate test transport metadata.
 
+When extending that harness, prepare(sql).all() silently executed only the first
+statement of a multi-statement CLI seed. Use SQLite exec for mutation commands
+and prepare/all only for JSON observation queries. FTS is contentless: projecting
+its tags column returns NULL by design. Verify MATCH results through the stable
+memory-to-rowid map, not by trying to recover stored FTS text.
+
 ## M6: synchronous fixture CLI work can stale HTTP sockets
 
 M5's controlled local-Worker probe proved that eight synchronous Wrangler D1

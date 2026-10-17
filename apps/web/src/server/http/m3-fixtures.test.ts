@@ -27,7 +27,9 @@ beforeAll(() => {
 	state.exec = (args) => {
 		const sql = args[args.indexOf("--command") + 1];
 		if (!sql) throw new Error("expected isolated SQL command");
-		return JSON.stringify([{ results: fixture.sqlite.prepare(sql).all(), success: true }]);
+		const results = args.includes("--json") ? fixture.sqlite.prepare(sql).all() : [];
+		if (!args.includes("--json")) fixture.sqlite.exec(sql);
+		return JSON.stringify([{ results, success: true }]);
 	};
 	vi.stubEnv("OCTO_PERSIST", "in-process-m3");
 	vi.stubEnv("OCTO_CONFIG", "in-process-m3");
@@ -47,3 +49,4 @@ afterAll(() => {
 
 await import("../../../../../tests/api/tags.test");
 await import("../../../../../tests/api/spaces.test");
+await import("../../../../../tests/api/tags-idempotency.test");
