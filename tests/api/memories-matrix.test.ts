@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { root } from "../../scripts/e2e";
-import { assertTestMarker, createD1Exec } from "../../scripts/local-d1";
+import { type AsyncD1Exec, assertAsyncTestMarker, createAsyncD1Exec } from "../../scripts/local-d1";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const pepper = "change-me-api-key-pepper";
@@ -18,8 +18,13 @@ beforeAll(async () => {
 	const persist = process.env.OCTO_PERSIST;
 	const config = process.env.OCTO_CONFIG;
 	if (!persist || !config) throw new Error("isolated D1 configuration is required");
-	const d1 = createD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-	assertTestMarker(d1);
+	const d1: AsyncD1Exec = createAsyncD1Exec(
+		join(root, "node_modules/.bin/wrangler"),
+		root,
+		persist,
+		config,
+	);
+	await assertAsyncTestMarker(d1);
 	const sql = [a, b, pageSpace].map(
 		(slug) =>
 			`INSERT INTO spaces (id, slug, name, created_at, updated_at) VALUES ('${slug}', '${slug}', '${slug}', 1, 1);`,
@@ -48,7 +53,7 @@ beforeAll(async () => {
 			`INSERT INTO memories (id, space_id, title, body, type, source_key_id, content_hash, created_at, updated_at) VALUES ('${id}', '${pageSpace}', 'page', 'page', 'note', 'fixture', 'fixture', 1, 1);`,
 		);
 	}
-	d1(["--command", sql.join("\n")]);
+	await d1(["--command", sql.join("\n")]);
 }, 120_000);
 
 async function request(
