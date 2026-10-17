@@ -126,6 +126,42 @@ Multipart uploads accept exactly one `file` part (no extra fields), with at most
 
 前缀 `/api/admin/*`，要求通过 Cloudflare Access JWT 校验，并且写请求必须同源（`Origin` 必须等于 `https://octo.hexly.ai`，开发环境是 `https://octo.dev.hexly.ai`）。功能：key 的增删改查、轮换、吊销；space 增删改；purge；审计查询；全局用量；embedding profile 管理；向量模型设置（`GET/PUT /api/admin/settings/embedding`，API key 只能写；`POST …/test` 测试连接）；回收站批量操作；以及与 v1 对等的读写（actor 记为 `admin:<email>`）。详见 [05](05-auth-permissions-audit.md)、[06](06-dashboard.md)。
 
+### M7 dashboard contract
+
+All paths below are relative to `/api/admin`. Responses use the normal `{data}`
+envelope and error envelope. No API key, including the `admin` role, authorizes
+these routes. Write requests require both Access and the allowed Origin.
+
+| Method | Path | Request / behavior |
+|---|---|---|
+| GET / POST | `/keys` | List sanitized metadata / mint a role template |
+| GET / PATCH / DELETE | `/keys/:id` | Read / edit permissions / revoke, retaining history |
+| POST | `/keys/:id/rotate` | `{grace_ms?: 0..604800000}`; default zero |
+| POST | `/keys/:id/revoke` | Immediately revoke |
+| GET / POST | `/spaces` | List / create `{slug,name,description?,owner_key_id?}` |
+| GET / PATCH / DELETE | `/spaces/:slug` | Read / edit / delete only when empty, including trash |
+| GET | `/audit` | Filter by `from,to,actor,action,status`; opaque `cursor`, bounded `limit` |
+| GET | `/usage` | UTC daily rows; `from,to,key_id?` |
+| GET / PUT | `/settings/embedding` | Read sanitized configuration / atomically save fields |
+| POST | `/settings/embedding/test` | Current configuration or unsaved overrides; fixed probe text |
+| DELETE | `/trash/:id` | Purge a trashed memory; durable external cleanup |
+
+Key metadata uses snake_case fields from the permission model, with `space_ids`
+as an array and boolean flags. Role templates are `admin`, `project`, `drop`,
+`readonly`, and `custom`. Mint and rotate return `{key,plaintext}` exactly once;
+other responses never include plaintext or either secret hash.
+
+Embedding fields are `base_url,model,dims,backfill_enabled`. GET additionally
+returns `api_key_set` and `api_key_mask` (only the last four characters). PUT
+omitting `api_key` preserves it, `null` clears it, and a nonempty string replaces
+it. Model/dimensions must match the active profile. Test returns only
+`{latency_ms,dims,match,error_code}`; no upstream response body or credential.
+
+Memory, version, diff, rollback, batch, trash/restore, changes, tags, attachments,
+and search endpoints mirror their `/api/v1` methods and suffixes under this
+prefix, reuse the same services and atomic transaction boundary, and record
+`admin:<email>` as actor. Purge has no `/api/v1` equivalent.
+
 ## 7. 示例
 
 ```bash

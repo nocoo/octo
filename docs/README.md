@@ -21,3 +21,9 @@ octo 是部署在 Zheng 个人 Cloudflare 付费账户上的私人记忆 / 知�
 冲突时的优先级：质量看 07，表结构看 02，HTTP 看 04，权限看 05，页面看 06。01 是方向性摘要。
 
 本目录只写设计。实现前，先按 [07](07-dev-workflow.md) 写失败测试。
+
+M7 owns the admin HTTP contract, audit/usage, encrypted embedding settings,
+backfill and the production Vectorize synchronizer. M6 owns the atomic HTTP/D1
+write boundary; the dashboard consumes [04 §6](04-api.md#6-admin-api只给-dashboard).
+The synchronizer's durable queue and non-transactional recovery protocol are
+specified in [02](02-data-model.md#m7-derived-index-ownership-and-recovery).

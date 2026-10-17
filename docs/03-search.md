@@ -41,6 +41,14 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
 
 ### 2.1 向量模型设置与查询向量（dashboard）
 
+Production index synchronization is owned by M7. The same post-commit queue
+handles explicit vectors, metadata edits, trash/restore, backfill and purge;
+see [the durable synchronization protocol](02-data-model.md#m7-derived-index-ownership-and-recovery).
+Hourly cron retries pending vectors and performs bounded anti-entropy passes.
+`indexed_at` acknowledges only a successful operation for the current generation,
+never an obsolete in-flight write. A stale vector keeps its original content hash
+so search can report staleness; synchronization does not fabricate an embedding.
+
 - **配置位置：** dashboard 的「向量模型」设置页（`/settings/embedding`），只走 Access 保护的 `/api/admin/settings/embedding`，**绝不**通过 `/api/v1` 或任何 API key 暴露。
 - **字段：** `base_url`、`api_key`、`model`（默认 `text-embedding-3-small`）、`dims`（默认 1536）、`backfill_enabled`（默认关）。
 - **API key 的存储：** 在 D1 `settings` 表中用 AES-GCM 加密保存，master key 是 Worker secret `OCTO_SETTINGS_KEY`。只能写不能读：GET 只返回 `api_key_set: true/false` 和末 4 位掩码，从不回显明文；可以整体替换或清除。明文只在提交那次请求体和 Worker 内存中出现，不进日志。

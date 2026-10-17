@@ -166,6 +166,32 @@ CREATE TABLE idempotency_records (
 
 D1 提交后，再写 Vectorize（upsert 或 delete），成功后回填 `indexed_at`。失败时 `indexed_at` 保持 NULL，由 cron 补偿重试。D1 和 Vectorize 不在同一个事务里，所以搜索时向量通道会用 D1 重新校验可见性（见 03 §5）。
 
+### M7 derived-index ownership and recovery
+
+M7 owns the production synchronizer, not M6 or the dashboard. An additive
+`vector_sync_jobs` table durably records each memory's desired generation. D1
+triggers enqueue vector changes and indexed metadata changes inside the original
+write transaction, invalidate `indexed_at`, and retain a deletion tombstone after
+purge. No external call occurs while preparing or committing memory SQL.
+
+After a successful HTTP commit, `waitUntil` runs bounded reconciliation through
+the `VectorStore` port. A D1 lease serializes work for each memory; the worker
+reads the current active-profile vector and metadata, upserts live vectors, and
+deletes missing/trashed vectors. Only the claimed generation may acknowledge
+`indexed_at`; concurrent mutations remain pending. Failed or expired leases are
+retried by the hourly cron. Completed jobs and purge tombstones remain available
+for periodic anti-entropy reconciliation: a lease alone cannot fence an old
+Vectorize call after a process pauses or crashes in the non-transactional gap.
+Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.
+
+The local D1 brute-force adapter already reads the authoritative state, so its
+write-port operations do not mutate or delete the source vectors. Tests exercise
+the same synchronizer with this adapter and controlled fake ports, never remote
+Vectorize. Backfill writes a guarded vector to D1, then uses this same queue;
+client-provided vectors and newer memory revisions must not be overwritten.
+Purge atomically removes D1 data and records R2 cleanup work; failed external
+cleanup remains retryable without resurrecting the memory or deleting audit.
+
 ## 4. 版本
 
 - 每次 create / update / rollback / restore / move 都生成新版本。版本号从 1 开始，按 memory 自增。

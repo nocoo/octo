@@ -104,6 +104,10 @@ Whole-request errors discard all staged SQL; per-item errors preserve other item
 
 ### Remaining phase-1 derived-index integration
 
+M7 is now the implementation owner for this boundary. The durable queue,
+post-commit port operations, backfill integration and cron recovery are specified
+in docs/02-data-model.md under "M7 derived-index ownership and recovery".
+
 Tracking owner: the phase-1 integration controller receiving the M2 signoff.
 That controller must assign an implementation owner before production vector
 capabilities are accepted; neither M4 nor M7 is implicitly assumed to own it.
