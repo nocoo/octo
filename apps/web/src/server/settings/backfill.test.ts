@@ -157,6 +157,7 @@ describe("post-commit embedding backfill", () => {
 					raw.exec(
 						"INSERT INTO memory_vectors VALUES ('m', 'tiny', 'tiny', 3, x'000000000000803f00000000', 'hash-1', 999, 2) ON CONFLICT(memory_id, profile_id) DO UPDATE SET vector = excluded.vector, content_hash = excluded.content_hash, indexed_at = excluded.indexed_at",
 					);
+					raw.exec("UPDATE memory_vectors SET indexed_at = 999 WHERE memory_id = 'm'");
 					return Response.json({ data: [{ embedding: [1, 0, 0] }] });
 				}),
 			);
