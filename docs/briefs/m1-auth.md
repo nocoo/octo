@@ -1,0 +1,8 @@
+# M1 — auth (API key, authorize(), Access JWT)
+Read: docs/05-auth-permissions-audit.md (all), docs/04-api.md §1-2, §5 (/me), §6.
+Dirs: apps/web/src/server/auth/**, apps/web/src/server/middleware/access*, tests/api/auth*.
+Deliver:
+1. API key format `octo_<keyid>_<secret>`, generation (mint/rotate helpers for admin use), HMAC-SHA256 with API_KEY_PEPPER, constant-time compare, prev secret grace window, expiry, revoke. Bearer middleware: 401 `unauthenticated` for any failure (no reason distinction). Updates last_used_at via waitUntil.
+2. Pure `authorize(key, op, target)` with full combinatorial L1 matrix: ops r/w/u/d, scope all/spaces/own, own_entries_only, move (both spaces), global tag ops require scope=all+update; out-of-scope → not_found, missing op → forbidden. Plus `visibleSpaceIds(key)` helper for list/search SQL.
+3. Cloudflare Access middleware copied from giraffe apps/web/src/server/middleware/access.ts approach: constants in apps/web/src/server/lib/access-config.ts (team https://nocoo.cloudflareaccess.com, AUD 9ab761cffd4ad657004e429d74e5524232d3b017775548211f5e0eb809a88d67); Cf-Access-Jwt-Assertion header only; JWKS fetch + 10-min cache + refresh on unknown kid; RS256, iss, aud, exp/nbf (60s skew); env overrides CF_ACCESS_TEAM_DOMAIN/CF_ACCESS_AUD/ACCESS_JWKS_URL only when RESOURCE_ENV=test; development bypass ACCESS_DEV_BYPASS_EMAIL only when RESOURCE_ENV=development and host is octo.dev.hexly.ai or loopback. Same-origin check for admin writes (https://octo.hexly.ai, dev https://octo.dev.hexly.ai).
+4. GET /api/v1/me. L2: JWKS stub on a port inside the L2 range, signed-token suite (valid, wrong aud, wrong iss, expired, unknown kid) against a protected placeholder admin route GET /api/admin/whoami.

@@ -1,0 +1,4 @@
+# M6 — idempotency, batch, pagination
+Read: docs/04-api.md §1, §3, §4, batch endpoints in §5; docs/02 idempotency_records.
+Dirs: apps/web/src/server/http/**, routes/v1/batch*, tests/api/idempotency*, tests/api/batch*.
+Deliver: cursor codec (opaque base64url, tamper → 400 validation_failed) as shared helper; Idempotency-Key middleware for all non-GET v1 writes (scope api_key+key, request_hash of method+path+canonical body, replay returns stored status/body with Idempotent-Replayed: true, mismatch → 409 idempotency_conflict, 1–128 printable ASCII); cron handler deleting records older than 7 days; batch endpoints POST /memories:batchCreate, :batchUpdate, :batchDelete (≤100, per-item results, whole batch one idempotency unit) built on M2's service interface (if M2 not on main yet, code against the interface and leave route mounting to integration).

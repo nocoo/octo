@@ -1,0 +1,4 @@
+# M5 — attachments (R2) and signed URLs
+Read: docs/02-data-model.md §8, docs/04-api.md (附件).
+Dirs: apps/web/src/server/ports/blob*, apps/web/src/server/attachments/**, routes/v1/attachments*, routes/files*, tests/api/attachments*.
+Deliver: BlobStore port over R2 binding FILES (local wrangler R2 in L2); upload via multipart or raw body + X-Filename, content-type whitelist (png/jpeg/webp/gif/svg+xml, pdf), ≤50 MB, sha256; list; GET /attachments/:id/url → signed URL {url, expires_at} (HMAC-SHA256(ATTACHMENT_URL_SECRET, r2_key|exp), default 300s, host configurable for future CDN); GET /files/<r2_key>?exp&sig (no API key; constant-time sig check; expiry; streams from R2 with Content-Disposition, ETag=sha256; SVG forced attachment); DELETE /attachments/:id soft delete. Permission checks via the Authz interface (update for upload, read for list/url, delete for delete).
