@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { memoryCreateSchema } from "../../lib/schema/memory";
 import { ApiError } from "./errors";
 import { parseStrict, readJson, readJsonLimited } from "./validate";
@@ -40,6 +40,32 @@ describe("readJson", () => {
 });
 
 describe("readJsonLimited", () => {
+	it("cancels an oversized unknown-length stream before consuming the remainder", async () => {
+		let reads = 0;
+		const cancel = vi.fn();
+		const stream = new ReadableStream<Uint8Array>(
+			{
+				pull(controller) {
+					reads++;
+					controller.enqueue(new Uint8Array(8));
+					if (reads === 5) controller.close();
+				},
+				cancel,
+			},
+			{ highWaterMark: 0 },
+		);
+		const request = new Request("http://x", {
+			method: "POST",
+			body: stream,
+			duplex: "half",
+		} as RequestInit);
+		await expect(readJsonLimited(request, 10)).rejects.toMatchObject({ code: "payload_too_large" });
+		expect(reads).toBe(2);
+		expect(cancel).toHaveBeenCalledOnce();
+		await expect(
+			readJsonLimited(new Request("http://x", { method: "POST" })),
+		).rejects.toMatchObject({ code: "validation_failed" });
+	});
 	it("rejects oversized payloads and invalid json", async () => {
 		expect(
 			await readJsonLimited(new Request("http://x", { method: "POST", body: '{"ok":true}' })),
@@ -51,7 +77,7 @@ describe("readJsonLimited", () => {
 			readJsonLimited(
 				new Request("http://x", {
 					method: "POST",
-					headers: { "content-length": "2000000" },
+					headers: { "content-length": "7000000" },
 					body: "{}",
 				}),
 			),

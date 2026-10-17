@@ -36,6 +36,49 @@ function auth(token: string, extra: Record<string, string> = {}) {
 }
 
 describe("memory v1 routes", () => {
+	it("enforces decoded UTF-8 body bytes without rejecting JSON escape expansion", async () => {
+		const { app, env, token } = await boot();
+		for (const body of [
+			"a".repeat(1_000_000),
+			"中".repeat(333_333) + "a",
+			"\u0000".repeat(1_000_000),
+		]) {
+			const res = await app.request(
+				"/api/v1/memories",
+				{
+					method: "POST",
+					headers: auth(token),
+					body: JSON.stringify({ space: "kb-bot", title: "t", body, type: "note", tags: [] }),
+				},
+				env,
+			);
+			expect(res.status).toBe(201);
+			const item = (await res.json()) as { id: string };
+			const patched = await app.request(
+				`/api/v1/memories/${item.id}`,
+				{
+					method: "PATCH",
+					headers: auth(token, { "If-Match": "1" }),
+					body: JSON.stringify({ body: body + "a" }),
+				},
+				env,
+			);
+			expect(patched.status).toBe(413);
+			expect(await patched.json()).toMatchObject({ error: { code: "payload_too_large" } });
+		}
+		for (const body of ["a".repeat(1_000_001), "中".repeat(333_334)]) {
+			const res = await app.request(
+				"/api/v1/memories",
+				{
+					method: "POST",
+					headers: auth(token),
+					body: JSON.stringify({ space: "kb-bot", title: "t", body, type: "note", tags: [] }),
+				},
+				env,
+			);
+			expect(res.status).toBe(413);
+		}
+	});
 	it("creates, gets, lists, patches, diffs, rollbacks, and trashes", async () => {
 		const { app, env, token } = await boot();
 		const created = await app.request(
@@ -528,7 +571,7 @@ describe("memory v1 routes", () => {
 			"/api/v1/memories",
 			{
 				method: "POST",
-				headers: { ...auth(admin.token), "content-length": "2000000" },
+				headers: { ...auth(admin.token), "content-length": "7000000" },
 				body: JSON.stringify({
 					space: "kb-bot",
 					title: "t",

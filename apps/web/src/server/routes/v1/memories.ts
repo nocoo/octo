@@ -1,7 +1,12 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { memoryFiltersSchema } from "../../../lib/schema/filters";
-import { memoryCreateSchema, memoryPatchSchema } from "../../../lib/schema/memory";
+import {
+	MEMORY_BODY_MAX_BYTES,
+	memoryCreateSchema,
+	memoryPatchSchema,
+	utf8Bytes,
+} from "../../../lib/schema/memory";
 import type { AppVars, Env } from "../../env";
 import { ApiError, jsonOk } from "../../lib/errors";
 import { parseStrict, readJsonLimited } from "../../lib/validate";
@@ -77,6 +82,20 @@ function filtersFromQuery(url: URL) {
 	return parseStrict(memoryFiltersSchema, raw);
 }
 
+async function readMemoryJson(request: Request): Promise<unknown> {
+	const data = await readJsonLimited(request);
+	if (
+		data &&
+		typeof data === "object" &&
+		"body" in data &&
+		typeof data.body === "string" &&
+		utf8Bytes(data.body) > MEMORY_BODY_MAX_BYTES
+	) {
+		throw new ApiError("payload_too_large", "body exceeds 1MB UTF-8");
+	}
+	return data;
+}
+
 function service(db: D1Database): MemoryService {
 	return new MemoryService(db);
 }
@@ -96,7 +115,7 @@ export function memoriesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	});
 
 	app.post("/", async (c) => {
-		const body = parseStrict(memoryCreateSchema, await readJsonLimited(c.req.raw));
+		const body = parseStrict(memoryCreateSchema, await readMemoryJson(c.req.raw));
 		const item = await service(c.env.DB).create(authzFrom(c.get("apiKey")), body);
 		return jsonOk(item, 201);
 	});
@@ -161,7 +180,7 @@ export function memoriesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	});
 
 	app.patch("/:id", async (c) => {
-		const body = parseStrict(memoryPatchSchema, await readJsonLimited(c.req.raw));
+		const body = parseStrict(memoryPatchSchema, await readMemoryJson(c.req.raw));
 		const item = await service(c.env.DB).patch(
 			authzFrom(c.get("apiKey")),
 			c.req.param("id"),
