@@ -31,6 +31,8 @@ import {
 import { AppHeader } from "@nocoo/basalt/components/app-header";
 import { AppMain, AppSkipLink, AppShell as Frame } from "@nocoo/basalt/components/app-shell";
 import { Banner } from "@nocoo/basalt/components/banner";
+import { LayerCard } from "@nocoo/basalt/components/layer-card";
+import { Text } from "@nocoo/basalt/components/text";
 import {
 	Activity,
 	BookOpen,
@@ -49,7 +51,7 @@ import {
 	Tags,
 	Trash2,
 } from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
@@ -141,33 +143,31 @@ export function AppShell() {
 		return (
 			<Sidebar collapsed={isCollapsed}>
 				<SidebarHeader>
-					<div className="octo-brand">
-						{!isCollapsed && (
-							<>
-								<strong>octo</strong>
-								<Badge variant="secondary">v{APP_VERSION}</Badge>
-							</>
-						)}
-						<Button
-							variant="ghost"
-							size="icon"
-							aria-label={isCollapsed ? "展开侧栏" : "收起侧栏"}
-							onClick={() => (mobile ? setDrawer(false) : setCollapsed(!collapsed))}
-						>
-							<PanelLeft aria-hidden="true" />
-						</Button>
-					</div>
+					{!isCollapsed && (
+						<>
+							<Text as="strong" variant="heading" size="xl">
+								Octo
+							</Text>
+							<Badge variant="secondary">v{APP_VERSION}</Badge>
+						</>
+					)}
+					<Button
+						variant="ghost"
+						size="icon"
+						aria-label={isCollapsed ? "展开侧栏" : "收起侧栏"}
+						onClick={() => (mobile ? setDrawer(false) : setCollapsed(!collapsed))}
+					>
+						<PanelLeft aria-hidden="true" />
+					</Button>
 				</SidebarHeader>
-				{!isCollapsed && (
-					<div className="octo-rail-search">
+				<SidebarNav aria-label="主导航">
+					{!isCollapsed && (
 						<SidebarSearch onClick={() => setPalette(true)} shortcut="⌘ K">
 							搜索与命令
 						</SidebarSearch>
-					</div>
-				)}
-				<SidebarNav aria-label="主导航">
+					)}
 					{Array.from(new Set(navigation.map((item) => item.group))).map((group) => (
-						<div key={group}>
+						<Fragment key={group}>
 							{!isCollapsed && <SidebarPartition>{group}</SidebarPartition>}
 							{navigation
 								.filter((item) => item.group === group)
@@ -202,20 +202,20 @@ export function AppShell() {
 										</SidebarItem>
 									);
 								})}
-						</div>
+						</Fragment>
 					))}
 				</SidebarNav>
 				<SidebarFooter>
 					{isCollapsed ? (
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<span>
+								<Button variant="ghost" size="icon" aria-label={identityLabel}>
 									<Avatar>
 										<AvatarFallback>
 											<ShieldCheck size={16} />
 										</AvatarFallback>
 									</Avatar>
-								</span>
+								</Button>
 							</TooltipTrigger>
 							<TooltipContent side="right">{identityLabel}</TooltipContent>
 						</Tooltip>
@@ -304,21 +304,19 @@ export function AppShell() {
 						</>
 					}
 				/>
-				<div className="octo-island-wrap">
-					<ContentIsland className="octo-island">
-						{identity.error && (
-							<Banner
-								variant="error"
-								role="alert"
-								description={identity.error}
-								action={<Banner.Action onClick={() => void model.load()}>重试</Banner.Action>}
-							/>
-						)}
-						<Suspense fallback={<p role="status">正在加载页面…</p>}>
-							<Outlet />
-						</Suspense>
-					</ContentIsland>
-				</div>
+				<ContentIsland className="octo-island">
+					{identity.error && (
+						<Banner
+							variant="error"
+							role="alert"
+							description={identity.error}
+							action={<Banner.Action onClick={() => void model.load()}>重试</Banner.Action>}
+						/>
+					)}
+					<Suspense fallback={<LayerCard.Loading label="正在加载页面…" />}>
+						<Outlet />
+					</Suspense>
+				</ContentIsland>
 			</AppMain>
 			<CommandPalette
 				open={palette}

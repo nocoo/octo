@@ -7,6 +7,8 @@ describe("shell navigation and identity", () => {
 		expect(pageTitle("/")).toBe("总览");
 		expect(pageTitle("/memories/one/edit")).toBe("记忆库");
 		expect(pageTitle("/settings/embedding")).toBe("向量模型");
+		expect(pageTitle("/spaces")).toBe("空间");
+		expect(pageTitle("/keys")).toBe("接口密钥");
 		expect(pageTitle("/missing")).toBe("页面不存在");
 		expect(new Set(navigation.map((item) => item.href)).size).toBe(navigation.length);
 	});

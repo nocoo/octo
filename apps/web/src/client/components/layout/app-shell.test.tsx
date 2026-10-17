@@ -23,7 +23,7 @@ function renderShell() {
 				<MemoryRouter>
 					<Routes>
 						<Route element={<AppShell />}>
-							<Route index element={<PageHeader title="Overview" />} />
+							<Route index element={<PageHeader title="总览" />} />
 						</Route>
 					</Routes>
 				</MemoryRouter>
@@ -42,6 +42,16 @@ it("does not describe failed Access verification as still pending", () => {
 it("leaves the single page heading to PageHeader", () => {
 	const html = renderShell();
 	expect(html.match(/<h1\b/g)).toHaveLength(1);
-	expect(html).toContain("Overview");
 	expect(html).toContain("总览");
+});
+
+it("uses the Basalt shell without duplicate custom layout wrappers", () => {
+	const html = renderShell();
+	expect(html.match(/data-basalt-island=/g)).toHaveLength(1);
+	for (const removed of ["octo-island-wrap", "octo-rail-search", "octo-brand"])
+		expect(html).not.toContain(removed);
+	expect(html).toContain("空间");
+	expect(html).toContain("接口密钥");
+	expect(html).not.toContain("API Key");
+	expect(html).not.toContain(">Space<");
 });

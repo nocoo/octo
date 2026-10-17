@@ -2,7 +2,7 @@ html,
 body,
 #root {
 	min-height: 100%;
-	margin: 0;
+	margin: unset;
 }
 body {
 	font-family: var(--basalt-font-sans, -apple-system), BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -17,38 +17,17 @@ a {
 	color: inherit;
 	text-underline-offset: var(--basalt-space-sm);
 }
-.octo-brand {
-	display: flex;
-	width: 100%;
-	align-items: center;
-	gap: var(--basalt-space-layout-sm);
-}
-.octo-brand strong {
-	font-size: var(--basalt-text-3xl);
-	letter-spacing: var(--tracking-tight);
-}
-.octo-brand > :last-child {
-	margin-left: auto;
-}
-.octo-rail-search {
-	padding-inline: var(--basalt-space-nav-inset);
-}
-.octo-island-wrap {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	min-height: 0;
-	min-width: 0;
-	padding: 0 var(--basalt-space-layout-sm) var(--basalt-space-layout-sm);
-}
 .octo-island {
-	display: flex;
-	flex-direction: column;
-	gap: var(--basalt-space-layout-lg);
+	display: grid;
+	align-content: start;
+	gap: var(--basalt-space-layout);
+	margin-inline: var(--basalt-space-layout-sm);
+	margin-bottom: var(--basalt-space-layout-sm);
+	overflow: auto;
 }
 .octo-mobile-rail {
-	padding: 0;
-	width: var(--basalt-sidebar-width, 260px);
+	padding: unset;
+	width: var(--basalt-sidebar-width);
 	max-width: 100%;
 	background: hsl(var(--basalt-background));
 }
@@ -79,12 +58,6 @@ a {
 ::view-transition-new(root) {
 	animation-duration: var(--basalt-motion-normal);
 	animation-timing-function: var(--basalt-motion-ease);
-}
-@media (max-width: 767px) {
-	.octo-island-wrap {
-		padding-inline: var(--basalt-space-lg);
-		padding-bottom: var(--basalt-space-lg);
-	}
 }
 @media (prefers-reduced-motion: reduce) {
 	::view-transition-old(root),
