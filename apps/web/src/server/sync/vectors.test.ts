@@ -22,6 +22,29 @@ function fixture() {
 }
 
 describe("durable vector synchronization", () => {
+	it("moves failed tasks behind untouched work instead of starving purge", async () => {
+		const { env, sqlite } = fixture();
+		sqlite.exec("DELETE FROM vector_sync_jobs");
+		for (let index = 0; index < 51; index++) {
+			sqlite
+				.prepare("INSERT INTO vector_sync_jobs (memory_id) VALUES (?)")
+				.run(`job-${String(index).padStart(2, "0")}`);
+		}
+		const deleted: string[] = [];
+		const store = {
+			upsert: vi.fn(async () => {}),
+			delete: vi.fn(async (ids: string[]) => {
+				if (ids[0] !== "job-50") throw new Error("provider failure");
+				deleted.push(...ids);
+			}),
+		};
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		await synchronizeVectors(env, { store, now: 100 });
+		await synchronizeVectors(env, { store, now: 101 });
+		expect(deleted).toEqual(["job-50"]);
+		log.mockRestore();
+	});
+
 	it("upserts current metadata and acknowledges only after success", async () => {
 		const { env, store, indexed, sqlite } = fixture();
 		expect(indexed()).toBeNull();

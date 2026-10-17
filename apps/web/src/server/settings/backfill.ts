@@ -64,7 +64,7 @@ export async function backfillMemory(env: Env, memoryId: string): Promise<boolea
 					state.snapshot,
 				)
 				.run();
-		return result.meta.changes === 1;
+		return result.meta.changes > 0;
 	} catch {
 		console.error("embedding backfill failed");
 		return false;

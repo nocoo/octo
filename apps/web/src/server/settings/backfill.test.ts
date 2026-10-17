@@ -21,6 +21,32 @@ afterEach(() => {
 });
 
 describe("post-commit embedding backfill", () => {
+	it("reports a changed vector when D1 includes trigger writes in changes", async () => {
+		const { env } = await setup();
+		const prepare = env.DB.prepare.bind(env.DB);
+		vi.spyOn(env.DB, "prepare").mockImplementation((sql) => {
+			const statement = prepare(sql);
+			if (!sql.startsWith("INSERT INTO memory_vectors")) return statement;
+			const bind = statement.bind.bind(statement);
+			vi.spyOn(statement, "bind").mockImplementation((...values) => {
+				const bound = bind(...values);
+				const run = bound.run.bind(bound);
+				vi.spyOn(bound, "run").mockImplementation(async () => {
+					const result = await run();
+					return { ...result, meta: { ...result.meta, changes: result.meta.changes * 3 } };
+				});
+				return bound;
+			});
+			return statement;
+		});
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] })),
+		);
+		expect(await backfillMemory(env, "m")).toBe(true);
+		expect(await backfillMemory(env, "m")).toBe(false);
+	});
+
 	it("defaults off and makes no outbound call for missing config/memory or trashed memories", async () => {
 		const fetcher = vi.fn();
 		vi.stubGlobal("fetch", fetcher);

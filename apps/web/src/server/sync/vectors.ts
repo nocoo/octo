@@ -26,14 +26,19 @@ type SourceVector = {
 	vector: ArrayBuffer;
 };
 
-async function invalidate(db: D1Database, memoryId: string, token: string): Promise<void> {
+async function invalidate(
+	db: D1Database,
+	memoryId: string,
+	token: string,
+	now: number,
+): Promise<void> {
 	await db.batch([
 		db.prepare("UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ?").bind(memoryId),
 		db
-			.prepare(`UPDATE vector_sync_jobs SET generation = generation + 1, due_at = 0,
+			.prepare(`UPDATE vector_sync_jobs SET generation = generation + 1, due_at = ?,
 			lease_until = CASE WHEN lease_token = ? THEN 0 ELSE lease_until END,
 			lease_token = CASE WHEN lease_token = ? THEN NULL ELSE lease_token END WHERE memory_id = ?`)
-			.bind(token, token, memoryId),
+			.bind(now, token, token, memoryId),
 	]);
 }
 
@@ -117,11 +122,11 @@ export async function synchronizeVectors(
 				),
 			]);
 			if (results[1]?.meta.changes === 1) totals.synced++;
-			else await invalidate(env.DB, job.memory_id, token);
+			else await invalidate(env.DB, job.memory_id, token, now);
 		} catch {
 			totals.failed++;
 			console.error("vector_sync_failed");
-			await invalidate(env.DB, job.memory_id, token);
+			await invalidate(env.DB, job.memory_id, token, now);
 		}
 	}
 	return totals;
