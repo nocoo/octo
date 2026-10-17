@@ -2,3 +2,7 @@ title = "octo"
 
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "pinned Cloudflare Access audience hash"
+regexes = ['''9ab761cffd4ad657004e429d74e5524232d3b017775548211f5e0eb809a88d67''']
