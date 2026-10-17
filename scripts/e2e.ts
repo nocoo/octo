@@ -204,20 +204,38 @@ export function stopProcessGroup(pid: number | undefined, signal: NodeJS.Signals
 	}
 }
 
+const stoppingChildren = new WeakMap<ChildProcess, Promise<void>>();
+
+function childExited(child: ChildProcess): boolean {
+	return child.exitCode != null || child.signalCode != null;
+}
+
 export async function stopChild(child: ChildProcess, sleeper = sleep): Promise<void> {
-	if (child.exitCode !== null) {
-		return;
+	const inflight = stoppingChildren.get(child);
+	if (inflight) {
+		return inflight;
 	}
-	const exited = new Promise<void>((resolve) => {
-		child.once("exit", () => resolve());
-	});
-	stopProcessGroup(child.pid, "SIGTERM");
-	child.kill("SIGTERM");
-	await Promise.race([exited, sleeper(1_000)]);
-	if (child.exitCode === null) {
-		stopProcessGroup(child.pid, "SIGKILL");
-		child.kill("SIGKILL");
-		await exited;
+	const work = (async () => {
+		if (childExited(child)) {
+			return;
+		}
+		const exited = new Promise<void>((resolve) => {
+			child.once("exit", () => resolve());
+		});
+		stopProcessGroup(child.pid, "SIGTERM");
+		child.kill("SIGTERM");
+		await Promise.race([exited, sleeper(1_000)]);
+		if (!childExited(child)) {
+			stopProcessGroup(child.pid, "SIGKILL");
+			child.kill("SIGKILL");
+			await exited;
+		}
+	})();
+	stoppingChildren.set(child, work);
+	try {
+		await work;
+	} finally {
+		stoppingChildren.delete(child);
 	}
 }
 
@@ -286,8 +304,13 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	wrangler.stdout?.on("data", (chunk) => process.stdout.write(chunk as Buffer));
 	wrangler.stderr?.on("data", (chunk) => process.stderr.write(chunk as Buffer));
 	const base = `http://127.0.0.1:${port}`;
+	let stopping: Promise<void> | undefined;
+	const cleanup = (): Promise<void> => {
+		stopping ??= stopChild(wrangler);
+		return stopping;
+	};
 	const onSignal = (): void => {
-		void stopChild(wrangler);
+		void cleanup();
 	};
 	process.on("SIGINT", onSignal);
 	process.on("SIGTERM", onSignal);
@@ -305,7 +328,7 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	} finally {
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
-		await stopChild(wrangler);
+		await cleanup();
 		await jwks.close();
 	}
 }

@@ -311,6 +311,29 @@ describe("runE2eApi", () => {
 		spy.mockRestore();
 	});
 
+	it("treats signal exit as done and reuses in-flight cleanup", async () => {
+		const child = new EventEmitter() as ChildProcess & EventEmitter;
+		Object.defineProperty(child, "exitCode", { writable: true, value: null });
+		Object.defineProperty(child, "signalCode", { writable: true, value: null });
+		const signals: Array<NodeJS.Signals | undefined> = [];
+		child.kill = ((signal?: NodeJS.Signals) => {
+			signals.push(signal);
+			if (signal === "SIGTERM") {
+				Object.defineProperty(child, "signalCode", { writable: true, value: "SIGTERM" });
+				queueMicrotask(() => child.emit("exit", null, "SIGTERM"));
+			}
+			return true;
+		}) as ChildProcess["kill"];
+		const hung = async () => {
+			await new Promise(() => undefined);
+		};
+		const first = stopChild(child, hung);
+		const concurrent = stopChild(child, hung);
+		await Promise.all([first, concurrent]);
+		await stopChild(child, hung);
+		expect(signals).toEqual(["SIGTERM"]);
+	});
+
 	it("force-kills a child that ignores SIGTERM", async () => {
 		const child = new EventEmitter() as ChildProcess & EventEmitter & { exitCode: number | null };
 		Object.defineProperty(child, "exitCode", { writable: true, value: null });
