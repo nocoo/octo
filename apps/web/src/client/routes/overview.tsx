@@ -1,5 +1,6 @@
 import { Badge, Button, LayerCard, StatStrip } from "@nocoo/basalt";
 import { AreaChart } from "@nocoo/basalt/charts/area";
+import { type ChartSeriesDescriptor, getChartColor } from "@nocoo/basalt/charts/config";
 import { HeatmapCalendar } from "@nocoo/basalt/charts/heatmap-calendar";
 import { Banner } from "@nocoo/basalt/components/banner";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
@@ -17,6 +18,17 @@ import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useModel } from "../components/layout/use-model";
 import { activitySeries, OverviewModel } from "../viewmodels/overview";
+
+export function activityChartSeries(activity: ReturnType<typeof activitySeries>) {
+	return activity.keys.map(
+		(key, index) =>
+			({
+				key: `agent_${index}` as const,
+				label: key,
+				color: getChartColor(activity.colors[index] ?? 0),
+			}) satisfies ChartSeriesDescriptor,
+	);
+}
 
 export function OverviewPage() {
 	const model = useMemo(() => new OverviewModel(), []);
@@ -106,11 +118,7 @@ export function OverviewPage() {
 						{activity.rows.length ? (
 							<AreaChart
 								data={activity.rows}
-								series={activity.keys.map((key, index) => ({
-									key: `agent_${index}` as const,
-									label: key,
-									colorIndex: activity.colors[index] ?? 0,
-								}))}
+								series={activityChartSeries(activity)}
 								stacked
 								showAxes
 								showLegend
