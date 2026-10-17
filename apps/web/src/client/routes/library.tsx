@@ -68,7 +68,7 @@ function useLibrary(kind: LibraryKind) {
 function LibraryStatus({ state, onRetry }: { state: LibraryState; onRetry: () => void }) {
 	return (
 		<>
-			{state.busy && !state.ready && <p role="status">Loading library...</p>}
+			{!state.ready && !state.error && <p role="status">Loading library...</p>}
 			{state.error && (
 				<p role="alert">
 					{state.error}{" "}
@@ -283,36 +283,43 @@ export function TagsPage() {
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
-			<LayerCard>
-				<DataTable
-					aria-label="Tags"
-					data={state.tags}
-					columns={columns}
-					filter={query}
-					getRowId={(tag) => tag.id}
-					pageSize={25}
-					edge="attached"
-					loading={state.busy && !state.ready}
-					empty="No tags match your search."
-				/>
-			</LayerCard>
-			<SectionRule title="Tag cooccurrence" hint="Each edge counts memories carrying both tags.">
-				<LayerCard>
-					<LayerCard.Header>
-						Vocabulary connections <Link href="/graph?mode=cooccurrence">Explore graph</Link>
-					</LayerCard.Header>
-					<LayerCard.Body>
-						<Suspense fallback={<p role="status">Loading graph...</p>}>
-							<GraphCanvas graph={graph} />
-						</Suspense>
-						<GraphTables
-							graph={graph}
-							selected={params.get("node") ? [params.get("node") as string] : []}
-							onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
+			{state.ready && (
+				<>
+					<LayerCard>
+						<DataTable
+							aria-label="Tags"
+							data={state.tags}
+							columns={columns}
+							filter={query}
+							getRowId={(tag) => tag.id}
+							pageSize={25}
+							edge="attached"
+							loading={state.busy && !state.ready}
+							empty="No tags match your search."
 						/>
-					</LayerCard.Body>
-				</LayerCard>
-			</SectionRule>
+					</LayerCard>
+					<SectionRule
+						title="Tag cooccurrence"
+						hint="Each edge counts memories carrying both tags."
+					>
+						<LayerCard>
+							<LayerCard.Header>
+								Vocabulary connections <Link href="/graph?mode=cooccurrence">Explore graph</Link>
+							</LayerCard.Header>
+							<LayerCard.Body>
+								<Suspense fallback={<p role="status">Loading graph...</p>}>
+									<GraphCanvas graph={graph} />
+								</Suspense>
+								<GraphTables
+									graph={graph}
+									selected={params.get("node") ? [params.get("node") as string] : []}
+									onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
+								/>
+							</LayerCard.Body>
+						</LayerCard>
+					</SectionRule>
+				</>
+			)}
 			<Dialog
 				open={Boolean(source) && !confirming}
 				onOpenChange={(open) => {
@@ -469,19 +476,21 @@ export function SpacesPage() {
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
-			<LayerCard>
-				<DataTable
-					aria-label="Spaces"
-					data={state.spaces}
-					columns={columns}
-					filter={params.get("q") ?? ""}
-					getRowId={(space) => space.id}
-					pageSize={25}
-					edge="attached"
-					loading={state.busy && !state.ready}
-					empty="No spaces found. Create a space to organize memories."
-				/>
-			</LayerCard>
+			{state.ready && (
+				<LayerCard>
+					<DataTable
+						aria-label="Spaces"
+						data={state.spaces}
+						columns={columns}
+						filter={params.get("q") ?? ""}
+						getRowId={(space) => space.id}
+						pageSize={25}
+						edge="attached"
+						loading={state.busy && !state.ready}
+						empty="No spaces found. Create a space to organize memories."
+					/>
+				</LayerCard>
+			)}
 			<Dialog
 				open={creating}
 				onOpenChange={(open) => {
@@ -632,37 +641,43 @@ export function TrashPage() {
 					{failure.id}: {failure.message}
 				</p>
 			))}
-			<LayerCard>
-				<DataTable
-					aria-label="Trashed memories"
-					data={visible}
-					columns={columns}
-					selected={selected}
-					onSelectedChange={(ids) => setParams(setSelection(params, ids))}
-					multiple
-					getRowId={(item) => item.id}
-					pageSize={25}
-					edge="attached"
-					loading={state.busy && !state.ready}
-					empty={
-						state.nextCursor
-							? "No loaded memories match these filters. Load more to search older trash."
-							: "Trash is empty for these filters."
-					}
-				/>
-				<LayerCard.Footer>
-					<div className="library-actions">
-						<p className="library-muted" role="status">
-							{state.memories.length} memories loaded. Filters apply to loaded memories.
-						</p>
-						{state.nextCursor && (
-							<Button variant="outline" loading={state.busy} onClick={() => void model.loadMore()}>
-								Load more
-							</Button>
-						)}
-					</div>
-				</LayerCard.Footer>
-			</LayerCard>
+			{state.ready && (
+				<LayerCard>
+					<DataTable
+						aria-label="Trashed memories"
+						data={visible}
+						columns={columns}
+						selected={selected}
+						onSelectedChange={(ids) => setParams(setSelection(params, ids))}
+						multiple
+						getRowId={(item) => item.id}
+						pageSize={25}
+						edge="attached"
+						loading={state.busy && !state.ready}
+						empty={
+							state.nextCursor
+								? "No loaded memories match these filters. Load more to search older trash."
+								: "Trash is empty for these filters."
+						}
+					/>
+					<LayerCard.Footer>
+						<div className="library-actions">
+							<p className="library-muted" role="status">
+								{state.memories.length} memories loaded. Filters apply to loaded memories.
+							</p>
+							{state.nextCursor && (
+								<Button
+									variant="outline"
+									loading={state.busy}
+									onClick={() => void model.loadMore()}
+								>
+									Load more
+								</Button>
+							)}
+						</div>
+					</LayerCard.Footer>
+				</LayerCard>
+			)}
 			<Dialog
 				open={state.purge?.stage === "title"}
 				onOpenChange={(open) => {
@@ -791,35 +806,39 @@ export function GraphPage() {
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
-			<LayerCard>
-				<LayerCard.Header>
-					<span>
-						{graph.nodes.length} nodes · {graph.links.length} relationships
-					</span>
-					{graph.clustered > 0 && (
-						<Badge variant="secondary">{graph.clustered} nodes clustered</Badge>
-					)}
-				</LayerCard.Header>
-				<LayerCard.Body>
-					<Suspense fallback={<p role="status">Loading graph...</p>}>
-						<GraphCanvas graph={graph} />
-					</Suspense>
-				</LayerCard.Body>
-			</LayerCard>
-			<SectionRule
-				title="Accessible graph data"
-				hint="Select a node here or on the canvas; selection is stored in the URL."
-			>
-				<LayerCard>
-					<LayerCard.Body>
-						<GraphTables
-							graph={graph}
-							selected={params.get("node") ? [params.get("node") as string] : []}
-							onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
-						/>
-					</LayerCard.Body>
-				</LayerCard>
-			</SectionRule>
+			{state.ready && (
+				<>
+					<LayerCard>
+						<LayerCard.Header>
+							<span>
+								{graph.nodes.length} nodes · {graph.links.length} relationships
+							</span>
+							{graph.clustered > 0 && (
+								<Badge variant="secondary">{graph.clustered} nodes clustered</Badge>
+							)}
+						</LayerCard.Header>
+						<LayerCard.Body>
+							<Suspense fallback={<p role="status">Loading graph...</p>}>
+								<GraphCanvas graph={graph} />
+							</Suspense>
+						</LayerCard.Body>
+					</LayerCard>
+					<SectionRule
+						title="Accessible graph data"
+						hint="Select a node here or on the canvas; selection is stored in the URL."
+					>
+						<LayerCard>
+							<LayerCard.Body>
+								<GraphTables
+									graph={graph}
+									selected={params.get("node") ? [params.get("node") as string] : []}
+									onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
+								/>
+							</LayerCard.Body>
+						</LayerCard>
+					</SectionRule>
+				</>
+			)}
 		</div>
 	);
 }
@@ -904,13 +923,13 @@ export function TimelinePage() {
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
-			{timeline.undated > 0 && (
+			{state.ready && timeline.undated > 0 && (
 				<p className="library-muted">
 					{timeline.undated} memories have no valid {options.field}; no creation-time fallback is
 					applied.
 				</p>
 			)}
-			{timeline.groups.length === 0 && (
+			{state.ready && timeline.groups.length === 0 && (
 				<LayerCard>
 					<LayerCard.Empty
 						title="No dated memories"
@@ -918,33 +937,34 @@ export function TimelinePage() {
 					/>
 				</LayerCard>
 			)}
-			{timeline.groups.map((group) => (
-				<LayerCard key={group.label}>
-					<LayerCard.Header>
-						{group.label} <Badge variant="secondary">{group.items.length} memories</Badge>
-					</LayerCard.Header>
-					<LayerCard.Body>
-						<Timeline
-							ariaLabel={`Memories in ${group.label}`}
-							events={group.items.map((item) => ({
-								id: item.id,
-								time: new Date(item.timestamp).toISOString(),
-								title: item.title,
-								subtitle: item.space,
-							}))}
-						/>
-						<DataTable
-							aria-label={`Timeline data ${group.label}`}
-							data={group.items}
-							columns={columns}
-							getRowId={(item) => item.id}
-							selected={selectedIds(params)}
-							onSelectedChange={(ids) => setParams(setSelection(params, ids))}
-							pageSize={20}
-						/>
-					</LayerCard.Body>
-				</LayerCard>
-			))}
+			{state.ready &&
+				timeline.groups.map((group) => (
+					<LayerCard key={group.label}>
+						<LayerCard.Header>
+							{group.label} <Badge variant="secondary">{group.items.length} memories</Badge>
+						</LayerCard.Header>
+						<LayerCard.Body>
+							<Timeline
+								ariaLabel={`Memories in ${group.label}`}
+								events={group.items.map((item) => ({
+									id: item.id,
+									time: new Date(item.timestamp).toISOString(),
+									title: item.title,
+									subtitle: item.space,
+								}))}
+							/>
+							<DataTable
+								aria-label={`Timeline data ${group.label}`}
+								data={group.items}
+								columns={columns}
+								getRowId={(item) => item.id}
+								selected={selectedIds(params)}
+								onSelectedChange={(ids) => setParams(setSelection(params, ids))}
+								pageSize={20}
+							/>
+						</LayerCard.Body>
+					</LayerCard>
+				))}
 		</div>
 	);
 }
