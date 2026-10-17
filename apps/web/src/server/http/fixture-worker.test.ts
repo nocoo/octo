@@ -34,19 +34,21 @@ async function fixture() {
 	return { db, sqlite, env, ctx, request };
 }
 
-describe("explicit test injection", () => {
-	it("uses real M1 auth while production never mounts fixtures even in test env", async () => {
+describe("isolated production worker fixture", () => {
+	it("uses the same production batch implementation and real M1 auth", async () => {
 		const f = await fixture();
-		expect((await worker.fetch(f.request(), f.env, f.ctx)).status).toBe(404);
+		const production = await worker.fetch(f.request(), f.env, f.ctx);
+		expect(production.status).toBe(200);
+		const original = await production.json();
 		const res = await fixtureWorker.fetch(f.request(), f.env, f.ctx);
-		// Use a fresh client key after the production 404 outcome above.
-		const req = f.request();
-		req.headers.set("Idempotency-Key", "actual-fixture");
-		expect(res.status).toBe(404);
-		const created = await fixtureWorker.fetch(req, f.env, f.ctx);
-		expect(created.status).toBe(200);
-		expect(await created.json()).toMatchObject({ results: [{ ok: true }] });
-		expect(f.sqlite.prepare("SELECT * FROM _m6_memories").all()).toHaveLength(1);
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await res.json()).toEqual(original);
+		for (const table of ["memories", "memory_versions", "memories_fts", "changes"])
+			expect(f.sqlite.prepare(`SELECT * FROM ${table}`).all()).toHaveLength(1);
+		expect(
+			f.sqlite.prepare("SELECT name FROM sqlite_master WHERE name LIKE '_m6_%'").all(),
+		).toEqual([]);
 		const noAuth = f.request();
 		noAuth.headers.delete("Authorization");
 		expect((await fixtureWorker.fetch(noAuth, f.env, f.ctx)).status).toBe(401);

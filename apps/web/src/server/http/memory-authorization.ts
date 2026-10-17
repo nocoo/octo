@@ -1,10 +1,10 @@
 import type { Context } from "hono";
 import type { AppVars, Env } from "../env";
 import { ApiError } from "../lib/errors";
-import { readJsonLimited } from "../lib/validate";
 import { MemoryRepo } from "../repo/memories";
 import { VersionRepo } from "../repo/versions";
 import { authzFrom } from "../services/memories";
+import { readAuthorizationBody } from "./authorization-body";
 
 export async function authorizeMemoryRequest(
 	c: Context<{ Bindings: Env; Variables: AppVars }>,
@@ -22,7 +22,7 @@ export async function authorizeMemoryRequest(
 	const authz = authzFrom(principal);
 	const repo = new MemoryRepo(c.env.DB);
 	if (create) {
-		const payload = await readJsonLimited(c.req.raw.clone());
+		const payload = await readAuthorizationBody(c);
 		if (
 			!payload ||
 			typeof payload !== "object" ||
@@ -66,7 +66,7 @@ export async function authorizeMemoryRequest(
 		return;
 	}
 	authz.denyUnless("update", target);
-	const payload = await readJsonLimited(c.req.raw.clone());
+	const payload = await readAuthorizationBody(c);
 	if (!payload || typeof payload !== "object") return;
 	let destination: string | undefined;
 	if (method === "PATCH" && "space" in payload && typeof payload.space === "string") {

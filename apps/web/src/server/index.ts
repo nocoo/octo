@@ -18,9 +18,8 @@ import { mountV1SearchRoutes } from "./routes/v1/search";
 import { spacesRoutes } from "./routes/v1/spaces";
 import { tagsRoutes, tagWriteAuthorization } from "./routes/v1/tags";
 import { trashRoutes } from "./routes/v1/trash";
-import type { MemoryService } from "./services/batch-memories";
 
-export function createApp(memoryService?: MemoryService): Hono<{
+export function createApp(): Hono<{
 	Bindings: Env;
 	Variables: AppVars;
 }> {
@@ -54,9 +53,7 @@ export function createApp(memoryService?: MemoryService): Hono<{
 	app.use("/api/admin/*", accessMiddleware);
 	app.use("/api/admin/*", adminWriteOriginMiddleware);
 	app.get("/api/v1/me", (c) => meResponse(c));
-	if (memoryService) {
-		app.route("/api/v1", createV1Routes(memoryService));
-	}
+	app.route("/api/v1", createV1Routes());
 	mountV1SearchRoutes(app);
 	app.route("/api/v1/memories", memoriesRoutes());
 	app.route("/api/v1/trash", trashRoutes());

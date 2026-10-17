@@ -6,8 +6,10 @@ import {
 	effectCount,
 	input,
 	post,
+	query,
 	seedKey,
 	seedSpace,
+	sqlText,
 	stored,
 } from "../fixtures/l2-batch";
 
@@ -78,8 +80,9 @@ describe("batch endpoint success/failure/auth matrix", () => {
 	it("batchCreate persists each successful item and reports missing spaces individually", async () => {
 		const d1 = await e2eD1();
 		const key = await seedKey(d1);
+		const tagged = { ...input, tags: ["BatchShared"] };
 		const res = await post("Create", key.token, {
-			items: [input, { ...input, space: "nonexistent-space" }, { ...input, title: "third" }],
+			items: [tagged, { ...input, space: "nonexistent-space" }, { ...tagged, title: "third" }],
 		});
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as BatchBody;
@@ -90,7 +93,37 @@ describe("batch endpoint success/failure/auth matrix", () => {
 			expect(result?.item?.version).toBe(1);
 			const persisted = await stored(d1, result?.item?.id ?? "");
 			expect(persisted?.deleted_at).toBeNull();
-			expect(JSON.parse(persisted?.record_json ?? "null")).toMatchObject(result?.item ?? {});
+			expect(persisted).toMatchObject({
+				id: result?.item?.id,
+				title: result?.item?.title,
+				body: result?.item?.body,
+				version: result?.item?.version,
+			});
+			const id = sqlText(result?.item?.id ?? "");
+			expect(
+				await query(
+					d1,
+					`SELECT version, tags_json, op FROM memory_versions WHERE memory_id = ${id}`,
+				),
+			).toEqual([{ version: 1, tags_json: '["batchshared"]', op: "create" }]);
+			expect(
+				await query(
+					d1,
+					`SELECT t.name FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id = ${id}`,
+				),
+			).toEqual([{ name: "batchshared" }]);
+			expect(
+				await query(
+					d1,
+					`SELECT op, version FROM changes WHERE entity = 'memory' AND entity_id = ${id}`,
+				),
+			).toEqual([{ op: "created", version: 1 }]);
+			expect(
+				await query(
+					d1,
+					`SELECT memory_id FROM memories_fts_map WHERE memory_id = ${id} AND fts_rowid IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH 'batchshared')`,
+				),
+			).toEqual([{ memory_id: result?.item?.id }]);
 		}
 	});
 	it("batchUpdate persists title/version changes and leaves stale and missing items unchanged", async () => {
@@ -112,10 +145,28 @@ describe("batch endpoint success/failure/auth matrix", () => {
 		});
 		expect(body.results[1]).toMatchObject({ ok: false, error: { code: "version_conflict" } });
 		expect(body.results[2]).toMatchObject({ ok: false, error: { code: "not_found" } });
-		expect(JSON.parse((await stored(d1, item.id))?.record_json ?? "null")).toMatchObject({
+		expect(await stored(d1, item.id)).toMatchObject({
 			title: "updated",
 			version: 2,
 		});
+		expect(
+			await query(
+				d1,
+				`SELECT title, version FROM memory_versions WHERE memory_id = ${sqlText(item.id)} ORDER BY version`,
+			),
+		).toEqual([
+			{ title: "title", version: 1 },
+			{ title: "updated", version: 2 },
+		]);
+		expect(
+			await query(d1, `SELECT op FROM changes WHERE entity_id = ${sqlText(item.id)} ORDER BY seq`),
+		).toEqual([{ op: "created" }, { op: "updated" }]);
+		expect(
+			await query(
+				d1,
+				`SELECT memory_id FROM memories_fts_map WHERE memory_id = ${sqlText(item.id)} AND fts_rowid IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH 'updated')`,
+			),
+		).toEqual([{ memory_id: item.id }]);
 	});
 	it("batchDelete persists trash rather than removing the row and reports missing items", async () => {
 		const d1 = await e2eD1();
@@ -127,7 +178,21 @@ describe("batch endpoint success/failure/auth matrix", () => {
 		expect(body.results[0]?.ok).toBe(true);
 		expect(body.results[0]?.item?.trashed_at).toEqual(expect.any(String));
 		expect(body.results.slice(1).map((r) => r.error?.code)).toEqual(["not_found", "not_found"]);
-		expect((await stored(d1, item.id))?.deleted_at).toBe(body.results[0]?.item?.trashed_at);
+		const deletedAt = (await stored(d1, item.id))?.deleted_at;
+		expect(deletedAt).toEqual(expect.any(Number));
+		expect(new Date(deletedAt ?? 0).toISOString()).toBe(body.results[0]?.item?.trashed_at);
+		expect(
+			await query(d1, `SELECT version FROM memory_versions WHERE memory_id = ${sqlText(item.id)}`),
+		).toEqual([{ version: 1 }]);
+		expect(
+			await query(d1, `SELECT op FROM changes WHERE entity_id = ${sqlText(item.id)} ORDER BY seq`),
+		).toEqual([{ op: "created" }, { op: "trashed" }]);
+		expect(
+			await query(
+				d1,
+				`SELECT memory_id FROM memories_fts_map WHERE memory_id = ${sqlText(item.id)} AND fts_rowid IN (SELECT rowid FROM memories_fts)`,
+			),
+		).toEqual([]);
 	});
 	it.each(["spaces", "own"] as const)(
 		"resolves real IDs for %s scope and enforces own-entry mutation and moves",
@@ -158,7 +223,7 @@ describe("batch endpoint success/failure/auth matrix", () => {
 			const body = (await updated.json()) as BatchBody;
 			expect(body.results.map((r) => r.ok)).toEqual([true, false, false]);
 			expect(body.results.slice(1).map((r) => r.error?.code)).toEqual(["forbidden", "not_found"]);
-			expect(JSON.parse((await stored(d1, own.id))?.record_json ?? "null")).toMatchObject({
+			expect(await stored(d1, own.id)).toMatchObject({
 				space: destination.slug,
 				space_id: destination.id,
 				version: 2,
@@ -171,7 +236,7 @@ describe("batch endpoint success/failure/auth matrix", () => {
 				"forbidden",
 				"not_found",
 			]);
-			expect((await stored(d1, own.id))?.deleted_at).toEqual(expect.any(String));
+			expect((await stored(d1, own.id))?.deleted_at).toEqual(expect.any(Number));
 			expect(await stored(d1, foreign.id)).toEqual(beforeForeign);
 			expect(await stored(d1, hidden.id)).toEqual(beforeHidden);
 			const deniedCreate = await post("Create", key.token, { items: [input] });

@@ -128,10 +128,17 @@ describe("L2 async fixture call sites", () => {
 	);
 	it("awaits post-HTTP observation queries and parses exact rows", async () => {
 		state.exec.mockResolvedValue(
-			'banner\n[{"results":[{"n":1,"record_json":"{}","deleted_at":null}]}]',
+			'banner\n[{"results":[{"n":1,"id":"memory-id","title":"stored","deleted_at":null}]}]',
 		);
 		expect(await effectCount(state.exec, "key")).toBe(1);
-		expect(await stored(state.exec, "id")).toEqual({ n: 1, record_json: "{}", deleted_at: null });
+		expect(await stored(state.exec, "id")).toEqual({
+			n: 1,
+			id: "memory-id",
+			title: "stored",
+			deleted_at: null,
+		});
+		expect(state.exec.mock.calls[0]?.[0][1]).toContain("FROM memories WHERE source_key_id");
+		expect(state.exec.mock.calls[1]?.[0][1]).toContain("FROM memories m INNER JOIN spaces");
 		state.exec.mockResolvedValue("[]");
 		expect(await effectCount(state.exec, "missing")).toBe(0);
 		expect(await stored(state.exec, "missing")).toBeUndefined();

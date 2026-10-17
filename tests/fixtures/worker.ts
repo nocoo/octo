@@ -1,8 +1,7 @@
 import type { Env } from "../../apps/web/src/server/env";
-import { createApp, worker } from "../../apps/web/src/server/index";
-import { MEMORY_FIXTURE_SQL, TestMemoryService } from "./memories";
+import { worker } from "../../apps/web/src/server/index";
+import { MEMORY_FIXTURE_SQL } from "./memories";
 
-const app = createApp(new TestMemoryService());
 const initialized = new WeakSet<D1Database>();
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
@@ -19,7 +18,7 @@ export default {
 			await env.DB.exec(MEMORY_FIXTURE_SQL);
 			initialized.add(env.DB);
 		}
-		return app.fetch(request, env, ctx);
+		return worker.fetch(request, env, ctx);
 	},
 	scheduled: worker.scheduled,
 };

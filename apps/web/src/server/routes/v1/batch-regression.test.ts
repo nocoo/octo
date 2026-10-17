@@ -4,7 +4,7 @@ import {
 	batchFixture,
 	memoryInput,
 } from "../../../../../../tests/fixtures/batch-app";
-import { TestMemoryService } from "../../../../../../tests/fixtures/memories";
+import { BatchMemoryService } from "../../services/batch-memories";
 import { testApiPrincipal } from "../../test-principal";
 
 describe("batch authorization regression", () => {
@@ -43,10 +43,11 @@ describe("batch authorization regression", () => {
 		},
 	);
 	it.each(["Update", "Delete"])("continues %s after an item lookup throws", async (action) => {
-		const svc = new TestMemoryService();
+		const svc = new BatchMemoryService();
 		const f = batchFixture(svc);
 		const ctx = f.ctx();
-		const rows = await Promise.all([1, 2, 3].map(() => svc.create(memoryInput, ctx)));
+		const rows: Array<Awaited<ReturnType<typeof svc.create>>> = [];
+		for (let i = 0; i < 3; i++) rows.push(await svc.create(memoryInput, ctx));
 		await f.db.batch(ctx.statements);
 		const get = svc.get.bind(svc);
 		vi.spyOn(svc, "get").mockImplementation((id, c) => {

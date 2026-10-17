@@ -4,16 +4,16 @@ import type { AppVars, Env } from "../../apps/web/src/server/env";
 import { idempotencyMiddleware } from "../../apps/web/src/server/http/idempotency";
 import { toErrorResponse } from "../../apps/web/src/server/lib/errors";
 import { createBatchRoutes } from "../../apps/web/src/server/routes/v1/batch";
-import type {
-	MemoryService,
-	MemoryServiceContext,
+import {
+	BatchMemoryService,
+	type MemoryService,
+	type MemoryServiceContext,
 } from "../../apps/web/src/server/services/batch-memories";
 import { testApiPrincipal } from "../../apps/web/src/server/test-principal";
-import { TestMemoryService } from "./memories";
 import { sqliteD1 } from "./sqlite-d1";
 
 export function batchFixture(
-	service: MemoryService = new TestMemoryService(),
+	service: MemoryService = new BatchMemoryService(),
 	principal: ApiPrincipal = testApiPrincipal(),
 ) {
 	const { db, sqlite } = sqliteD1();
@@ -26,10 +26,9 @@ export function batchFixture(
 	app.use("*", idempotencyMiddleware());
 	app.route("/api/v1", createBatchRoutes(service));
 	const ctx = (keyId = principal.id): MemoryServiceContext => ({
-		keyId,
-		actor: `key:${keyId}`,
 		db,
 		statements: [],
+		principal: testApiPrincipal(keyId),
 	});
 	const post = (action: string, body: unknown, headers: Record<string, string> = {}) =>
 		app.request(

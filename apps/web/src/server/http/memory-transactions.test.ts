@@ -26,7 +26,7 @@ async function fixture() {
 			type: "note",
 			tags: [],
 		},
-		idem = "create",
+		idem: string | null = "create",
 	) =>
 		app.request(
 			`/api/v1${path}`,
@@ -35,7 +35,7 @@ async function fixture() {
 				headers: {
 					Authorization: `Bearer ${key.plaintext}`,
 					"Content-Type": "application/json",
-					"Idempotency-Key": idem,
+					...(idem === null ? {} : { "Idempotency-Key": idem }),
 				},
 				...(body === undefined ? {} : { body: JSON.stringify(body) }),
 			},
@@ -45,6 +45,164 @@ async function fixture() {
 }
 
 describe("memory HTTP transaction boundary", () => {
+	it("returns the one committed item to all eight concurrent same-key creates", async () => {
+		const { sqlite, request } = await fixture();
+		const responses = await Promise.all(Array.from({ length: 8 }, () => request()));
+		expect(responses.map((response) => response.status)).toEqual(Array(8).fill(201));
+		const bodies = await Promise.all(responses.map((response) => response.text()));
+		expect(new Set(bodies).size).toBe(1);
+		expect(
+			responses.filter((response) => response.headers.get("Idempotent-Replayed") === "true"),
+		).toHaveLength(7);
+		for (const table of [
+			"memories",
+			"memory_versions",
+			"memories_fts",
+			"changes",
+			"idempotency_records",
+		])
+			expect(sqlite.prepare(`SELECT * FROM ${table}`).all()).toHaveLength(1);
+	});
+
+	it.each(["create", "patch", "rollback"])(
+		"recovers a committed %s with a lost acknowledgment without a retry",
+		async (operation) => {
+			const { db, sqlite, request } = await fixture();
+			let id: string | undefined;
+			if (operation !== "create") {
+				id = ((await (await request()).json()) as { id: string }).id;
+			}
+			const batch = db.batch.bind(db);
+			const spy = vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+				await batch(statements);
+				throw new Error("lost committed acknowledgment");
+			});
+			const response =
+				operation === "create"
+					? await request()
+					: operation === "patch"
+						? await request(
+								`/memories/${id}`,
+								"PATCH",
+								{ title: "patched", expected_version: 1 },
+								"lost-ack",
+							)
+						: await request(
+								`/memories/${id}/rollback`,
+								"POST",
+								{ to_version: 1, expected_version: 1 },
+								"lost-ack",
+							);
+			expect(response.status).toBe(operation === "create" ? 201 : 200);
+			expect(response.headers.get("Idempotent-Replayed")).toBe("true");
+			expect(spy).toHaveBeenCalledTimes(1);
+			const chunks = sqlite
+				.prepare(
+					"SELECT body FROM idempotency_response_chunks WHERE idem_key = ? ORDER BY chunk_index",
+				)
+				.all(operation === "create" ? "create" : "lost-ack") as Array<{ body: string }>;
+			expect(await response.text()).toBe(chunks.map((chunk) => chunk.body).join(""));
+			expect(sqlite.prepare("SELECT * FROM memories").all()).toHaveLength(1);
+			expect(sqlite.prepare("SELECT * FROM memory_versions").all()).toHaveLength(
+				operation === "create" ? 1 : 2,
+			);
+		},
+	);
+
+	it.each(["keyed", "unkeyed"])(
+		"retains 503 when a %s write's asynchronous diagnostic DB query fails",
+		async (mode) => {
+			const { db, sqlite, request } = await fixture();
+			const { id } = (await (await request()).json()) as { id: string };
+			const prepare = db.prepare.bind(db);
+			let diagnosing = false;
+			vi.spyOn(db, "prepare").mockImplementation((sql) => {
+				if (diagnosing && sql.startsWith("SELECT m.id, m.space_id"))
+					throw new Error("private diagnostic DB failure");
+				return prepare(sql);
+			});
+			vi.spyOn(db, "batch").mockImplementationOnce(async () => {
+				diagnosing = true;
+				throw new Error("commit failed");
+			});
+			const response = await request(
+				`/memories/${id}`,
+				"PATCH",
+				{ title: "rejected", expected_version: 1 },
+				mode === "keyed" ? "failed-diagnostic" : null,
+			);
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({ error: { code: "unavailable" } });
+			expect(sqlite.prepare("SELECT title, version FROM memories WHERE id = ?").get(id)).toEqual({
+				title: "title",
+				version: 1,
+			});
+			expect(sqlite.prepare("SELECT * FROM memory_versions").all()).toHaveLength(1);
+			expect(
+				sqlite
+					.prepare("SELECT * FROM idempotency_records WHERE idem_key = 'failed-diagnostic'")
+					.all(),
+			).toEqual([]);
+		},
+	);
+
+	it("rechecks the current resource after a committed write loses its acknowledgment", async () => {
+		const { db, sqlite, request, keyId } = await fixture();
+		const { id } = (await (await request()).json()) as { id: string };
+		sqlite
+			.prepare(
+				"UPDATE api_keys SET scope = 'spaces', space_ids_json = '[\"space:kb\"]' WHERE id = ?",
+			)
+			.run(keyId);
+		const batch = db.batch.bind(db);
+		const spy = vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+			await batch(statements);
+			sqlite
+				.prepare("UPDATE memories SET space_id = 'space:other', version = 3 WHERE id = ?")
+				.run(id);
+			throw new Error("lost committed acknowledgment");
+		});
+		const response = await request(
+			`/memories/${id}`,
+			"PATCH",
+			{ body: "private committed contents", expected_version: 1 },
+			"lost-scope",
+		);
+		expect(response.status).toBe(404);
+		expect(await response.text()).not.toContain("private committed contents");
+		expect(spy).toHaveBeenCalledTimes(1);
+	});
+
+	it("retains 503 if the resource lookup fails while authorizing a recovered outcome", async () => {
+		const { db, sqlite, request } = await fixture();
+		const { id } = (await (await request()).json()) as { id: string };
+		const prepare = db.prepare.bind(db);
+		let recovering = false;
+		vi.spyOn(db, "prepare").mockImplementation((sql) => {
+			if (recovering && sql.startsWith("SELECT m.id, m.space_id"))
+				throw new Error("recovery DB failure");
+			return prepare(sql);
+		});
+		const batch = db.batch.bind(db);
+		vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+			await batch(statements);
+			recovering = true;
+			throw new Error("lost committed acknowledgment");
+		});
+		const response = await request(
+			`/memories/${id}`,
+			"PATCH",
+			{ title: "committed", expected_version: 1 },
+			"failed-recovery-auth",
+		);
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({ error: { code: "unavailable" } });
+		expect(sqlite.prepare("SELECT title, version FROM memories WHERE id = ?").get(id)).toEqual({
+			title: "committed",
+			version: 2,
+		});
+	});
+
 	it("stages an automatically owned space with the first memory", async () => {
 		const { db, request, keyId } = await fixture();
 		await db

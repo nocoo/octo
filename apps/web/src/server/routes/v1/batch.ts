@@ -10,7 +10,11 @@ import { type AuthzOp, type AuthzTarget, authorize } from "../../auth/authorize"
 import type { AppVars, Env } from "../../env";
 import { ApiError } from "../../lib/errors";
 import { parseStrict } from "../../lib/validate";
-import type { MemoryService, MemoryServiceContext } from "../../services/batch-memories";
+import {
+	BatchMemoryService,
+	type MemoryService,
+	type MemoryServiceContext,
+} from "../../services/batch-memories";
 import { parseJsonBody } from "./json-body";
 
 type BatchOk<T> = { ok: true; item: T };
@@ -21,8 +25,12 @@ type BatchErr = {
 type BatchResult<T> = BatchOk<T> | BatchErr;
 
 function serviceCtx(c: Context<{ Bindings: Env; Variables: AppVars }>): MemoryServiceContext {
-	const keyId = c.get("apiKey").id;
-	return { keyId, actor: `key:${keyId}`, db: c.env.DB, statements: c.get("writeStatements") };
+	return {
+		db: c.env.DB,
+		statements: c.get("writeStatements"),
+		principal: c.get("apiKey"),
+		setWriteError: (mapper) => c.set("writeError", mapper),
+	};
 }
 
 function mapServiceError(err: unknown): BatchErr {
@@ -56,7 +64,7 @@ function batchAuthDenied(
 }
 
 export function createBatchRoutes(
-	memoryService: MemoryService,
+	memoryService: MemoryService = new BatchMemoryService(),
 ): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
 
@@ -68,17 +76,11 @@ export function createBatchRoutes(
 		const ctx = serviceCtx(c);
 		const results: BatchResult<Awaited<ReturnType<MemoryService["create"]>>>[] = [];
 		for (const item of body.items) {
-			const checkpoint = ctx.statements.length;
+			const rollback = memoryService.checkpoint(ctx);
 			try {
-				const spaceId = await memoryService.resolveSpace(item.space, ctx);
-				const denied = batchAuthDenied(c, "write", { spaceId });
-				if (denied) {
-					results.push(denied);
-					continue;
-				}
 				results.push({ ok: true, item: await memoryService.create(item, ctx) });
 			} catch (err) {
-				ctx.statements.length = checkpoint;
+				rollback();
 				results.push(mapServiceError(err));
 			}
 		}
@@ -93,7 +95,7 @@ export function createBatchRoutes(
 		const ctx = serviceCtx(c);
 		const results: BatchResult<Awaited<ReturnType<MemoryService["update"]>>>[] = [];
 		for (const item of body.items) {
-			const checkpoint = ctx.statements.length;
+			const rollback = memoryService.checkpoint(ctx);
 			try {
 				const { id, expected_version, ...patch } = item;
 				const existing = await memoryService.get(id, ctx);
@@ -128,7 +130,7 @@ export function createBatchRoutes(
 					item: await memoryService.update(id, { ...patch, expected_version }, ctx),
 				});
 			} catch (err) {
-				ctx.statements.length = checkpoint;
+				rollback();
 				results.push(mapServiceError(err));
 			}
 		}
@@ -143,7 +145,7 @@ export function createBatchRoutes(
 		const ctx = serviceCtx(c);
 		const results: BatchResult<{ trashed_at: string }>[] = [];
 		for (const id of body.ids) {
-			const checkpoint = ctx.statements.length;
+			const rollback = memoryService.checkpoint(ctx);
 			try {
 				const existing = await memoryService.get(id, ctx);
 				if (!existing) {
@@ -163,7 +165,7 @@ export function createBatchRoutes(
 				}
 				results.push({ ok: true, item: await memoryService.delete(id, ctx) });
 			} catch (err) {
-				ctx.statements.length = checkpoint;
+				rollback();
 				results.push(mapServiceError(err));
 			}
 		}

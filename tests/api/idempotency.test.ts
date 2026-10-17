@@ -118,7 +118,7 @@ describe("idempotency over real HTTP with M1 auth", () => {
 		const changedPath = await post("Delete", key.token, { ids: [item.id] }, "whole-batch");
 		expect(changedPath.status).toBe(409);
 		expect((await stored(d1, item.id))?.deleted_at).toBeNull();
-		expect(JSON.parse((await stored(d1, item.id))?.record_json ?? "null")).toMatchObject({
+		expect(await stored(d1, item.id)).toMatchObject({
 			version: 2,
 		});
 		const deleted = await post("Delete", key.token, { ids: [item.id] }, "delete");

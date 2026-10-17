@@ -2,6 +2,12 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Production batch integration and recovery used incomplete boundaries
+
+The rebased application still mounted M6 writes only through a fake injected memory service. Real batch routes now reuse M2's staged transaction, retain per-request row/tag-ID overlays, and roll back SQL plus predicted state after individual failures. L2 observes production memory/version/tag/FTS/change effects rather than `_m6_memories`. Error mapping reads persisted state and the initial version, not a later predicted batch version.
+
+MAX review then reproduced another recovery bug: the handler had already consumed the request body when replay authorization tried to clone it. A request-scoped cache now retains bounded authorization input before consumption; cache recovery still rechecks current permissions and resource visibility. Tests cover eight simultaneous same-key creates, committed writes with lost acknowledgements, scope changes during recovery, large valid batch bodies, and failing D1 diagnostic queries. A diagnostic failure preserves 503 rather than turning storage unavailability into 500. No HTTP retries or assertion weakening were introduced.
+
 ## 2026-10-17 — Resolving retained tags by name recreated renamed tags
 
 The first commit-time tag guard covered changes after resolution, but MAX review found an earlier window: current associations were read as names, a rename committed, and create-or-get resolution created a second tag under the old name. Omitted-tag writes now retain association IDs, reload/follow those identities and never create tags from their names. A SQL-boundary regression performs the rename after the association SELECT and proves the original tag remains attached under its new name. Restore follows merged identities, missing identities fail closed, and pending IDs are visible only while their owning INSERT remains staged.

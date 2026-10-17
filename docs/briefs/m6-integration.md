@@ -2,12 +2,10 @@
 
 ## Atomic writes
 
-Production deliberately mounts no memory routes until M2 is integrated. Setting
-`RESOURCE_ENV=test` does not enable any fixture. Only `tests/fixtures/worker.ts`
-explicitly injects the D1-backed test service; the L2 runner selects that entry.
-It still uses the real M1 bearer middleware and checks the local test marker
-before initializing fixture tables. `_m6_memories` is a test observation table,
-not an implementation of M2's version/tag/FTS/change invariants.
+Production mounts M2 memory routes and M6 batch writes against the real M2
+service. The L2 fixture entrypoint wraps the same application with a local test
+marker check; it does not substitute a separate memory implementation. Tests
+observe the actual memory/version/tag/FTS/change/vector tables.
 
 The HTTP write middleware owns `AppVars.writeStatements`. MemoryService receives
 this exact array through `MemoryServiceContext.statements`. Mutations must only
@@ -17,7 +15,7 @@ Reads and space resolution may execute read-only queries. Resolve slugs to real
 space IDs; returned records must carry `space_id` and `source_key_id` for M1
 visibility and own-entry checks.
 
-M2 integration must satisfy all of these before route mounting:
+The integrated write boundary enforces these invariants:
 
 1. Stage every row/version/tag/FTS/change/vector write in the HTTP-owned array.
 2. Keep a request-local read-your-writes view (including duplicate IDs within a
@@ -26,8 +24,9 @@ M2 integration must satisfy all of these before route mounting:
 3. Guard snapshots, authorization-sensitive metadata, and expected versions
    against concurrent changes in the committing transaction. A stale plan must
    abort the transaction, never commit a response that claims nonexistent writes.
-   The present HTTP layer returns retryable 503 on a failed commit with no saved
-   outcome; M2 must provide consistent per-item OCC outcomes when integrated.
+   Known per-item OCC failures are returned without staging that item. A stale
+   committing transaction aborts rather than saving a successful partial result;
+   ordinary storage failures return retryable 503 with no saved outcome.
 4. Do not send derived Vectorize/embedding effects before commit. Persist work
    for post-commit processing in the same SQL transaction.
 5. Prove the above with M2's real D1 invariants and concurrent mutations. The
@@ -35,8 +34,15 @@ M2 integration must satisfy all of these before route mounting:
 6. Authorize replay access against the current M1 principal before reading a
    saved memory outcome. Permission/scope changes must not expose an outcome
    which the current principal can no longer access. M3's global-tag preflight
-   is integrated now; per-resource/batch memory replay authorization remains
-   part of the production-unmounted M2 integration boundary.
+   and per-resource/batch memory checks precede replay access. Single-memory
+   responses also recheck current resource visibility when recovering an outcome.
+
+HTTP-created tags and first-use owned spaces share the same statement sink.
+Pending resources are reusable only while their exact insert statement remains
+staged. Tag associations validate canonical ID, name and unmerged state at commit,
+so a concurrent rename/merge cannot be undone by a stale memory plan. History
+reads bind the authorized memory space/version in SQL, and GET/list revalidate
+that snapshot before returning separately loaded secondary fields.
 
 ## M3 tag writes
 
@@ -61,10 +67,10 @@ business writes or saved outcome. The client may submit a fresh request after
 reconciling the concurrent change. No automatic retry is used. Ordinary M3
 validation/conflict/auth envelopes and real M1 authorization are unchanged.
 
-`TagRepo.resolveMany` remains the existing M3 immediate create-or-get helper.
-M2 must not call it to mutate persistent tags while preparing an HTTP write;
-its integration still needs staged tag creation together with all other memory
-SQL, rather than reintroducing an out-of-transaction side effect.
+HTTP services pass their statement sink to `TagRepo.resolveMany` through its
+constructor. Resolution then performs read-only lookups and stages new rows;
+it never executes a tag insert while preparing the memory response. Standalone
+repository fixtures can still explicitly resolve committed tags.
 
 ## Idempotency outcomes and recovery
 
@@ -96,10 +102,25 @@ Whole-request errors discard all staged SQL; per-item errors preserve other item
 
 ## Review handoff
 
-Every L2 fixture/observation SQL call uses the shared `createAsyncD1Exec` and
-awaits `assertAsyncTestMarker` before exposing the executor. This keeps the client
-event loop serviceable between HTTP requests: M5's controlled probe proved that
-synchronous Wrangler CLI calls could cause reuse of an expired keepalive socket.
+### Remaining phase-1 derived-index integration
+
+Tracking owner: the phase-1 integration controller receiving the M2 signoff.
+That controller must assign an implementation owner before production vector
+capabilities are accepted; neither M4 nor M7 is implicitly assumed to own it.
+M2 persists vectors and pending `indexed_at` state, but the current scheduled
+handler only cleans idempotency records. A separate integrated synchronizer must
+cover post-commit Vectorize upsert/delete, metadata changes, successful
+`indexed_at` acknowledgement, restore reindexing and retry compensation. Local
+D1 brute-force test success is not proof of production Vectorize synchronization.
+
+### Local HTTP verification
+
+Every L2 fixture/observation SQL call awaits shared `e2eD1`, backed by one cached
+`openFixtureD1` SDK session per test module/run. The session checks the local test
+marker, disables remote bindings, validates isolated persistence and rejects
+linked storage. This keeps the client event loop serviceable between requests
+without spawning a Wrangler process per observation. Earlier controlled probes
+showed that synchronous fixture calls could reuse an expired keepalive socket.
 Marker, seed, scope, count, trash/version, chunk, trigger and secret-rotation
 queries are all awaited, including `/me` and FTS tests. No HTTP retries, sleeps or
 keepalive overrides are used. Startup migration behavior remains synchronous and
@@ -108,4 +129,6 @@ unchanged; those commands finish before the server starts.
 Run the complete L2 suite serially on port 17059 after the implementation handoff.
 The implementer intentionally does not run L2 while the controller/reviewer owns
 that lane. L2 tests use the explicit fixture entry and real M1 credentials, and
-observe `_m6_memories` to distinguish replayed responses from duplicated effects.
+observe production memory tables to distinguish replayed responses from duplicated
+effects. The tags merge-event observation is scoped to its fixture memory IDs,
+so unrelated legitimate merge events cannot contaminate its exact assertion.

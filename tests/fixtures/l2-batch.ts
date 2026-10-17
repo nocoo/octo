@@ -81,9 +81,17 @@ export function post(
 }
 export async function stored(d1: AsyncD1Exec, id: string) {
 	return (
-		await query<{ record_json: string; deleted_at: string | null }>(
+		await query<{
+			id: string;
+			title: string;
+			body: string;
+			version: number;
+			space: string;
+			space_id: string;
+			deleted_at: number | null;
+		}>(
 			d1,
-			`SELECT record_json, deleted_at FROM _m6_memories WHERE id = ${sqlText(id)}`,
+			`SELECT m.*, s.slug AS space FROM memories m INNER JOIN spaces s ON s.id = m.space_id WHERE m.id = ${sqlText(id)}`,
 		)
 	)[0];
 }
@@ -92,7 +100,7 @@ export async function effectCount(d1: AsyncD1Exec, keyId: string): Promise<numbe
 		(
 			await query<{ n: number }>(
 				d1,
-				`SELECT count(*) AS n FROM _m6_memories WHERE json_extract(record_json, '$.source_key_id') = ${sqlText(keyId)}`,
+				`SELECT count(*) AS n FROM memories WHERE source_key_id = ${sqlText(keyId)}`,
 			)
 		)[0]?.n ?? 0
 	);
