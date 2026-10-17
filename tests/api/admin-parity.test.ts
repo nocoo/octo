@@ -301,19 +301,19 @@ describe("admin parity real HTTP", () => {
 			const body = { profile: "te3-small-1536", values, expected_version: 1 };
 			expect((await fetch(path, { method: "PUT" })).status).toBe(401);
 			if (prefix === "/api/v1") {
-				for (const [deniedToken, status] of [
-					[readonlyToken, 403],
-					[writeonlyToken, 403],
-					[outOfScopeToken, 404],
-					[ownerScopedToken, 404],
-					[ownEntriesToken, 403],
+				for (const [role, deniedToken, status] of [
+					["readonly", readonlyToken, 403],
+					["writeonly", writeonlyToken, 403],
+					["out of scope", outOfScopeToken, 404],
+					["owner scoped", ownerScopedToken, 404],
+					["own entries", ownEntriesToken, 403],
 				] as const) {
 					const response = await fetch(path, {
 						method: "PUT",
 						headers: { ...headers, Authorization: `Bearer ${deniedToken}` },
 						body: JSON.stringify(body),
 					});
-					expect(response.status).toBe(status);
+					expect(response.status, role).toBe(status);
 					expect(await response.json()).toMatchObject({
 						error: { code: status === 403 ? "forbidden" : "not_found" },
 					});
