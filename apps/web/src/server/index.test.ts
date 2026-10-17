@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { sqliteD1 } from "../../../../tests/fixtures/sqlite-d1";
 import { APP_VERSION } from "../lib/version";
 import type { Env } from "./env";
 import { createApp, worker } from "./index";
@@ -87,20 +88,18 @@ describe("worker", () => {
 		expect(res.status).toBe(200);
 	});
 
-	it("schedules idempotency purge tasks", () => {
+	it("schedules idempotency, usage and derived tasks", async () => {
 		const waitUntil = vi.fn((promise: Promise<unknown>) => promise);
-		const stmt = {
-			bind: () => ({
-				run: async () => ({ success: true, meta: { changes: 0 } }),
-			}),
-		};
+		const { db } = sqliteD1();
 		const scheduledEnv = {
 			...env(),
-			DB: { prepare: () => stmt } as unknown as D1Database,
+			DB: db,
+			RESOURCE_ENV: "test",
 		};
 		worker.scheduled({} as ScheduledEvent, scheduledEnv, {
 			waitUntil,
 		} as unknown as ExecutionContext);
 		expect(waitUntil).toHaveBeenCalled();
+		await waitUntil.mock.calls[0]?.[0];
 	});
 });
