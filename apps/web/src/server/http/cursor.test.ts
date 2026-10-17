@@ -38,13 +38,15 @@ describe("cursor codec", () => {
 		});
 	});
 
-	it("rejects null cursor blobs", async () => {
-		const { base64UrlEncode } = await import("./base64url");
-		const blob = base64UrlEncode(new TextEncoder().encode("null"));
-		await expect(decodeCursor(secret, blob)).rejects.toMatchObject({
-			code: "validation_failed",
-		});
-	});
+	it.each(["null", "1", "true", '"text"', "[]", "{}", '{"v":1}'])(
+		"rejects decoded %s",
+		async (json) => {
+			const { base64UrlEncode } = await import("./base64url");
+			await expect(
+				decodeCursor(secret, base64UrlEncode(new TextEncoder().encode(json))),
+			).rejects.toMatchObject({ code: "validation_failed" });
+		},
+	);
 
 	it("rejects malformed cursors", async () => {
 		await expect(decodeCursor(secret, "not-a-cursor")).rejects.toMatchObject({

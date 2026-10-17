@@ -18,7 +18,7 @@ function sortJson(value: unknown): unknown {
 		const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
 			a.localeCompare(b),
 		);
-		const out = Object.create(null) as Record<string, unknown>;
+		const out: Record<string, unknown> = Object.create(null);
 		for (const [key, child] of entries) {
 			out[key] = sortJson(child);
 		}

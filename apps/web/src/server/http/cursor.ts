@@ -16,21 +16,24 @@ export async function encodeCursor(secret: string, payload: CursorPayload): Prom
 }
 
 export async function decodeCursor(secret: string, cursor: string): Promise<CursorPayload> {
-	let wire: CursorWire;
+	let wire: unknown;
 	try {
 		const json = new TextDecoder().decode(base64UrlDecode(cursor));
-		const parsed: unknown = JSON.parse(json);
-		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-			throw new ApiError("validation_failed", "invalid cursor");
-		}
-		wire = parsed as CursorWire;
-	} catch (err) {
-		if (err instanceof ApiError) {
-			throw err;
-		}
+		wire = JSON.parse(json) as unknown;
+	} catch {
 		throw new ApiError("validation_failed", "invalid cursor");
 	}
-	if (wire.v !== VERSION || typeof wire.p !== "string" || typeof wire.m !== "string") {
+	if (
+		!wire ||
+		typeof wire !== "object" ||
+		Array.isArray(wire) ||
+		!("v" in wire) ||
+		wire.v !== VERSION ||
+		!("p" in wire) ||
+		typeof wire.p !== "string" ||
+		!("m" in wire) ||
+		typeof wire.m !== "string"
+	) {
 		throw new ApiError("validation_failed", "invalid cursor");
 	}
 	const expected = await hmacSha256Base64Url(secret, `${VERSION}:${wire.p}`);

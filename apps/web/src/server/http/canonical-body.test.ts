@@ -18,10 +18,9 @@ describe("canonicalBody", () => {
 		expect(canonicalBody('[{"b":2,"a":1}]')).toBe('[{"a":1,"b":2}]');
 	});
 
-	it("keeps distinct hashes for __proto__ payloads via null-prototype sorting", () => {
-		const withProto = '{"__proto__":{"polluted":true},"a":1}';
-		const without = '{"a":1}';
-		expect(canonicalBody(withProto)).not.toBe(canonicalBody(without));
-		expect(canonicalBody(withProto)).toContain("__proto__");
+	it.each(["__proto__", "constructor", "prototype"])("preserves %s in the hash input", (key) => {
+		const raw = `{"${key}":{"polluted":true},"a":1}`;
+		expect(JSON.parse(canonicalBody(raw))).toEqual(JSON.parse(raw));
+		expect(canonicalBody(raw)).not.toBe(canonicalBody('{"a":1}'));
 	});
 });
