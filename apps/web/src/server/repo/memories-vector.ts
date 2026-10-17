@@ -14,20 +14,21 @@ export type VectorWrite = {
 };
 
 export function normalizeVector(values: number[]): Float32Array {
-	let sum = 0;
+	let scale = 0;
 	for (const value of values) {
 		if (!Number.isFinite(value)) {
 			throw new ApiError("validation_failed", "vector values must be finite");
 		}
-		sum += value * value;
+		scale = Math.max(scale, Math.abs(value));
 	}
-	const norm = Math.sqrt(sum);
-	if (norm === 0) {
+	if (scale === 0) {
 		throw new ApiError("validation_failed", "vector must be non-zero");
 	}
+	const scaled = values.map((value) => value / scale);
+	const norm = Math.hypot(...scaled);
 	const out = new Float32Array(values.length);
 	for (let i = 0; i < values.length; i += 1) {
-		out[i] = (values[i] ?? 0) / norm;
+		out[i] = (scaled[i] ?? 0) / norm;
 	}
 	return out;
 }

@@ -11,6 +11,15 @@ describe("normalizeVector", () => {
 		expect(vectorBlob(out).byteLength).toBe(8);
 	});
 
+	it("normalizes extreme finite vectors without overflow or underflow", () => {
+		for (const scale of [1e200, 1e-200, Number.MAX_VALUE, Number.MIN_VALUE]) {
+			const out = normalizeVector([scale, scale, 0]);
+			expect(out[0]).toBeCloseTo(Math.SQRT1_2);
+			expect(out[1]).toBeCloseTo(Math.SQRT1_2);
+			expect(Math.hypot(...out)).toBeCloseTo(1);
+		}
+	});
+
 	it("rejects zero and non-finite values", () => {
 		expect(() => normalizeVector([0, 0])).toThrow(ApiError);
 		expect(() => normalizeVector([1, Number.NaN])).toThrow(ApiError);

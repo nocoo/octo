@@ -163,6 +163,10 @@ The first M4 remediation authorized the final content SELECT but fetched tags af
 The production fail-closed vector factory also exposed missing explicit development mode in both local startup paths. Startup tests now assert the actual shared Wrangler arguments rather than relying on manually constructed test environments.
 
 Future search changes must trace every returned field through its read snapshot, derive all scores/counts from the same final candidate set, and verify environment selection through the real startup entrypoints.
+## M2 draft vector normalization failure
+
+Squaring finite components directly overflowed large vectors to a zero result and underflowed tiny nonzero vectors into rejection. Normalization now scales by the largest absolute component before using `Math.hypot`; regression cases include the largest and smallest finite JavaScript magnitudes. Finiteness checks alone do not prove arithmetic preserves a vector's norm.
+
 ## M2 draft payload boundary failures
 
 The request reader buffered the entire stream before enforcing its cap, and the transport cap confused JSON escape bytes with decoded UTF-8 body bytes. A valid escaped body could be rejected while an oversized decoded body returned 400 instead of 413. Streaming now stops and cancels on budget overflow; the bounded JSON envelope allows worst-case escaping while memory routes separately enforce the 1 MB decoded body limit. Tests cover chunk consumption, exact ASCII and multibyte boundaries, and escaped control characters.
