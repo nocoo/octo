@@ -10,6 +10,7 @@ import {
 	assertPortFree,
 	assertWranglerConfigLocal,
 	createExclusiveDir,
+	e2eEnvContents,
 	listenError,
 	listenErrorCode,
 	occupyingPid,
@@ -47,6 +48,8 @@ describe("e2e helpers", () => {
 		expect(rewritten).toContain("port = 17059");
 		expect(rewritten).toContain("/tmp/assets");
 		expect(wranglerDevArgs(17059, "p", "c", "e").includes("--local")).toBe(true);
+		expect(e2eEnvContents(17057)).toContain("RESOURCE_ENV=test");
+		expect(e2eEnvContents(17057)).toContain("http://127.0.0.1:17057/cdn-cgi/access/certs");
 		expect(() => assertWranglerConfigLocal("name = 'octo'\n")).not.toThrow();
 		expect(() => assertWranglerConfigLocal(`[[d1_databases]]\nremote${"=true"}\n`)).toThrow(
 			"remote",
@@ -163,11 +166,23 @@ describe("runE2eApi", () => {
 			child.emit("exit", child.exitCode);
 			return true;
 		}) as ChildProcess["kill"];
-		const vitest = vi.fn(async () => undefined);
+		const vitest = vi.fn<(env: Record<string, string>) => Promise<void>>(async () => undefined);
+		const jwksClosed: boolean[] = [];
 		const code = await runE2eApi({
 			prepareDb: async () => undefined,
 			assertFree: async () => undefined,
 			wait: async () => undefined,
+			generateJwks: async () => ({
+				kid: "e2e",
+				privateJwk: { kty: "RSA" },
+				publicJwk: { kty: "RSA", kid: "e2e" },
+			}),
+			startJwks: async () => ({
+				url: "http://127.0.0.1:17057/cdn-cgi/access/certs",
+				close: async () => {
+					jwksClosed.push(true);
+				},
+			}),
 			spawnWrangler: () => {
 				queueMicrotask(() => {
 					child.stdout?.emit("data", Buffer.from("out"));
@@ -179,6 +194,46 @@ describe("runE2eApi", () => {
 		});
 		expect(code).toBe(0);
 		expect(vitest).toHaveBeenCalled();
+		expect(vitest.mock.calls.at(0)?.[0]).toMatchObject({
+			OCTO_JWKS_PORT: "17057",
+		});
+		expect(jwksClosed).toEqual([true]);
+		const livePort = await new Promise<number>((resolve, reject) => {
+			const server = createServer();
+			server.listen(0, "127.0.0.1", () => {
+				const addr = server.address();
+				server.close(() => {
+					if (!addr || typeof addr === "string") {
+						reject(new Error("no port"));
+						return;
+					}
+					resolve(addr.port);
+				});
+			});
+		});
+		const realChild = new EventEmitter() as ChildProcess &
+			EventEmitter & { exitCode: number | null };
+		Object.defineProperty(realChild, "exitCode", { writable: true, value: null });
+		realChild.stdout = new EventEmitter() as ChildProcess["stdout"];
+		realChild.stderr = new EventEmitter() as ChildProcess["stderr"];
+		realChild.kill = ((signal?: NodeJS.Signals) => {
+			Object.defineProperty(realChild, "exitCode", {
+				writable: true,
+				value: signal === "SIGKILL" ? 1 : 0,
+			});
+			realChild.emit("exit", realChild.exitCode);
+			return true;
+		}) as ChildProcess["kill"];
+		expect(
+			await runE2eApi({
+				jwksPort: livePort,
+				prepareDb: async () => undefined,
+				assertFree: async () => undefined,
+				wait: async () => undefined,
+				spawnWrangler: () => realChild,
+				spawnVitest: async () => undefined,
+			}),
+		).toBe(0);
 		await stopChild(child);
 		Object.defineProperty(child, "exitCode", { writable: true, value: 0 });
 		await stopChild(child);

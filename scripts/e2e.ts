@@ -5,8 +5,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureClientAssets, ensureDevVars } from "./ensure-dev-vars";
 import { tomlHasRemoteBinding } from "./gate-no-remote";
+import {
+	generateJwksPair,
+	type JwksState,
+	type JwksStub,
+	L2_ACCESS_AUD,
+	l2AccessIss,
+	l2JwksUrl,
+	startJwksStub,
+} from "./jwks-stub";
 import { applyMigrations, assertTestMarker, createD1Exec, writeTestMarker } from "./local-d1";
-import { L2_WORKER_PORT } from "./ports";
+import { L2_JWKS_PORT, L2_WORKER_PORT } from "./ports";
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -188,14 +197,31 @@ export async function stopChild(child: ChildProcess, sleeper = sleep): Promise<v
 	}
 }
 
+export function e2eEnvContents(jwksPort = L2_JWKS_PORT): string {
+	const iss = l2AccessIss(jwksPort);
+	return [
+		"API_KEY_PEPPER=change-me-api-key-pepper",
+		"ATTACHMENT_URL_SECRET=change-me-attachment-url-secret",
+		"OCTO_SETTINGS_KEY=change-me-octo-settings-key",
+		"RESOURCE_ENV=test",
+		`CF_ACCESS_TEAM_DOMAIN=${iss}`,
+		`CF_ACCESS_AUD=${L2_ACCESS_AUD}`,
+		`ACCESS_JWKS_URL=${l2JwksUrl(jwksPort)}`,
+		"",
+	].join("\n");
+}
+
 export type RunE2eOptions = {
 	runId?: string;
 	port?: number;
+	jwksPort?: number;
 	spawnVitest?: (env: Record<string, string>) => Promise<void>;
 	spawnWrangler?: (args: string[]) => ChildProcess;
 	prepareDb?: (persistTo: string, config: string) => Promise<void>;
 	wait?: (base: string, timeoutMs: number) => Promise<void>;
 	assertFree?: (port: number) => Promise<void>;
+	generateJwks?: () => Promise<JwksState>;
+	startJwks?: (port: number, state: JwksState) => Promise<JwksStub>;
 };
 
 export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
@@ -218,12 +244,16 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	assertWranglerConfigLocal(rewritten);
 	await writeFile(configPath, rewritten);
 	const envFile = join(tmp, ".env");
-	await writeFile(
-		envFile,
-		"API_KEY_PEPPER=change-me-api-key-pepper\nATTACHMENT_URL_SECRET=change-me-attachment-url-secret\nOCTO_SETTINGS_KEY=change-me-octo-settings-key\n",
-	);
+	const jwksPort = options.jwksPort ?? L2_JWKS_PORT;
+	await writeFile(envFile, e2eEnvContents(jwksPort));
+	const state = await (options.generateJwks ?? generateJwksPair)();
+	const jwksStatePath = join(tmp, "jwks-state.json");
+	await writeFile(jwksStatePath, JSON.stringify(state));
 	await (options.prepareDb ?? prepareE2eDb)(persistTo, configPath);
-	await (options.assertFree ?? assertPortFree)(port);
+	const assertFree = options.assertFree ?? assertPortFree;
+	await assertFree(port);
+	await assertFree(jwksPort);
+	const jwks = await (options.startJwks ?? startJwksStub)(jwksPort, state);
 	const wranglerBin = join(root, "node_modules/.bin/wrangler");
 	const args = wranglerDevArgs(port, persistTo, configPath, envFile);
 	const wrangler =
@@ -238,10 +268,13 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 			OCTO_E2E: base,
 			OCTO_PERSIST: persistTo,
 			OCTO_CONFIG: configPath,
+			OCTO_JWKS_STATE: jwksStatePath,
+			OCTO_JWKS_PORT: String(jwksPort),
 		};
 		await (options.spawnVitest ?? spawnVitestProcess)(env);
 		return 0;
 	} finally {
 		await stopChild(wrangler);
+		await jwks.close();
 	}
 }
