@@ -183,6 +183,27 @@ describe("transactional admin purge", () => {
 		expect(sqlite.prepare("SELECT * FROM external_file_cleanup_jobs").all()).toEqual([]);
 	});
 
+	it("does not let a failed first batch starve later purge cleanup", async () => {
+		const { sqlite, files, env } = await fixture();
+		for (let index = 0; index < 101; index++) {
+			sqlite
+				.prepare("INSERT INTO external_file_cleanup_jobs (r2_key, created_at) VALUES (?, 1)")
+				.run(`purge-${String(index).padStart(3, "0")}`);
+		}
+		files.delete.mockImplementation(async (key) => {
+			if (key !== "purge-100") throw new Error("provider failure");
+		});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		await cleanupExternalFiles(env);
+		await cleanupExternalFiles(env);
+		expect(files.delete).toHaveBeenCalledWith("purge-100");
+		expect(
+			sqlite
+				.prepare("SELECT r2_key FROM external_file_cleanup_jobs WHERE r2_key = 'purge-100'")
+				.get(),
+		).toBeUndefined();
+	});
+
 	it("retries an already deleted object when the D1 acknowledgment fails", async () => {
 		const { db, sqlite, memoryId, files, env } = await fixture();
 		await purgeMemory(db, memoryId, "admin:owner@local");

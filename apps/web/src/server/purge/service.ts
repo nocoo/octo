@@ -90,7 +90,7 @@ export async function purgeMemory(
 
 export async function cleanupExternalFiles(env: Pick<Env, "DB" | "FILES">): Promise<void> {
 	const { results } = await env.DB.prepare(
-		"SELECT r2_key FROM external_file_cleanup_jobs ORDER BY created_at, r2_key LIMIT 100",
+		"SELECT r2_key FROM external_file_cleanup_jobs ORDER BY last_attempt_at, created_at, r2_key LIMIT 100",
 	).all<{ r2_key: string }>();
 	for (const job of results) {
 		try {
@@ -100,6 +100,11 @@ export async function cleanupExternalFiles(env: Pick<Env, "DB" | "FILES">): Prom
 				.run();
 		} catch {
 			console.error("purge file cleanup failed");
+			await env.DB.prepare(
+				"UPDATE external_file_cleanup_jobs SET last_attempt_at = ? WHERE r2_key = ?",
+			)
+				.bind(Date.now(), job.r2_key)
+				.run();
 		}
 	}
 }
