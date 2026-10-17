@@ -27,32 +27,12 @@ a {
 }
 .octo-mobile-rail {
 	padding: unset;
-	width: var(--basalt-sidebar-width);
+	width: fit-content;
 	max-width: 100%;
 	background: hsl(var(--basalt-background));
 }
-.octo-page {
-	display: flex;
-	flex-direction: column;
-	gap: var(--basalt-space-layout-lg);
-	min-width: 0;
-}
-.octo-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-	gap: var(--basalt-space-layout);
-}
-.octo-actions {
-	display: flex;
-	align-items: center;
-	gap: var(--basalt-space-lg);
-	flex-wrap: wrap;
-}
 .octo-muted {
 	color: hsl(var(--basalt-muted-foreground));
-}
-.octo-chart {
-	min-height: 15rem;
 }
 ::view-transition-old(root),
 ::view-transition-new(root) {

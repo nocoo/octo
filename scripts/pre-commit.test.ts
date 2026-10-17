@@ -32,6 +32,7 @@ describe("index snapshot", () => {
 			"gate:no-remote",
 			"gate:wrangler-vars",
 			"gate:client-fetch",
+			"gate:client-design",
 			"test:coverage",
 		]);
 	});

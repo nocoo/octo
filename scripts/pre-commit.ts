@@ -12,6 +12,7 @@ export const L1_SCRIPTS = [
 	"gate:no-remote",
 	"gate:wrangler-vars",
 	"gate:client-fetch",
+	"gate:client-design",
 	"test:coverage",
 ] as const;
 

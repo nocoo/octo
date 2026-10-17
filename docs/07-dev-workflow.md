@@ -25,6 +25,8 @@
 
 覆盖率范围：`apps/web/src/**/*.{ts,tsx}` 加上 `scripts/**`。只排除测试文件、`client/routes/**/*.tsx`、`client/components/layout/**/*.tsx`、`client/main.tsx`、`client/app.tsx`。`server/routes` **不豁免**。
 
+`gate:client-design` runs in L1 and rejects handwritten structural containers, native controls (except hidden file uploads), and non-Basalt margin/padding/gap values in client JSX/CSS; semantic forms, prose, canvas geometry and package internals remain distinct from application layout.
+
 ## 3. 本地开发和 Caddy
 
 `ensureDevVars` copies `ACCESS_DEV_BYPASS_EMAIL=dev@local` and `RESOURCE_ENV=development` from `dev.vars.example` only when local vars are missing, preserves existing files, and local config generation removes routes without changing production `wrangler.toml`; never commit `.dev.vars`.

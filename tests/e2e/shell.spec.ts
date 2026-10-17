@@ -5,7 +5,7 @@ test("slash focuses search on its first lazy navigation", async ({ page }) => {
 	await expect(page.getByRole("heading", { name: "总览", exact: true })).toBeVisible();
 	await page.keyboard.press("/");
 	await expect(page).toHaveURL(/\/search$/);
-	const search = page.getByRole("textbox", { name: "Search memories", exact: true });
+	const search = page.getByRole("textbox", { name: "搜索记忆", exact: true });
 	await expect(search).toBeFocused();
 	await page.keyboard.type("first search");
 	await expect(search).toHaveValue("first search");
@@ -24,18 +24,18 @@ test("mobile navigation restores focus to its opener", async ({ page }) => {
 
 const pages = [
 	["/", "总览", ["/spaces", "/usage", "/memories"]],
-	["/memories", "Memories", ["/memories"]],
-	["/search", "Search", []],
-	["/tags", "Tags", ["/tags", "/memories"]],
-	["/spaces", "Spaces", ["/spaces", "/keys"]],
-	["/graph", "Relationship graph", ["/memories"]],
-	["/timeline", "Timeline", ["/memories"]],
-	["/keys", "API keys", ["/keys"]],
-	["/usage", "Usage and health", ["/usage"]],
-	["/audit", "Audit log", ["/audit"]],
-	["/trash", "Trash", ["/trash"]],
-	["/settings", "Settings", ["/embedding-profiles"]],
-	["/settings/embedding", "Embedding gateway", ["/settings/embedding"]],
+	["/memories", "记忆库", ["/memories"]],
+	["/search", "搜索", []],
+	["/tags", "标签", ["/tags", "/memories"]],
+	["/spaces", "空间", ["/spaces", "/keys"]],
+	["/graph", "关系图", ["/memories"]],
+	["/timeline", "时间线", ["/memories"]],
+	["/keys", "接口密钥", ["/keys"]],
+	["/usage", "用量与健康状态", ["/usage"]],
+	["/audit", "审计日志", ["/audit"]],
+	["/trash", "回收站", ["/trash"]],
+	["/settings", "设置", ["/embedding-profiles"]],
+	["/settings/embedding", "向量模型", ["/settings/embedding"]],
 ] as const;
 
 for (const [path, heading, endpoints] of pages) {
@@ -91,7 +91,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 			await page.getByRole("combobox", { name: "搜索页面或记忆", exact: true }).fill("设置");
 			await page.getByRole("option", { name: "设置", exact: true }).click();
 			await expect(page).toHaveURL(/\/settings$/);
-			await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+			await expect(page.getByRole("heading", { name: "设置", exact: true })).toBeVisible();
 			expect(errors).toEqual([]);
 			await capture(page, info, `theme-${colorScheme}-motion-${reducedMotion}`);
 		});

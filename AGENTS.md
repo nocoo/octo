@@ -39,6 +39,8 @@ bun run gate:test-skip
 bun run gate:no-remote
 bun run gate:wrangler-vars
 bun run gate:client-fetch
+bun run gate:client-design # Basalt containers/controls and token-only spacing
+bun run gate:production   # Empty Access bypass in production build inputs
 bun run gate:security    # gitleaks + osv-scanner; missing tools fail
 ```
 

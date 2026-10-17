@@ -18,6 +18,7 @@
 		"gate:no-remote": "bun run scripts/gate-no-remote.ts",
 		"gate:wrangler-vars": "bun run scripts/gate-wrangler-vars.ts",
 		"gate:client-fetch": "bun run scripts/gate-client-fetch.ts",
+		"gate:client-design": "bun run scripts/gate-client-design.ts",
 		"gate:production": "bun run scripts/gate-production.ts",
 		"gate:security": "bun run scripts/gate-security.ts",
 		"prepare": "husky"
