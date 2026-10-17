@@ -1,261 +1,183 @@
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
-import { root } from "../../scripts/e2e";
-import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
-import { afterD1Exec, fetchWithRetry } from "./helpers";
+import {
+	type BatchBody,
+	createMemory,
+	e2eD1,
+	effectCount,
+	input,
+	post,
+	seedKey,
+	seedSpace,
+	stored,
+} from "../fixtures/l2-batch";
 
-const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
-const pepper = "change-me-api-key-pepper";
-
-function e2eD1(): D1Exec {
-	const persist = process.env.OCTO_PERSIST;
-	const config = process.env.OCTO_CONFIG;
-	if (!persist || !config) {
-		throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	}
-	return createD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
+function payload(action: string, id = "missing") {
+	return action === "Create"
+		? { items: [input] }
+		: action === "Update"
+			? { items: [{ id, title: "updated", expected_version: 1 }] }
+			: { ids: [id] };
 }
 
-async function seedKey(d1: D1Exec, ops: string): Promise<string> {
-	const material = generateApiKeyMaterial();
-	const secretHash = await hashSecret(pepper, material.secret);
-	const now = Date.now();
-	d1([
-		"--command",
-		`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', 'e2e-${material.keyid}', '${secretHash}', 'admin', '${ops}', 'all', '[]', 0, 0, NULL, ${now}, ${now})`,
-	]);
-	await afterD1Exec();
-	return material.plaintext;
-}
-
-async function seedWriteKey(d1: D1Exec): Promise<string> {
-	return seedKey(d1, "r,w,u,d");
-}
-
-async function seedKbSpace(d1: D1Exec): Promise<void> {
-	const now = Date.now();
-	d1([
-		"--command",
-		`INSERT OR IGNORE INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES ('sp-kb', 'kb', 'KB', '', NULL, ${now}, ${now})`,
-	]);
-	await afterD1Exec();
-}
-
-describe("batch memory endpoints", () => {
-	it("POST /api/v1/memories:batchCreate returns per-item results", async () => {
+describe("batch endpoint success/failure/auth matrix", () => {
+	it.each(["Create", "Update", "Delete"])(
+		"batch%s requires real M1 bearer authentication",
+		async (action) => {
+			for (const token of [null, "octo_invalid"]) {
+				const res = await post(action, token, payload(action));
+				expect(res.status).toBe(401);
+				expect(await res.json()).toMatchObject({ error: { code: "unauthenticated" } });
+			}
+		},
+	);
+	it.each(["Create", "Update", "Delete"])(
+		"batch%s rejects malformed and oversized requests before effects",
+		async (action) => {
+			const d1 = e2eD1();
+			const key = await seedKey(d1);
+			for (const body of [
+				{ unknown: true },
+				"{",
+				action === "Delete" ? { ids: [1] } : { items: [{ unexpected: true }] },
+			]) {
+				const res = await post(action, key.token, body);
+				expect(res.status).toBe(400);
+				expect(await res.json()).toMatchObject({ error: { code: "validation_failed" } });
+			}
+			const body =
+				action === "Delete"
+					? { ids: Array(101).fill("missing") }
+					: {
+							items: Array.from({ length: 101 }, () =>
+								action === "Create" ? input : { id: "missing", title: "t", expected_version: 1 },
+							),
+						};
+			const tooLarge = await post(action, key.token, body);
+			expect(tooLarge.status).toBe(413);
+			expect(await tooLarge.json()).toMatchObject({ error: { code: "payload_too_large" } });
+			expect(effectCount(d1, key.id)).toBe(0);
+		},
+	);
+	it.each(["Create", "Update", "Delete"])(
+		"batch%s denies readonly keys without changing persisted data",
+		async (action) => {
+			const d1 = e2eD1();
+			const writer = await seedKey(d1);
+			const readonly = await seedKey(d1, { ops: "r" });
+			const item = await createMemory(writer.token);
+			const before = stored(d1, item.id);
+			const res = await post(action, readonly.token, payload(action, item.id));
+			expect(res.status).toBe(200);
+			expect(await res.json()).toMatchObject({
+				results: [{ ok: false, error: { code: "forbidden" } }],
+			});
+			expect(stored(d1, item.id)).toEqual(before);
+			expect(effectCount(d1, readonly.id)).toBe(0);
+		},
+	);
+	it("batchCreate persists each successful item and reports missing spaces individually", async () => {
 		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const res = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [
-					{ space: "kb", title: "one", body: "body", type: "note", tags: ["a"] },
-					{ space: "kb", title: "two", body: "body", type: "note", tags: [] },
-				],
-			}),
+		const key = await seedKey(d1);
+		const res = await post("Create", key.token, {
+			items: [input, { ...input, space: "nonexistent-space" }, { ...input, title: "third" }],
 		});
 		expect(res.status).toBe(200);
-		const body = (await res.json()) as { results: Array<{ ok: boolean; item?: { id: string } }> };
-		expect(body.results).toHaveLength(2);
-		expect(body.results.every((row) => row.ok)).toBe(true);
+		const body = (await res.json()) as BatchBody;
+		expect(body.results.map((r) => r.ok)).toEqual([true, false, true]);
+		expect(body.results[1]?.error?.code).toBe("not_found");
+		expect(effectCount(d1, key.id)).toBe(2);
+		for (const result of [body.results[0], body.results[2]]) {
+			expect(result?.item?.version).toBe(1);
+			const persisted = stored(d1, result?.item?.id ?? "");
+			expect(persisted?.deleted_at).toBeNull();
+			expect(JSON.parse(persisted?.record_json ?? "null")).toMatchObject(result?.item ?? {});
+		}
 	});
-
-	it("rejects unauthenticated batch writes", async () => {
-		const res = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-			}),
-		});
-		expect(res.status).toBe(401);
-	});
-
-	it("returns payload_too_large for more than 100 items", async () => {
+	it("batchUpdate persists title/version changes and leaves stale and missing items unchanged", async () => {
 		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const items = Array.from({ length: 101 }, () => ({
-			space: "kb",
-			title: "x",
-			body: "b",
-			type: "note",
-			tags: [],
-		}));
-		const res = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({ items }),
-		});
-		expect(res.status).toBe(413);
-	});
-
-	it("returns per-item forbidden for read-only keys", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedKey(d1, "r");
-		const res = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-			}),
+		const key = await seedKey(d1);
+		const item = await createMemory(key.token);
+		const res = await post("Update", key.token, {
+			items: [
+				{ id: item.id, title: "updated", expected_version: 1 },
+				{ id: item.id, title: "stale", expected_version: 1 },
+				{ id: "missing", title: "missing", expected_version: 1 },
+			],
 		});
 		expect(res.status).toBe(200);
-		const body = (await res.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(body.results[0]?.ok).toBe(false);
-		expect(body.results[0]?.error?.code).toBe("forbidden");
+		const body = (await res.json()) as BatchBody;
+		expect(body.results[0]).toMatchObject({
+			ok: true,
+			item: { id: item.id, title: "updated", version: 2 },
+		});
+		expect(body.results[1]).toMatchObject({ ok: false, error: { code: "version_conflict" } });
+		expect(body.results[2]).toMatchObject({ ok: false, error: { code: "not_found" } });
+		expect(JSON.parse(stored(d1, item.id)?.record_json ?? "null")).toMatchObject({
+			title: "updated",
+			version: 2,
+		});
 	});
-
-	it("batchUpdate reports version_conflict and not_found per item", async () => {
+	it("batchDelete persists trash rather than removing the row and reports missing items", async () => {
 		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const created = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-			}),
-		});
-		const createdBody = (await created.json()) as {
-			results: Array<{ ok: boolean; item?: { id: string; version: number } }>;
-		};
-		const item = createdBody.results[0]?.item;
-		expect(item?.id).toBeTruthy();
-		const updated = await fetchWithRetry(`${base}/api/v1/memories:batchUpdate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [
-					{ id: item?.id, title: "y", expected_version: 99 },
-					{ id: "01missing0000000000000000", title: "z", expected_version: 1 },
-				],
-			}),
-		});
-		expect(updated.status).toBe(200);
-		const updatedBody = (await updated.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(updatedBody.results[0]?.error?.code).toBe("version_conflict");
-		expect(updatedBody.results[1]?.error?.code).toBe("not_found");
+		const key = await seedKey(d1);
+		const item = await createMemory(key.token);
+		const res = await post("Delete", key.token, { ids: [item.id, item.id, "missing"] });
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as BatchBody;
+		expect(body.results[0]?.ok).toBe(true);
+		expect(body.results[0]?.item?.trashed_at).toEqual(expect.any(String));
+		expect(body.results.slice(1).map((r) => r.error?.code)).toEqual(["not_found", "not_found"]);
+		expect(stored(d1, item.id)?.deleted_at).toBe(body.results[0]?.item?.trashed_at);
 	});
-
-	it("POST /api/v1/memories:batchUpdate and batchDelete accept ids", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const created = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-			}),
-		});
-		const createdBody = (await created.json()) as {
-			results: Array<{ ok: boolean; item?: { id: string; version: number } }>;
-		};
-		const item = createdBody.results[0]?.item;
-		expect(item?.id).toBeTruthy();
-		const updated = await fetchWithRetry(`${base}/api/v1/memories:batchUpdate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ id: item?.id, title: "y", expected_version: item?.version ?? 1 }],
-			}),
-		});
-		expect(updated.status).toBe(200);
-		const updatedBody = (await updated.json()) as {
-			results: Array<{ ok: boolean; item?: { title: string; version: number } }>;
-		};
-		expect(updatedBody.results[0]?.ok).toBe(true);
-		expect(updatedBody.results[0]?.item?.title).toBe("y");
-		expect(updatedBody.results[0]?.item?.version).toBe(2);
-		const deleted = await fetchWithRetry(`${base}/api/v1/memories:batchDelete`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({ ids: [item?.id] }),
-		});
-		expect(deleted.status).toBe(200);
-		const deletedBody = (await deleted.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(deletedBody.results[0]?.ok).toBe(true);
-		const missingDelete = await fetchWithRetry(`${base}/api/v1/memories:batchDelete`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-			body: JSON.stringify({ ids: [item?.id, "01missing0000000000000000"] }),
-		});
-		const missingBody = (await missingDelete.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(missingBody.results[0]?.error?.code).toBe("not_found");
-		expect(missingBody.results[1]?.error?.code).toBe("not_found");
-	});
-
-	it("rejects unauthenticated batchUpdate and batchDelete", async () => {
-		const update = await fetchWithRetry(`${base}/api/v1/memories:batchUpdate`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ id: "01missing", title: "t", expected_version: 1 }],
-			}),
-		});
-		expect(update.status).toBe(401);
-		const del = await fetchWithRetry(`${base}/api/v1/memories:batchDelete`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ ids: ["01missing"] }),
-		});
-		expect(del.status).toBe(401);
-	});
-
-	it("returns per-item forbidden for read-only batchUpdate and batchDelete", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const writeToken = await seedWriteKey(d1);
-		const created = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${writeToken}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ space: "kb", title: "x", body: "b", type: "note", tags: [] }],
-			}),
-		});
-		const createdBody = (await created.json()) as {
-			results: Array<{ item?: { id: string; version: number } }>;
-		};
-		const item = createdBody.results[0]?.item;
-		const readToken = await seedKey(d1, "r");
-		const updated = await fetchWithRetry(`${base}/api/v1/memories:batchUpdate`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${readToken}`, "Content-Type": "application/json" },
-			body: JSON.stringify({
-				items: [{ id: item?.id, title: "nope", expected_version: item?.version ?? 1 }],
-			}),
-		});
-		const updatedBody = (await updated.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(updatedBody.results[0]?.error?.code).toBe("forbidden");
-		const deleted = await fetchWithRetry(`${base}/api/v1/memories:batchDelete`, {
-			method: "POST",
-			headers: { Authorization: `Bearer ${readToken}`, "Content-Type": "application/json" },
-			body: JSON.stringify({ ids: [item?.id] }),
-		});
-		const deletedBody = (await deleted.json()) as {
-			results: Array<{ ok: boolean; error?: { code: string } }>;
-		};
-		expect(deletedBody.results[0]?.error?.code).toBe("forbidden");
-	});
+	it.each(["spaces", "own"] as const)(
+		"resolves real IDs for %s scope and enforces own-entry mutation and moves",
+		async (scope) => {
+			const d1 = e2eD1();
+			const key = await seedKey(d1, { scope, ownEntriesOnly: true });
+			const source = seedSpace(d1, key.id);
+			const destination = seedSpace(d1, key.id);
+			if (scope === "spaces")
+				d1([
+					"--command",
+					`UPDATE api_keys SET space_ids_json = '${JSON.stringify([source.id, destination.id])}' WHERE id = '${key.id}'`,
+				]);
+			const otherKey = await seedKey(d1);
+			const own = await createMemory(key.token, { space: source.slug });
+			const foreign = await createMemory(otherKey.token, { space: source.slug });
+			const hidden = await createMemory(otherKey.token);
+			const beforeForeign = stored(d1, foreign.id);
+			const beforeHidden = stored(d1, hidden.id);
+			const updated = await post("Update", key.token, {
+				items: [own, foreign, hidden].map((item) => ({
+					id: item.id,
+					space: destination.slug,
+					expected_version: 1,
+				})),
+			});
+			expect(updated.status).toBe(200);
+			const body = (await updated.json()) as BatchBody;
+			expect(body.results.map((r) => r.ok)).toEqual([true, false, false]);
+			expect(body.results.slice(1).map((r) => r.error?.code)).toEqual(["forbidden", "not_found"]);
+			expect(JSON.parse(stored(d1, own.id)?.record_json ?? "null")).toMatchObject({
+				space: destination.slug,
+				space_id: destination.id,
+				version: 2,
+			});
+			const deleted = await post("Delete", key.token, { ids: [own.id, foreign.id, hidden.id] });
+			expect(deleted.status).toBe(200);
+			const deletedBody = (await deleted.json()) as BatchBody;
+			expect(deletedBody.results.map((r) => r.ok)).toEqual([true, false, false]);
+			expect(deletedBody.results.slice(1).map((r) => r.error?.code)).toEqual([
+				"forbidden",
+				"not_found",
+			]);
+			expect(stored(d1, own.id)?.deleted_at).toEqual(expect.any(String));
+			expect(stored(d1, foreign.id)).toEqual(beforeForeign);
+			expect(stored(d1, hidden.id)).toEqual(beforeHidden);
+			const deniedCreate = await post("Create", key.token, { items: [input] });
+			expect(await deniedCreate.json()).toMatchObject({
+				results: [{ ok: false, error: { code: "not_found" } }],
+			});
+		},
+	);
 });

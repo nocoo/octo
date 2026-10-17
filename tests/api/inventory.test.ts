@@ -14,7 +14,10 @@ describe("api inventory", () => {
 				throw new Error(`invalid route key ${key}`);
 			}
 			const res = await fetch(`${base}${path}`, { method });
-			expect(res.status).toBeLessThan(500);
+			expect(res.status).toBe(path === "/api/live" ? 200 : 401);
+			if (path !== "/api/live") {
+				expect(await res.json()).toMatchObject({ error: { code: "unauthenticated" } });
+			}
 		}
 	});
 });

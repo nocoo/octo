@@ -1,265 +1,176 @@
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
-import { root } from "../../scripts/e2e";
-import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
-import { afterD1Exec, fetchWithRetry } from "./helpers";
+import {
+	type BatchBody,
+	createMemory,
+	e2eD1,
+	effectCount,
+	input,
+	post,
+	query,
+	seedKey,
+	sqlText,
+	stored,
+} from "../fixtures/l2-batch";
 
-const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
-const pepper = "change-me-api-key-pepper";
-
-function e2eD1(): D1Exec {
-	const persist = process.env.OCTO_PERSIST;
-	const config = process.env.OCTO_CONFIG;
-	if (!persist || !config) {
-		throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	}
-	return createD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-}
-
-async function seedKbSpace(d1: D1Exec): Promise<void> {
-	const now = Date.now();
-	d1([
-		"--command",
-		`INSERT OR IGNORE INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES ('sp-kb', 'kb', 'KB', '', NULL, ${now}, ${now})`,
-	]);
-	await afterD1Exec();
-}
-
-async function seedWriteKey(d1: D1Exec): Promise<string> {
-	const material = generateApiKeyMaterial();
-	const secretHash = await hashSecret(pepper, material.secret);
-	const now = Date.now();
-	d1([
-		"--command",
-		`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', 'e2e-${material.keyid}', '${secretHash}', 'admin', 'r,w,u,d', 'all', '[]', 0, 0, NULL, ${now}, ${now})`,
-	]);
-	await afterD1Exec();
-	return material.plaintext;
-}
-
-function batchCreateHeaders(token: string, idemKey: string) {
-	return {
-		Authorization: `Bearer ${token}`,
-		"Content-Type": "application/json",
-		"Idempotency-Key": idemKey,
-	};
-}
-
-function batchCreateBody(title: string, body = "b") {
-	return JSON.stringify({
-		items: [{ space: "kb", title, body, type: "note", tags: [] }],
-	});
-}
-
-/** Response JSON must exceed IDEMPOTENCY_CHUNK_BYTES (750k) to force multi-row storage. */
-function largeBatchBody(): string {
-	const big = "a".repeat(755_000);
-	return JSON.stringify({
-		items: [{ space: "kb", title: "big", body: big, type: "note", tags: [] }],
-	});
-}
-
-describe("idempotency", () => {
-	it("replays batch writes for the same Idempotency-Key", async () => {
+describe("idempotency over real HTTP with M1 auth", () => {
+	it("replays a sequential batch without executing more effects", async () => {
 		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const body = batchCreateBody("idem");
-		const headers = batchCreateHeaders(token, "batch-create-1");
-		const first = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers,
-			body,
-		});
+		const key = await seedKey(d1);
+		const first = await post("Create", key.token, { items: [input] }, "sequential");
 		expect(first.status).toBe(200);
-		const second = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers,
-			body,
-		});
-		expect(second.status).toBe(200);
-		expect(second.headers.get("Idempotent-Replayed")).toBe("true");
-		expect(await second.json()).toEqual(await first.json());
-	});
-
-	it("replays concurrent requests that share the same idempotency key", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const headers = batchCreateHeaders(token, `concurrent-${Date.now()}`);
-		const body = batchCreateBody("concurrent");
-		const responses = await Promise.all(
-			Array.from({ length: 4 }, () =>
-				fetchWithRetry(`${base}/api/v1/memories:batchCreate`, { method: "POST", headers, body }),
-			),
-		);
-		for (const res of responses) {
-			expect(res.status).toBe(200);
-		}
-		const replayed = responses.filter((res) => res.headers.get("Idempotent-Replayed") === "true");
-		expect(replayed.length).toBeGreaterThanOrEqual(1);
-		const bodies = await Promise.all(responses.map((res) => res.json()));
-		for (const parsed of bodies) {
-			expect(parsed).toEqual(bodies[0]);
-		}
-		const memoryIds = new Set(
-			bodies
-				.map(
-					(parsed) =>
-						(parsed as { results: Array<{ item?: { id: string } }> }).results[0]?.item?.id,
-				)
-				.filter(Boolean),
-		);
-		expect(memoryIds.size).toBe(1);
-	});
-
-	it("returns idempotency_conflict when the key is reused with a different body", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const headers = batchCreateHeaders(token, "batch-create-conflict");
-		await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers,
-			body: batchCreateBody("a"),
-		});
-		const conflict = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers,
-			body: batchCreateBody("b"),
-		});
-		expect(conflict.status).toBe(409);
-		const envelope = (await conflict.json()) as { error: { code: string } };
-		expect(envelope.error.code).toBe("idempotency_conflict");
-	});
-
-	it("rejects invalid Idempotency-Key values", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const res = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${token}`,
-				"Content-Type": "application/json",
-				"Idempotency-Key": "bad\tkey",
-			},
-			body: batchCreateBody("x"),
-		});
-		expect(res.status).toBe(400);
-	});
-
-	it("rejects an empty Idempotency-Key header", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const res = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${token}`,
-				"Content-Type": "application/json",
-				"Idempotency-Key": "",
-			},
-			body: batchCreateBody("x"),
-		});
-		expect(res.status).toBe(400);
-	});
-
-	it("conflicts concurrent hash-mismatch retries on the same key", async () => {
-		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const idemKey = `hash-mismatch-${Date.now()}`;
-		const headers = {
-			Authorization: `Bearer ${token}`,
-			"Content-Type": "application/json",
-			"Idempotency-Key": idemKey,
-		};
-		const [first, second] = await Promise.all([
-			fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-				method: "POST",
-				headers,
-				body: batchCreateBody("one"),
-			}),
-			fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-				method: "POST",
-				headers,
-				body: batchCreateBody("two"),
-			}),
-		]);
-		const statuses = [first.status, second.status].sort();
-		expect(statuses).toEqual([200, 409]);
-		const winner = first.status === 200 ? await first.json() : await second.json();
-		const memoryId = (winner as { results: Array<{ item?: { id: string } }> }).results[0]?.item?.id;
-		expect(memoryId).toBeTruthy();
-		const replay = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: {
-				...headers,
-				Authorization: `Bearer ${token}`,
-			},
-			body: first.status === 200 ? batchCreateBody("one") : batchCreateBody("two"),
-		});
+		const body = await first.text();
+		expect((JSON.parse(body) as BatchBody).results[0]?.ok).toBe(true);
+		const replay = await post("Create", key.token, { items: [input] }, "sequential");
 		expect(replay.status).toBe(200);
 		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await replay.text()).toBe(body);
+		expect(effectCount(d1, key.id)).toBe(1);
 	});
-
-	it("does not cross-isolate idempotency keys", async () => {
+	it("commits exactly one side effect for eight simultaneous identical requests", async () => {
 		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const tokenA = await seedWriteKey(d1);
-		const tokenB = await seedWriteKey(d1);
-		const idemKey = `cross-key-${Date.now()}`;
-		const body = batchCreateBody("isolated");
-		const resA = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: batchCreateHeaders(tokenA, idemKey),
-			body,
-		});
-		const resB = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers: batchCreateHeaders(tokenB, idemKey),
-			body,
-		});
-		expect(resA.status).toBe(200);
-		expect(resB.status).toBe(200);
-		expect(resB.headers.get("Idempotent-Replayed")).not.toBe("true");
-		const bodyA = (await resA.json()) as { results: Array<{ item?: { id: string } }> };
-		const bodyB = (await resB.json()) as { results: Array<{ item?: { id: string } }> };
-		expect(bodyA.results[0]?.item?.id).not.toBe(bodyB.results[0]?.item?.id);
+		const key = await seedKey(d1);
+		const responses = await Promise.all(
+			Array.from({ length: 8 }, () => post("Create", key.token, { items: [input] }, "concurrent")),
+		);
+		expect(responses.map((r) => r.status)).toEqual(Array(8).fill(200));
+		expect(responses.filter((r) => r.headers.get("Idempotent-Replayed") === "true")).toHaveLength(
+			7,
+		);
+		const bodies = await Promise.all(responses.map((r) => r.text()));
+		expect(new Set(bodies).size).toBe(1);
+		expect((JSON.parse(bodies[0] ?? "null") as BatchBody).results[0]?.ok).toBe(true);
+		expect(effectCount(d1, key.id)).toBe(1);
 	});
-
-	it("replays a large batch response stored across multiple D1 rows", async () => {
+	it("makes concurrent different hashes conflict without executing the loser's plan", async () => {
 		const d1 = e2eD1();
-		assertTestMarker(d1);
-		await seedKbSpace(d1);
-		const token = await seedWriteKey(d1);
-		const body = largeBatchBody();
-		const headers = batchCreateHeaders(token, `large-batch-${Date.now()}`);
-		const first = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers,
-			body,
-		});
+		const key = await seedKey(d1);
+		const responses = await Promise.all(
+			["one", "two"].map((title) =>
+				post("Create", key.token, { items: [{ ...input, title }] }, "hash-race"),
+			),
+		);
+		expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
+		const conflict = responses.find((r) => r.status === 409);
+		expect(await conflict?.json()).toMatchObject({ error: { code: "idempotency_conflict" } });
+		const winnerText = await responses.find((r) => r.status === 200)?.text();
+		expect(winnerText).toBeDefined();
+		const winner = (JSON.parse(winnerText ?? "{}") as BatchBody).results[0]?.item;
+		expect(winner?.title).toMatch(/^(one|two)$/u);
+		const replay = await post(
+			"Create",
+			key.token,
+			{ items: [{ ...input, title: winner?.title }] },
+			"hash-race",
+		);
+		expect(replay.status).toBe(200);
+		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await replay.text()).toBe(winnerText);
+		expect(effectCount(d1, key.id)).toBe(1);
+	});
+	it("isolates the same idempotency key across real API keys", async () => {
+		const d1 = e2eD1();
+		const keys = await Promise.all([seedKey(d1), seedKey(d1)]);
+		const responses = await Promise.all(
+			keys.map((key) => post("Create", key.token, { items: [input] }, "shared-key")),
+		);
+		expect(responses.map((r) => r.status)).toEqual([200, 200]);
+		expect(responses.every((r) => r.headers.get("Idempotent-Replayed") === null)).toBe(true);
+		const bodies = await Promise.all(responses.map((r) => r.json() as Promise<BatchBody>));
+		expect(bodies[0]?.results[0]?.item?.id).not.toBe(bodies[1]?.results[0]?.item?.id);
+		for (const key of keys) expect(effectCount(d1, key.id)).toBe(1);
+	});
+	it.each(["__proto__", "constructor", "prototype"])(
+		"preserves %s in hash conflicts",
+		async (field) => {
+			const d1 = e2eD1();
+			const key = await seedKey(d1);
+			const body = JSON.stringify({ items: [input] });
+			expect((await post("Create", key.token, body, "all-fields")).status).toBe(200);
+			const changed = `${body.slice(0, -1)},"${field}":{"x":1}}`;
+			const res = await post("Create", key.token, changed, "all-fields");
+			expect(res.status).toBe(409);
+			expect(await res.json()).toMatchObject({ error: { code: "idempotency_conflict" } });
+			expect(effectCount(d1, key.id)).toBe(1);
+		},
+	);
+	it.each(["", "bad\tkey", "x".repeat(129)])(
+		"rejects invalid header %j before effects",
+		async (header) => {
+			const d1 = e2eD1();
+			const key = await seedKey(d1);
+			const res = await post("Create", key.token, { items: [input] }, header);
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({ error: { code: "validation_failed" } });
+			expect(effectCount(d1, key.id)).toBe(0);
+		},
+	);
+	it("treats method/path and the entire batch as one idempotency unit", async () => {
+		const d1 = e2eD1();
+		const key = await seedKey(d1);
+		const item = await createMemory(key.token);
+		const update = { items: [{ id: item.id, title: "new", expected_version: 1 }] };
+		const first = await post("Update", key.token, update, "whole-batch");
 		expect(first.status).toBe(200);
-		const second = await fetchWithRetry(`${base}/api/v1/memories:batchCreate`, {
-			method: "POST",
-			headers,
-			body,
-		});
-		expect(second.status).toBe(200);
-		expect(second.headers.get("Idempotent-Replayed")).toBe("true");
-		const firstJson = await first.json();
-		const secondJson = await second.json();
-		expect(secondJson).toEqual(firstJson);
-		expect(JSON.stringify(firstJson).length).toBeGreaterThan(750_000);
+		expect(await first.json()).toMatchObject({ results: [{ ok: true, item: { version: 2 } }] });
+		const replay = await post("Update", key.token, update, "whole-batch");
+		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await replay.json()).toMatchObject({ results: [{ ok: true, item: { version: 2 } }] });
+		const changedPath = await post("Delete", key.token, { ids: [item.id] }, "whole-batch");
+		expect(changedPath.status).toBe(409);
+		expect(stored(d1, item.id)?.deleted_at).toBeNull();
+		expect(JSON.parse(stored(d1, item.id)?.record_json ?? "null")).toMatchObject({ version: 2 });
+		const deleted = await post("Delete", key.token, { ids: [item.id] }, "delete");
+		expect(deleted.status).toBe(200);
+		const original = await deleted.text();
+		expect((JSON.parse(original) as BatchBody).results[0]?.ok).toBe(true);
+		const deleteReplay = await post("Delete", key.token, { ids: [item.id] }, "delete");
+		expect(deleteReplay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await deleteReplay.text()).toBe(original);
+	});
+	it("persists legitimate large batches across rows and replays their complete response", async () => {
+		const d1 = e2eD1();
+		const key = await seedKey(d1);
+		const body = {
+			items: Array.from({ length: 3 }, () => ({ ...input, body: "x".repeat(800_000) })),
+		};
+		const first = await post("Create", key.token, body, "large-batch");
+		expect(first.status).toBe(200);
+		const original = await first.text();
+		expect((JSON.parse(original) as BatchBody).results.every((r) => r.ok)).toBe(true);
+		const chunks = query<{ n: number; max_bytes: number }>(
+			d1,
+			`SELECT count(*) AS n, max(length(CAST(body AS BLOB))) AS max_bytes FROM idempotency_response_chunks WHERE key_id = ${sqlText(key.id)}`,
+		)[0];
+		expect(chunks?.n).toBeGreaterThan(3);
+		expect(chunks?.max_bytes).toBeLessThanOrEqual(240_000);
+		const replay = await post("Create", key.token, body, "large-batch");
+		expect(replay.status).toBe(200);
+		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await replay.text()).toBe(original);
+		expect(effectCount(d1, key.id)).toBe(3);
+	});
+	it("rolls back business effects on response storage failure and safely retries", async () => {
+		const d1 = e2eD1();
+		const key = await seedKey(d1);
+		const trigger = `fail_${key.id}`;
+		d1([
+			"--command",
+			`CREATE TRIGGER ${trigger} BEFORE INSERT ON idempotency_response_chunks WHEN NEW.key_id = ${sqlText(key.id)} BEGIN SELECT RAISE(ABORT, 'injected chunk failure'); END`,
+		]);
+		try {
+			const failed = await post("Create", key.token, { items: [input] }, "recover");
+			expect(failed.status).toBe(503);
+			expect(await failed.json()).toMatchObject({ error: { code: "unavailable" } });
+			expect(effectCount(d1, key.id)).toBe(0);
+			expect(
+				query(d1, `SELECT * FROM idempotency_records WHERE key_id = ${sqlText(key.id)}`),
+			).toEqual([]);
+		} finally {
+			d1(["--command", `DROP TRIGGER ${trigger}`]);
+		}
+		expect((await post("Create", key.token, { items: [input] }, "recover")).status).toBe(200);
+		const replay = await post("Create", key.token, { items: [input] }, "recover");
+		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(effectCount(d1, key.id)).toBe(1);
 	});
 });
