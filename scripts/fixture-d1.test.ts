@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openFixtureD1 } from "./fixture-d1";
 
@@ -179,6 +179,40 @@ describe("official local fixture D1 runtime", () => {
 		await expect(openFixtureD1(f.persist, f.configPath)).rejects.toThrow("isolated");
 		expect(platform.open).not.toHaveBeenCalled();
 	});
+	it.each([
+		{ path: "d1", hardlink: false },
+		{ path: "d1/miniflare-D1DatabaseObject", hardlink: false },
+		{ path: "d1/miniflare-D1DatabaseObject/store.sqlite", hardlink: false },
+		{ path: "d1/miniflare-D1DatabaseObject/store.sqlite", hardlink: true },
+	])(
+		"rejects nested storage alias $path (hardlink=$hardlink) before the SDK",
+		async ({ path, hardlink }) => {
+			const a = await layout();
+			const b = await layout();
+			const leaf = join(a.persist, "v3/d1/miniflare-D1DatabaseObject/store.sqlite");
+			await mkdir(dirname(leaf), { recursive: true });
+			await writeFile(leaf, "original canary");
+			const destination = join(b.persist, "v3", path);
+			await mkdir(dirname(destination), { recursive: true });
+			if (hardlink) await link(leaf, destination);
+			else await symlink(join(a.persist, "v3", path), destination);
+			binding();
+			await expect(openFixtureD1(b.persist, b.configPath)).rejects.toThrow("isolated");
+			expect(platform.open).not.toHaveBeenCalled();
+			expect(await readFile(leaf, "utf8")).toBe("original canary");
+		},
+	);
+	it("accepts ordinary nested directories and singly linked SQLite files", async () => {
+		const f = await layout();
+		const leaf = join(f.persist, "v3/d1/miniflare-D1DatabaseObject/store.sqlite");
+		await mkdir(dirname(leaf), { recursive: true });
+		await writeFile(leaf, "normal file");
+		const b = binding();
+		const session = await openFixtureD1(f.persist, f.configPath);
+		await session.dispose();
+		expect(b.dispose).toHaveBeenCalledTimes(1);
+	});
+
 	it.each([
 		"invalid = [",
 		safeConfig + ["remote", " = ", "true"].join(""),

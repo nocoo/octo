@@ -1,4 +1,4 @@
-import { readFile, realpath } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { D1Database } from "@cloudflare/workers-types";
 import { parse } from "smol-toml";
@@ -16,6 +16,16 @@ function assertRunPaths(persist: string, config: string): void {
 		config !== join(dirname(dirname(persist)), "e2e-run", basename(persist), "wrangler.toml")
 	)
 		throw new Error("fixture D1 requires matching isolated run paths");
+}
+
+async function assertIsolatedStore(path: string): Promise<void> {
+	const entry = await lstat(path);
+	if (entry.isSymbolicLink() || (entry.isFile() && entry.nlink > 1)) {
+		throw new Error("fixture D1 storage must be isolated without linked entries");
+	}
+	if (entry.isDirectory()) {
+		for (const name of await readdir(path)) await assertIsolatedStore(join(path, name));
+	}
 }
 
 async function assertMarker(db: D1Database): Promise<void> {
@@ -56,6 +66,7 @@ export async function openFixtureD1(
 	) {
 		throw new Error("unsafe fixture D1 configuration");
 	}
+	await assertIsolatedStore(state);
 	const { getPlatformProxy, unstable_splitSqlQuery } = await import("wrangler");
 	const proxy = await getPlatformProxy<{ DB: D1Database }>({
 		configPath: config,
