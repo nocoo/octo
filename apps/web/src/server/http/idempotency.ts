@@ -44,7 +44,12 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 		}
 		const keyId = c.get("apiKey")?.id;
 		if (!keyId) throw new ApiError("unauthenticated", "unauthenticated");
-		const hash = await requestHash(c.req.method, c.req.path, await c.req.raw.clone().text());
+		const hash = await requestHash(
+			c.req.method,
+			c.req.path,
+			await c.req.raw.clone().text(),
+			c.req.header("If-Match"),
+		);
 		try {
 			const existing = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
 			if (existing) {
