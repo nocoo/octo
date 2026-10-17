@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("../../../../../scripts/local-d1", async (importOriginal) => ({
 	...(await importOriginal<typeof import("../../../../../scripts/local-d1")>()),
-	createD1Exec: () => state.exec,
+	createAsyncD1Exec: () => async (args: string[]) => state.exec(args),
 }));
 let fixture: ReturnType<typeof sqliteD1>;
 beforeAll(() => {

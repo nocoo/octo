@@ -63,6 +63,15 @@ Whole-request errors discard all staged SQL; per-item errors preserve other item
 
 ## Review handoff
 
+Every L2 fixture/observation SQL call uses the shared `createAsyncD1Exec` and
+awaits `assertAsyncTestMarker` before exposing the executor. This keeps the client
+event loop serviceable between HTTP requests: M5's controlled probe proved that
+synchronous Wrangler CLI calls could cause reuse of an expired keepalive socket.
+Marker, seed, scope, count, trash/version, chunk, trigger and secret-rotation
+queries are all awaited, including `/me` and FTS tests. No HTTP retries, sleeps or
+keepalive overrides are used. Startup migration behavior remains synchronous and
+unchanged; those commands finish before the server starts.
+
 Run the complete L2 suite serially on port 17059 after the implementation handoff.
 The implementer intentionally does not run L2 while the controller/reviewer owns
 that lane. L2 tests use the explicit fixture entry and real M1 credentials, and

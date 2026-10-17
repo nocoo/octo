@@ -1,13 +1,16 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { CORE_MIGRATION } from "./schema";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const wranglerBin = join(root, "node_modules/.bin/wrangler");
 
 export type D1Exec = (args: string[]) => string;
+export type AsyncD1Exec = (args: string[]) => Promise<string>;
+const execFileAsync = promisify(execFile);
 
 export function wranglerD1Args(args: string[], persistTo?: string, config?: string): string[] {
 	const extra: string[] = [];
@@ -31,6 +34,21 @@ export function createD1Exec(
 			cwd,
 			encoding: "utf8",
 		});
+}
+
+export function createAsyncD1Exec(
+	bin = wranglerBin,
+	cwd = root,
+	persistTo?: string,
+	config?: string,
+): AsyncD1Exec {
+	return async (args) => {
+		const { stdout } = await execFileAsync(bin, wranglerD1Args(args, persistTo, config), {
+			cwd,
+			encoding: "utf8",
+		});
+		return stdout;
+	};
 }
 
 export function tableExists(d1: D1Exec, name: string): boolean {
@@ -78,7 +96,12 @@ export function writeTestMarker(d1: D1Exec): void {
 }
 
 export function readTestMarkerValue(d1: D1Exec): string | null {
-	const stdout = d1(["--command", "SELECT value FROM _test_marker WHERE key = 'env'", "--json"]);
+	return markerValue(
+		d1(["--command", "SELECT value FROM _test_marker WHERE key = 'env'", "--json"]),
+	);
+}
+
+function markerValue(stdout: string): string | null {
 	const start = stdout.indexOf("[");
 	if (start < 0) {
 		return null;
@@ -90,6 +113,17 @@ export function readTestMarkerValue(d1: D1Exec): string | null {
 export function assertTestMarker(d1: D1Exec): void {
 	const value = readTestMarkerValue(d1);
 	if (value !== "test") {
+		throw new Error("refusing to mutate D1 without _test_marker env=test");
+	}
+}
+
+export async function assertAsyncTestMarker(d1: AsyncD1Exec): Promise<void> {
+	const output = await d1([
+		"--command",
+		"SELECT value FROM _test_marker WHERE key = 'env'",
+		"--json",
+	]);
+	if (markerValue(output) !== "test") {
 		throw new Error("refusing to mutate D1 without _test_marker env=test");
 	}
 }

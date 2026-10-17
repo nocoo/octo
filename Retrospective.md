@@ -2,6 +2,23 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## M6: synchronous fixture CLI work can stale HTTP sockets
+
+M5's controlled local-Worker probe proved that eight synchronous Wrangler D1
+calls blocked the client event loop for 9122ms; the next POST reused the expired
+socket and failed with UND_ERR_SOCKET. Awaiting the same commands asynchronously
+left closure processing serviceable and the next POST used a fresh socket.
+M6 now uses a promisified execFile executor for every L2 fixture mutation and
+observation, including marker checks, `/me` secret rotation and FTS. The existing
+synchronous migration runner is unchanged because it runs before the server.
+No request retries or keepalive overrides mask failures. Regression tests use an
+isolated child process and deferred fixture replies without binding a server.
+
+The deferred-write test initially assumed one event-loop turn also completed
+WebCrypto hashing. That let a pending seed spill into the following test. Signal
+actual CLI invocation before asserting that the seed awaits its result; never
+use an unrelated scheduling turn as proof of asynchronous task completion.
+
 ## M6: shared fixture spaces invalidate singleton assumptions
 
 Adding base and scoped spaces to the explicit M6 fixture invalidated the older
