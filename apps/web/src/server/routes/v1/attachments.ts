@@ -1,18 +1,54 @@
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { attachmentService } from "../../attachments/context";
+import { sha256Hex } from "../../attachments/crypto";
 import { parseAttachmentUpload } from "../../attachments/upload";
 import type { AppVars, Env } from "../../env";
 import { jsonOk } from "../../lib/errors";
+
+export const attachmentUploadPreparation: MiddlewareHandler<{
+	Bindings: Env;
+	Variables: AppVars;
+}> = async (c, next) => {
+	if (c.req.method === "POST") {
+		await attachmentService(c).assertUploadAccess(c.get("apiKey"), c.req.param("id") ?? "");
+		const upload = await parseAttachmentUpload(c.req.raw);
+		c.set("attachmentUpload", upload);
+		if (c.req.header("Idempotency-Key") !== undefined) {
+			c.set(
+				"requestHashBody",
+				JSON.stringify({
+					filename: upload.filename,
+					content_type: upload.contentType,
+					sha256: await sha256Hex(upload.bytes),
+				}),
+			);
+		}
+	}
+	await next();
+};
+
+export const attachmentDeleteAuthorization: MiddlewareHandler<{
+	Bindings: Env;
+	Variables: AppVars;
+}> = async (c, next) => {
+	if (c.req.method === "DELETE") {
+		await attachmentService(c).assertDeleteAccess(c.get("apiKey"), c.req.param("id") ?? "");
+	}
+	await next();
+};
 
 export function createAttachmentsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
 
 	app.post("/memories/:id/attachments", async (c) => {
-		const svc = attachmentService(c);
-		await svc.assertUploadAccess(c.get("apiKey"), c.req.param("id"));
-		const upload = await parseAttachmentUpload(c.req.raw);
-		const body = await svc.upload(c.get("apiKey"), c.req.param("id"), upload);
-		return jsonOk(body, 201);
+		const write = await attachmentService(c).upload(
+			c.get("apiKey"),
+			c.req.param("id"),
+			c.get("attachmentUpload"),
+		);
+		c.get("writeStatements").push(...write.statements);
+		c.set("writeError", write.mapError);
+		return jsonOk(write.value, 201);
 	});
 
 	app.get("/memories/:id/attachments", async (c) => {
@@ -26,7 +62,9 @@ export function createAttachmentsRoutes(): Hono<{ Bindings: Env; Variables: AppV
 	});
 
 	app.delete("/attachments/:id", async (c) => {
-		await attachmentService(c).delete(c.get("apiKey"), c.req.param("id"));
+		const write = await attachmentService(c).delete(c.get("apiKey"), c.req.param("id"));
+		c.get("writeStatements").push(...write.statements);
+		c.set("writeError", write.mapError);
 		return jsonOk({ ok: true });
 	});
 

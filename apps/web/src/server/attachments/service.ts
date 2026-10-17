@@ -13,6 +13,12 @@ import {
 	signAttachmentUrl,
 } from "./url-sign";
 
+export type AttachmentWrite<T> = {
+	statements: D1PreparedStatement[];
+	value: T;
+	mapError: (error: unknown) => ApiError | undefined | Promise<ApiError | undefined>;
+};
+
 export type AttachmentServiceDeps = {
 	repo: AttachmentRepo;
 	blobs: BlobStore;
@@ -62,11 +68,18 @@ export class AttachmentService {
 		requireMemoryAccess(key, "update", memory);
 	}
 
+	async assertDeleteAccess(key: ApiPrincipal, attachmentId: string): Promise<void> {
+		const attachment = await this.deps.repo.getAttachment(attachmentId);
+		if (!attachment) throw new ApiError("not_found", "not found");
+		const memory = await this.loadMemory(attachment.memory_id);
+		requireMemoryAccess(key, "delete", memory);
+	}
+
 	async upload(
 		key: ApiPrincipal,
 		memoryId: string,
 		upload: ParsedUpload,
-	): Promise<AttachmentPublic> {
+	): Promise<AttachmentWrite<AttachmentPublic>> {
 		const memory = await this.loadMemory(memoryId);
 		requireMemoryAccess(key, "update", memory);
 		const now = this.now();
@@ -84,20 +97,22 @@ export class AttachmentService {
 			created_at: now,
 			deleted_at: null,
 		};
+		const statements = this.deps.repo.insertStatements(row, memory.space_id, this.actor(key), now);
 		await this.deps.blobs.put(row.r2_key, upload.bytes, {
 			contentType: upload.contentType,
 			sha256,
 		});
-		try {
-			await this.deps.repo.insertAttachment(row, memory.space_id, this.actor(key), now);
-		} catch (err) {
-			const persisted = await this.deps.repo.getAttachment(id).catch(() => undefined);
-			if (persisted === null) {
-				await this.deps.blobs.delete(row.r2_key);
-			}
-			throw err;
-		}
-		return toPublicAttachment(row, true);
+		return {
+			statements,
+			value: toPublicAttachment(row, true),
+			mapError: async () => {
+				const persisted = await this.deps.repo.getAttachment(id).catch(() => undefined);
+				if (persisted === null) {
+					await this.deps.blobs.delete(row.r2_key);
+				}
+				return new ApiError("unavailable", "upload transaction failed");
+			},
+		};
 	}
 
 	async list(key: ApiPrincipal, memoryId: string): Promise<AttachmentPublic[]> {
@@ -126,21 +141,25 @@ export class AttachmentService {
 		};
 	}
 
-	async delete(key: ApiPrincipal, attachmentId: string): Promise<void> {
+	async delete(key: ApiPrincipal, attachmentId: string): Promise<AttachmentWrite<void>> {
 		const attachment = await this.deps.repo.getAttachment(attachmentId);
 		if (!attachment || attachment.deleted_at !== null) {
 			throw new ApiError("not_found", "not found");
 		}
 		const memory = await this.loadMemory(attachment.memory_id);
 		requireMemoryAccess(key, "delete", memory);
-		const ok = await this.deps.repo.softDelete(
-			attachmentId,
-			memory.space_id,
-			this.actor(key),
-			this.now(),
-		);
-		if (!ok) {
-			throw new ApiError("not_found", "not found");
-		}
+		return {
+			statements: this.deps.repo.softDeleteStatements(
+				attachmentId,
+				memory.space_id,
+				this.actor(key),
+				this.now(),
+			),
+			value: undefined,
+			mapError: (err) =>
+				String(err).includes("NOT NULL constraint failed: attachments.filename")
+					? new ApiError("not_found", "not found")
+					: undefined,
+		};
 	}
 }

@@ -1,3 +1,4 @@
+import type { ParsedUpload } from "./attachments/upload";
 import type { ApiPrincipal } from "./auth/authorize";
 import type { ApiError } from "./lib/errors";
 
@@ -5,6 +6,8 @@ export type AppVars = {
 	requestId: string;
 	writeStatements: D1PreparedStatement[];
 	writeError: (error: unknown) => ApiError | undefined | Promise<ApiError | undefined>;
+	requestHashBody: string;
+	attachmentUpload: ParsedUpload;
 	apiKey: ApiPrincipal;
 	adminEmail: string;
 };

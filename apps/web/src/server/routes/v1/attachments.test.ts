@@ -3,8 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { MAX_ATTACHMENT_BYTES } from "../../attachments/content-type";
 import type { ApiPrincipal } from "../../auth/authorize";
 import type { AppVars, Env } from "../../env";
+import { idempotencyMiddleware } from "../../http/idempotency";
 import { toErrorResponse } from "../../lib/errors";
-import { createAttachmentsRoutes } from "./attachments";
+import {
+	attachmentDeleteAuthorization,
+	attachmentUploadPreparation,
+	createAttachmentsRoutes,
+} from "./attachments";
 
 function principal(): ApiPrincipal {
 	return {
@@ -31,7 +36,10 @@ function attachmentsApp(key: ApiPrincipal | null = principal()) {
 			await next();
 		});
 	}
-	app.route("/", createAttachmentsRoutes());
+	app.use("/api/v1/memories/:id/attachments", attachmentUploadPreparation);
+	app.use("/api/v1/attachments/:id", attachmentDeleteAuthorization);
+	app.use("*", idempotencyMiddleware());
+	app.route("/api/v1", createAttachmentsRoutes());
 	return app;
 }
 
@@ -68,7 +76,7 @@ function env(): Env {
 describe("attachments routes", () => {
 	it("uploads via raw body", async () => {
 		const res = await attachmentsApp().request(
-			"/memories/m1/attachments",
+			"/api/v1/memories/m1/attachments",
 			{
 				method: "POST",
 				headers: { "Content-Type": "image/png", "X-Filename": "a.png" },
@@ -81,7 +89,7 @@ describe("attachments routes", () => {
 
 	it("authorizes uploads before consuming request bytes", async () => {
 		const pull = vi.fn();
-		const request = new Request("http://x/memories/m1/attachments", {
+		const request = new Request("http://x/api/v1/memories/m1/attachments", {
 			method: "POST",
 			headers: { "Content-Type": "image/png", "X-Filename": "a.png" },
 			body: new ReadableStream({ pull }, { highWaterMark: 0 }),
@@ -101,7 +109,7 @@ describe("attachments routes", () => {
 	it("returns the declared-oversize envelope without aborting the unused upload", async () => {
 		const pull = vi.fn();
 		const cancel = vi.fn();
-		const request = new Request("http://x/memories/m1/attachments", {
+		const request = new Request("http://x/api/v1/memories/m1/attachments", {
 			method: "POST",
 			headers: {
 				"Content-Type": "image/png",
@@ -125,7 +133,7 @@ describe("attachments routes", () => {
 	});
 
 	it("lists attachments", async () => {
-		const res = await attachmentsApp().request("/memories/m1/attachments", {}, env());
+		const res = await attachmentsApp().request("/api/v1/memories/m1/attachments", {}, env());
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ items: [] });
 	});

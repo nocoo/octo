@@ -58,7 +58,7 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 		const hash = await requestHash(
 			c.req.method,
 			c.req.path,
-			await c.req.raw.clone().text(),
+			c.get("requestHashBody") ?? (await c.req.raw.clone().text()),
 			c.req.header("If-Match"),
 		);
 		try {
@@ -86,6 +86,11 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 				c.res.status < 400 ? writes : [],
 			);
 		} catch (commitError) {
+			const writeError = await writeFailure(
+				c,
+				commitError,
+				"write transaction unavailable; retry with the same key",
+			);
 			try {
 				const outcome = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
 				if (outcome) {
@@ -98,11 +103,7 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 				if (err instanceof ApiError) throw err;
 				throw new ApiError("unavailable", "idempotency recovery unavailable");
 			}
-			throw await writeFailure(
-				c,
-				commitError,
-				"write transaction unavailable; retry with the same key",
-			);
+			throw writeError;
 		}
 	};
 }

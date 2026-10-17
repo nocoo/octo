@@ -12,7 +12,11 @@ import { whoamiResponse } from "./routes/admin/whoami";
 import { createFilesRoutes } from "./routes/files";
 import { liveResponse } from "./routes/live";
 import { createV1Routes } from "./routes/v1";
-import { createAttachmentsRoutes } from "./routes/v1/attachments";
+import {
+	attachmentDeleteAuthorization,
+	attachmentUploadPreparation,
+	createAttachmentsRoutes,
+} from "./routes/v1/attachments";
 import { changesRoutes } from "./routes/v1/changes";
 import { meResponse } from "./routes/v1/me";
 import { memoriesRoutes } from "./routes/v1/memories";
@@ -51,6 +55,8 @@ export function createApp(): Hono<{
 	app.use("/api/v1/*", bearerMiddleware);
 	app.use("/api/v1/tags/:name/rename", tagWriteAuthorization);
 	app.use("/api/v1/tags/:name/merge", tagWriteAuthorization);
+	app.use("/api/v1/memories/:id/attachments", attachmentUploadPreparation);
+	app.use("/api/v1/attachments/:id", attachmentDeleteAuthorization);
 	app.use("/api/v1/*", idempotencyMiddleware());
 	app.use("/api/admin/*", accessMiddleware);
 	app.use("/api/admin/*", adminWriteOriginMiddleware);

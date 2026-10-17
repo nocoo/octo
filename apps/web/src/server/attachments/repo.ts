@@ -44,13 +44,13 @@ export class AttachmentRepo {
 		return results ?? [];
 	}
 
-	async insertAttachment(
+	insertStatements(
 		row: AttachmentRecord,
 		spaceId: string,
 		actor: string,
 		now: number,
-	): Promise<void> {
-		const stmts = [
+	): D1PreparedStatement[] {
+		return [
 			this.deps.db
 				.prepare(
 					"INSERT INTO attachments (id, memory_id, r2_key, filename, content_type, size_bytes, sha256, created_by, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)",
@@ -72,11 +72,23 @@ export class AttachmentRepo {
 				)
 				.bind(row.id, spaceId, actor, now),
 		];
-		await this.deps.db.batch(stmts);
 	}
 
-	async softDelete(id: string, spaceId: string, actor: string, now: number): Promise<boolean> {
-		const results = await this.deps.db.batch([
+	softDeleteStatements(
+		id: string,
+		spaceId: string,
+		actor: string,
+		now: number,
+	): D1PreparedStatement[] {
+		// A stale snapshot violates NOT NULL to abort the entire HTTP-owned transaction.
+		return [
+			this.deps.db
+				.prepare(
+					`INSERT INTO attachments (id, memory_id, r2_key, filename, content_type, size_bytes, sha256, created_by, created_at)
+					 SELECT ?, '', '', NULL, '', 0, '', '', 0
+					 WHERE NOT EXISTS (SELECT 1 FROM attachments WHERE id = ? AND deleted_at IS NULL)`,
+				)
+				.bind(id, id),
 			this.deps.db
 				.prepare("UPDATE attachments SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL")
 				.bind(now, id),
@@ -87,7 +99,6 @@ export class AttachmentRepo {
 					 WHERE changes() = 1`,
 				)
 				.bind(id, spaceId, actor, now),
-		]);
-		return (results[0]?.meta?.changes ?? 0) > 0;
+		];
 	}
 }

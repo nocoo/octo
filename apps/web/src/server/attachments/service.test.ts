@@ -60,9 +60,9 @@ const memory = {
 describe("AttachmentService", () => {
 	it("uploads when authorized", async () => {
 		const put = vi.fn();
-		const insertAttachment = vi.fn();
+		const insertStatements = vi.fn().mockReturnValue([]);
 		const svc = serviceWith(
-			{ getMemory: vi.fn().mockResolvedValue(memory), insertAttachment },
+			{ getMemory: vi.fn().mockResolvedValue(memory), insertStatements },
 			{ put },
 		);
 		const body = await svc.upload(principal(), "m1", {
@@ -70,52 +70,53 @@ describe("AttachmentService", () => {
 			contentType: "image/png",
 			bytes: new Uint8Array([1]),
 		});
-		expect(body.markdown).toBe(`![](octo://att/${body.id})`);
+		expect(body.value.markdown).toBe(`![](octo://att/${body.value.id})`);
+		expect(body.statements).toEqual([]);
 		expect(put).toHaveBeenCalled();
-		expect(insertAttachment).toHaveBeenCalled();
+		expect(insertStatements).toHaveBeenCalled();
 	});
 
 	it("deletes blob when metadata insert fails", async () => {
 		const put = vi.fn();
 		const del = vi.fn();
-		const insertAttachment = vi.fn().mockRejectedValue(new Error("d1 down"));
+		const insertStatements = vi.fn().mockReturnValue([]);
 		const svc = serviceWith(
 			{
 				getMemory: vi.fn().mockResolvedValue(memory),
-				insertAttachment,
+				insertStatements,
 				getAttachment: vi.fn().mockResolvedValue(null),
 			},
 			{ put, delete: del },
 		);
-		await expect(
-			svc.upload(principal(), "m1", {
-				filename: "a.png",
-				contentType: "image/png",
-				bytes: new Uint8Array([1]),
-			}),
-		).rejects.toThrow("d1 down");
+		const write = await svc.upload(principal(), "m1", {
+			filename: "a.png",
+			contentType: "image/png",
+			bytes: new Uint8Array([1]),
+		});
+		expect(await write.mapError(new Error("d1 down"))).toMatchObject({ code: "unavailable" });
 		expect(del).toHaveBeenCalledWith(expect.stringMatching(/^att\/m1\//));
 	});
 
 	it.each(["committed", "unknown"])("preserves blob when metadata is %s", async (state) => {
 		const del = vi.fn();
-		const insertAttachment = vi.fn().mockRejectedValue(new Error("commit acknowledgement lost"));
+		const insertStatements = vi.fn().mockReturnValue([]);
 		const getAttachment =
 			state === "committed"
 				? vi.fn().mockResolvedValue({ id: "committed" })
 				: vi.fn().mockRejectedValue(new Error("verification unavailable"));
 		const svc = serviceWith(
-			{ getMemory: vi.fn().mockResolvedValue(memory), insertAttachment, getAttachment },
+			{ getMemory: vi.fn().mockResolvedValue(memory), insertStatements, getAttachment },
 			{ put: vi.fn(), delete: del },
 		);
-		await expect(
-			svc.upload(principal(), "m1", {
-				filename: "a.png",
-				contentType: "image/png",
-				bytes: new Uint8Array([1]),
-			}),
-		).rejects.toThrow("commit acknowledgement lost");
-		expect(getAttachment).toHaveBeenCalledWith(insertAttachment.mock.calls[0]?.[0].id);
+		const write = await svc.upload(principal(), "m1", {
+			filename: "a.png",
+			contentType: "image/png",
+			bytes: new Uint8Array([1]),
+		});
+		expect(await write.mapError(new Error("commit acknowledgement lost"))).toMatchObject({
+			code: "unavailable",
+		});
+		expect(getAttachment).toHaveBeenCalledWith(insertStatements.mock.calls[0]?.[0].id);
 		expect(del).not.toHaveBeenCalled();
 	});
 
@@ -174,11 +175,15 @@ describe("AttachmentService", () => {
 			{
 				getAttachment: vi.fn().mockResolvedValue(attachment),
 				getMemory: vi.fn().mockResolvedValue(memory),
-				softDelete: vi.fn().mockResolvedValue(false),
+				softDeleteStatements: vi.fn().mockReturnValue([]),
 			},
 			{ put: vi.fn() },
 		);
-		await expect(svc.delete(principal(), "a1")).rejects.toMatchObject({ code: "not_found" });
+		const write = await svc.delete(principal(), "a1");
+		expect(
+			await write.mapError(new Error("NOT NULL constraint failed: attachments.filename")),
+		).toMatchObject({ code: "not_found" });
+		expect(await write.mapError(new Error("d1 unavailable"))).toBeUndefined();
 	});
 
 	it("deletes attachments", async () => {
@@ -194,17 +199,17 @@ describe("AttachmentService", () => {
 			created_at: 1,
 			deleted_at: null,
 		};
-		const softDelete = vi.fn().mockResolvedValue(true);
+		const softDeleteStatements = vi.fn().mockReturnValue([]);
 		const svc = serviceWith(
 			{
 				getAttachment: vi.fn().mockResolvedValue(attachment),
 				getMemory: vi.fn().mockResolvedValue(memory),
-				softDelete,
+				softDeleteStatements,
 			},
 			{ put: vi.fn() },
 		);
 		await svc.delete(principal(), "a1");
-		expect(softDelete).toHaveBeenCalled();
+		expect(softDeleteStatements).toHaveBeenCalled();
 	});
 
 	it("hides deleted attachments for url", async () => {

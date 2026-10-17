@@ -52,7 +52,8 @@ describe("AttachmentRepo integration", () => {
 		db.prepare(
 			"INSERT INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at) VALUES ('m1', 's1', 't', 'b', 'note', 0.5, 'k1', 1, 'h', ?, ?)",
 		).run(now, now);
-		const repo = new AttachmentRepo({ db: d1FromDb(db) });
+		const d1 = d1FromDb(db);
+		const repo = new AttachmentRepo({ db: d1 });
 		const row = {
 			id: "a1",
 			memory_id: "m1",
@@ -65,23 +66,31 @@ describe("AttachmentRepo integration", () => {
 			created_at: now,
 			deleted_at: null,
 		};
-		await repo.insertAttachment(row, "s1", "key:k1", now);
+		await d1.batch(repo.insertStatements(row, "s1", "key:k1", now));
 		expect(await repo.listForMemory("m1")).toHaveLength(1);
 		expect(await repo.getAttachment("a1")).toMatchObject({ id: "a1" });
 		db.exec(`CREATE TRIGGER reject_trash BEFORE INSERT ON changes
 			WHEN NEW.op = 'trashed' BEGIN SELECT RAISE(ABORT, 'event failure'); END`);
-		await expect(repo.softDelete("a1", "s1", "key:k1", now + 1)).rejects.toThrow("event failure");
+		await expect(
+			d1.batch(repo.softDeleteStatements("a1", "s1", "key:k1", now + 1)),
+		).rejects.toThrow("event failure");
 		expect(await repo.getAttachment("a1")).toMatchObject({ deleted_at: null });
 		expect(db.prepare("SELECT COUNT(*) AS n FROM changes").get()).toMatchObject({ n: 1 });
 		db.exec("DROP TRIGGER reject_trash");
-		expect(await repo.softDelete("a1", "s1", "key:k1", now + 1)).toBe(true);
+		expect(
+			(await d1.batch(repo.softDeleteStatements("a1", "s1", "key:k1", now + 1)))[1]?.meta.changes,
+		).toBe(1);
 		expect(await repo.listForMemory("m1")).toHaveLength(0);
 		const changes = db
 			.prepare("SELECT op FROM changes WHERE entity = 'attachment' AND entity_id = 'a1'")
 			.all() as Array<{ op: string }>;
 		expect(changes.map((c) => c.op).sort()).toEqual(["created", "trashed"]);
-		expect(await repo.softDelete("a1", "s1", "key:k1", now + 1)).toBe(false);
-		expect(await repo.softDelete("a1", "s1", "key:k1", now + 2)).toBe(false);
+		await expect(
+			d1.batch(repo.softDeleteStatements("a1", "s1", "key:k1", now + 1)),
+		).rejects.toThrow("NOT NULL constraint failed: attachments.filename");
+		await expect(
+			d1.batch(repo.softDeleteStatements("a1", "s1", "key:k1", now + 2)),
+		).rejects.toThrow("NOT NULL constraint failed: attachments.filename");
 		const changesAfter = db
 			.prepare("SELECT COUNT(*) AS n FROM changes WHERE entity = 'attachment' AND entity_id = 'a1'")
 			.get() as { n: number };

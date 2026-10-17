@@ -1,12 +1,11 @@
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAX_ATTACHMENT_BYTES } from "../../apps/web/src/server/attachments/content-type";
 import { MAX_MULTIPART_OVERHEAD_BYTES } from "../../apps/web/src/server/attachments/upload";
 import { signAttachmentUrl } from "../../apps/web/src/server/attachments/url-sign";
 import { seedAttachmentKey } from "../../scripts/attachment-fixtures";
-import { root } from "../../scripts/e2e";
 import { e2eFetch as fetch } from "../../scripts/e2e-fetch";
-import { type AsyncD1Exec, assertAsyncTestMarker, createAsyncD1Exec } from "../../scripts/local-d1";
+import type { AsyncD1Exec } from "../../scripts/local-d1";
+import { e2eD1, query, sqlText } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const urlSecret = "change-me-attachment-url-secret";
@@ -21,17 +20,6 @@ type CreatedAttachment = {
 	size_bytes: number;
 	created_at: string;
 };
-
-async function e2eD1(): Promise<AsyncD1Exec> {
-	const persist = process.env.OCTO_PERSIST;
-	const config = process.env.OCTO_CONFIG;
-	if (!persist || !config) {
-		throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	}
-	const d1 = createAsyncD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
-	await assertAsyncTestMarker(d1);
-	return d1;
-}
 
 async function cleanupAttachmentFixtures(d1: AsyncD1Exec) {
 	await d1([
@@ -74,13 +62,14 @@ async function expectError(response: Response, status: number, code: string) {
 	expect(await response.json()).toMatchObject({ error: { code } });
 }
 
-async function rawUpload(header: string, body = png, contentType = "image/png") {
+async function rawUpload(header: string, body = png, contentType = "image/png", idemKey?: string) {
 	return fetch(`${base}${memoryPath}`, {
 		method: "POST",
 		headers: {
 			Authorization: header,
 			"Content-Type": contentType,
 			"X-Filename": "file.png",
+			...(idemKey === undefined ? {} : { "Idempotency-Key": idemKey }),
 		},
 		body,
 	});
@@ -391,6 +380,86 @@ describe("attachments API", { sequential: true }, () => {
 		const badType = new FormData();
 		badType.append("file", new File(["x"], "a.txt", { type: "text/plain" }));
 		await expectError(await multipartUpload(header, badType), 415, "unsupported_media_type");
+	});
+
+	it("replays attachment upload and delete without duplicate effects", async () => {
+		const { d1, header, keyId } = await setup();
+		const upload = await rawUpload(header, png, "image/png", "m5-upload");
+		expect(upload.status).toBe(201);
+		const saved = await upload.text();
+		const { id } = JSON.parse(saved) as CreatedAttachment;
+		const replay = await rawUpload(header, png, "image/png", "m5-upload");
+		expect(replay.status).toBe(201);
+		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(await replay.text()).toBe(saved);
+		for (let i = 0; i < 2; i++) {
+			const response = await fetch(`${base}/api/v1/attachments/${id}`, {
+				method: "DELETE",
+				headers: { Authorization: header, "Idempotency-Key": "m5-delete" },
+			});
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ ok: true });
+			expect(response.headers.get("Idempotent-Replayed")).toBe(i === 0 ? null : "true");
+		}
+		expect(
+			await query(
+				d1,
+				`SELECT op, COUNT(*) AS n FROM changes WHERE entity = 'attachment' AND entity_id = ${sqlText(id)} GROUP BY op ORDER BY op`,
+			),
+		).toEqual([
+			{ op: "created", n: 1 },
+			{ op: "trashed", n: 1 },
+		]);
+		expect(
+			await query(
+				d1,
+				`SELECT COUNT(*) AS n FROM idempotency_records WHERE key_id = ${sqlText(keyId)}`,
+			),
+		).toEqual([{ n: 2 }]);
+	});
+
+	it("rejects binary replay conflicts and keyed declared oversize", async () => {
+		const { header } = await setup();
+		const first = await rawUpload(header, new Uint8Array([255]), "image/png", "m5-binary");
+		expect(first.status).toBe(201);
+		await first.arrayBuffer();
+		await expectError(
+			await rawUpload(header, new Uint8Array([254]), "image/png", "m5-binary"),
+			409,
+			"idempotency_conflict",
+		);
+		await expectError(
+			await rawUpload(header, new Uint8Array(MAX_ATTACHMENT_BYTES + 1), "image/png", "m5-large"),
+			413,
+			"payload_too_large",
+		);
+	});
+
+	it.each(["raw", "multipart"])("bounds keyed chunked %s uploads before hashing", async (kind) => {
+		const { header } = await setup();
+		let sent = 0;
+		const chunk = new Uint8Array(1024 * 1024);
+		const response = await fetch(`${base}${memoryPath}`, {
+			method: "POST",
+			headers: {
+				Authorization: header,
+				"Content-Type": kind === "raw" ? "image/png" : "multipart/form-data; boundary=x",
+				"X-Filename": "big.png",
+				"Idempotency-Key": `m5-chunked-${kind}`,
+			},
+			body: new ReadableStream({
+				pull(controller) {
+					if (sent > MAX_ATTACHMENT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES) {
+						controller.close();
+						return;
+					}
+					controller.enqueue(chunk);
+					sent += chunk.byteLength;
+				},
+			}),
+			duplex: "half",
+		} as RequestInit);
+		await expectError(response, 413, "payload_too_large");
 	});
 
 	it("bounds multipart envelope and extra-field bytes", async () => {
