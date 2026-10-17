@@ -63,9 +63,17 @@
 	padding: var(--basalt-space-md) var(--basalt-space-lg);
 	border-bottom: 1px solid hsl(var(--basalt-border));
 }
-.octo-markdown .contains-task-list {
-	list-style: none;
+.octo-markdown :is(ul, ol) {
 	padding-inline-start: var(--basalt-space-layout);
+}
+.octo-markdown ul {
+	list-style-type: disc;
+}
+.octo-markdown ol {
+	list-style-type: decimal;
+}
+.octo-markdown .task-list-item {
+	list-style-type: none;
 }
 .octo-markdown .task-list-item > :first-child {
 	margin-inline-end: var(--basalt-space-lg);
