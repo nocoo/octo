@@ -4,7 +4,7 @@ import { APP_VERSION } from "../../apps/web/src/lib/version";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { encodeFloat32Vector, l2Normalize } from "../../apps/web/src/server/search/math";
 import { root } from "../../scripts/e2e";
-import { assertTestMarker, createD1Exec } from "../../scripts/local-d1";
+import { assertAsyncTestMarker, createAsyncD1Exec } from "../../scripts/local-d1";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const pepper = "change-me-api-key-pepper";
@@ -20,13 +20,13 @@ function e2eD1() {
 	const persist = process.env.OCTO_PERSIST;
 	const config = process.env.OCTO_CONFIG;
 	if (!persist || !config) throw new Error("OCTO_PERSIST and OCTO_CONFIG are required");
-	return createD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
+	return createAsyncD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config);
 }
 
-function cleanup() {
+async function cleanup() {
 	const d1 = e2eD1();
-	assertTestMarker(d1);
-	d1([
+	await assertAsyncTestMarker(d1);
+	await d1([
 		"--command",
 		`
 DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${quotedIds}));
@@ -43,9 +43,9 @@ DELETE FROM api_keys WHERE name LIKE 'search-l2-%';`,
 }
 
 beforeAll(async () => {
-	cleanup();
+	await cleanup();
 	const d1 = e2eD1();
-	assertTestMarker(d1);
+	await assertAsyncTestMarker(d1);
 	const now = Date.now();
 	const commands: string[] = [];
 	const keySpecs = [
@@ -79,10 +79,12 @@ INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,cont
 VALUES ('${id}','te3-small-1536','text-embedding-3-small',1536,X'${blob}','hash',${now});
 INSERT INTO memory_tags VALUES ('${id}','tag_srch_infra');`);
 	}
-	d1(["--command", commands.join("\n")]);
+	await d1(["--command", commands.join("\n")]);
 });
 
-afterAll(() => cleanup());
+afterAll(async () => {
+	await cleanup();
+});
 
 async function post(path: string, body: unknown, key = "scoped", raw = false) {
 	return fetch(`${base}/api/v1/${path}`, {
