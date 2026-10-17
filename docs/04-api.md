@@ -128,8 +128,8 @@ Multipart uploads accept exactly one `file` part (no extra fields), with at most
 
 ### M7 dashboard contract
 
-All paths below are relative to `/api/admin`. Responses use the normal `{data}`
-envelope and error envelope. No API key, including the `admin` role, authorizes
+All paths below are relative to `/api/admin`. Responses use the existing raw JSON
+success payload and standard error envelope. No API key, including the `admin` role, authorizes
 these routes. Write requests require both Access and the allowed Origin.
 
 | Method | Path | Request / behavior |

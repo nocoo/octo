@@ -10,6 +10,15 @@ For future transport failures, compare the application runtime with development 
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — M7 contract draft assumed an envelope
+
+The initial M7 admin contract described a `{data}` success envelope before checking
+`jsonOk`, which actually returns the raw JSON payload. Inspection caught the mismatch
+before route integration; the controller corrected the document and notified every
+worker. Contract-first work still requires checking existing serializers and error
+codes before documenting them. A draft must not silently change a parallel client's
+wire format.
+
 ## 2026-10-17 — A literal idempotency fixture triggered secret scanning
 
 Removing only the authorized multipart variants made the remaining raw test's synthetic idempotency label a literal. Gitleaks classified that fixture as a generic API key and correctly blocked the range gate. It was not a credential; a shorter synthetic label preserves the test semantics without a scanner exemption. The unpublished introducing commit was amended so history scanning also passes. Keep the compensation integration before the amended test commit so its index-snapshot hooks retain all passing regressions; do not bypass hooks or assume a later deletion removes a historical scanner finding.

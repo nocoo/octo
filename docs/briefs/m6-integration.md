@@ -108,11 +108,9 @@ M7 is now the implementation owner for this boundary. The durable queue,
 post-commit port operations, backfill integration and cron recovery are specified
 in docs/02-data-model.md under "M7 derived-index ownership and recovery".
 
-Tracking owner: the phase-1 integration controller receiving the M2 signoff.
-That controller must assign an implementation owner before production vector
-capabilities are accepted; neither M4 nor M7 is implicitly assumed to own it.
-M2 persists vectors and pending `indexed_at` state, but the current scheduled
-handler only cleans idempotency records. A separate integrated synchronizer must
+Implementation owner: M7, explicitly assigned by Zheng after the M2 signoff.
+M2 persists vectors and pending `indexed_at` state; M7 extends the scheduled
+handler beyond idempotency cleanup. The integrated synchronizer must
 cover post-commit Vectorize upsert/delete, metadata changes, successful
 `indexed_at` acknowledgement, restore reindexing and retry compensation. Local
 D1 brute-force test success is not proof of production Vectorize synchronization.
