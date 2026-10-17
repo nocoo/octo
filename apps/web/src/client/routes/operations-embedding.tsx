@@ -61,118 +61,124 @@ export function EmbeddingPage() {
 					</Button>
 				}
 			/>
-			{state.loading && !state.config.base_url && <p role="status">Loading gateway settings...</p>}
+			{state.loading && !state.loaded && <p role="status">Loading gateway settings...</p>}
+			{state.error && <p role="alert">{state.error}</p>}
 			<LayerCard>
 				<LayerCard.Header>Gateway configuration</LayerCard.Header>
 				<LayerCard.Body>
-					<form
-						className="ops-stack"
-						onSubmit={async (event) => {
-							event.preventDefault();
-							if (await model.save(fields, takeSecret()))
-								toast.success("Embedding settings saved.");
-						}}
-					>
-						<Field
-							label="Gateway URL"
-							required
-							hint="OpenAI-compatible base URL; /v1/embeddings is added by the server."
+					{state.loaded ? (
+						<form
+							className="ops-stack"
+							onSubmit={async (event) => {
+								event.preventDefault();
+								if (await model.save(fields, takeSecret()))
+									toast.success("Embedding settings saved.");
+							}}
 						>
-							<Input
-								type="url"
-								value={fields.base_url}
-								onChange={(event) => setFields({ ...fields, base_url: event.target.value })}
-								disabled={state.pending}
-								required
-								autoComplete="off"
-							/>
-						</Field>
-						<div className="ops-fields">
-							<Field label="Model" required>
-								<Input
-									value={fields.model}
-									onChange={(event) => setFields({ ...fields, model: event.target.value })}
-									disabled={state.pending}
-									required
-								/>
-							</Field>
 							<Field
-								label="Dimensions"
+								label="Gateway URL"
 								required
-								hint="Changing dimensions requires a matching Vectorize profile."
+								hint="OpenAI-compatible base URL; /v1/embeddings is added by the server."
 							>
 								<Input
-									type="number"
-									min={1}
-									max={1536}
-									step={1}
-									value={fields.dims}
-									onChange={(event) => setFields({ ...fields, dims: Number(event.target.value) })}
+									type="url"
+									value={fields.base_url}
+									onChange={(event) => setFields({ ...fields, base_url: event.target.value })}
 									disabled={state.pending}
 									required
+									autoComplete="off"
 								/>
 							</Field>
-						</div>
-						<div className="ops-row">
-							<p role="status">
-								{state.config.api_key_set ? (
-									<>
-										Configured {"\u2022\u2022\u2022\u2022"}
-										{state.config.api_key_suffix ?? ""}
-									</>
-								) : (
-									"No API key configured"
-								)}
+							<div className="ops-fields">
+								<Field label="Model" required>
+									<Input
+										value={fields.model}
+										onChange={(event) => setFields({ ...fields, model: event.target.value })}
+										disabled={state.pending}
+										required
+									/>
+								</Field>
+								<Field
+									label="Dimensions"
+									required
+									hint="Changing dimensions requires a matching Vectorize profile."
+								>
+									<Input
+										type="number"
+										min={1}
+										max={1536}
+										step={1}
+										value={fields.dims}
+										onChange={(event) => setFields({ ...fields, dims: Number(event.target.value) })}
+										disabled={state.pending}
+										required
+									/>
+								</Field>
+							</div>
+							<div className="ops-row">
+								<p role="status">
+									{state.config.api_key_set ? (
+										<>
+											Configured {"\u2022\u2022\u2022\u2022"}
+											{state.config.api_key_suffix ?? ""}
+										</>
+									) : (
+										"No API key configured"
+									)}
+								</p>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setClearing(true)}
+									disabled={!state.config.api_key_set || state.pending}
+								>
+									Clear saved key
+								</Button>
+							</div>
+							<Field
+								label="Replacement API key"
+								hint="Write-only. Left empty keeps the saved key. Cleared after each request; re-enter before saving after a test."
+							>
+								<Input
+									ref={secret}
+									type="password"
+									autoComplete="new-password"
+									passwordManagerIgnore
+									disabled={state.pending}
+								/>
+							</Field>
+							<label className="ops-inline" htmlFor="embedding-backfill">
+								<Switch
+									id="embedding-backfill"
+									checked={fields.backfill_enabled}
+									onCheckedChange={(backfill_enabled) => setFields({ ...fields, backfill_enabled })}
+									disabled={state.pending}
+								/>
+								Backfill missing vectors
+							</label>
+							<p className="ops-muted">
+								Backfill is off by default. When enabled, embedding failures never block memory
+								writes.
 							</p>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setClearing(true)}
-								disabled={!state.config.api_key_set || state.pending}
-							>
-								Clear saved key
-							</Button>
-						</div>
-						<Field
-							label="Replacement API key"
-							hint="Write-only. Left empty keeps the saved key. Cleared after each request; re-enter before saving after a test."
-						>
-							<Input
-								ref={secret}
-								type="password"
-								autoComplete="new-password"
-								passwordManagerIgnore
-								disabled={state.pending}
-							/>
-						</Field>
-						<label className="ops-inline" htmlFor="embedding-backfill">
-							<Switch
-								id="embedding-backfill"
-								checked={fields.backfill_enabled}
-								onCheckedChange={(backfill_enabled) => setFields({ ...fields, backfill_enabled })}
-								disabled={state.pending}
-							/>
-							Backfill missing vectors
-						</label>
-						<p className="ops-muted">
-							Backfill is off by default. When enabled, embedding failures never block memory
-							writes.
+							<div className="ops-actions">
+								<Button
+									type="button"
+									variant="outline"
+									loading={state.pending}
+									onClick={() => void model.test(fields, takeSecret())}
+								>
+									Test connection
+								</Button>
+								<Button type="submit" loading={state.pending}>
+									Save settings
+								</Button>
+							</div>
+						</form>
+					) : (
+						<p role="status">
+							Gateway configuration is unknown. Refresh settings before making changes.
 						</p>
-						{state.error && <p role="alert">{state.error}</p>}
-						<div className="ops-actions">
-							<Button
-								type="button"
-								variant="outline"
-								loading={state.pending}
-								onClick={() => void model.test(fields, takeSecret())}
-							>
-								Test connection
-							</Button>
-							<Button type="submit" loading={state.pending}>
-								Save settings
-							</Button>
-						</div>
-					</form>
+					)}
 				</LayerCard.Body>
 			</LayerCard>
 			{state.testResult && (

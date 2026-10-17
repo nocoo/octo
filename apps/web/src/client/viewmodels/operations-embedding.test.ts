@@ -10,6 +10,41 @@ const fields = {
 const saved = { ...fields, api_key_set: true, api_key_suffix: "abcd" };
 
 describe("embedding settings", () => {
+	it("keeps configuration unknown after an initial read failure and blocks changes without hiding the error", async () => {
+		const request = vi.fn().mockRejectedValue(new Error("private"));
+		const model = new EmbeddingModel({ request });
+		expect(model.state.loaded).toBe(false);
+		expect(await model.save(fields, "replacement")).toBe(false);
+		await model.test(fields);
+		expect(request).not.toHaveBeenCalled();
+		await model.load();
+		expect(model.state.loaded).toBe(false);
+		expect(model.state.error).toBe("Unable to load embedding settings.");
+		expect(await model.save(fields, null)).toBe(false);
+		await model.test(fields);
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(model.state.error).toBe("Unable to load embedding settings.");
+	});
+
+	it("only marks successful reads loaded and retains stale configuration on refresh failure", async () => {
+		const config = { ...saved, backfill_enabled: true, model: "active-model", dims: 512 };
+		const request = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("private"))
+			.mockResolvedValueOnce(config)
+			.mockRejectedValueOnce(new Error("private"));
+		const model = new EmbeddingModel({ request });
+		await model.load();
+		expect(model.state.loaded).toBe(false);
+		await model.load();
+		expect(model.state.loaded).toBe(true);
+		expect(model.state.config).toEqual(config);
+		await model.load();
+		expect(model.state.loaded).toBe(true);
+		expect(model.state.config).toEqual(config);
+		expect(model.state.error).toBe("Unable to load embedding settings.");
+	});
+
 	it("shows cleared credentials and ignores disposed read failures", async () => {
 		const request = vi
 			.fn()
@@ -36,14 +71,18 @@ describe("embedding settings", () => {
 			for (const fail of [false, true]) {
 				let resolve: (value: unknown) => void = () => {};
 				let reject: (reason: Error) => void = () => {};
-				const request = vi.fn().mockImplementation(
-					() =>
-						new Promise((done, failed) => {
-							resolve = done;
-							reject = failed;
-						}),
-				);
+				const request = vi
+					.fn()
+					.mockResolvedValueOnce(saved)
+					.mockImplementation(
+						() =>
+							new Promise((done, failed) => {
+								resolve = done;
+								reject = failed;
+							}),
+					);
 				const model = new EmbeddingModel({ request });
+				await model.load();
 				const pending = model[action](fields, "secret");
 				model.dispose();
 				if (fail) reject(new Error("secret"));
@@ -57,6 +96,7 @@ describe("embedding settings", () => {
 	it("starts with the documented defaults and projects only readable fields", async () => {
 		const request = vi.fn().mockResolvedValue({ ...saved, api_key: "never-read" });
 		const model = new EmbeddingModel({ request });
+		expect(model.state.loaded).toBe(false);
 		expect(model.state.config).toEqual({
 			...fields,
 			base_url: "",
@@ -64,6 +104,7 @@ describe("embedding settings", () => {
 			api_key_suffix: null,
 		});
 		await model.load();
+		expect(model.state.loaded).toBe(true);
 		expect(request).toHaveBeenCalledWith("/settings/embedding");
 		expect(model.state.config).toEqual(saved);
 		expect(JSON.stringify(model.state)).not.toContain("never-read");
@@ -72,6 +113,7 @@ describe("embedding settings", () => {
 	it("writes a replacement once, clears explicitly, and omits unchanged credentials", async () => {
 		const request = vi.fn().mockResolvedValue(saved);
 		const model = new EmbeddingModel({ request });
+		await model.load();
 		expect(await model.save(fields, "new-secret")).toBe(true);
 		expect(request).toHaveBeenCalledWith("/settings/embedding", {
 			method: "PUT",
@@ -92,8 +134,10 @@ describe("embedding settings", () => {
 	});
 
 	it("validates URLs, model, dimensions and replacement before any request", async () => {
-		const request = vi.fn();
+		const request = vi.fn().mockResolvedValue(saved);
 		const model = new EmbeddingModel({ request });
+		await model.load();
+		request.mockClear();
 		for (const base_url of [
 			"bad",
 			"javascript:alert(1)",
@@ -118,8 +162,10 @@ describe("embedding settings", () => {
 		};
 		const request = vi
 			.fn()
+			.mockResolvedValueOnce(saved)
 			.mockResolvedValueOnce({ ...result, api_key: "leak", upstream_error: "leak" });
 		const model = new EmbeddingModel({ request });
+		await model.load();
 		await model.test(fields, "test-secret");
 		expect(request).toHaveBeenCalledWith("/settings/embedding/test", {
 			method: "POST",
@@ -173,13 +219,18 @@ describe("embedding settings", () => {
 
 	it("locks writes during save/test, and disposal prevents late updates", async () => {
 		let finish: (value: unknown) => void = () => {};
-		const request = vi.fn().mockImplementation(
-			() =>
-				new Promise((resolve) => {
-					finish = resolve;
-				}),
-		);
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(saved)
+			.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						finish = resolve;
+					}),
+			);
 		const model = new EmbeddingModel({ request });
+		await model.load();
+		request.mockClear();
 		const pending = model.test(fields);
 		expect(await model.save(fields)).toBe(false);
 		await model.test(fields);

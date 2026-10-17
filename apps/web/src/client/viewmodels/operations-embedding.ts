@@ -20,6 +20,7 @@ export interface EmbeddingTestResult {
 interface EmbeddingState {
 	config: EmbeddingConfig;
 	loading: boolean;
+	loaded: boolean;
 	pending: boolean;
 	error: string | null;
 	testResult: EmbeddingTestResult | null;
@@ -88,6 +89,7 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 				api_key_suffix: null,
 			},
 			loading: false,
+			loaded: false,
 			pending: false,
 			error: null,
 			testResult: null,
@@ -100,7 +102,7 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 		try {
 			const config = await this.api.request<EmbeddingConfig>("/settings/embedding");
 			if (this.alive && revision === this.revision)
-				this.set({ config: readable(config), loading: false });
+				this.set({ config: readable(config), loading: false, loaded: true });
 		} catch {
 			if (this.alive && revision === this.revision)
 				this.set({ loading: false, error: "Unable to load embedding settings." });
@@ -148,7 +150,7 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 	}
 
 	private prepare(fields: EmbeddingFields, secret?: string | null): boolean {
-		if (!this.alive || this.state.pending) return false;
+		if (!this.alive || !this.state.loaded || this.state.pending) return false;
 		if (!valid(fields, secret)) {
 			this.set({
 				error:
