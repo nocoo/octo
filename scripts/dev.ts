@@ -13,7 +13,7 @@ export type Spawned = { exited: Promise<number>; kill: () => void };
 export type DevSpawn = (cmd: string[], cwd: string) => Spawned;
 
 export function wranglerSidecarArgs(port = DEV_WORKER_PORT): string[] {
-	return ["dev", `--${"local"}`, "--port", String(port)];
+	return ["dev", `--${"local"}`, "--port", String(port), "--var", "RESOURCE_ENV:development"];
 }
 
 export function viteArgs(port = DEV_VITE_PORT): string[] {

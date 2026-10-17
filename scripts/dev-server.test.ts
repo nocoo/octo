@@ -7,6 +7,17 @@ describe("dev-server", () => {
 		const spawn = vi.fn(() => ({ exited: Promise.resolve(0) }));
 		expect(await runDevServer("/tmp", spawn, prepare, 37059)).toBe(0);
 		expect(prepare).toHaveBeenCalledWith("/tmp");
-		expect(spawn).toHaveBeenCalled();
+		expect(spawn).toHaveBeenCalledWith(
+			[
+				"/tmp/node_modules/.bin/wrangler",
+				"dev",
+				"--local",
+				"--port",
+				"37059",
+				"--var",
+				"RESOURCE_ENV:development",
+			],
+			"/tmp",
+		);
 	});
 });
