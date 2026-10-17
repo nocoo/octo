@@ -1,32 +1,29 @@
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
-import { FormData as ClientFormData, type Dispatcher, request } from "undici";
-
-function multipartBody(form: FormData): ClientFormData {
-	const body = new ClientFormData();
-	for (const [name, value] of form) body.append(name, value);
-	return body;
-}
+import { type Dispatcher, request } from "undici";
 
 export async function e2eFetch(url: string | URL, init?: RequestInit): Promise<Response> {
 	try {
+		if (init?.body instanceof FormData) {
+			return await fetch(url, init);
+		}
 		const method = (init?.method ?? "GET") as Dispatcher.HttpMethod;
 		const upload =
-			init?.body instanceof FormData
-				? multipartBody(init.body)
-				: init?.body instanceof ReadableStream
-					? Readable.fromWeb(init.body as unknown as NodeReadableStream<Uint8Array>)
-					: init?.body;
+			init?.body instanceof ReadableStream
+				? Readable.fromWeb(init.body as unknown as NodeReadableStream<Uint8Array>)
+				: init?.body;
+		const headers = Object.fromEntries(new Headers(init?.headers));
+		headers.connection = "close";
 		const result = await request(url, {
 			method,
-			headers: Object.fromEntries(new Headers(init?.headers)),
+			headers,
 			body: (upload ?? null) as Exclude<Dispatcher.DispatchOptions["body"], undefined>,
 			signal: init?.signal ?? null,
 		});
-		const headers = new Headers();
+		const responseHeaders = new Headers();
 		for (const [name, value] of Object.entries(result.headers)) {
 			if (value === undefined) continue;
-			for (const item of Array.isArray(value) ? value : [value]) headers.append(name, item);
+			for (const item of Array.isArray(value) ? value : [value]) responseHeaders.append(name, item);
 		}
 		const bodyless = method === "HEAD" || [204, 205, 304].includes(result.statusCode);
 		if (bodyless) result.body.resume();
@@ -34,7 +31,7 @@ export async function e2eFetch(url: string | URL, init?: RequestInit): Promise<R
 			bodyless ? null : (Readable.toWeb(result.body) as unknown as ReadableStream),
 			{
 				status: result.statusCode,
-				headers,
+				headers: responseHeaders,
 			},
 		);
 	} catch (cause) {
