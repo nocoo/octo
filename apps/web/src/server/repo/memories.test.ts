@@ -149,7 +149,7 @@ describe("MemoryRepo", () => {
 			op: "create",
 			now: 1,
 		});
-		const trashed = await repo.trash("m1", "key:k1", 5);
+		const trashed = await repo.trash("m1", "key:k1", 5, { version: 1, spaceId: "s1" });
 		expect(trashed.deleted_at).toBe(5);
 		const live = await repo.list({
 			filters: {},
@@ -182,7 +182,9 @@ describe("MemoryRepo", () => {
 		});
 		expect(restored.deleted_at).toBeNull();
 		expect(restored.version).toBe(2);
-		await expect(repo.trash("missing", "key:k1", 7)).rejects.toMatchObject({ code: "not_found" });
+		await expect(
+			repo.trash("missing", "key:k1", 7, { version: 1, spaceId: "s1" }),
+		).rejects.toMatchObject({ code: "not_found" });
 	});
 
 	it("filters list by space, tags, type, time, importance, and cursor", async () => {
@@ -334,7 +336,7 @@ describe("MemoryRepo", () => {
 				now: 20,
 			}),
 		);
-		await repo.trash("b", "key:k2", 30);
+		await repo.trash("b", "key:k2", 30, { version: 1, spaceId: "s2" });
 		const both = await repo.list({
 			filters: {},
 			visible: { kind: "all" },
@@ -425,7 +427,7 @@ describe("MemoryRepo", () => {
 		await expect(
 			repo.write(writeInput({ id: "gone", op: "update", expectedVersion: 1 })),
 		).rejects.toMatchObject({ code: "not_found" });
-		await repo.trash("m1", "key:k1", 2);
+		await repo.trash("m1", "key:k1", 2, { version: 1, spaceId: "s1" });
 		await expect(
 			repo.write(writeInput({ id: "m1", op: "update", expectedVersion: 1, now: 3 })),
 		).rejects.toMatchObject({ code: "not_found" });
@@ -443,7 +445,7 @@ describe("MemoryRepo", () => {
 			.run();
 		await expect(
 			repo.write(writeInput({ id: "m2", op: "update", expectedVersion: 1, now: 11 })),
-		).rejects.toMatchObject({ code: "version_conflict" });
+		).rejects.toThrow("UNIQUE constraint failed");
 		await expect(
 			repo.write(writeInput({ id: "m2", op: "update", expectedVersion: 1, now: 10 })),
 		).rejects.toThrow();

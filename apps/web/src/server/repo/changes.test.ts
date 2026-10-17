@@ -39,7 +39,7 @@ describe("ChangeRepo", () => {
 			op: "create",
 			now: 2,
 		});
-		await memories.trash("m1", "key:k", 3);
+		await memories.trash("m1", "key:k", 3, { version: 1, spaceId: "s1" });
 		const repo = new ChangeRepo(db);
 		expect(await repo.head({ kind: "all" })).toBeGreaterThan(0);
 		const page = await repo.list({ kind: "all" }, { limit: 1 });

@@ -194,11 +194,7 @@ export class MemoryRepo {
 			results = await this.db.batch(stmts);
 		} catch (err) {
 			const current = await this.get(input.id);
-			if (
-				current &&
-				input.expectedVersion != null &&
-				(current.version !== input.expectedVersion || current.updated_at !== input.now)
-			) {
+			if (current && input.expectedVersion != null && current.version !== input.expectedVersion) {
 				throw new ApiError(
 					"version_conflict",
 					`memory ${input.id} is at version ${current.version}, expected ${input.expectedVersion}`,
@@ -225,26 +221,37 @@ export class MemoryRepo {
 		return row;
 	}
 
-	async trash(id: string, actor: string, now: number): Promise<MemoryRecord> {
+	async trash(
+		id: string,
+		actor: string,
+		now: number,
+		expected: { version: number; spaceId: string },
+	): Promise<MemoryRecord> {
 		const results = await this.db.batch([
 			this.db
 				.prepare(
-					"UPDATE memories SET deleted_at = ?, deleted_by = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
+					"UPDATE memories SET deleted_at = ?, deleted_by = ?, updated_at = ? WHERE id = ? AND version = ? AND space_id = ? AND deleted_at IS NULL",
 				)
-				.bind(now, actor, now, id),
+				.bind(now, actor, now, id, expected.version, expected.spaceId),
 			this.db
 				.prepare(
-					"DELETE FROM memories_fts WHERE rowid IN (SELECT map.fts_rowid FROM memories_fts_map map INNER JOIN memories m ON m.id = map.memory_id WHERE m.id = ? AND m.deleted_at IS NOT NULL)",
-				)
-				.bind(id),
-			this.db
-				.prepare(
-					"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', id, space_id, 'trashed', version, ?, ? FROM memories WHERE id = ? AND deleted_at IS NOT NULL",
+					"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', id, space_id, 'trashed', version, ?, ? FROM memories WHERE id = ? AND changes() > 0",
 				)
 				.bind(actor, now, id),
+			this.db
+				.prepare(
+					"DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?) AND changes() > 0",
+				)
+				.bind(id),
 		]);
 		if (firstChanges(results[0]) === 0) {
-			throw new ApiError("not_found", "not found");
+			const current = await this.get(id);
+			if (!current || current.deleted_at != null) {
+				throw new ApiError("not_found", "not found");
+			}
+			throw new ApiError("version_conflict", "memory changed before trash", {
+				current_version: current.version,
+			});
 		}
 		const row = await this.get(id);
 		if (!row) {
@@ -439,8 +446,17 @@ export class MemoryRepo {
 	}
 
 	private vectorStmts(input: MemoryWrite, version: number, hash: string): D1PreparedStatement[] {
+		const pending = ["restore", "move", "rollback"].includes(input.op)
+			? [
+					this.db
+						.prepare(
+							"UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ? AND EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)",
+						)
+						.bind(input.id, input.id, version, input.now),
+				]
+			: [];
 		if (input.vector === undefined) {
-			return [];
+			return pending;
 		}
 		if (input.vector === null) {
 			return [
@@ -453,6 +469,7 @@ export class MemoryRepo {
 		}
 		const vector = input.vector;
 		return [
+			...pending,
 			this.db
 				.prepare(
 					`INSERT INTO memory_vectors (memory_id, profile_id, embedding_model, dim, vector, content_hash, indexed_at, updated_at)

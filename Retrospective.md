@@ -163,6 +163,10 @@ The first M4 remediation authorized the final content SELECT but fetched tags af
 The production fail-closed vector factory also exposed missing explicit development mode in both local startup paths. Startup tests now assert the actual shared Wrangler arguments rather than relying on manually constructed test environments.
 
 Future search changes must trace every returned field through its read snapshot, derive all scores/counts from the same final candidate set, and verify environment selection through the real startup entrypoints.
+## M2 draft transition atomicity failures
+
+Trash updated by ID alone after authorization and emitted duplicate events when the state transition changed no row. It now binds the authorized version and space, and SQLite `changes()` gates the immediately following event and FTS deletion in the same batch. Ordinary batch failures were also mislabeled as conflicts by comparing timestamps; only a changed version establishes that conflict. Retained vectors now become pending on restore, move, and rollback so the M4 integration can rebuild derived metadata without losing the stored vector.
+
 ## M2 draft authorization and rollback failures
 
 The draft checked the current memory but not the historical destination on rollback, and single trashed reads omitted delete authorization. Auto-own-space creation also ran before checking write capability. Rollback caught TagRepo failures as if they were malformed snapshots and silently cleared tags; alias filters confused canonical deduplication with missing names. Regression tests now verify authorization before side effects, unchanged persisted state on rejected rollback, and alias-aware filtering. Keep parsing catches separate from storage calls and authorize every destination, not only the initially loaded resource.

@@ -343,7 +343,10 @@ export class MemoryService {
 
 	async remove(authz: Authz, id: string): Promise<{ trashed_at: string }> {
 		const current = await this.loadVisible(authz, id, "delete", false);
-		const row = await this.memories.trash(current.id, authz.actor, this.now());
+		const row = await this.memories.trash(current.id, authz.actor, this.now(), {
+			version: current.version,
+			spaceId: current.space_id,
+		});
 		return { trashed_at: iso(row.deleted_at) ?? new Date(this.now()).toISOString() };
 	}
 
