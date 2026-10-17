@@ -16,7 +16,7 @@ async function masterKey(secret: string | undefined): Promise<CryptoKey> {
 	if (!secret) throw settingsUnavailable();
 	const binary = atob(secret);
 	if (binary.length !== 32 || btoa(binary) !== secret) throw settingsUnavailable();
-	const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+	const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
 	return crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 

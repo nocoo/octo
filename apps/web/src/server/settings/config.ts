@@ -78,14 +78,14 @@ export async function readEmbeddingState(env: Env): Promise<EmbeddingState> {
 		profile,
 		rows,
 		snapshot: JSON.stringify(
-			rows.map((r) => [
-				r.key,
-				r.value,
-				r.ciphertext_hex,
-				r.iv_hex,
-				r.key_version,
-				r.updated_by,
-				r.updated_at,
+			rows.map((row) => [
+				row.key,
+				row.value,
+				row.ciphertext_hex,
+				row.iv_hex,
+				row.key_version,
+				row.updated_by,
+				row.updated_at,
 			]),
 		),
 		settings: {
@@ -98,10 +98,10 @@ export async function readEmbeddingState(env: Env): Promise<EmbeddingState> {
 }
 
 async function storedApiKey(env: Env, state: EmbeddingState): Promise<string | null> {
-	const row = state.rows.find((r) => r.key === "embedding.api_key");
+	const row = state.rows.find((setting) => setting.key === "embedding.api_key");
 	if (!row) return null;
 	const bytes = (hex: string) =>
-		Uint8Array.from(hex.match(/../g) ?? [], (v) => Number.parseInt(v, 16));
+		Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16));
 	return decryptApiKey(env.OCTO_SETTINGS_KEY, {
 		ciphertext: bytes(row.ciphertext_hex),
 		iv: bytes(row.iv_hex),

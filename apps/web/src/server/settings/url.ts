@@ -6,17 +6,17 @@ function publicHost(host: string): boolean {
 		return /^\[[23][0-9a-f]{3}:/.test(host) && !host.startsWith("[2002:");
 	}
 	if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-		const [a = 0, b = 0] = host.split(".").map(Number);
+		const [firstOctet = 0, secondOctet = 0] = host.split(".").map(Number);
 		return !(
-			a === 0 ||
-			a === 10 ||
-			a === 127 ||
-			a >= 224 ||
-			(a === 100 && b >= 64 && b <= 127) ||
-			(a === 169 && b === 254) ||
-			(a === 172 && b >= 16 && b <= 31) ||
-			(a === 192 && (b === 168 || b === 0)) ||
-			(a === 198 && (b === 18 || b === 19))
+			firstOctet === 0 ||
+			firstOctet === 10 ||
+			firstOctet === 127 ||
+			firstOctet >= 224 ||
+			(firstOctet === 100 && secondOctet >= 64 && secondOctet <= 127) ||
+			(firstOctet === 169 && secondOctet === 254) ||
+			(firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) ||
+			(firstOctet === 192 && (secondOctet === 168 || secondOctet === 0)) ||
+			(firstOctet === 198 && (secondOctet === 18 || secondOctet === 19))
 		);
 	}
 	return (
@@ -29,7 +29,9 @@ export function validateEmbeddingUrl(value: string, mode: string | undefined): s
 	try {
 		if (
 			/[\s\\?#]/.test(value) ||
-			[...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
+			[...value].some(
+				(character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+			)
 		)
 			throw new Error();
 		const url = new URL(value);

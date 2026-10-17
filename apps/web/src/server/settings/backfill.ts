@@ -24,7 +24,7 @@ export async function backfillMemory(env: Env, memoryId: string): Promise<boolea
 		const config = await configFromState(env, state);
 		if (!config) return false;
 		const memory = await env.DB.prepare(
-			`SELECT m.id, m.title, m.body, m.version, m.content_hash, v.content_hash AS vector_hash, v.embedding_model AS vector_model, v.dim AS vector_dim FROM memories m LEFT JOIN memory_vectors v ON v.memory_id = m.id AND v.profile_id = ? WHERE m.id = ? AND m.deleted_at IS NULL`,
+			`SELECT memory.id, memory.title, memory.body, memory.version, memory.content_hash, vector.content_hash AS vector_hash, vector.embedding_model AS vector_model, vector.dim AS vector_dim FROM memories memory LEFT JOIN memory_vectors vector ON vector.memory_id = memory.id AND vector.profile_id = ? WHERE memory.id = ? AND memory.deleted_at IS NULL`,
 		)
 			.bind(config.profileId, memoryId)
 			.first<ObservedMemory>();
@@ -42,8 +42,8 @@ export async function backfillMemory(env: Env, memoryId: string): Promise<boolea
 		const blob = vectorBlobFromValues(vectors.flat(), config.dims);
 		const result =
 			await env.DB.prepare(`INSERT INTO memory_vectors (memory_id, profile_id, embedding_model, dim, vector, content_hash, indexed_at, updated_at)
-			SELECT m.id, ?, ?, ?, ?, m.content_hash, NULL, ? FROM memories m
-			WHERE m.id = ? AND m.content_hash = ? AND m.version = ? AND m.deleted_at IS NULL
+			SELECT memory.id, ?, ?, ?, ?, memory.content_hash, NULL, ? FROM memories memory
+			WHERE memory.id = ? AND memory.content_hash = ? AND memory.version = ? AND memory.deleted_at IS NULL
 			AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
 			AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND model = ? AND dims = ? AND active = 1)
 			AND ${SETTINGS_SNAPSHOT_SQL} = ?
