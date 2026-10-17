@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { root } from "../../scripts/e2e";
 import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
+const pepper = "change-me-api-key-pepper";
 
 function e2eD1(): D1Exec {
 	const persist = process.env.OCTO_PERSIST;
@@ -20,27 +22,24 @@ function d1(sql: string): void {
 	exec(["--command", sql]);
 }
 
-function inject(id: string, over: Record<string, unknown> = {}): Record<string, string> {
-	return {
-		Authorization: `Bearer octo_${id}_x`,
-		"X-Octo-Test-Key": JSON.stringify({
-			id,
-			name: id,
-			ops: "r,w,u,d",
-			scope: "all",
-			space_ids_json: "[]",
-			own_entries_only: 0,
-			auto_own_space: 0,
-			expires_at: null,
-			revoked_at: null,
-			...over,
-		}),
-	};
+async function mint(over: {
+	ops?: string;
+	scope?: string;
+	space_ids_json?: string;
+	role?: string;
+}): Promise<Record<string, string>> {
+	const material = generateApiKeyMaterial();
+	const secretHash = await hashSecret(pepper, material.secret);
+	const now = Date.now();
+	const ops = over.ops ?? "r,w,u,d";
+	const scope = over.scope ?? "all";
+	const spaceIds = over.space_ids_json ?? "[]";
+	const role = over.role ?? "admin";
+	d1(
+		`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', 'e2e-${material.keyid}', '${secretHash}', '${role}', '${ops}', '${scope}', '${spaceIds}', 0, 0, NULL, ${now}, ${now})`,
+	);
+	return { Authorization: `Bearer ${material.plaintext}` };
 }
-
-const adminId = "dddddddddddd";
-const scopedId = "eeeeeeeeeeee";
-const writeId = "ffffffffff01";
 
 describe("spaces api", () => {
 	it("lists and gets only visible spaces", async () => {
@@ -57,9 +56,13 @@ describe("spaces api", () => {
 		const anon = await fetch(`${base}/api/v1/spaces`);
 		expect(anon.status).toBe(401);
 
-		const listed = await fetch(`${base}/api/v1/spaces`, {
-			headers: inject(scopedId, { ops: "r", scope: "spaces", space_ids_json: '["sp-vis"]' }),
+		const scoped = await mint({
+			ops: "r",
+			scope: "spaces",
+			space_ids_json: '["sp-vis"]',
+			role: "project",
 		});
+		const listed = await fetch(`${base}/api/v1/spaces`, { headers: scoped });
 		expect(listed.status).toBe(200);
 		const body = (await listed.json()) as {
 			items: Array<{ slug: string; memory_count: number; created_at: string }>;
@@ -70,27 +73,26 @@ describe("spaces api", () => {
 		expect(body.items[0]?.memory_count).toBe(1);
 		expect(body.items[0]?.created_at).toMatch(/Z$/);
 
-		const one = await fetch(`${base}/api/v1/spaces/visible-room`, {
-			headers: inject(scopedId, { ops: "r", scope: "spaces", space_ids_json: '["sp-vis"]' }),
-		});
+		const one = await fetch(`${base}/api/v1/spaces/visible-room`, { headers: scoped });
 		expect(one.status).toBe(200);
 		const detail = (await one.json()) as { slug: string; created_at: string };
 		expect(detail.slug).toBe("visible-room");
 		expect(detail.created_at).toMatch(/Z$/);
 
-		const writeDenied = await fetch(`${base}/api/v1/spaces/visible-room`, {
-			headers: inject(writeId, { ops: "w", scope: "spaces", space_ids_json: '["sp-vis"]' }),
+		const writeOnly = await mint({
+			ops: "w",
+			scope: "spaces",
+			space_ids_json: '["sp-vis"]',
+			role: "project",
 		});
+		const writeDenied = await fetch(`${base}/api/v1/spaces/visible-room`, { headers: writeOnly });
 		expect(writeDenied.status).toBe(403);
 
-		const hidden = await fetch(`${base}/api/v1/spaces/hidden-room`, {
-			headers: inject(scopedId, { ops: "r", scope: "spaces", space_ids_json: '["sp-vis"]' }),
-		});
+		const hidden = await fetch(`${base}/api/v1/spaces/hidden-room`, { headers: scoped });
 		expect(hidden.status).toBe(404);
 
-		const adminList = await fetch(`${base}/api/v1/spaces`, {
-			headers: inject(adminId),
-		});
+		const admin = await mint({});
+		const adminList = await fetch(`${base}/api/v1/spaces`, { headers: admin });
 		expect(adminList.status).toBe(200);
 		const all = (await adminList.json()) as { items: Array<{ slug: string }> };
 		const slugs = all.items.map((s) => s.slug);

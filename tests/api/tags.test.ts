@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { root } from "../../scripts/e2e";
 import { assertTestMarker, createD1Exec, type D1Exec } from "../../scripts/local-d1";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
+const pepper = "change-me-api-key-pepper";
 
 function e2eD1(): D1Exec {
 	const persist = process.env.OCTO_PERSIST;
@@ -26,28 +28,27 @@ function rows<T>(stdout: string): T[] {
 	return parsed[0]?.results ?? [];
 }
 
-function inject(id: string, over: Record<string, unknown> = {}): Record<string, string> {
+async function mint(over: {
+	ops?: string;
+	scope?: string;
+	space_ids_json?: string;
+	role?: string;
+}): Promise<{ token: string; headers: Record<string, string> }> {
+	const material = generateApiKeyMaterial();
+	const secretHash = await hashSecret(pepper, material.secret);
+	const now = Date.now();
+	const ops = over.ops ?? "r,w,u,d";
+	const scope = over.scope ?? "all";
+	const spaceIds = over.space_ids_json ?? "[]";
+	const role = over.role ?? "admin";
+	d1(
+		`INSERT INTO api_keys (id, name, secret_hash, role, ops, scope, space_ids_json, own_entries_only, auto_own_space, expires_at, created_at, updated_at) VALUES ('${material.keyid}', 'e2e-${material.keyid}', '${secretHash}', '${role}', '${ops}', '${scope}', '${spaceIds}', 0, 0, NULL, ${now}, ${now})`,
+	);
 	return {
-		Authorization: `Bearer octo_${id}_x`,
-		"X-Octo-Test-Key": JSON.stringify({
-			id,
-			name: id,
-			ops: "r,w,u,d",
-			scope: "all",
-			space_ids_json: "[]",
-			own_entries_only: 0,
-			auto_own_space: 0,
-			expires_at: null,
-			revoked_at: null,
-			...over,
-		}),
+		token: material.plaintext,
+		headers: { Authorization: `Bearer ${material.plaintext}` },
 	};
 }
-
-const adminId = "aaaaaaaaaaaa";
-const readerId = "bbbbbbbbbbbb";
-const dropId = "cccccccccccc";
-const scopedId = "ffffffffffff";
 
 describe("tags api", () => {
 	it("covers list, rename, merge, auth, and d1 effects", async () => {
@@ -75,14 +76,17 @@ describe("tags api", () => {
 		const anon = await fetch(`${base}/api/v1/tags`);
 		expect(anon.status).toBe(401);
 
-		const drop = await fetch(`${base}/api/v1/tags`, {
-			headers: inject(dropId, { ops: "w" }),
-		});
-		expect(drop.status).toBe(403);
+		const drop = await mint({ ops: "w" });
+		const dropRes = await fetch(`${base}/api/v1/tags`, { headers: drop.headers });
+		expect(dropRes.status).toBe(403);
 
-		const listed = await fetch(`${base}/api/v1/tags`, {
-			headers: inject(readerId, { ops: "r", scope: "spaces", space_ids_json: '["sp1"]' }),
+		const reader = await mint({
+			ops: "r",
+			scope: "spaces",
+			space_ids_json: '["sp1"]',
+			role: "project",
 		});
+		const listed = await fetch(`${base}/api/v1/tags`, { headers: reader.headers });
 		expect(listed.status).toBe(200);
 		const listBody = (await listed.json()) as {
 			items: Array<{ name: string; use_count: number }>;
@@ -92,29 +96,33 @@ describe("tags api", () => {
 		const alpha = listBody.items.find((t) => t.name === "alpha");
 		expect(alpha?.use_count).toBe(1);
 
+		const readerAll = await mint({ ops: "r", scope: "all" });
 		const readerRename = await fetch(`${base}/api/v1/tags/alpha/rename`, {
 			method: "POST",
-			headers: {
-				...inject(readerId, { ops: "r", scope: "all" }),
-				"content-type": "application/json",
-			},
+			headers: { ...readerAll.headers, "content-type": "application/json" },
 			body: JSON.stringify({ new_name: "gamma" }),
 		});
 		expect(readerRename.status).toBe(403);
 
+		const scoped = await mint({
+			ops: "u",
+			scope: "spaces",
+			space_ids_json: '["sp1"]',
+			role: "project",
+		});
 		const scopedMerge = await fetch(`${base}/api/v1/tags/alpha/merge`, {
 			method: "POST",
-			headers: {
-				...inject(scopedId, { ops: "u", scope: "spaces", space_ids_json: '["sp1"]' }),
-				"content-type": "application/json",
-			},
+			headers: { ...scoped.headers, "content-type": "application/json" },
 			body: JSON.stringify({ into: "beta" }),
 		});
 		expect(scopedMerge.status).toBe(403);
 
+		const admin = await mint({});
+		const jsonHeaders = { ...admin.headers, "content-type": "application/json" };
+
 		const conflict = await fetch(`${base}/api/v1/tags/alpha/rename`, {
 			method: "POST",
-			headers: { ...inject(adminId), "content-type": "application/json" },
+			headers: jsonHeaders,
 			body: JSON.stringify({ new_name: "beta" }),
 		});
 		expect(conflict.status).toBe(409);
@@ -124,21 +132,21 @@ describe("tags api", () => {
 
 		const missing = await fetch(`${base}/api/v1/tags/nope/merge`, {
 			method: "POST",
-			headers: { ...inject(adminId), "content-type": "application/json" },
+			headers: jsonHeaders,
 			body: JSON.stringify({ into: "beta" }),
 		});
 		expect(missing.status).toBe(404);
 
 		const selfMerge = await fetch(`${base}/api/v1/tags/alpha/merge`, {
 			method: "POST",
-			headers: { ...inject(adminId), "content-type": "application/json" },
+			headers: jsonHeaders,
 			body: JSON.stringify({ into: "alpha" }),
 		});
 		expect(selfMerge.status).toBe(400);
 
 		const renamed = await fetch(`${base}/api/v1/tags/alpha/rename`, {
 			method: "POST",
-			headers: { ...inject(adminId), "content-type": "application/json" },
+			headers: jsonHeaders,
 			body: JSON.stringify({ new_name: "gamma" }),
 		});
 		expect(renamed.status).toBe(200);
@@ -148,7 +156,7 @@ describe("tags api", () => {
 
 		const merged = await fetch(`${base}/api/v1/tags/gamma/merge`, {
 			method: "POST",
-			headers: { ...inject(adminId), "content-type": "application/json" },
+			headers: jsonHeaders,
 			body: JSON.stringify({ into: "beta" }),
 		});
 		expect(merged.status).toBe(200);
