@@ -199,16 +199,18 @@ describe("MemoryService", () => {
 				"UPDATE memory_versions SET tags_json = 'nope' WHERE memory_id = 'mid1' AND version = 1",
 			)
 			.run();
-		const rolled = await svc.rollback(admin, "mid1", 1, "1");
-		expect(rolled.tags).toEqual([]);
+		await expect(svc.rollback(admin, "mid1", 1, "1")).rejects.toMatchObject({
+			code: "unprocessable",
+		});
 		await db
 			.prepare(
 				"INSERT INTO memory_versions (memory_id, version, title, body, type, importance, tags_json, event_time, space_id, actor, op, rollback_of, created_at) VALUES ('mid1', 9, 't', 'b', 'note', 0.5, '{}', NULL, 's1', 'key:K1', 'update', NULL, 1)",
 			)
 			.run();
-		const rolledObj = await svc.rollback(admin, "mid1", 9, String(rolled.version));
-		expect(rolledObj.tags).toEqual([]);
-		const same = await svc.patch(admin, "mid1", { space: "kb-bot" }, String(rolledObj.version));
+		await expect(svc.rollback(admin, "mid1", 9, "1")).rejects.toMatchObject({
+			code: "unprocessable",
+		});
+		const same = await svc.patch(admin, "mid1", { space: "kb-bot" }, "1");
 		expect(same.space).toBe("kb-bot");
 		await expect(svc.restore(admin, "mid1")).rejects.toMatchObject({ code: "not_found" });
 		await expect(svc.getVersion(admin, "mid1", 99)).rejects.toMatchObject({ code: "not_found" });

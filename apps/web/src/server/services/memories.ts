@@ -165,6 +165,13 @@ export class MemoryService {
 
 	async create(authz: Authz, input: MemoryCreate): Promise<Record<string, unknown>> {
 		if (authz.principal.autoOwnSpace) {
+			if (!authz.principal.ops.has("w")) {
+				const target = await this.memories.spaceBySlug(input.space);
+				if (target) {
+					authz.denyUnless("write", { spaceId: target.id });
+				}
+				throw new ApiError("forbidden", "forbidden");
+			}
 			const own = await ensureAutoOwnSpace(
 				this.db,
 				{
@@ -207,6 +214,9 @@ export class MemoryService {
 
 	async get(authz: Authz, id: string, include: Set<string>): Promise<Record<string, unknown>> {
 		const row = await this.loadVisible(authz, id, "read", include.has("trashed"));
+		if (include.has("trashed")) {
+			authz.denyUnless("delete", { spaceId: row.space_id, sourceKeyId: row.source_key_id });
+		}
 		const tags = (await this.memories.tagNamesByMemory([row.id])).get(row.id) ?? [];
 		const extra: Record<string, unknown> = {};
 		if (include.has("versions_count")) {
@@ -403,15 +413,23 @@ export class MemoryService {
 		if (!snapshot) {
 			throw new ApiError("unprocessable", "version does not exist");
 		}
-		let tags: Array<{ id: string; name: string; display_name: string; merged_into: string | null }>;
-		try {
-			const names: unknown = JSON.parse(snapshot.tags_json);
-			tags = Array.isArray(names)
-				? await this.tags.resolveMany(names.filter((item) => typeof item === "string"))
-				: [];
-		} catch {
-			tags = [];
+		if (snapshot.space_id !== current.space_id) {
+			authz.denyUnless("move", {
+				spaceId: current.space_id,
+				destSpaceId: snapshot.space_id,
+				sourceKeyId: current.source_key_id,
+			});
 		}
+		let names: unknown;
+		try {
+			names = JSON.parse(snapshot.tags_json);
+		} catch {
+			throw new ApiError("unprocessable", "invalid version tags");
+		}
+		if (!Array.isArray(names) || !names.every((item) => typeof item === "string")) {
+			throw new ApiError("unprocessable", "invalid version tags");
+		}
+		const tags = await this.tags.resolveMany(names);
 		const row = await this.memories.write({
 			id: current.id,
 			spaceId: snapshot.space_id,
@@ -530,10 +548,12 @@ export class MemoryService {
 			}
 		}
 		const resolved: string[] = [];
+		let missing = false;
 		const seenIds = new Set<string>();
 		for (const name of unique) {
 			const row = await this.tags.getByName(name);
 			if (!row) {
+				missing = true;
 				continue;
 			}
 			const canonical = await this.tags.follow(row);
@@ -542,7 +562,7 @@ export class MemoryService {
 				resolved.push(canonical.id);
 			}
 		}
-		if (all && resolved.length !== unique.length) {
+		if (all && missing) {
 			return [];
 		}
 		return resolved;
