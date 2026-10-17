@@ -562,8 +562,17 @@ export class MemoryService {
 	): Promise<
 		Array<{ id: string; name: string; display_name: string; merged_into: string | null }>
 	> {
-		const names = (await this.memories.tagNamesByMemory([memoryId])).get(memoryId) ?? [];
-		return this.tags.resolveMany(names);
+		const resolved = new Map<
+			string,
+			{ id: string; name: string; display_name: string; merged_into: string | null }
+		>();
+		for (const id of await this.memories.tagIdsByMemory(memoryId)) {
+			const row = await this.tags.getById(id);
+			if (!row) throw new ApiError("tag_conflict", "memory tags changed");
+			const canonical = await this.tags.follow(row);
+			resolved.set(canonical.id, canonical);
+		}
+		return [...resolved.values()].sort((left, right) => left.name.localeCompare(right.name));
 	}
 
 	private async filterSpaceIds(

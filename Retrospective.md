@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Resolving retained tags by name recreated renamed tags
+
+The first commit-time tag guard covered changes after resolution, but MAX review found an earlier window: current associations were read as names, a rename committed, and create-or-get resolution created a second tag under the old name. Omitted-tag writes now retain association IDs, reload/follow those identities and never create tags from their names. A SQL-boundary regression performs the rename after the association SELECT and proves the original tag remains attached under its new name. Restore follows merged identities, missing identities fail closed, and pending IDs are visible only while their owning INSERT remains staged.
+
 ## 2026-10-17 — Auto-owned spaces were an untracked write side effect
 
 Reading the M6 preparation contract after staging memory and tags exposed one remaining immediate write: first-use space creation. A rejected first memory could leave an empty owned space. The HTTP service now prepares that space in the same statement sink and uses its anticipated slug/ID for the memory plan. Its request-local pending space is reusable only while its insert remains staged, so failed batch-item checkpoints cannot retain a nonexistent resource. A red/green real-auth test verifies rejected-input cleanup and a single successful batch containing the first space and memory.

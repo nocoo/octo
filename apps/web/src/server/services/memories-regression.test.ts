@@ -47,6 +47,52 @@ async function state(db: D1Database) {
 }
 
 describe("memory permission and rollback regressions", () => {
+	it("restores canonical tag identities and rejects disappeared associations", async () => {
+		const { db, tags, service, admin, id } = await boot();
+		await service.remove(admin, id);
+		await tags.resolveMany(["target"]);
+		await db.batch((await tags.merge("old", "target", admin.actor)).statements);
+		expect(await service.restore(admin, id)).toMatchObject({ tags: ["target"] });
+		const before = await state(db);
+		vi.spyOn(tags, "getById").mockResolvedValueOnce(null);
+		await expect(service.patch(admin, id, { title: "rejected" }, "2")).rejects.toMatchObject({
+			code: "tag_conflict",
+		});
+		expect(await state(db)).toEqual(before);
+	});
+	it("preserves tag identity when a rename follows reading current associations", async () => {
+		const { db, tags, service, admin, id } = await boot();
+		const prepare = db.prepare.bind(db);
+		let renamed = false;
+		vi.spyOn(db, "prepare").mockImplementation((sql) => {
+			const statement = prepare(sql);
+			if (sql.startsWith("SELECT") && sql.includes("FROM memory_tags")) {
+				const bind = statement.bind.bind(statement);
+				vi.spyOn(statement, "bind").mockImplementation((...args) => {
+					const bound = bind(...args);
+					const all = bound.all.bind(bound);
+					vi.spyOn(bound, "all").mockImplementationOnce(async () => {
+						const rows = await all();
+						if (!renamed) {
+							renamed = true;
+							await db.batch((await tags.rename("old", "renamed", admin.actor)).statements);
+						}
+						return rows;
+					});
+					return bound;
+				});
+			}
+			return statement;
+		});
+		expect(await service.patch(admin, id, { title: "changed" }, "1")).toMatchObject({
+			tags: ["renamed"],
+			version: 2,
+		});
+		expect(renamed).toBe(true);
+		expect((await db.prepare("SELECT name FROM tags").all()).results).toEqual([
+			{ name: "renamed" },
+		]);
+	});
 	it.each(["get", "list"])(
 		"does not return %s secondary fields from a newly hidden memory",
 		async (operation) => {

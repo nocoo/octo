@@ -61,6 +61,9 @@ export class TagRepo {
 	}
 
 	async getById(id: string): Promise<TagRow | null> {
+		for (const entry of this.pending.values()) {
+			if (entry.row.id === id && this.statements?.includes(entry.statement)) return entry.row;
+		}
 		return this.db.prepare("SELECT * FROM tags WHERE id = ?").bind(id).first<TagRow>();
 	}
 

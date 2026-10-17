@@ -154,6 +154,14 @@ export class MemoryRepo {
 		return map;
 	}
 
+	async tagIdsByMemory(id: string): Promise<string[]> {
+		const { results } = await this.db
+			.prepare("SELECT tag_id FROM memory_tags WHERE memory_id = ? ORDER BY tag_id")
+			.bind(id)
+			.all<{ tag_id: string }>();
+		return results.map((row) => row.tag_id);
+	}
+
 	async versionsCount(id: string): Promise<number> {
 		const row = await this.db
 			.prepare("SELECT COUNT(*) AS n FROM memory_versions WHERE memory_id = ?")

@@ -9,10 +9,12 @@ describe("staged tag resolution", () => {
 		const tags = new TagRepo(db, undefined, undefined, statements);
 		const first = await tags.resolveMany(["Alpha", "alpha"]);
 		expect(first).toHaveLength(1);
+		expect(await tags.getById(first[0]?.id ?? "")).toEqual(first[0]);
 		expect(await tags.resolveMany(["alpha"])).toEqual(first);
 		expect(statements).toHaveLength(1);
 		expect((await db.prepare("SELECT * FROM tags").all()).results).toEqual([]);
 		statements.length = 0;
+		expect(await tags.getById(first[0]?.id ?? "")).toBeNull();
 		const second = await tags.resolveMany(["alpha"]);
 		expect(second[0]?.id).not.toBe(first[0]?.id);
 		await db.batch(statements);
