@@ -265,8 +265,6 @@ export function SearchPage() {
 										<MemoryLink memoryId={item.id} memoryTitle={item.title}>
 											<strong>{item.title}</strong>
 										</MemoryLink>
-										<Badge variant="outline">{item.space}</Badge>
-										<Badge variant="secondary">{memoryTypeLabels[item.type] ?? "未知类型"}</Badge>
 									</LayerCard.Header>
 									<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 										{item.snippet !== undefined && (
@@ -283,8 +281,11 @@ export function SearchPage() {
 												gridTemplateColumns:
 													"repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
 												alignItems: "center",
+												overflowWrap: "anywhere",
 											}}
 										>
+											<Badge variant="outline">{item.space}</Badge>
+											<Badge variant="secondary">{memoryTypeLabels[item.type] ?? "未知类型"}</Badge>
 											{item.tags.map((tag) => (
 												<Badge key={tag} variant="outline">
 													{tag}

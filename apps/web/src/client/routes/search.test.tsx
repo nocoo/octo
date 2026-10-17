@@ -107,6 +107,38 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 	expect(renderResult()).toContain("向量：无匹配");
 });
 
+it("keeps long space metadata out of the result title row", () => {
+	const title = "知识工作台：检索与协作";
+	const space = "l3-b6f3628a23074d3d9304fad55d45f36b";
+	overrides.state = {
+		result: {
+			items: [
+				{
+					id: "m1",
+					title,
+					space,
+					type: "note",
+					tags: ["field-notes"],
+					updated_at: "2026-10-18T00:00:00Z",
+					scores: { fused: 1, fts: null, vector: null },
+				},
+			],
+			channels: { fts: { candidates: 1, partial: false }, vector: {} },
+		} satisfies SearchResult,
+	};
+	const html = renderResult();
+	const header = html.match(/<div\b[^>]*data-slot="card-header"[^>]*>([\s\S]*?)<\/div>/)?.[1];
+	expect(header).toContain(`<strong>${title}</strong>`);
+	expect(header).not.toContain(space);
+	expect(header).not.toContain("笔记");
+	const body = html.slice(html.indexOf('data-slot="card-body"'));
+	expect(body).toContain(space);
+	expect(body).toContain("笔记");
+	expect(body).toContain("field-notes");
+	expect(body).toContain("repeat(auto-fit, minmax(min(100%, 8rem), max-content))");
+	expect(body).toContain("overflow-wrap:anywhere");
+});
+
 it("distinguishes successful zero matches from unavailable results", () => {
 	overrides.state = {
 		result: { items: [], channels: { fts: { candidates: 0, partial: false }, vector: {} } },
