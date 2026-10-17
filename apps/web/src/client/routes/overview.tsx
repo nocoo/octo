@@ -3,6 +3,11 @@ import { AreaChart } from "@nocoo/basalt/charts/area";
 import { type ChartSeriesDescriptor, getChartColor } from "@nocoo/basalt/charts/config";
 import { HeatmapCalendar } from "@nocoo/basalt/charts/heatmap-calendar";
 import { Banner } from "@nocoo/basalt/components/banner";
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@nocoo/basalt/components/collapsible";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
@@ -129,10 +134,10 @@ export function OverviewPage() {
 						) : (
 							<p className="octo-muted">调用记录会显示在这里。</p>
 						)}
-						<details>
-							<summary>查看活动数据表</summary>
-							{table}
-						</details>
+						<Collapsible>
+							<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
+							<CollapsibleContent unstyled>{table}</CollapsibleContent>
+						</Collapsible>
 					</LayerCard.Body>
 				</LayerCard>
 				<LayerCard>
