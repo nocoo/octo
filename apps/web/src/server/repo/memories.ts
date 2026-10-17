@@ -117,6 +117,23 @@ export class MemoryRepo {
 		return this.db.prepare(`${SELECT_MEMORY} WHERE m.id = ?`).bind(id).first<MemoryRecord>();
 	}
 
+	async unchangedIds(rows: MemoryRecord[]): Promise<Set<string>> {
+		if (rows.length === 0) return new Set();
+		const snapshots = rows.map(({ id, space_id, version, deleted_at }) => ({
+			id,
+			space_id,
+			version,
+			deleted_at,
+		}));
+		const { results } = await this.db
+			.prepare(
+				"SELECT m.id FROM memories m JOIN json_each(?) snapshot ON m.id = json_extract(snapshot.value, '$.id') WHERE m.space_id = json_extract(snapshot.value, '$.space_id') AND m.version = json_extract(snapshot.value, '$.version') AND m.deleted_at IS json_extract(snapshot.value, '$.deleted_at')",
+			)
+			.bind(JSON.stringify(snapshots))
+			.all<{ id: string }>();
+		return new Set(results.map((row) => row.id));
+	}
+
 	async tagNamesByMemory(ids: string[]): Promise<Map<string, string[]>> {
 		const map = new Map<string, string[]>();
 		if (ids.length === 0) {

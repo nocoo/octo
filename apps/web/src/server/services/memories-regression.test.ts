@@ -47,6 +47,28 @@ async function state(db: D1Database) {
 }
 
 describe("memory permission and rollback regressions", () => {
+	it.each(["get", "list"])(
+		"does not return %s secondary fields from a newly hidden memory",
+		async (operation) => {
+			const { db, service, admin, id } = await boot();
+			const repo = new MemoryRepo(db);
+			const tags = repo.tagNamesByMemory.bind(repo);
+			vi.spyOn(repo, "tagNamesByMemory").mockImplementationOnce(async (ids) => {
+				await service.patch(admin, id, { space: "b", tags: ["hidden-tag"] }, "1");
+				return tags(ids);
+			});
+			const restricted = new MemoryService(db, undefined, undefined, undefined, repo);
+			const authz = key({ scope: "spaces", spaceIds: ["a"] });
+			if (operation === "get")
+				await expect(restricted.get(authz, id, new Set())).rejects.toMatchObject({
+					code: "not_found",
+				});
+			else
+				expect(
+					(await restricted.list(authz, { filters: {}, include: new Set(), limit: 50 })).items,
+				).toEqual([]);
+		},
+	);
 	it("applies delete ownership to include=trashed without hiding live reads", async () => {
 		const { service, admin, id } = await boot();
 		const reader = key({ id: "other", ownEntriesOnly: true });

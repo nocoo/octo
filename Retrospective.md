@@ -2,6 +2,10 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## 2026-10-17 — Secondary memory fields mixed visibility snapshots
+
+Extending the history-race investigation reproduced hidden tags leaking through GET and list after a memory moved between the initial authorized row read and the tag query. Before serialization, both paths now revalidate IDs against the originally read space, version and deletion state in one bounded JSON-parameter query. Moved entries are rejected or omitted, so separately loaded tags, attachments and vector status cannot accompany an obsolete authorization snapshot. The regression interleaves a real move and retag operation rather than mocking a successful authorization result.
+
 ## 2026-10-17 — Saved memory responses bypassed current authorization
 
 The generic idempotency middleware returned saved memory bodies before M2 handlers could apply current M1 scope and operation checks. Red tests reproduced successful replay after permission withdrawal, scope removal and a move to a hidden space. Memory write authorization now runs before replay lookup and again before returning a saved outcome, including looking up a created response's current memory. It checks move/rollback destinations without reapplying the old OCC token and preserves authorized DELETE/restore replay. The first implementation changed the established auto-own-space name-collision error; focused API tests caught it and the read-only precheck now preserves that contract. Authentication is not sufficient authorization for a cached resource response. A later patch context mismatch also showed why chained patch-and-commit commands must stop on the patch exit status.

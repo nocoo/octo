@@ -242,6 +242,8 @@ export class MemoryService {
 		if (include.has("vector_status")) {
 			extra.vector_status = await this.memories.vectorStatus(row.id, row.content_hash);
 		}
+		if (!(await this.memories.unchangedIds([row])).has(row.id))
+			throw new ApiError("not_found", "not found");
 		return publicMemory(row, tags, extra);
 	}
 
@@ -285,8 +287,11 @@ export class MemoryService {
 			limit: opts.limit,
 		});
 		const tagMap = await this.memories.tagNamesByMemory(listed.items.map((item) => item.id));
+		const unchanged = await this.memories.unchangedIds(listed.items);
 		return {
-			items: listed.items.map((item) => publicMemory(item, tagMap.get(item.id) ?? [])),
+			items: listed.items
+				.filter((item) => unchanged.has(item.id))
+				.map((item) => publicMemory(item, tagMap.get(item.id) ?? [])),
 			next_cursor: listed.next_cursor,
 		};
 	}
