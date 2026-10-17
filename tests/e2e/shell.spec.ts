@@ -75,16 +75,36 @@ for (const colorScheme of ["light", "dark"] as const) {
 		await expect(link).toBeVisible();
 		const colors = await link.evaluate((element) => {
 			const actual = getComputedStyle(element).color;
+			const background = getComputedStyle(element).backgroundColor;
 			const token = getComputedStyle(element).getPropertyValue("--basalt-primary-foreground");
 			const probe = document.createElement("span");
 			probe.style.color = "hsl(var(--basalt-primary-foreground))";
 			element.appendChild(probe);
 			const expected = getComputedStyle(probe).color;
 			probe.remove();
-			return { actual, expected, token };
+			const luminance = (color: string) => {
+				const channels =
+					color
+						.match(/[\d.]+/g)
+						?.slice(0, 3)
+						.map(Number) ?? [];
+				if (channels.length !== 3) throw new Error("Expected computed RGB color");
+				return channels.reduce((total, channel, index) => {
+					const value = channel / 255;
+					const linear = value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+					return total + linear * ([0.2126, 0.7152, 0.0722][index] ?? 0);
+				}, 0);
+			};
+			const foregroundLuminance = luminance(actual);
+			const backgroundLuminance = luminance(background);
+			const contrast =
+				(Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+				(Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+			return { actual, expected, token, contrast };
 		});
 		expect(colors.token.trim()).not.toBe("");
 		expect(colors.actual).toBe(colors.expected);
+		expect(colors.contrast).toBeGreaterThanOrEqual(4.5);
 	});
 	for (const reducedMotion of ["no-preference", "reduce"] as const) {
 		test(`${colorScheme} theme with motion ${reducedMotion}`, async ({ page, admin }, info) => {
