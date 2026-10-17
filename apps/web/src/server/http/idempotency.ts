@@ -26,8 +26,10 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 			if (c.res.status < 400 && writes.length > 0) {
 				try {
 					await c.env.DB.batch(writes);
-				} catch {
-					throw new ApiError("unavailable", "write transaction failed");
+				} catch (err) {
+					throw (
+						c.get("writeError")?.(err) ?? new ApiError("unavailable", "write transaction failed")
+					);
 				}
 			}
 			return;
@@ -54,7 +56,7 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 				body,
 				c.res.status < 400 ? writes : [],
 			);
-		} catch {
+		} catch (commitError) {
 			try {
 				const outcome = await readIdempotencyResponse(c.env.DB, keyId, key, hash);
 				if (outcome) {
@@ -64,7 +66,10 @@ export function idempotencyMiddleware(): MiddlewareHandler<{ Bindings: Env; Vari
 			} catch (err) {
 				if (err instanceof ApiError) throw err;
 			}
-			throw new ApiError("unavailable", "write transaction unavailable; retry with the same key");
+			throw (
+				c.get("writeError")?.(commitError) ??
+				new ApiError("unavailable", "write transaction unavailable; retry with the same key")
+			);
 		}
 	};
 }

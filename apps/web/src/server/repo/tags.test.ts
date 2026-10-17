@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../lib/errors";
 import { asD1, FakeD1 } from "./__tests__/fake-d1";
+import { commitTagWrite } from "./__tests__/tag-write";
 import { normalizeTag, TagRepo, tagDisplayName } from "./tags";
 
 describe("normalizeTag", () => {
@@ -172,23 +173,27 @@ describe("TagRepo", () => {
 			updated_at: 1,
 		});
 		const repo = new TagRepo(asD1(db), () => 50);
-		await expect(repo.rename("missing", "n", "key:1")).rejects.toBeInstanceOf(ApiError);
+		await expect(
+			commitTagWrite(asD1(db), repo.rename("missing", "n", "key:1")),
+		).rejects.toBeInstanceOf(ApiError);
 		try {
-			await repo.rename("old", "taken", "key:1");
+			await commitTagWrite(asD1(db), repo.rename("old", "taken", "key:1"));
 			throw new Error("expected conflict");
 		} catch (err) {
 			expect(err).toBeInstanceOf(ApiError);
 			expect((err as ApiError).code).toBe("tag_conflict");
 			expect((err as ApiError).details).toEqual({ suggest: "merge", into: "taken" });
 		}
-		const renamed = await repo.rename("old", "New", "key:1");
+		const renamed = await commitTagWrite(asD1(db), repo.rename("old", "New", "key:1"));
 		expect(renamed.name).toBe("new");
 		expect(renamed.display_name).toBe("New");
 		expect(db.changes).toHaveLength(1);
-		const same = await repo.rename("new", "NEW", "key:1");
+		const same = await commitTagWrite(asD1(db), repo.rename("new", "NEW", "key:1"));
 		expect(same.id).toBe("a");
 		db.hiddenNames.add("taken");
-		await expect(repo.rename("new", "taken", "key:1")).rejects.toMatchObject({
+		await expect(
+			commitTagWrite(asD1(db), repo.rename("new", "taken", "key:1")),
+		).rejects.toMatchObject({
 			code: "tag_conflict",
 		});
 	});
@@ -219,7 +224,7 @@ describe("TagRepo", () => {
 			{ memory_id: "m2", tag_id: "a" },
 		);
 		const repo = new TagRepo(asD1(db), () => 9);
-		const result = await repo.merge("from", "into", "key:1");
+		const result = await commitTagWrite(asD1(db), repo.merge("from", "into", "key:1"));
 		expect(result.memories).toBe(2);
 		expect(db.tags.get("a")?.merged_into).toBe("b");
 		expect(db.memoryTags).toEqual([
@@ -227,10 +232,14 @@ describe("TagRepo", () => {
 			{ memory_id: "m2", tag_id: "b" },
 		]);
 		expect(db.changes).toHaveLength(2);
-		await expect(repo.merge("into", "into", "key:1")).rejects.toMatchObject({
+		await expect(
+			commitTagWrite(asD1(db), repo.merge("into", "into", "key:1")),
+		).rejects.toMatchObject({
 			code: "validation_failed",
 		});
-		await expect(repo.merge("missing", "into", "key:1")).rejects.toMatchObject({
+		await expect(
+			commitTagWrite(asD1(db), repo.merge("missing", "into", "key:1")),
+		).rejects.toMatchObject({
 			code: "not_found",
 		});
 		expect(db.fts.get("m1")).toContain("into");
@@ -244,7 +253,9 @@ describe("TagRepo", () => {
 			created_at: 1,
 			updated_at: 1,
 		});
-		await expect(repo.merge("other", "into", "key:1")).rejects.toMatchObject({
+		await expect(
+			commitTagWrite(asD1(db), repo.merge("other", "into", "key:1")),
+		).rejects.toMatchObject({
 			code: "unprocessable",
 		});
 	});
@@ -306,8 +317,12 @@ describe("TagRepo", () => {
 		boom.batch = async () => {
 			throw new Error("boom");
 		};
-		await expect(new TagRepo(boom, () => 1).rename("old", "new", "key:1")).rejects.toThrow("boom");
-		await expect(new TagRepo(boom, () => 1).merge("old", "into", "key:1")).rejects.toThrow("boom");
+		await expect(
+			commitTagWrite(boom, new TagRepo(boom, () => 1).rename("old", "new", "key:1")),
+		).rejects.toThrow("boom");
+		await expect(
+			commitTagWrite(boom, new TagRepo(boom, () => 1).merge("old", "into", "key:1")),
+		).rejects.toThrow("boom");
 	});
 
 	it("throws when insert does not become readable", async () => {

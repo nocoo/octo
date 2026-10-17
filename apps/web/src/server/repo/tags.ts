@@ -40,6 +40,12 @@ export type TagCount = {
 	use_count: number;
 };
 
+export type TagWrite<T> = {
+	statements: D1PreparedStatement[];
+	value: T;
+	mapError: (error: unknown) => ApiError | undefined;
+};
+
 export class TagRepo {
 	constructor(
 		private readonly db: D1Database,
@@ -134,7 +140,7 @@ export class TagRepo {
 		return tags.map((tag) => ({ ...tag, use_count: map.get(tag.id) ?? 0 }));
 	}
 
-	async rename(fromRaw: string, toRaw: string, actor: string): Promise<TagRow> {
+	async rename(fromRaw: string, toRaw: string, actor: string): Promise<TagWrite<TagRow>> {
 		const fromName = normalizeTag(fromRaw);
 		const toName = normalizeTag(toRaw);
 		const toDisplay = tagDisplayName(toRaw);
@@ -150,8 +156,9 @@ export class TagRepo {
 			});
 		}
 		const ts = this.now();
-		try {
-			await this.db.batch([
+		return {
+			statements: [
+				this.guardTag(from),
 				this.db
 					.prepare("UPDATE tags SET name = ?, display_name = ?, updated_at = ? WHERE id = ?")
 					.bind(toName, toDisplay, ts, from.id),
@@ -161,24 +168,24 @@ export class TagRepo {
 					)
 					.bind(from.id, actor, ts),
 				...this.ftsRebuildStmts(from.id),
-			]);
-		} catch (err) {
-			if (isUniqueConstraint(err, "tags")) {
-				throw new ApiError("tag_conflict", "tag name already exists", {
-					suggest: "merge",
-					into: toName,
-				});
-			}
-			throw err;
-		}
-		return { ...from, name: toName, display_name: toDisplay, updated_at: ts };
+			],
+			value: { ...from, name: toName, display_name: toDisplay, updated_at: ts },
+			mapError: (err) =>
+				isUniqueConstraint(err, "tags") ||
+				String(err).includes("NOT NULL constraint failed: tags.display_name")
+					? new ApiError("tag_conflict", "tag name already exists", {
+							suggest: "merge",
+							into: toName,
+						})
+					: undefined,
+		};
 	}
 
 	async merge(
 		fromRaw: string,
 		intoRaw: string,
 		actor: string,
-	): Promise<{ from: TagRow; into: TagRow; memories: number }> {
+	): Promise<TagWrite<{ from: TagRow; into: TagRow; memories: number }>> {
 		const fromRow = await this.getByName(normalizeTag(fromRaw));
 		const intoRow = await this.getByName(normalizeTag(intoRaw));
 		if (!fromRow || !intoRow) {
@@ -189,14 +196,28 @@ export class TagRepo {
 		if (from.id === into.id) {
 			throw new ApiError("validation_failed", "cannot merge a tag into itself");
 		}
+		const affected = await this.db
+			.prepare(
+				"SELECT COUNT(*) AS n FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?",
+			)
+			.bind(from.id)
+			.first<{ n: number }>();
+		const memories = Number(affected?.n ?? 0);
 		const ts = this.now();
 		const changeInsert = this.db
 			.prepare(
 				"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', mt.memory_id, m.space_id, 'tag_merged', NULL, ?, ? FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?",
 			)
 			.bind(actor, ts, from.id);
-		try {
-			const results = await this.db.batch([
+		return {
+			statements: [
+				this.guardTag(from),
+				this.guardTag(into),
+				this.db
+					.prepare(
+						"INSERT INTO tags (id, name, display_name, merged_into, created_at, updated_at) SELECT id, name, display_name, merged_into, created_at, updated_at FROM tags WHERE id = ? AND ? != (SELECT COUNT(*) FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?)",
+					)
+					.bind(from.id, memories, from.id),
 				this.db
 					.prepare(
 						"UPDATE tags SET merged_into = ?, updated_at = ? WHERE id = ? AND merged_into IS NULL AND EXISTS (SELECT 1 FROM tags t WHERE t.id = ? AND t.merged_into IS NULL)",
@@ -217,15 +238,24 @@ export class TagRepo {
 					.prepare("UPDATE memory_tags SET tag_id = ? WHERE tag_id = ?")
 					.bind(into.id, from.id),
 				...this.ftsRebuildStmts(into.id, from.id),
-			]);
-			const written = results[2] as { meta?: { changes?: number } } | undefined;
-			return { from, into, memories: Number(written?.meta?.changes ?? 0) };
-		} catch (err) {
-			if (String(err).includes("UNIQUE constraint") || String(err).includes("stale_tag_merge")) {
-				throw new ApiError("unprocessable", "tag merge is stale");
-			}
-			throw err;
-		}
+			],
+			value: { from, into, memories },
+			mapError: (err) =>
+				String(err).includes("UNIQUE constraint") ||
+				String(err).includes("stale_tag_merge") ||
+				String(err).includes("NOT NULL constraint failed: tags.display_name")
+					? new ApiError("unprocessable", "tag merge is stale")
+					: undefined,
+		};
+	}
+
+	private guardTag(row: TagRow): D1PreparedStatement {
+		// A stale snapshot deliberately violates NOT NULL to abort the entire HTTP transaction.
+		return this.db
+			.prepare(
+				"INSERT INTO tags (id, name, display_name, created_at, updated_at) SELECT ?, '', NULL, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM tags WHERE id = ? AND name = ? AND display_name = ? AND merged_into IS ? AND updated_at = ?)",
+			)
+			.bind(row.id, row.id, row.name, row.display_name, row.merged_into, row.updated_at);
 	}
 
 	private ftsRebuildStmts(...tagIds: string[]): D1PreparedStatement[] {

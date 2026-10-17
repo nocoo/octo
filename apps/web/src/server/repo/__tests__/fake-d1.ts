@@ -121,6 +121,35 @@ export class FakeD1 {
 			}
 			return [];
 		}
+		if (sql.includes("SELECT ?, '', NULL, 0, 0 WHERE NOT EXISTS")) {
+			const [, id, name, display, merged, updated] = binds;
+			const row = this.tags.get(String(id));
+			if (
+				!row ||
+				row.name !== name ||
+				row.display_name !== display ||
+				row.merged_into !== merged ||
+				row.updated_at !== updated
+			)
+				throw new Error("NOT NULL constraint failed: tags.display_name");
+			return [];
+		}
+		if (sql.includes("SELECT COUNT(*) AS n FROM memory_tags mt")) {
+			return [
+				{
+					n: this.memoryTags.filter(
+						(link) => link.tag_id === binds[0] && this.memories.has(link.memory_id),
+					).length,
+				},
+			];
+		}
+		if (sql.includes("INSERT INTO tags") && sql.includes("SELECT COUNT(*)")) {
+			const n = this.memoryTags.filter(
+				(link) => link.tag_id === binds[2] && this.memories.has(link.memory_id),
+			).length;
+			if (n !== Number(binds[1])) throw new Error("UNIQUE constraint failed: tags.id");
+			return [];
+		}
 		if (sql.includes("INSERT INTO tags") && sql.includes("AND NOT EXISTS")) {
 			const fromId = String(binds[0]);
 			const intoId = String(binds[2]);

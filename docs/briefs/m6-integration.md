@@ -33,6 +33,28 @@ M2 integration must satisfy all of these before route mounting:
 5. Prove the above with M2's real D1 invariants and concurrent mutations. The
    simplified test service is not evidence that M2 integration is complete.
 
+## M3 tag writes
+
+M3 tags/spaces remain mounted in production. `TagRepo.rename` and `merge` now
+return a `TagWrite` plan, never execute it. Routes stage its statements and
+register its transaction-error mapping with the HTTP middleware. Tag changes,
+links, mapped-rowid FTS rebuilds and replay chunks commit in one D1 batch.
+Standalone repository tests explicitly execute the same plan; there is no
+immediate-write fallback in production.
+
+Tag snapshots are checked inside the committing transaction. Merge additionally
+guards the anticipated affected-memory count, so a concurrent membership change
+cannot commit an inaccurate stored response. A stale rename returns 409
+`tag_conflict`; a stale merge returns 422 `unprocessable`, with no partial
+business writes or saved outcome. The client may submit a fresh request after
+reconciling the concurrent change. No automatic retry is used. Ordinary M3
+validation/conflict/auth envelopes and real M1 authorization are unchanged.
+
+`TagRepo.resolveMany` remains the existing M3 immediate create-or-get helper.
+M2 must not call it to mutate persistent tags while preparing an HTTP write;
+its integration still needs staged tag creation together with all other memory
+SQL, rather than reintroducing an out-of-transaction side effect.
+
 ## Idempotency outcomes and recovery
 
 One D1 `batch()` inserts the unique `(key_id, idem_key)` completed record first,

@@ -29,12 +29,14 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			throw new ApiError("forbidden", "forbidden");
 		}
 		const body = parseStrict(renameSchema, await readJson(c.req.raw));
-		const tag = await new TagRepo(c.env.DB).rename(
+		const write = await new TagRepo(c.env.DB).rename(
 			c.req.param("name"),
 			body.new_name,
 			`key:${key.id}`,
 		);
-		return jsonOk(serializeTag(tag));
+		c.get("writeStatements").push(...write.statements);
+		c.set("writeError", write.mapError);
+		return jsonOk(serializeTag(write.value));
 	});
 
 	app.post("/:name/merge", async (c) => {
@@ -44,11 +46,14 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 			throw new ApiError("forbidden", "forbidden");
 		}
 		const body = parseStrict(mergeSchema, await readJson(c.req.raw));
-		const result = await new TagRepo(c.env.DB).merge(
+		const write = await new TagRepo(c.env.DB).merge(
 			c.req.param("name"),
 			body.into,
 			`key:${key.id}`,
 		);
+		c.get("writeStatements").push(...write.statements);
+		c.set("writeError", write.mapError);
+		const result = write.value;
 		return jsonOk({
 			from: serializeTag(result.from),
 			into: serializeTag(result.into),

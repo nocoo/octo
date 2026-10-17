@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TagRepo } from "../tags";
 import { migratedSqlite } from "./sqlite-d1";
+import { commitTagWrite } from "./tag-write";
 
 function seedPair(
 	raw: ReturnType<typeof migratedSqlite>["raw"],
@@ -40,12 +41,12 @@ describe("TagRepo on real sqlite", () => {
 		const { raw, d1 } = migratedSqlite();
 		seedPair(raw, { from: "from", into: "into", memFrom: "ta" });
 		const repo = new TagRepo(d1, () => 9);
-		await repo.merge("from", "into", "key:1");
+		await commitTagWrite(d1, repo.merge("from", "into", "key:1"));
 		expect(
 			raw.prepare("SELECT merged_into FROM tags WHERE id = 'ta'").get() as { merged_into: string },
 		).toEqual({ merged_into: "tb" });
 		repo.follow = async (row) => row;
-		await expect(repo.merge("into", "from", "key:1")).rejects.toMatchObject({
+		await expect(commitTagWrite(d1, repo.merge("into", "from", "key:1"))).rejects.toMatchObject({
 			code: "unprocessable",
 		});
 		expect(
@@ -81,7 +82,7 @@ describe("TagRepo on real sqlite", () => {
 			.prepare("SELECT fts_rowid FROM memories_fts_map WHERE memory_id = 'm1'")
 			.get() as { fts_rowid: number };
 		const repo = new TagRepo(d1, () => 20);
-		await repo.rename("alpha", "gamma", "key:1");
+		await commitTagWrite(d1, repo.rename("alpha", "gamma", "key:1"));
 		expect(ftsHits(raw, "gamma")).toEqual(["m1"]);
 		expect(ftsHits(raw, "alpha")).toEqual([]);
 		expect(
@@ -91,7 +92,7 @@ describe("TagRepo on real sqlite", () => {
 				}
 			).fts_rowid,
 		).toBe(mapped.fts_rowid);
-		await repo.rename("gamma", "delta", "key:1");
+		await commitTagWrite(d1, repo.rename("gamma", "delta", "key:1"));
 		expect(ftsHits(raw, "delta")).toEqual(["m1"]);
 		expect(ftsHits(raw, "gamma")).toEqual([]);
 		expect(ftsRowCount(raw)).toBe(1);
@@ -120,11 +121,14 @@ describe("TagRepo on real sqlite", () => {
 		d1.batch = async (stmts) => {
 			if (!nested) {
 				nested = true;
-				await repo.merge("gamma", "alpha", "key:1");
+				await commitTagWrite(d1, repo.merge("gamma", "alpha", "key:1"));
 			}
 			return origBatch(stmts);
 		};
-		await repo.merge("alpha", "beta", "key:1");
+		await expect(commitTagWrite(d1, repo.merge("alpha", "beta", "key:1"))).rejects.toMatchObject({
+			code: "unprocessable",
+		});
+		await commitTagWrite(d1, repo.merge("alpha", "beta", "key:1"));
 		expect(ftsHits(raw, "beta").sort()).toEqual(["m1", "m2"]);
 		expect(ftsHits(raw, "alpha")).toEqual([]);
 		expect(ftsHits(raw, "gamma")).toEqual([]);
@@ -144,13 +148,13 @@ describe("TagRepo on real sqlite", () => {
 			INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1', 'ta'), ('m2', 'ta');
 		`);
 		const repo = new TagRepo(d1, () => 40);
-		await repo.merge("alpha", "beta", "key:1");
+		await commitTagWrite(d1, repo.merge("alpha", "beta", "key:1"));
 		expect(ftsHits(raw, "beta").sort()).toEqual(["m1", "m2"]);
 		expect(ftsHits(raw, "alpha")).toEqual([]);
 		raw.close();
 	});
 
-	it("counts only this merge from batch meta.changes", async () => {
+	it("counts only the guarded merge plan", async () => {
 		const { raw, d1 } = migratedSqlite();
 		raw.exec(`
 			INSERT INTO spaces (id, slug, name, description, created_at, updated_at) VALUES ('s1', 's1', 's1', '', 1, 1);
@@ -162,8 +166,8 @@ describe("TagRepo on real sqlite", () => {
 			INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1', 'a'), ('m2', 'c');
 		`);
 		const repo = new TagRepo(d1, () => 50);
-		expect((await repo.merge("a", "b", "key:1")).memories).toBe(1);
-		expect((await repo.merge("c", "d", "key:1")).memories).toBe(1);
+		expect((await commitTagWrite(d1, repo.merge("a", "b", "key:1"))).memories).toBe(1);
+		expect((await commitTagWrite(d1, repo.merge("c", "d", "key:1"))).memories).toBe(1);
 		raw.close();
 	});
 });

@@ -2,6 +2,22 @@
 
 Incident narratives and lessons for octo, newest first.
 
+## M6: replay middleware does not make immediate writes atomic
+
+Rebasing onto M3 preserved its routes but exposed a transaction integration bug:
+tag rename/merge committed before the HTTP-owned replay transaction. Forced
+chunk-storage failure returned 503 after tags, links and FTS had changed. M3
+mutations now prepare SQL, with snapshot/count guards and transaction-error
+mapping; only the HTTP boundary commits it together with the replay outcome.
+Test both keyed and unkeyed production routes with real M1 auth, rollback,
+concurrent requests and lost acknowledgements, not just middleware fixtures.
+
+The first regression seed reused a slug already present in the shared fixture;
+use milestone-specific fixture identities. Another initial assertion assumed
+own_entries_only forbids tag_global, but M1 explicitly checks only all-space
+scope and update permission for that operation. Read the actual authorization
+contract before asserting a new policy, and keep M1 unchanged during integration.
+
 ## M6: synchronous fixture CLI work can stale HTTP sockets
 
 M5's controlled local-Worker probe proved that eight synchronous Wrangler D1
