@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { parse } from "smol-toml";
 import { runIfMain } from "./cli";
 import { collectTsFiles } from "./fs-walk";
 
@@ -9,11 +10,34 @@ export function remoteViolation(text: string): boolean {
 	return text.includes(remoteFlag) || remoteTrue.test(text);
 }
 
+export function valueHasRemoteTrue(value: unknown): boolean {
+	if (Array.isArray(value)) {
+		return value.some(valueHasRemoteTrue);
+	}
+	if (value && typeof value === "object") {
+		const record = value as Record<string, unknown>;
+		if (record.remote === true) {
+			return true;
+		}
+		return Object.values(record).some(valueHasRemoteTrue);
+	}
+	return false;
+}
+
+export function tomlHasRemoteBinding(text: string): boolean {
+	try {
+		return valueHasRemoteTrue(parse(text));
+	} catch {
+		return true;
+	}
+}
+
 export async function scanRemote(files: string[]): Promise<string[]> {
 	const hits: string[] = [];
 	for (const file of files) {
 		const text = await readFile(file, "utf8");
-		if (remoteViolation(text)) {
+		const forbidden = file.endsWith(".toml") ? tomlHasRemoteBinding(text) : remoteViolation(text);
+		if (forbidden) {
 			hits.push(file);
 		}
 	}

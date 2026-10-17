@@ -2,7 +2,14 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { main, remoteViolation, runGateNoRemote, scanRemote } from "./gate-no-remote";
+import {
+	main,
+	remoteViolation,
+	runGateNoRemote,
+	scanRemote,
+	tomlHasRemoteBinding,
+	valueHasRemoteTrue,
+} from "./gate-no-remote";
 
 describe("gate:no-remote", () => {
 	it("detects forbidden tokens built without embedding them here as literals", () => {
@@ -13,6 +20,16 @@ describe("gate:no-remote", () => {
 		expect(remoteViolation(`remote${"=true"}`)).toBe(true);
 		expect(remoteViolation(`remote${"  =  true"}`)).toBe(true);
 		expect(remoteViolation(`remote${":true"}`)).toBe(true);
+		expect(tomlHasRemoteBinding(`[[d1_databases]]\n"remote"${" = true"}\n`)).toBe(true);
+		expect(tomlHasRemoteBinding(`[[d1_databases]]\n'remote'${" = true"}\n`)).toBe(true);
+		expect(
+			tomlHasRemoteBinding(`[env.prod]\n[[env.prod.d1_databases]]\nremote${" = true"}\n`),
+		).toBe(true);
+		expect(tomlHasRemoteBinding(`[[d1_databases]]\nremote${" = false"}\n`)).toBe(false);
+		expect(tomlHasRemoteBinding("name = 'octo'\n")).toBe(false);
+		expect(tomlHasRemoteBinding("not toml {")).toBe(true);
+		expect(valueHasRemoteTrue("x")).toBe(false);
+		expect(valueHasRemoteTrue([{ remote: false }, 1])).toBe(false);
 	});
 
 	it("fails a fixture tree that enables remote mode", async () => {
@@ -25,6 +42,10 @@ describe("gate:no-remote", () => {
 		try {
 			expect(await runGateNoRemote(root)).toBe(0);
 			await writeFile(join(root, "wrangler.toml"), `[[d1_databases]]\nremote${"=true"}\n`);
+			expect(await runGateNoRemote(root)).toBe(1);
+			await writeFile(join(root, "wrangler.toml"), `[[d1_databases]]\n"remote"${" = true"}\n`);
+			expect(await runGateNoRemote(root)).toBe(1);
+			await writeFile(join(root, "wrangler.toml"), `[[d1_databases]]\n'remote'${" = true"}\n`);
 			expect(await runGateNoRemote(root)).toBe(1);
 			await writeFile(join(root, "wrangler.toml"), "name = 'octo'\n");
 			await writeFile(join(root, "scripts", "bad.ts"), `const flag = "${"--"}remote";\n`);

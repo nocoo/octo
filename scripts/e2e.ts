@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureClientAssets, ensureDevVars } from "./ensure-dev-vars";
-import { remoteViolation } from "./gate-no-remote";
+import { tomlHasRemoteBinding } from "./gate-no-remote";
 import { applyMigrations, assertTestMarker, createD1Exec, writeTestMarker } from "./local-d1";
 import { L2_WORKER_PORT } from "./ports";
 
@@ -46,7 +46,7 @@ export function wranglerDevArgs(
 }
 
 export function assertWranglerConfigLocal(toml: string): void {
-	if (remoteViolation(toml)) {
+	if (tomlHasRemoteBinding(toml)) {
 		throw new Error("wrangler config enables remote bindings");
 	}
 }

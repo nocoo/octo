@@ -51,6 +51,12 @@ describe("e2e helpers", () => {
 		expect(() => assertWranglerConfigLocal(`[[d1_databases]]\nremote${"=true"}\n`)).toThrow(
 			"remote",
 		);
+		expect(() => assertWranglerConfigLocal(`[[d1_databases]]\n"remote"${" = true"}\n`)).toThrow(
+			"remote",
+		);
+		expect(() => assertWranglerConfigLocal(`[[d1_databases]]\n'remote'${" = true"}\n`)).toThrow(
+			"remote",
+		);
 	});
 
 	it("waitLive succeeds on d1_marker=test and times out otherwise", async () => {
