@@ -31,7 +31,7 @@ export function miniflareOptions(
 	const config = localConfig.parse(parsed);
 	return {
 		host: "127.0.0.1",
-		port: config.dev.port,
+		port: 0,
 		cf: false,
 		telemetry: { enabled: false },
 		resourcePersistencePath: join(persistTo, "v3"),
@@ -56,7 +56,10 @@ export function miniflareOptions(
 						ASSETS: { type: "worker", worker: "octo-l2-assets" },
 					},
 				},
-				dev: { unsafeRegisterWorker: false },
+				dev: {
+					unsafeRegisterWorker: false,
+					unsafeDirectSockets: [{ host: "127.0.0.1", port: config.dev.port }],
+				},
 			},
 			{
 				config: {

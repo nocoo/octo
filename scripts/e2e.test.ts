@@ -246,7 +246,9 @@ describe("runE2eApi", () => {
 				},
 			}),
 			createRuntime: (options) => {
-				expect(options.port).toBe(18059);
+				expect(options.workers[0]?.dev?.unsafeDirectSockets).toEqual([
+					{ host: "127.0.0.1", port: 18059 },
+				]);
 				expect(options.host).toBe("127.0.0.1");
 				expect(options.resourcePersistencePath).toContain(".wrangler/e2e/");
 				return { ready: Promise.resolve(new URL("http://127.0.0.1:18059")), dispose };

@@ -33,7 +33,7 @@ describe("direct Miniflare runtime", () => {
 			),
 		);
 		try {
-			const response = await fetch(new URL("/dashboard", await runtime.ready));
+			const response = await fetch(new URL("/dashboard", await runtime.unsafeGetDirectURL("octo")));
 			expect(response.status).toBe(200);
 			expect(response.headers.get("X-Test-Worker")).toBe("direct");
 			expect(await response.text()).toContain("<title>octo</title>");
@@ -45,7 +45,7 @@ describe("direct Miniflare runtime", () => {
 	it("maps only local D1, R2, assets and explicit test bindings", () => {
 		const options = miniflareOptions(config, "/run", "export default {}", { RESOURCE_ENV: "test" });
 		expect(options.host).toBe("127.0.0.1");
-		expect(options.port).toBe(17059);
+		expect(options.port).toBe(0);
 		expect(options.cf).toBe(false);
 		expect(options.telemetry).toEqual({ enabled: false });
 		expect(options.resourcePersistencePath).toBe("/run/v3");
@@ -62,7 +62,10 @@ describe("direct Miniflare runtime", () => {
 			directory: "/assets",
 			notFoundHandling: "single-page-application",
 		});
-		expect(worker?.dev).toEqual({ unsafeRegisterWorker: false });
+		expect(worker?.dev).toEqual({
+			unsafeRegisterWorker: false,
+			unsafeDirectSockets: [{ host: "127.0.0.1", port: 17059 }],
+		});
 		expect(worker?.config.manifest?.modules["worker.mjs"]).toEqual({
 			type: "esm",
 			contents: "export default {}",
