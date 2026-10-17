@@ -151,23 +151,17 @@ async function verifyJwt(
 
 type AccessConfig = { iss: string; aud: string; jwksUrl: string };
 
-function accessConfig(env: Env, request: Request): AccessConfig {
+function accessConfig(env: Env): AccessConfig {
 	const mode = resourceEnv(env.RESOURCE_ENV);
-	if (
-		mode === "test" &&
-		isLoopbackHost(requestHostname(request)) &&
-		env.CF_ACCESS_TEAM_DOMAIN &&
-		env.CF_ACCESS_AUD &&
-		env.ACCESS_JWKS_URL
-	) {
+	if (mode === "test") {
+		if (!env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUD || !env.ACCESS_JWKS_URL) {
+			throw new ApiError("internal", "internal error");
+		}
 		return {
 			iss: env.CF_ACCESS_TEAM_DOMAIN,
 			aud: env.CF_ACCESS_AUD,
 			jwksUrl: env.ACCESS_JWKS_URL,
 		};
-	}
-	if (mode === "test" && isLoopbackHost(requestHostname(request))) {
-		throw new ApiError("internal", "internal error");
 	}
 	const iss = ACCESS_TEAM_DOMAIN;
 	return { iss, aud: ACCESS_AUD, jwksUrl: `${iss.replace(/\/$/, "")}/cdn-cgi/access/certs` };
@@ -188,7 +182,7 @@ export async function resolveAccessIdentity(
 	if (!token) {
 		throw unauthenticated();
 	}
-	const cfg = accessConfig(env, request);
+	const cfg = accessConfig(env);
 	const now = nowMs();
 	const headerPart = token.split(".")[0];
 	let kid: string | undefined;

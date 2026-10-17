@@ -261,13 +261,13 @@ describe("resolveAccessIdentity", () => {
 		await resolveAccessIdentity(req, env(testEnv), ttlFetch, () => t);
 	});
 
-	it("ignores test JWKS overrides outside test loopback", async () => {
+	it("uses test JWKS overrides only when RESOURCE_ENV is test", async () => {
 		const headerMissing = b64url(
 			new TextEncoder().encode(JSON.stringify({ alg: "RS256", kid: "k1" })),
 		);
 		await expect(
 			resolveAccessIdentity(
-				new Request("http://127.0.0.1/api/admin/whoami", {
+				new Request("https://octo.hexly.ai/api/admin/whoami", {
 					headers: { "Cf-Access-Jwt-Assertion": `${headerMissing}.e.s` },
 				}),
 				env({ RESOURCE_ENV: "test" }),
