@@ -52,7 +52,7 @@ Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-veri
 |---|---|---|
 | L1 pre-commit | Statements/branches/functions/lines each ≥95%, no skipped/focused tests, strict typecheck, Biome `--error-on-warnings`, on the index snapshot <30s | enforced |
 | L2 API | Direct Miniflare/workerd HTTP over 100% endpoint × method, success/failure/auth, including finite oversize uploads | enforced |
-| L3 UI | Critical dashboard journeys in Chromium on isolated local Worker | CI gate; acceptance pending admin integration |
+| L3 UI | Critical dashboard journeys in Chromium on isolated local Worker | CI gate; real admin integration covered |
 | G2 security | gitleaks over pushed ranges + osv-scanner on `bun.lock` | enforced |
 | D1 isolation | Per-run local persistence and ports, local-mode assertion, `_test_marker env=test` before fixtures/cleanup | enforced |
 
