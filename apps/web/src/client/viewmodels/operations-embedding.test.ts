@@ -19,11 +19,11 @@ describe("embedding settings", () => {
 		expect(request).not.toHaveBeenCalled();
 		await model.load();
 		expect(model.state.loaded).toBe(false);
-		expect(model.state.error).toBe("Unable to load embedding settings.");
+		expect(model.state.error).toBe("无法加载嵌入设置。");
 		expect(await model.save(fields, null)).toBe(false);
 		await model.test(fields);
 		expect(request).toHaveBeenCalledTimes(1);
-		expect(model.state.error).toBe("Unable to load embedding settings.");
+		expect(model.state.error).toBe("无法加载嵌入设置。");
 	});
 
 	it("only marks successful reads loaded and retains stale configuration on refresh failure", async () => {
@@ -42,7 +42,7 @@ describe("embedding settings", () => {
 		await model.load();
 		expect(model.state.loaded).toBe(true);
 		expect(model.state.config).toEqual(config);
-		expect(model.state.error).toBe("Unable to load embedding settings.");
+		expect(model.state.error).toBe("无法加载嵌入设置。");
 	});
 
 	it("shows cleared credentials and ignores disposed read failures", async () => {
@@ -183,7 +183,7 @@ describe("embedding settings", () => {
 		expect(model.state.testResult?.dims_match).toBe(true);
 		request.mockRejectedValueOnce(new Error("test-secret"));
 		await model.test(fields, null);
-		expect(model.state.error).toBe("Unable to test embedding connection.");
+		expect(model.state.error).toBe("无法测试嵌入连接。");
 		expect(model.state.testResult).toBeNull();
 		await model.test({ ...fields, dims: -1 });
 	});
@@ -198,10 +198,10 @@ describe("embedding settings", () => {
 		await model.load();
 		await model.load();
 		expect(model.state.config).toEqual(saved);
-		expect(model.state.error).toBe("Unable to load embedding settings.");
+		expect(model.state.error).toBe("无法加载嵌入设置。");
 		request.mockRejectedValueOnce(new Error("private"));
 		expect(await model.save(fields, "secret")).toBe(false);
-		expect(model.state.error).toBe("Unable to save embedding settings.");
+		expect(model.state.error).toBe("无法保存嵌入设置。");
 		request
 			.mockImplementationOnce(
 				() =>
@@ -254,7 +254,7 @@ describe("embedding profiles settings", () => {
 		await model.load();
 		expect(model.state).toMatchObject({
 			loaded: false,
-			error: "Unable to load embedding profiles.",
+			error: "无法加载嵌入配置。",
 		});
 		await model.load();
 		expect(model.state).toMatchObject({ loaded: true, profiles: [], error: null });
@@ -295,7 +295,7 @@ describe("embedding profiles settings", () => {
 		expect(model.state.profiles).toEqual(items);
 		await model.load();
 		expect(model.state.profiles).toEqual(items);
-		expect(model.state.error).toBe("Unable to load embedding profiles.");
+		expect(model.state.error).toBe("无法加载嵌入配置。");
 		await model.load();
 		expect(model.state).toMatchObject({ profiles: [], error: null, loading: false });
 	});

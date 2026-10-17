@@ -28,13 +28,13 @@ describe("key permissions and lifecycle", () => {
 		const model = new KeysModel({ request });
 		expect(model.state).toMatchObject({ loaded: false });
 		await model.load();
-		expect(model.state).toMatchObject({ loaded: false, error: "Unable to load API keys." });
+		expect(model.state).toMatchObject({ loaded: false, error: "无法加载接口密钥。" });
 		await model.load();
 		await model.load();
 		expect(model.state).toMatchObject({
 			loaded: true,
 			items: [key],
-			error: "Unable to load API keys.",
+			error: "无法加载接口密钥。",
 		});
 		await model.load();
 		expect(model.state).toMatchObject({ loaded: true, items: [], error: null });
@@ -127,7 +127,7 @@ describe("key permissions and lifecycle", () => {
 			return Promise.reject(new Error("private detail"));
 		});
 		await model.load();
-		expect(model.state.error).toBe("Unable to load API keys.");
+		expect(model.state.error).toBe("无法加载接口密钥。");
 		request.mockResolvedValueOnce({ items: [] });
 		await model.load();
 		expect(model.state).toMatchObject({ items: [], error: null, loading: false });
@@ -215,7 +215,7 @@ describe("key permissions and lifecycle", () => {
 		expect(await pending).toBe("once");
 		request.mockRejectedValueOnce(new Error("secret"));
 		expect(await model.revoke("x")).toBe(false);
-		expect(model.state.error).toBe("Unable to change API key.");
+		expect(model.state.error).toBe("无法修改接口密钥。");
 		request.mockRejectedValueOnce(new Error("secret"));
 		expect(await model.rotate("x", 0)).toBeNull();
 	});

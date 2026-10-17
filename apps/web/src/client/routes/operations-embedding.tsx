@@ -11,7 +11,18 @@ import {
 	toast,
 } from "@nocoo/basalt";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
+import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { SectionRule } from "@nocoo/basalt/components/section-rule";
+import {
+	CircleAlert,
+	CircleCheck,
+	PlugZap,
+	RefreshCw,
+	Save,
+	Settings2,
+	Trash2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { APP_VERSION } from "../../lib/version";
@@ -22,6 +33,7 @@ import {
 	type EmbeddingProfile,
 	SettingsModel,
 } from "../viewmodels/operations-embedding";
+import { operationsError } from "../viewmodels/operations-errors";
 import "./operations.css";
 
 export function EmbeddingPage() {
@@ -47,144 +59,172 @@ export function EmbeddingPage() {
 		return value;
 	}
 	return (
-		<div className="ops-page">
+		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="Embedding gateway"
-				description="Access-only query embeddings. Model and dimensions must match the active profile."
+				title="向量模型"
 				actions={
 					<Button
+						icon={<RefreshCw aria-hidden="true" />}
 						variant="outline"
 						onClick={() => void model.load()}
 						disabled={state.loading || state.pending}
 					>
-						Refresh
+						刷新
 					</Button>
 				}
 			/>
-			{state.loading && !state.loaded && <p role="status">Loading gateway settings...</p>}
-			{state.error && <p role="alert">{state.error}</p>}
-			<LayerCard>
-				<LayerCard.Header>Gateway configuration</LayerCard.Header>
-				<LayerCard.Body>
-					{state.loaded ? (
-						<form
-							className="ops-stack"
-							onSubmit={async (event) => {
-								event.preventDefault();
-								if (await model.save(fields, takeSecret()))
-									toast.success("Embedding settings saved.");
-							}}
-						>
-							<Field
-								label="Gateway URL"
-								required
-								hint="OpenAI-compatible base URL; /v1/embeddings is added by the server."
+			{state.loading && !state.loaded && <p role="status">正在加载网关设置……</p>}
+			{state.error && (
+				<p role="alert">
+					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}
+				</p>
+			)}
+			<SectionRule title="网关配置">
+				<LayerCard>
+					<LayerCard.Body>
+						{state.loaded ? (
+							<form
+								onSubmit={async (event) => {
+									event.preventDefault();
+									if (await model.save(fields, takeSecret())) toast.success("嵌入设置已保存。");
+								}}
 							>
-								<Input
-									type="url"
-									value={fields.base_url}
-									onChange={(event) => setFields({ ...fields, base_url: event.target.value })}
-									disabled={state.pending}
-									required
-									autoComplete="off"
-								/>
-							</Field>
-							<div className="ops-fields">
-								<Field label="Model" required>
-									<Input
-										value={fields.model}
-										onChange={(event) => setFields({ ...fields, model: event.target.value })}
-										disabled={state.pending}
+								<Grid columns={1} gap="sm">
+									<Field
+										label="网关地址"
 										required
-									/>
-								</Field>
-								<Field
-									label="Dimensions"
-									required
-									hint="Changing dimensions requires a matching Vectorize profile."
-								>
-									<Input
-										type="number"
-										min={1}
-										max={1536}
-										step={1}
-										value={fields.dims}
-										onChange={(event) => setFields({ ...fields, dims: Number(event.target.value) })}
-										disabled={state.pending}
-										required
-									/>
-								</Field>
-							</div>
-							<div className="ops-row">
-								<p role="status">
-									{state.config.api_key_set ? (
-										<>
-											Configured {"\u2022\u2022\u2022\u2022"}
-											{state.config.api_key_suffix ?? ""}
-										</>
-									) : (
-										"No API key configured"
-									)}
-								</p>
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => setClearing(true)}
-									disabled={!state.config.api_key_set || state.pending}
-								>
-									Clear saved key
-								</Button>
-							</div>
-							<Field
-								label="Replacement API key"
-								hint="Write-only. Left empty keeps the saved key. Cleared after each request; re-enter before saving after a test."
-							>
-								<Input
-									ref={secret}
-									type="password"
-									autoComplete="new-password"
-									passwordManagerIgnore
-									disabled={state.pending}
-								/>
-							</Field>
-							<label className="ops-inline" htmlFor="embedding-backfill">
-								<Switch
-									id="embedding-backfill"
-									checked={fields.backfill_enabled}
-									onCheckedChange={(backfill_enabled) => setFields({ ...fields, backfill_enabled })}
-									disabled={state.pending}
-								/>
-								Backfill missing vectors
-							</label>
-							<p className="ops-muted">
-								Backfill is off by default. When enabled, embedding failures never block memory
-								writes.
-							</p>
-							<div className="ops-actions">
-								<Button
-									type="button"
-									variant="outline"
-									loading={state.pending}
-									onClick={() => void model.test(fields, takeSecret())}
-								>
-									Test connection
-								</Button>
-								<Button type="submit" loading={state.pending}>
-									Save settings
-								</Button>
-							</div>
-						</form>
-					) : (
-						<p role="status">
-							Gateway configuration is unknown. Refresh settings before making changes.
-						</p>
-					)}
-				</LayerCard.Body>
-			</LayerCard>
+										hint="兼容 OpenAI 的服务地址；服务端会追加 /v1/embeddings。"
+									>
+										<Input
+											type="url"
+											value={fields.base_url}
+											onChange={(event) => setFields({ ...fields, base_url: event.target.value })}
+											disabled={state.pending}
+											required
+											autoComplete="off"
+										/>
+									</Field>
+									<Grid
+										columns={2}
+										gap="sm"
+										style={{
+											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 13rem), 1fr))",
+										}}
+									>
+										<Field label="模型" required>
+											<Input
+												value={fields.model}
+												onChange={(event) => setFields({ ...fields, model: event.target.value })}
+												disabled={state.pending}
+												required
+											/>
+										</Field>
+										<Field label="维度" required hint="更改维度需要匹配的 Vectorize 配置。">
+											<Input
+												type="number"
+												min={1}
+												max={1536}
+												step={1}
+												value={fields.dims}
+												onChange={(event) =>
+													setFields({ ...fields, dims: Number(event.target.value) })
+												}
+												disabled={state.pending}
+												required
+											/>
+										</Field>
+									</Grid>
+									<Grid
+										columns={2}
+										gap="sm"
+										style={{
+											gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+											alignItems: "center",
+										}}
+									>
+										<p role="status">
+											{state.config.api_key_set ? (
+												<>
+													已配置 {"\u2022\u2022\u2022\u2022"}
+													{state.config.api_key_suffix ?? ""}
+												</>
+											) : (
+												"尚未配置接口密钥"
+											)}
+										</p>
+										<Button
+											icon={<Trash2 aria-hidden="true" />}
+											type="button"
+											variant="outline"
+											onClick={() => setClearing(true)}
+											disabled={!state.config.api_key_set || state.pending}
+										>
+											清除已保存密钥
+										</Button>
+									</Grid>
+									<Field
+										label="替换密钥"
+										hint="仅写入；留空保留原密钥。每次请求后清空，测试后保存前请重新输入。"
+									>
+										<Input
+											ref={secret}
+											type="password"
+											autoComplete="new-password"
+											passwordManagerIgnore
+											disabled={state.pending}
+										/>
+									</Field>
+									<Field
+										label="回填缺失向量"
+										htmlFor="embedding-backfill"
+										hint="默认关闭；启用后，嵌入失败不会阻止记忆写入。"
+									>
+										<Switch
+											id="embedding-backfill"
+											checked={fields.backfill_enabled}
+											onCheckedChange={(backfill_enabled) =>
+												setFields({ ...fields, backfill_enabled })
+											}
+											disabled={state.pending}
+										/>
+									</Field>
+									<Grid
+										columns={2}
+										gap="sm"
+										style={{
+											gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+											alignItems: "center",
+										}}
+									>
+										<Button
+											icon={<PlugZap aria-hidden="true" />}
+											type="button"
+											variant="outline"
+											loading={state.pending}
+											onClick={() => void model.test(fields, takeSecret())}
+										>
+											测试连接
+										</Button>
+										<Button
+											type="submit"
+											icon={<Save aria-hidden="true" />}
+											loading={state.pending}
+										>
+											保存设置
+										</Button>
+									</Grid>
+								</Grid>
+							</form>
+						) : (
+							<p role="status">网关配置尚未加载，请刷新后再修改。</p>
+						)}
+					</LayerCard.Body>
+				</LayerCard>
+			</SectionRule>
 			{state.testResult && (
 				<LayerCard>
 					<LayerCard.Header>
-						Connection result{" "}
+						连接结果{" "}
 						<Badge
 							variant={
 								state.testResult.dims_match && !state.testResult.error_code
@@ -192,52 +232,58 @@ export function EmbeddingPage() {
 									: "secondary"
 							}
 						>
+							{state.testResult.dims_match && !state.testResult.error_code ? (
+								<CircleCheck className="size-basalt-icon" aria-hidden="true" />
+							) : (
+								<CircleAlert className="size-basalt-icon" aria-hidden="true" />
+							)}
 							{state.testResult.error_code
-								? "Failed"
+								? "失败"
 								: state.testResult.dims_match
-									? "Connected"
-									: "Dimension mismatch"}
+									? "连接成功"
+									: "维度不匹配"}
 						</Badge>
 					</LayerCard.Header>
-					<LayerCard.Body>
+					<LayerCard.Well>
 						<StatStrip
 							items={[
-								{ label: "Latency", value: `${state.testResult.latency_ms} ms` },
+								{ label: "延迟", value: `${state.testResult.latency_ms} 毫秒` },
 								{
-									label: "Actual dimensions",
-									value: state.testResult.actual_dims ?? "Unavailable",
+									label: "实际维度",
+									value: state.testResult.actual_dims ?? "暂无数据",
 								},
-								{ label: "Profile match", value: state.testResult.dims_match ? "Yes" : "No" },
+								{ label: "配置匹配", value: state.testResult.dims_match ? "是" : "否" },
 							]}
 						/>
 						{state.testResult.error_code && (
-							<p role="alert">Error code: {state.testResult.error_code}</p>
+							<p role="alert">错误：{operationsError(state.testResult.error_code)}</p>
 						)}
-					</LayerCard.Body>
+					</LayerCard.Well>
 				</LayerCard>
 			)}
 			<ConfirmDialog
 				open={clearing}
 				onOpenChange={setClearing}
-				title="Clear the saved API key?"
+				title="清除已保存的接口密钥？"
 				description={
 					<>
-						Query embeddings will be unavailable until a replacement is saved.{" "}
+						保存替换密钥前，查询嵌入将不可用。{" "}
 						{state.error && <span role="alert">{state.error}</span>}
 					</>
 				}
 				variant="destructive"
-				confirmLabel="Clear key"
+				cancelLabel="取消"
+				confirmLabel="清除密钥"
 				loading={state.pending}
 				onConfirm={async () => {
 					takeSecret();
 					if (await model.save(state.config, null)) {
 						setClearing(false);
-						toast.success("Saved API key cleared.");
+						toast.success("已清除保存的接口密钥。");
 					}
 				}}
 			/>
-		</div>
+		</Grid>
 	);
 }
 
@@ -249,71 +295,109 @@ export function SettingsPage() {
 		return () => model.dispose();
 	}, [model]);
 	const columns: DataTableColumn<EmbeddingProfile>[] = [
-		{ id: "id", header: "Profile", accessor: (profile) => profile.id },
-		{ id: "model", header: "Model", accessor: (profile) => profile.model },
-		{ id: "dims", header: "Dimensions", textAlign: "end", accessor: (profile) => profile.dims },
-		{ id: "metric", header: "Metric", accessor: (profile) => profile.metric },
+		{ id: "id", header: "配置", accessor: (profile) => profile.id },
+		{ id: "model", header: "模型", accessor: (profile) => profile.model },
+		{ id: "dims", header: "维度", textAlign: "end", accessor: (profile) => profile.dims },
+		{
+			id: "metric",
+			header: "距离度量",
+			accessor: (profile) =>
+				({ cosine: "余弦相似度", euclidean: "欧氏距离", "dot-product": "点积" })[profile.metric] ??
+				"未知度量",
+		},
 		{
 			id: "active",
-			header: "Status",
-			sortValue: (profile) => (profile.active ? "Active" : "Inactive"),
+			header: "状态",
+			sortValue: (profile) => (profile.active ? "已启用" : "未启用"),
 			accessor: (profile) => (
 				<Badge variant={profile.active ? "success" : "secondary"}>
-					{profile.active ? "Active" : "Inactive"}
+					{profile.active ? "已启用" : "未启用"}
 				</Badge>
 			),
 		},
 	];
 	return (
-		<div className="ops-page">
+		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="Settings"
-				description="Application version and embedding profiles."
+				title="设置"
 				actions={
 					<>
-						<Button variant="outline" onClick={() => void model.load()} disabled={state.loading}>
-							Refresh
+						<Button
+							icon={<RefreshCw aria-hidden="true" />}
+							variant="outline"
+							onClick={() => void model.load()}
+							disabled={state.loading}
+						>
+							刷新
 						</Button>
 						<Button asChild>
-							<Link to="/settings/embedding">Configure embedding gateway</Link>
+							<Link to="/settings/embedding">
+								<Settings2 aria-hidden="true" />
+								配置嵌入网关
+							</Link>
 						</Button>
 					</>
 				}
 			/>
 			<LayerCard>
+				<LayerCard.Header>应用信息</LayerCard.Header>
 				<LayerCard.Body>
 					<DescriptionList>
-						<DescriptionList.Item term="Application">Octo</DescriptionList.Item>
-						<DescriptionList.Item term="Version">{APP_VERSION}</DescriptionList.Item>
+						<DescriptionList.Item term="应用">Octo</DescriptionList.Item>
+						<DescriptionList.Item term="版本">{APP_VERSION}</DescriptionList.Item>
 					</DescriptionList>
 				</LayerCard.Body>
 			</LayerCard>
 			{state.error && (
 				<p role="alert">
-					{state.error}{" "}
-					<Button variant="ghost" size="sm" onClick={() => void model.load()}>
-						Retry
+					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}{" "}
+					<Button
+						icon={<RefreshCw aria-hidden="true" />}
+						variant="ghost"
+						size="sm"
+						onClick={() => void model.load()}
+					>
+						重试
 					</Button>
 				</p>
 			)}
-			<LayerCard>
-				<LayerCard.Header>Embedding profiles</LayerCard.Header>
-				<DataTable
-					aria-label="Embedding profiles"
-					columns={columns}
-					data={state.profiles}
-					getRowId={(profile) => profile.id}
-					edge="attached"
-					loading={state.loading && state.profiles.length === 0}
-					error={state.profiles.length === 0 ? state.error : null}
-					onRetry={() => void model.load()}
-					empty={
-						state.loaded
-							? "No embedding profiles configured."
-							: "Embedding profiles are unknown. Refresh to load profiles."
-					}
-				/>
-			</LayerCard>
-		</div>
+			<SectionRule title="嵌入配置">
+				<LayerCard padding="none">
+					{state.loading && state.profiles.length === 0 ? (
+						<LayerCard.Loading label="正在加载嵌入配置" />
+					) : (
+						<DataTable
+							aria-label="嵌入配置"
+							columns={columns}
+							data={state.profiles}
+							getRowId={(profile) => profile.id}
+							edge="attached"
+							error={state.profiles.length === 0 ? state.error : null}
+							retryLabel="重试"
+							onRetry={() => void model.load()}
+							empty={
+								state.loaded ? (
+									<LayerCard.Empty
+										icon={<Settings2 aria-hidden="true" />}
+										title="尚未配置嵌入配置。"
+										description="先设置网关与模型。"
+										action={
+											<Button asChild>
+												<Link to="/settings/embedding">
+													<Settings2 aria-hidden="true" />
+													配置嵌入网关
+												</Link>
+											</Button>
+										}
+									/>
+								) : (
+									"嵌入配置尚未加载，请刷新。"
+								)
+							}
+						/>
+					)}
+				</LayerCard>
+			</SectionRule>
+		</Grid>
 	);
 }

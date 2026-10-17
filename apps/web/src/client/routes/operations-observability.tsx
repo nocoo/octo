@@ -1,7 +1,18 @@
-import { Badge, Button, Field, Input, LayerCard, StatStrip, toast } from "@nocoo/basalt";
+import {
+	Badge,
+	Button,
+	Field,
+	Input,
+	LayerCard,
+	ScrollArea,
+	StatStrip,
+	toast,
+} from "@nocoo/basalt";
 import { LineChart } from "@nocoo/basalt/charts/line";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
+import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Table,
 	TableBody,
@@ -11,9 +22,20 @@ import {
 	TableHeader,
 	TableRow,
 } from "@nocoo/basalt/components/table";
+import {
+	ArrowDown,
+	ChartNoAxesCombined,
+	CircleAlert,
+	Download,
+	Filter,
+	RefreshCw,
+	ScrollText,
+	X,
+} from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
+import { operationsError } from "../viewmodels/operations-errors";
 import {
 	AuditModel,
 	auditQuery,
@@ -39,28 +61,28 @@ export function UsagePage() {
 	const columns: DataTableColumn<UsageDaily & { error_rate: number }>[] = [
 		{
 			id: "day",
-			header: "Day",
+			header: "日期",
 			sortValue: (row) => Date.parse(row.day),
 			accessor: (row) => row.day,
 		},
-		{ id: "key", header: "Key", accessor: (row) => row.key_id },
+		{ id: "key", header: "密钥", accessor: (row) => row.key_id },
 		{
 			id: "calls",
-			header: "Calls",
+			header: "调用次数",
 			sortValue: (row) => row.calls,
 			textAlign: "end",
-			accessor: (row) => row.calls.toLocaleString(),
+			accessor: (row) => row.calls.toLocaleString("zh-CN"),
 		},
 		{
 			id: "errors",
-			header: "Errors",
+			header: "错误次数",
 			sortValue: (row) => row.errors,
 			textAlign: "end",
-			accessor: (row) => row.errors.toLocaleString(),
+			accessor: (row) => row.errors.toLocaleString("zh-CN"),
 		},
 		{
 			id: "rate",
-			header: "Error rate",
+			header: "错误率",
 			sortValue: (row) => row.error_rate,
 			textAlign: "end",
 			accessor: (row) => `${row.error_rate.toFixed(2)}%`,
@@ -70,39 +92,39 @@ export function UsagePage() {
 			header: "P50",
 			sortValue: (row) => row.p50_ms ?? Number.POSITIVE_INFINITY,
 			textAlign: "end",
-			accessor: (row) => (row.p50_ms === null ? "Unavailable" : `${row.p50_ms} ms`),
+			accessor: (row) => (row.p50_ms === null ? "暂无数据" : `${row.p50_ms} 毫秒`),
 		},
 		{
 			id: "p95",
 			header: "P95",
 			sortValue: (row) => row.p95_ms ?? Number.POSITIVE_INFINITY,
 			textAlign: "end",
-			accessor: (row) => (row.p95_ms === null ? "Unavailable" : `${row.p95_ms} ms`),
+			accessor: (row) => (row.p95_ms === null ? "暂无数据" : `${row.p95_ms} 毫秒`),
 		},
 	];
 	const alternative = (
-		<p className="ops-muted">
-			Exact values are available in the <a href="#usage-daily-table">daily usage table</a>.
+		<p className="text-basalt-sm text-basalt-muted-foreground">
+			精确数值请查看<a href="#usage-daily-table">每日用量表</a>.
 		</p>
 	);
 	return (
-		<div className="ops-page">
+		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="Usage and health"
-				description="Calls, errors and latency by key and day. No rate limiting is applied."
+				title="用量与健康状态"
 				actions={
 					<Button
+						icon={<RefreshCw aria-hidden="true" />}
 						variant="outline"
 						onClick={() => void model.load(search)}
 						disabled={state.loading}
 					>
-						Refresh
+						刷新
 					</Button>
 				}
 				filters={
 					<form
 						key={search}
-						className="ops-filters"
+						className="w-full"
 						onSubmit={(event) => {
 							event.preventDefault();
 							const data = new FormData(event.currentTarget);
@@ -115,149 +137,172 @@ export function UsagePage() {
 							);
 						}}
 					>
-						<Field label="Key ID">
-							<Input name="key_id" defaultValue={filters.key_id} autoComplete="off" />
-						</Field>
-						<Field label="From">
-							<Input type="date" name="from" defaultValue={filters.from} />
-						</Field>
-						<Field label="To">
-							<Input type="date" name="to" defaultValue={filters.to} />
-						</Field>
-						<Button type="submit" variant="outline">
-							Apply filters
-						</Button>
-						<Button type="button" variant="ghost" onClick={() => setParams("")}>
-							Clear filters
-						</Button>
+						<Grid
+							columns={5}
+							gap="sm"
+							style={{
+								gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 10rem), 1fr))",
+								alignItems: "end",
+							}}
+						>
+							<Field label="密钥标识">
+								<Input name="key_id" defaultValue={filters.key_id} autoComplete="off" />
+							</Field>
+							<Field label="开始日期">
+								<Input type="date" name="from" defaultValue={filters.from} />
+							</Field>
+							<Field label="结束日期">
+								<Input type="date" name="to" defaultValue={filters.to} />
+							</Field>
+							<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
+								应用筛选
+							</Button>
+							<Button
+								type="button"
+								icon={<X aria-hidden="true" />}
+								variant="ghost"
+								onClick={() => setParams("")}
+							>
+								清除筛选
+							</Button>
+						</Grid>
 					</form>
 				}
 			/>
 			{state.error && (
 				<p role="alert">
-					{state.error}{" "}
+					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}{" "}
 					<Button size="sm" variant="ghost" onClick={() => void model.load(search)}>
-						Retry
+						重试
 					</Button>
 				</p>
 			)}
-			<LayerCard>
-				<LayerCard.Header>Infrastructure</LayerCard.Header>
-				<LayerCard.Body>
-					<StatStrip
-						loading={state.loading}
-						items={[
-							{
-								label: "D1 bytes",
-								value: state.loaded ? state.health.d1_bytes.toLocaleString() : "Unavailable",
-							},
-							{
-								label: "Pending vector sync",
-								value: state.loaded ? state.health.vector_backlog.toLocaleString() : "Unavailable",
-							},
-							{
-								label: "Last cron run",
-								value: !state.loaded
-									? "Unavailable"
-									: state.health.cron_last_run_at === null
-										? "Never recorded"
-										: new Date(state.health.cron_last_run_at).toLocaleString(),
-							},
-						]}
-					/>
-				</LayerCard.Body>
-			</LayerCard>
+			<SectionRule title="基础设施">
+				<LayerCard>
+					<LayerCard.Body>
+						<StatStrip
+							loading={state.loading}
+							items={[
+								{
+									label: "D1 占用字节",
+									value: state.loaded ? state.health.d1_bytes.toLocaleString("zh-CN") : "暂无数据",
+								},
+								{
+									label: "待同步向量",
+									value: state.loaded
+										? state.health.vector_backlog.toLocaleString("zh-CN")
+										: "暂无数据",
+								},
+								{
+									label: "最近定时任务",
+									value: !state.loaded
+										? "暂无数据"
+										: state.health.cron_last_run_at === null
+											? "尚无记录"
+											: new Date(state.health.cron_last_run_at).toLocaleString("zh-CN"),
+								},
+							]}
+						/>
+					</LayerCard.Body>
+				</LayerCard>
+			</SectionRule>
 			{state.daily.length > 0 ? (
-				<div className="ops-chart-grid">
+				<Grid
+					columns={2}
+					gap="sm"
+					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))" }}
+				>
 					<LayerCard>
-						<LayerCard.Header>Calls</LayerCard.Header>
+						<LayerCard.Header>调用次数</LayerCard.Header>
 						<LayerCard.Body>
-							<div className="ops-chart">
+							<Grid columns={1} gap="sm">
 								<LineChart
 									className="ops-plot"
 									showAxes
 									data={model.chart}
-									series={[{ key: "calls", label: "Calls" }]}
-									ariaLabel="Calls by key and day"
-									summary="Each point represents one key on one day; values are not aggregated across keys."
+									series={[{ key: "calls", label: "调用次数" }]}
+									ariaLabel="各密钥的每日调用次数"
+									summary="每个点代表一个密钥一天内的值，不跨密钥汇总。"
 									dataAlternative={alternative}
 								/>
-							</div>
+							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
 					<LayerCard>
-						<LayerCard.Header>Error rate</LayerCard.Header>
+						<LayerCard.Header>错误率</LayerCard.Header>
 						<LayerCard.Body>
-							<div className="ops-chart">
+							<Grid columns={1} gap="sm">
 								<LineChart
 									className="ops-plot"
 									showAxes
 									yDomain={[0, 100]}
 									data={model.chart}
-									series={[{ key: "error_rate", label: "Error rate (%)" }]}
-									ariaLabel="Error rate by key and day"
+									series={[{ key: "error_rate", label: "错误率（%）" }]}
+									ariaLabel="各密钥的每日错误率"
 									valueFormatter={(value) => `${value.toFixed(1)}%`}
-									summary="Percentage of calls returning errors for each key and day."
+									summary="各密钥每天错误调用所占比例。"
 									dataAlternative={alternative}
 								/>
-							</div>
+							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
 					<LayerCard>
-						<LayerCard.Header>Latency</LayerCard.Header>
+						<LayerCard.Header>延迟</LayerCard.Header>
 						<LayerCard.Body>
-							<div className="ops-chart">
+							<Grid columns={1} gap="sm">
 								<LineChart
 									className="ops-plot"
 									showAxes
 									data={model.chart}
 									series={[
-										{ key: "p50_ms", label: "P50 (ms)" },
-										{ key: "p95_ms", label: "P95 (ms)" },
+										{ key: "p50_ms", label: "P50（毫秒）" },
+										{ key: "p95_ms", label: "P95（毫秒）" },
 									]}
 									showLegend
-									ariaLabel="P50 and P95 latency by key and day"
-									valueFormatter={(value) => `${value} ms`}
-									summary="Server-computed percentiles; missing measurements remain unavailable, not zero."
+									ariaLabel="各密钥的每日 P50 与 P95 延迟"
+									valueFormatter={(value) => `${value} 毫秒`}
+									summary="服务端计算的百分位数；缺失测量保持未知，不记为零。"
 									dataAlternative={alternative}
 								/>
-							</div>
+							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
-				</div>
-			) : (
-				state.loaded &&
-				!state.loading &&
-				!state.error && (
-					<LayerCard>
-						<LayerCard.Empty
-							title="No usage in this range"
-							description="Adjust filters or make an API request with an agent key."
-						/>
-					</LayerCard>
-				)
-			)}
-			<div id="usage-daily-table">
-				<LayerCard>
-					<LayerCard.Header>Daily usage / chart data</LayerCard.Header>
+				</Grid>
+			) : null}
+			<LayerCard id="usage-daily-table">
+				<LayerCard.Header>每日用量与图表数据</LayerCard.Header>
+				{state.loading && state.daily.length === 0 ? (
+					<LayerCard.Loading label="正在加载每日用量" />
+				) : (
 					<DataTable
-						aria-label="Daily usage table"
+						aria-label="每日用量表"
 						data={model.rows}
 						columns={columns}
 						getRowId={(row) => `${row.key_id}/${row.day}`}
 						edge="attached"
-						loading={state.loading && state.daily.length === 0}
 						error={state.daily.length === 0 ? state.error : null}
+						retryLabel="重试"
 						onRetry={() => void model.load(search)}
 						empty={
-							state.loaded
-								? "No daily usage records."
-								: "Daily usage is unknown. Refresh to load usage."
+							state.loaded ? (
+								<LayerCard.Empty
+									icon={<ChartNoAxesCombined aria-hidden="true" />}
+									title="此范围内暂无用量"
+									description="暂无每日用量记录。请调整筛选或发起接口请求。"
+									action={
+										<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
+											清除筛选
+										</Button>
+									}
+								/>
+							) : (
+								"每日用量尚未加载，请刷新。"
+							)
 						}
 					/>
-				</LayerCard>
-			</div>
-		</div>
+				)}
+			</LayerCard>
+		</Grid>
 	);
 }
 
@@ -267,7 +312,7 @@ export function AuditPage() {
 	const [params, setParams] = useSearchParams();
 	const search = params.toString();
 	const filters = parseAuditFilters(search);
-	const viewport = useRef<HTMLElement>(null);
+	const viewport = useRef<HTMLDivElement>(null);
 	const table = useRef<HTMLTableElement>(null);
 	const [geometry, setGeometry] = useState({ top: 0, height: 480, row: 36 });
 	const window = virtualWindow(state.items.length, geometry.top, geometry.height, geometry.row);
@@ -297,20 +342,22 @@ export function AuditPage() {
 		return () => observer.disconnect();
 	}, [state.items.length]);
 	return (
-		<div className="ops-page">
+		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="Audit log"
-				description="Every call, including denied requests. Request bodies and credentials are never recorded."
+				title="审计日志"
+				description="包含被拒绝的请求；不记录请求正文和凭据。"
 				actions={
 					<>
 						<Button
+							icon={<RefreshCw aria-hidden="true" />}
 							variant="outline"
 							onClick={() => void model.load(search)}
 							disabled={state.loading}
 						>
-							Refresh
+							刷新
 						</Button>
 						<Button
+							icon={<Download aria-hidden="true" />}
 							loading={state.exporting}
 							onClick={async () => {
 								const csv = await model.exportCsv();
@@ -325,17 +372,17 @@ export function AuditPage() {
 								link.click();
 								link.remove();
 								setTimeout(() => URL.revokeObjectURL(url), 0);
-								toast.success("Audit CSV exported.");
+								toast.success("审计 CSV 已导出。");
 							}}
 						>
-							Export CSV
+							导出 CSV
 						</Button>
 					</>
 				}
 				filters={
 					<form
 						key={search}
-						className="ops-filters"
+						className="w-full"
 						onSubmit={(event) => {
 							event.preventDefault();
 							const data = new FormData(event.currentTarget);
@@ -350,156 +397,199 @@ export function AuditPage() {
 							);
 						}}
 					>
-						<Field label="Actor">
-							<Input name="actor" defaultValue={filters.actor} autoComplete="off" />
-						</Field>
-						<Field label="Route">
-							<Input name="route" defaultValue={filters.route} autoComplete="off" />
-						</Field>
-						<Field label="Status code">
-							<Input
-								name="status"
-								type="number"
-								min={100}
-								max={599}
-								step={1}
-								defaultValue={filters.status}
-							/>
-						</Field>
-						<Field label="From">
-							<Input name="from" type="date" defaultValue={filters.from.slice(0, 10)} />
-						</Field>
-						<Field label="To">
-							<Input name="to" type="date" defaultValue={filters.to.slice(0, 10)} />
-						</Field>
-						<Button type="submit" variant="outline">
-							Apply filters
-						</Button>
-						<Button type="button" variant="ghost" onClick={() => setParams("")}>
-							Clear filters
-						</Button>
+						<Grid
+							columns={7}
+							gap="sm"
+							style={{
+								gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 9rem), 1fr))",
+								alignItems: "end",
+							}}
+						>
+							<Field label="调用者">
+								<Input name="actor" defaultValue={filters.actor} autoComplete="off" />
+							</Field>
+							<Field label="路由">
+								<Input name="route" defaultValue={filters.route} autoComplete="off" />
+							</Field>
+							<Field label="状态码">
+								<Input
+									name="status"
+									type="number"
+									min={100}
+									max={599}
+									step={1}
+									defaultValue={filters.status}
+								/>
+							</Field>
+							<Field label="开始日期">
+								<Input name="from" type="date" defaultValue={filters.from.slice(0, 10)} />
+							</Field>
+							<Field label="结束日期">
+								<Input name="to" type="date" defaultValue={filters.to.slice(0, 10)} />
+							</Field>
+							<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
+								应用筛选
+							</Button>
+							<Button
+								type="button"
+								icon={<X aria-hidden="true" />}
+								variant="ghost"
+								onClick={() => setParams("")}
+							>
+								清除筛选
+							</Button>
+						</Grid>
 					</form>
 				}
 			/>
 			{state.error && (
 				<p role="alert">
-					{state.error}{" "}
+					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}{" "}
 					<Button variant="ghost" size="sm" onClick={() => void model.load(search)}>
-						Retry
+						重试
 					</Button>
 				</p>
 			)}
-			{state.loading && <p role="status">Refreshing audit log...</p>}
-			<LayerCard>
-				<LayerCard.Header>
-					{state.loaded
-						? `${state.items.length.toLocaleString()} loaded records`
-						: "Audit records not loaded"}{" "}
-					<span className="ops-muted">/ virtualized rows</span>
-				</LayerCard.Header>
-				<section
-					ref={viewport}
-					className="ops-audit-scroll"
-					// biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the audit viewport.
-					tabIndex={0}
-					aria-label="Scrollable audit records"
-					onScroll={(event) => {
-						const top = event.currentTarget.scrollTop;
-						setGeometry((current) => ({ ...current, top }));
-					}}
-				>
-					<Table
-						ref={table}
-						className="ops-audit-table"
-						aria-label="Audit records"
-						aria-rowcount={state.items.length + 1}
-					>
-						<TableCaption>
-							Times are local. Use arrow keys or Page Down in this region to scroll; load more to
-							retrieve the next server page.
-						</TableCaption>
-						<TableHeader>
-							<TableRow>
-								{["Time", "Actor", "Method", "Route", "Status", "Duration", "Request ID"].map(
-									(label) => (
-										<TableHead
-											key={label}
-											textAlign={label === "Duration" ? "end" : "start"}
-											className={
-												label === "Time"
-													? "ps-basalt-table-edge"
-													: label === "Request ID"
-														? "pe-basalt-table-edge"
-														: ""
-											}
-										>
-											{label}
-										</TableHead>
-									),
-								)}
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{window.before > 0 && (
-								<TableRow aria-hidden="true">
-									<TableCell colSpan={7} className="ops-spacer" style={{ height: window.before }} />
-								</TableRow>
-							)}
-							{state.items.slice(window.start, window.end).map((row, index) => (
-								<TableRow key={row.id} data-audit-row="" aria-rowindex={window.start + index + 2}>
-									<TableCell className="ps-basalt-table-edge">
-										{new Date(row.at).toLocaleString()}
-									</TableCell>
-									<TableCell>{row.actor}</TableCell>
-									<TableCell>{row.method}</TableCell>
-									<TableCell>{row.route}</TableCell>
-									<TableCell>
-										<Badge variant={row.status >= 400 ? "secondary" : "success"}>
-											{row.status}
-										</Badge>
-										{row.error_code && <span className="ops-muted"> {row.error_code}</span>}
-									</TableCell>
-									<TableCell textAlign="end">{row.duration_ms} ms</TableCell>
-									<TableCell className="pe-basalt-table-edge">{row.request_id}</TableCell>
-								</TableRow>
-							))}
-							{window.after > 0 && (
-								<TableRow aria-hidden="true">
-									<TableCell colSpan={7} className="ops-spacer" style={{ height: window.after }} />
-								</TableRow>
-							)}
-							{state.items.length === 0 && !state.loading && (
-								<TableRow>
-									<TableCell colSpan={7} className="ps-basalt-table-edge pe-basalt-table-edge">
-										{state.error
-											? "Audit records are unavailable. Retry the query."
-											: state.loaded
-												? "No audit records match these filters."
-												: "Audit records are unknown. Refresh to load records."}
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
-					</Table>
-				</section>
-				<LayerCard.Footer>
-					<Button
-						variant="outline"
-						disabled={!state.nextCursor || state.loading}
-						loading={state.loadingMore}
-						onClick={() => void model.loadMore()}
-					>
-						Load more
-					</Button>
-					<span className="ops-muted">
-						{state.nextCursor
-							? "More records available"
-							: state.loaded && !state.loading && !state.error
-								? "End of loaded query"
-								: "Query completion is unknown"}
+			{state.loading && <p role="status">正在刷新审计日志……</p>}
+			<SectionRule
+				title="请求记录"
+				actions={
+					<span className="text-basalt-sm text-basalt-muted-foreground">
+						{state.loaded
+							? `${state.items.length.toLocaleString("zh-CN")} 条已加载记录`
+							: "审计记录尚未加载"}
 					</span>
-				</LayerCard.Footer>
-			</LayerCard>
-		</div>
+				}
+			>
+				<LayerCard padding="none">
+					<ScrollArea
+						ref={viewport}
+						orientation="both"
+						className={state.items.length ? "ops-audit-scroll" : ""}
+						tabIndex={0}
+						aria-label="可滚动的审计记录"
+						onScroll={(event) => {
+							const top = event.currentTarget.scrollTop;
+							setGeometry((current) => ({ ...current, top }));
+						}}
+					>
+						<Table
+							ref={table}
+							className="ops-audit-table"
+							aria-label="审计记录"
+							aria-rowcount={state.items.length + 1}
+						>
+							<TableCaption>
+								本地时间；使用方向键或向下翻页键滚动，点击“加载更多”获取下一页。
+							</TableCaption>
+							<TableHeader>
+								<TableRow>
+									{["时间", "调用者", "请求方法", "路由", "状态码", "耗时", "请求标识"].map(
+										(label) => (
+											<TableHead
+												key={label}
+												textAlign={label === "耗时" ? "end" : "start"}
+												className={
+													label === "时间"
+														? "ps-basalt-table-edge"
+														: label === "请求标识"
+															? "pe-basalt-table-edge"
+															: ""
+												}
+											>
+												{label}
+											</TableHead>
+										),
+									)}
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{window.before > 0 && (
+									<TableRow aria-hidden="true">
+										<TableCell
+											colSpan={7}
+											className="ops-spacer"
+											style={{ height: window.before }}
+										/>
+									</TableRow>
+								)}
+								{state.items.slice(window.start, window.end).map((row, index) => (
+									<TableRow key={row.id} data-audit-row="" aria-rowindex={window.start + index + 2}>
+										<TableCell className="ps-basalt-table-edge">
+											{new Date(row.at).toLocaleString("zh-CN")}
+										</TableCell>
+										<TableCell>{row.actor}</TableCell>
+										<TableCell>{row.method}</TableCell>
+										<TableCell>{row.route}</TableCell>
+										<TableCell>
+											<Badge variant={row.status >= 400 ? "secondary" : "success"}>
+												{row.status}
+											</Badge>
+											{row.error_code && (
+												<span className="text-basalt-sm text-basalt-muted-foreground">
+													{" "}
+													{operationsError(row.error_code)}
+												</span>
+											)}
+										</TableCell>
+										<TableCell textAlign="end">{row.duration_ms} 毫秒</TableCell>
+										<TableCell className="pe-basalt-table-edge">{row.request_id}</TableCell>
+									</TableRow>
+								))}
+								{window.after > 0 && (
+									<TableRow aria-hidden="true">
+										<TableCell
+											colSpan={7}
+											className="ops-spacer"
+											style={{ height: window.after }}
+										/>
+									</TableRow>
+								)}
+								{state.items.length === 0 && !state.loading && (
+									<TableRow>
+										<TableCell colSpan={7} className="ps-basalt-table-edge pe-basalt-table-edge">
+											{state.error ? (
+												"审计记录暂不可用，请重试查询。"
+											) : state.loaded ? (
+												<LayerCard.Empty
+													icon={<ScrollText aria-hidden="true" />}
+													title="没有符合筛选条件的审计记录"
+													description="调整筛选后再次查询。"
+													action={
+														<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
+															清除筛选
+														</Button>
+													}
+												/>
+											) : (
+												"审计记录尚未加载，请刷新。"
+											)}
+										</TableCell>
+									</TableRow>
+								)}
+							</TableBody>
+						</Table>
+					</ScrollArea>
+					<LayerCard.Footer>
+						<Button
+							icon={<ArrowDown aria-hidden="true" />}
+							variant="outline"
+							disabled={!state.nextCursor || state.loading}
+							loading={state.loadingMore}
+							onClick={() => void model.loadMore()}
+						>
+							加载更多
+						</Button>
+						<span className="text-basalt-sm text-basalt-muted-foreground">
+							{state.nextCursor
+								? "还有更多记录"
+								: state.loaded && !state.loading && !state.error
+									? "已加载全部查询结果"
+									: "查询是否完成尚不确定"}
+						</span>
+					</LayerCard.Footer>
+				</LayerCard>
+			</SectionRule>
+		</Grid>
 	);
 }

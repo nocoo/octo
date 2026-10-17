@@ -1,84 +1,15 @@
-.ops-page {
-	display: grid;
-	gap: var(--basalt-space-layout-lg);
-	min-inline-size: 0;
-}
-
-.ops-stack {
-	display: grid;
-	gap: var(--basalt-space-layout);
-	min-inline-size: 0;
-}
-
-.ops-row,
-.ops-inline,
-.ops-actions,
-.ops-filters {
-	display: flex;
-	align-items: center;
-	gap: var(--basalt-space-content-gap);
-}
-
-.ops-row {
-	justify-content: space-between;
-	flex-wrap: wrap;
-}
-
-.ops-actions,
-.ops-filters {
-	flex-wrap: wrap;
-}
-
-.ops-filters {
-	align-items: end;
-	gap: var(--basalt-space-layout-sm);
-}
-
-.ops-filters > div {
-	flex: 1 1 10rem;
-}
-
-.ops-fields,
-.ops-chart-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-	gap: var(--basalt-space-layout);
-	min-inline-size: 0;
-}
-
-.ops-chart-grid > *,
-.ops-chart {
-	min-inline-size: 0;
-}
-
-.ops-fields {
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-}
-
-.ops-chart .ops-plot {
+.ops-plot {
 	inline-size: 100%;
 	block-size: clamp(14rem, 26vh, 20rem);
 }
 
-.ops-muted {
-	color: hsl(var(--basalt-muted-foreground));
-	font-size: var(--basalt-text-sm);
-}
-
-.ops-spark {
+.ops-sparkline {
 	inline-size: 9rem;
 	min-block-size: var(--basalt-size-control);
 }
 
 .ops-audit-scroll {
-	max-block-size: 60vh;
-	overflow: auto;
-	overscroll-behavior-inline: contain;
-}
-
-.ops-audit-scroll:focus-visible {
-	outline: var(--basalt-space-xs) solid hsl(var(--basalt-ring));
-	outline-offset: calc(-1 * var(--basalt-space-xs));
+	block-size: min(60vh, 32rem);
 }
 
 .ops-audit-table {
@@ -98,6 +29,6 @@
 }
 
 .ops-audit-table .ops-spacer {
-	padding: 0;
+	padding: unset;
 	border: 0;
 }

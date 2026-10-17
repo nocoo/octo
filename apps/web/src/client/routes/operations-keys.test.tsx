@@ -86,10 +86,34 @@ beforeEach(() => {
 });
 
 describe("key table sorting", () => {
+	it("localizes role, scope, operation and status displays without changing user names", () => {
+		const html = render();
+		for (const text of [
+			"管理员",
+			"只读",
+			"仅投递",
+			"全部空间",
+			"读取",
+			"创建",
+			"更新",
+			"删除",
+			"有效",
+			"已过期",
+			"已撤销",
+			"编辑 Zulu",
+			"轮换 Zulu",
+			"撤销 Zulu",
+		])
+			expect(html).toContain(text);
+		expect(html).toContain("Alpha");
+		expect(html).not.toMatch(
+			/>\s*(?:admin|readonly|drop|all|active|expired|revoked|r,w,u,d)\s*(?:<|\/)/,
+		);
+	});
 	it.each([
 		["name", ["Alpha", "Beta", "Zulu"]],
-		["role", ["Zulu", "Beta", "Alpha"]],
-		["status", ["Zulu", "Alpha", "Beta"]],
+		["role", ["Beta", "Alpha", "Zulu"]],
+		["status", ["Beta", "Alpha", "Zulu"]],
 		["expiry", ["Alpha", "Zulu", "Beta"]],
 		["last", ["Zulu", "Alpha", "Beta"]],
 	] as const)("sorts %s using domain values in both directions", (id, expected) => {
@@ -105,32 +129,29 @@ describe("key table sorting", () => {
 		const html = render();
 		expect(html).not.toMatch(/<(?:details|summary)\b/);
 		expect(html).toContain(`aria-expanded="${open}"`);
-		expect(html).toContain("Values");
+		expect(html).toContain("数值");
 		if (open) {
 			expect(html).toContain("aria-controls=");
-			expect(html).toContain('aria-label="Recent calls data for Zulu"');
+			expect(html).toContain('aria-label="Zulu 的近期调用数据"');
 			expect(html).toMatch(/<td[^>]*>10<\/td>/);
-		} else expect(html).not.toContain('aria-label="Recent calls data for Zulu"');
+		} else expect(html).not.toContain('aria-label="Zulu 的近期调用数据"');
 	});
 });
 
 describe("key read states", () => {
-	it.each([null, "Unable to load API keys."])(
-		"does not assert an empty unknown list: %s",
-		(error) => {
-			fixture.state = { items: [], loaded: false, error };
-			const html = render();
-			expect(html).not.toContain("No API keys.");
-			if (error) expect(html).toContain(error);
-		},
-	);
+	it.each([null, "无法加载接口密钥。"])("does not assert an empty unknown list: %s", (error) => {
+		fixture.state = { items: [], loaded: false, error };
+		const html = render();
+		expect(html).not.toContain("暂无接口密钥。");
+		if (error) expect(html).toContain(error);
+	});
 
 	it("distinguishes successful emptiness and retains rows on refresh error", () => {
 		fixture.state = { items: [], loaded: true };
-		expect(render()).toContain("No API keys.");
-		fixture.state = { items: [base], loaded: true, error: "Unable to load API keys." };
+		expect(render()).toContain("暂无接口密钥。");
+		fixture.state = { items: [base], loaded: true, error: "无法加载接口密钥。" };
 		const html = render();
 		expect(names(html)).toEqual(["Zulu"]);
-		expect(html).toContain("Unable to load API keys.");
+		expect(html).toContain("无法加载接口密钥。");
 	});
 });

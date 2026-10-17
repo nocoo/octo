@@ -1,5 +1,6 @@
 import { type AdminClient, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
+import { operationsError } from "./operations-errors";
 
 export interface EmbeddingFields {
 	base_url: string;
@@ -103,9 +104,9 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 			const config = await this.api.request<EmbeddingConfig>("/settings/embedding");
 			if (this.alive && revision === this.revision)
 				this.set({ config: readable(config), loading: false, loaded: true });
-		} catch {
+		} catch (error) {
 			if (this.alive && revision === this.revision)
-				this.set({ loading: false, error: "Unable to load embedding settings." });
+				this.set({ loading: false, error: operationsError(error, "无法加载嵌入设置。") });
 		}
 	}
 
@@ -119,8 +120,8 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 			if (!this.alive) return false;
 			await this.load();
 			return this.alive;
-		} catch {
-			if (this.alive) this.set({ error: "Unable to save embedding settings." });
+		} catch (error) {
+			if (this.alive) this.set({ error: operationsError(error, "无法保存嵌入设置。") });
 			return false;
 		} finally {
 			if (this.alive) this.set({ pending: false });
@@ -136,8 +137,8 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 			});
 			const { latency_ms, actual_dims, dims_match, error_code } = result;
 			if (this.alive) this.set({ testResult: { latency_ms, actual_dims, dims_match, error_code } });
-		} catch {
-			if (this.alive) this.set({ error: "Unable to test embedding connection." });
+		} catch (error) {
+			if (this.alive) this.set({ error: operationsError(error, "无法测试嵌入连接。") });
 		} finally {
 			if (this.alive) this.set({ pending: false });
 		}
@@ -153,8 +154,7 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 		if (!this.alive || !this.state.loaded || this.state.pending) return false;
 		if (!valid(fields, secret)) {
 			this.set({
-				error:
-					"Provide a valid gateway URL, model, dimensions (1-1536) and nonempty replacement key.",
+				error: "请填写有效的网关地址、模型、维度（1 至 1536）和非空替换密钥。",
 			});
 			return false;
 		}
@@ -187,9 +187,9 @@ export class SettingsModel extends Store<{
 			const result = await this.api.request<{ items: EmbeddingProfile[] }>("/embedding-profiles");
 			if (revision === this.revision)
 				this.set({ profiles: result.items, loading: false, loaded: true });
-		} catch {
+		} catch (error) {
 			if (revision === this.revision)
-				this.set({ error: "Unable to load embedding profiles.", loading: false });
+				this.set({ error: operationsError(error, "无法加载嵌入配置。"), loading: false });
 		}
 	}
 	dispose(): void {

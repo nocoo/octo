@@ -1,5 +1,6 @@
 import { type AdminClient, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
+import { operationsError } from "./operations-errors";
 
 export interface UsageDaily {
 	day: string;
@@ -126,7 +127,7 @@ export class UsageModel extends Store<
 			this.set({
 				filters,
 				daily: [],
-				error: "Start time must not follow end time.",
+				error: "开始时间不能晚于结束时间。",
 				loading: false,
 			});
 			return;
@@ -137,9 +138,9 @@ export class UsageModel extends Store<
 			const result = await this.api.request<UsageResponse>(endpoint("/usage", usageQuery(filters)));
 			if (revision === this.revision)
 				this.set({ daily: result.daily, health: result.health, loading: false, loaded: true });
-		} catch {
+		} catch (error) {
 			if (revision === this.revision)
-				this.set({ error: "Unable to load usage and health.", loading: false });
+				this.set({ error: operationsError(error, "无法加载用量与健康状态。"), loading: false });
 		}
 	}
 	dispose(): void {
@@ -180,7 +181,19 @@ export function auditCsv(rows: AuditRow[]): string {
 		"duration_ms",
 	] as const;
 	return [
-		columns.map(csvCell).join(","),
+		[
+			"记录标识",
+			"时间",
+			"调用者",
+			"请求方法",
+			"路由",
+			"状态码",
+			"错误代码",
+			"请求标识",
+			"耗时（毫秒）",
+		]
+			.map(csvCell)
+			.join(","),
 		...rows.map((row) =>
 			columns
 				.map((column) => csvCell(column === "at" ? new Date(row.at).toISOString() : row[column]))
@@ -229,7 +242,7 @@ export class AuditModel extends Store<{
 				nextCursor: null,
 				loaded: false,
 				loadingMore: false,
-				error: "Start time must not follow end time.",
+				error: "开始时间不能晚于结束时间。",
 				loading: false,
 			});
 			return;
@@ -253,9 +266,9 @@ export class AuditModel extends Store<{
 					loading: false,
 					loaded: true,
 				});
-		} catch {
+		} catch (error) {
 			if (revision === this.revision)
-				this.set({ error: "Unable to load audit log.", loading: false });
+				this.set({ error: operationsError(error, "无法加载审计日志。"), loading: false });
 		}
 	}
 	async loadMore(): Promise<void> {
@@ -271,15 +284,15 @@ export class AuditModel extends Store<{
 				for (const row of result.items) rows.set(row.id, row);
 				this.set({ items: [...rows.values()], nextCursor: result.next_cursor, loadingMore: false });
 			}
-		} catch {
+		} catch (error) {
 			if (revision === this.revision)
-				this.set({ error: "Unable to load audit log.", loadingMore: false });
+				this.set({ error: operationsError(error, "无法加载审计日志。"), loadingMore: false });
 		}
 	}
 	async exportCsv(): Promise<string | null> {
 		if (this.state.exporting) return null;
 		if (reversed(this.state.filters)) {
-			this.set({ error: "Start time must not follow end time." });
+			this.set({ error: "开始时间不能晚于结束时间。" });
 			return null;
 		}
 		const revision = this.revision;
@@ -302,8 +315,9 @@ export class AuditModel extends Store<{
 				}
 			} while (cursor);
 			return auditCsv(rows);
-		} catch {
-			if (revision === this.revision) this.set({ error: "Unable to export audit log." });
+		} catch (error) {
+			if (revision === this.revision)
+				this.set({ error: operationsError(error, "无法导出审计日志。") });
 			return null;
 		} finally {
 			this.set({ exporting: false });

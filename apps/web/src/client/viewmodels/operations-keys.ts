@@ -1,5 +1,6 @@
 import { type AdminClient, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
+import { operationsError } from "./operations-errors";
 
 export type KeyRole = "admin" | "project" | "drop" | "readonly" | "custom";
 export interface KeyPermissions {
@@ -106,9 +107,9 @@ export class KeysModel extends Store<KeysState> {
 			const result = await this.api.request<{ items: KeyMetadata[] }>("/keys");
 			if (this.alive && revision === this.revision)
 				this.set({ items: result.items.map(metadata), loading: false, loaded: true });
-		} catch {
+		} catch (error) {
 			if (this.alive && revision === this.revision)
-				this.set({ loading: false, error: "Unable to load API keys." });
+				this.set({ loading: false, error: operationsError(error, "无法加载接口密钥。") });
 		}
 	}
 
@@ -120,7 +121,7 @@ export class KeysModel extends Store<KeysState> {
 			!permissions ||
 			!validPermissions(permissions)
 		) {
-			this.set({ error: "Provide a name, valid expiry and explicit permissions." });
+			this.set({ error: "请填写名称、有效的到期时间并明确授权范围。" });
 			return null;
 		}
 		const result = await this.change<{ plaintext: string }>("/keys", "POST", {
@@ -134,7 +135,7 @@ export class KeysModel extends Store<KeysState> {
 
 	async rotate(id: string, graceSeconds: number): Promise<string | null> {
 		if (!Number.isInteger(graceSeconds) || graceSeconds < 0 || graceSeconds > 604800) {
-			this.set({ error: "Rotation grace must be between 0 and 604800 seconds." });
+			this.set({ error: "轮换宽限期须为 0 至 604800 秒。" });
 			return null;
 		}
 		const result = await this.change<{ plaintext: string }>(
@@ -150,7 +151,7 @@ export class KeysModel extends Store<KeysState> {
 		patch: { expires_at: number | null; role?: KeyRole; permissions?: KeyPermissions },
 	): Promise<boolean> {
 		if (!validExpiry(patch.expires_at)) {
-			this.set({ error: "Provide a valid expiry." });
+			this.set({ error: "请填写有效的到期时间。" });
 			return false;
 		}
 		const permissions =
@@ -160,7 +161,7 @@ export class KeysModel extends Store<KeysState> {
 					? rolePermissions(patch.role)
 					: undefined;
 		if (patch.role && (!permissions || !validPermissions(permissions))) {
-			this.set({ error: "Provide explicit permissions." });
+			this.set({ error: "请明确授权范围。" });
 			return false;
 		}
 		return (
@@ -197,8 +198,8 @@ export class KeysModel extends Store<KeysState> {
 			await this.load();
 			if (!this.alive) return null;
 			return result;
-		} catch {
-			if (this.alive) this.set({ error: "Unable to change API key." });
+		} catch (error) {
+			if (this.alive) this.set({ error: operationsError(error, "无法修改接口密钥。") });
 			return null;
 		} finally {
 			if (this.alive) this.set({ pending: false });

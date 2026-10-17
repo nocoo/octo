@@ -111,13 +111,13 @@ describe("usage table sorting", () => {
 });
 
 describe("observability read states", () => {
-	it.each([null, "Unable to load audit log."])(
+	it.each([null, "无法加载审计日志。"])(
 		"keeps an unknown audit query distinct from empty: %s",
 		(error) => {
 			fixture.audit = { loaded: false, error };
 			const html = render("audit");
-			expect(html).not.toContain("No audit records match");
-			expect(html).not.toContain("End of loaded query");
+			expect(html).not.toContain("没有符合筛选条件的审计记录");
+			expect(html).not.toContain("已加载全部查询结果");
 			if (error) expect(html).toContain(error);
 		},
 	);
@@ -125,11 +125,11 @@ describe("observability read states", () => {
 	it("shows successful audit emptiness and retains cached rows and pagination on refresh failure", () => {
 		fixture.audit = { loaded: true };
 		const empty = render("audit");
-		expect(empty).toContain("No audit records match");
-		expect(empty).toContain("End of loaded query");
+		expect(empty).toContain("没有符合筛选条件的审计记录");
+		expect(empty).toContain("已加载全部查询结果");
 		fixture.audit = {
 			loaded: true,
-			error: "Unable to load audit log.",
+			error: "无法加载审计日志。",
 			nextCursor: "older",
 			items: [
 				{
@@ -147,17 +147,17 @@ describe("observability read states", () => {
 		};
 		const html = render("audit");
 		expect(html).toContain("cached-actor");
-		expect(html).toContain("Unable to load audit log.");
-		expect(html).toContain("More records available");
+		expect(html).toContain("无法加载审计日志。");
+		expect(html).toContain("还有更多记录");
 	});
 
-	it.each([null, "Unable to load usage and health."])(
+	it.each([null, "无法加载用量与健康状态。"])(
 		"does not assert an empty unknown usage query: %s",
 		(error) => {
 			fixture.usage = { loaded: false, error };
 			const html = render("usage");
-			expect(html).not.toContain("No usage in this range");
-			expect(html).not.toContain("No daily usage records.");
+			expect(html).not.toContain("此范围内暂无用量");
+			expect(html).not.toContain("暂无每日用量记录。");
 			if (error) expect(html).toContain(error);
 		},
 	);

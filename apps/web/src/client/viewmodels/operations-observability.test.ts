@@ -101,7 +101,7 @@ describe("usage health model", () => {
 		await model.load();
 		await model.load();
 		expect(model.state.daily).toEqual(daily);
-		expect(model.state.error).toBe("Unable to load usage and health.");
+		expect(model.state.error).toBe("无法加载用量与健康状态。");
 		await model.load("from=2026-10-18&to=2026-10-01");
 		expect(request).toHaveBeenCalledTimes(2);
 		expect(model.state.filters.from).toBe("2026-10-18");
@@ -135,14 +135,14 @@ describe("audit query, virtualization and CSV", () => {
 		const model = new AuditModel({ request });
 		expect(model.state).toMatchObject({ loaded: false });
 		await model.load();
-		expect(model.state).toMatchObject({ loaded: false, error: "Unable to load audit log." });
+		expect(model.state).toMatchObject({ loaded: false, error: "无法加载审计日志。" });
 		await model.load();
 		await model.load();
 		expect(model.state).toMatchObject({
 			loaded: true,
 			items: [row],
 			nextCursor: "older",
-			error: "Unable to load audit log.",
+			error: "无法加载审计日志。",
 		});
 		await model.load("status=500");
 		expect(model.state).toMatchObject({ loaded: false, items: [], nextCursor: null });
@@ -187,6 +187,9 @@ describe("audit query, virtualization and CSV", () => {
 		expect(csv).toContain('"\'\tformula"');
 		expect(csv).toContain('"1970-01-01T00:00:00.000Z"');
 		expect(auditCsv([]).split("\r\n")).toHaveLength(1);
+		expect(auditCsv([])).toBe(
+			'"记录标识","时间","调用者","请求方法","路由","状态码","错误代码","请求标识","耗时（毫秒）"',
+		);
 	});
 
 	it("bounds virtual rows with overscan at both ends", () => {
@@ -229,7 +232,7 @@ describe("audit query, virtualization and CSV", () => {
 		expect(request.mock.calls[1]?.[0]).toBe("/audit?status=200&limit=200");
 		request.mockRejectedValueOnce(new Error("sensitive"));
 		expect(await model.exportCsv()).toBeNull();
-		expect(model.state.error).toBe("Unable to export audit log.");
+		expect(model.state.error).toBe("无法导出审计日志。");
 		request.mockResolvedValue({ items: [], next_cursor: "repeat" });
 		expect(await model.exportCsv()).toBeNull();
 		expect(model.state.exporting).toBe(false);
@@ -245,14 +248,14 @@ describe("audit query, virtualization and CSV", () => {
 		await model.load();
 		await model.loadMore();
 		expect(model.state.items).toEqual([row]);
-		expect(model.state.error).toBe("Unable to load audit log.");
+		expect(model.state.error).toBe("无法加载审计日志。");
 		await model.load();
 		expect(model.state.items).toEqual([row]);
 		request.mockRejectedValueOnce(new Error("secret"));
 		await model.load("status=500");
 		expect(model.state.items).toEqual([]);
 		await model.load("from=2026-10-18&to=2026-10-01");
-		expect(model.state.error).toBe("Start time must not follow end time.");
+		expect(model.state.error).toBe("开始时间不能晚于结束时间。");
 		expect(model.state.items).toEqual([]);
 		const before = request.mock.calls.length;
 		expect(await model.exportCsv()).toBeNull();

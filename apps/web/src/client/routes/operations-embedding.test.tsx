@@ -75,43 +75,46 @@ describe("profile read states", () => {
 				: ["profile-inactive", "profile-active"],
 		);
 	});
-	it.each([null, "Unable to load embedding profiles."])(
+	it.each([null, "无法加载嵌入配置。"])(
 		"does not assert an empty unknown profiles list: %s",
 		(error) => {
 			fixture.settings = { loaded: false, error };
 			const html = render();
-			expect(html).not.toContain("No embedding profiles configured.");
+			expect(html).not.toContain("尚未配置嵌入配置。");
 			if (error) expect(html).toContain(error);
 		},
 	);
 	it("distinguishes successful emptiness and preserves profiles after a refresh failure", () => {
 		fixture.settings = { loaded: true };
-		expect(render()).toContain("No embedding profiles configured.");
+		expect(render()).toContain("尚未配置嵌入配置。");
 		fixture.settings = {
 			loaded: true,
-			error: "Unable to load embedding profiles.",
+			error: "无法加载嵌入配置。",
 			profiles: [
 				{ id: "cached-profile", model: "active-model", dims: 512, metric: "cosine", active: true },
 			],
 		};
 		const html = render();
 		expect(html).toContain("cached-profile");
-		expect(html).toContain("Unable to load embedding profiles.");
+		expect(html).toContain("无法加载嵌入配置。");
+		expect(html).toContain("余弦相似度");
+		expect(html).toContain("已启用");
+		expect(html).not.toContain(">cosine<");
 	});
 });
 
 describe("embedding configuration visibility", () => {
-	it.each([null, "Unable to load embedding settings."])(
+	it.each([null, "无法加载嵌入设置。"])(
 		"keeps unknown settings out of the editor with error %s",
 		(error) => {
 			fixture.state = { loaded: false, error };
 			const html = renderToStaticMarkup(<EmbeddingPage />);
-			expect(html).not.toContain("No API key configured");
+			expect(html).not.toContain("尚未配置接口密钥");
 			expect(html).not.toContain("text-embedding-3-small");
 			expect(html).not.toContain("<form");
-			expect(html).not.toContain("Save settings");
-			expect(html).not.toContain("Clear saved key");
-			expect(html).toContain("configuration is unknown");
+			expect(html).not.toContain("保存设置");
+			expect(html).not.toContain("清除已保存密钥");
+			expect(html).toContain("配置尚未加载");
 			if (error) expect(html).toContain(error);
 		},
 	);
@@ -119,7 +122,7 @@ describe("embedding configuration visibility", () => {
 	it("retains loaded stale values and the visible refresh error", () => {
 		fixture.state = {
 			loaded: true,
-			error: "Unable to load embedding settings.",
+			error: "无法加载嵌入设置。",
 			config: {
 				base_url: "https://gateway.example",
 				model: "active-model",
@@ -130,11 +133,11 @@ describe("embedding configuration visibility", () => {
 			},
 		};
 		const html = renderToStaticMarkup(<EmbeddingPage />);
-		expect(html).toContain("Unable to load embedding settings.");
+		expect(html).toContain("无法加载嵌入设置。");
 		expect(html).toContain('value="active-model"');
 		expect(html).toContain("abcd");
 		expect(html).toContain("<form");
-		expect(html).toContain("Save settings");
+		expect(html).toContain("保存设置");
 		expect(html).not.toContain("disabled=");
 	});
 });

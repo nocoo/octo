@@ -20,7 +20,9 @@ import {
 } from "@nocoo/basalt";
 import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
+import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Select,
 	SelectContent,
@@ -36,6 +38,20 @@ import {
 	TableHeader,
 	TableRow,
 } from "@nocoo/basalt/components/table";
+import {
+	Ban,
+	Check,
+	CircleAlert,
+	Clock,
+	Copy,
+	KeyRound,
+	Pencil,
+	Plus,
+	RefreshCw,
+	RotateCw,
+	Save,
+	X,
+} from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useModel } from "../components/layout/use-model";
 import {
@@ -50,8 +66,23 @@ import {
 import "./operations.css";
 
 const roles: KeyRole[] = ["project", "drop", "readonly", "admin", "custom"];
+const roleLabels = {
+	project: "项目",
+	drop: "仅投递",
+	readonly: "只读",
+	admin: "管理员",
+	custom: "自定义",
+};
+const scopeLabels = { all: "全部空间", spaces: "指定空间", own: "自有空间" };
+const statusLabels = { active: "有效", expired: "已过期", revoked: "已撤销" };
+const operationLabels: Record<string, string> = { r: "读取", w: "创建", u: "更新", d: "删除" };
+const operationText = (ops: string) =>
+	ops
+		.split(",")
+		.map((op) => operationLabels[op] ?? "未授权")
+		.join("、");
 const time = (value: number | null): string =>
-	value === null ? "Never" : new Date(value).toLocaleString();
+	value === null ? "从未" : new Date(value).toLocaleString("zh-CN");
 function localDate(value: number | null): string {
 	if (value === null) return "";
 	const date = new Date(value);
@@ -89,7 +120,6 @@ function KeyForm({
 	const [spaces, setSpaces] = useState(initial?.space_ids.join(", ") ?? "");
 	return (
 		<form
-			className="ops-stack"
 			onSubmit={async (event) => {
 				event.preventDefault();
 				await onSubmit({
@@ -106,144 +136,143 @@ function KeyForm({
 				});
 			}}
 		>
-			<Field label="Agent name" required>
-				<Input
-					value={name}
-					onChange={(event) => setName(event.target.value)}
-					required
-					disabled={pending || initial !== null}
-					autoComplete="off"
-				/>
-			</Field>
-			<div className="ops-fields">
-				<Field label="Role template" htmlFor={`${id}-role`} required>
-					<Select
-						value={role}
-						disabled={pending}
-						onValueChange={(value) => {
-							const next = value as KeyRole;
-							setRole(next);
-							setPermissions(rolePermissions(next));
-						}}
-					>
-						<SelectTrigger id={`${id}-role`}>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{roles.map((value) => (
-								<SelectItem key={value} value={value}>
-									{value}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</Field>
-				<Field label="Expires at" hint="Local time; leave empty for no expiry.">
+			<Grid columns={1} gap="sm">
+				<Field label="代理名称" required>
 					<Input
-						type="datetime-local"
-						value={expiry}
-						onChange={(event) => setExpiry(event.target.value)}
-						disabled={pending}
+						value={name}
+						onChange={(event) => setName(event.target.value)}
+						required
+						disabled={pending || initial !== null}
+						autoComplete="off"
 					/>
 				</Field>
-			</div>
-			{role === "custom" ? (
-				<>
-					<fieldset className="ops-stack">
-						<legend>Allowed operations</legend>
-						<div className="ops-actions">
-							{[
-								["r", "Read"],
-								["w", "Create"],
-								["u", "Update"],
-								["d", "Delete"],
-							].map(([op, label]) => (
-								<label className="ops-inline" key={op} htmlFor={`${id}-${op}`}>
-									<Checkbox
-										id={`${id}-${op}`}
-										checked={permissions.ops.split(",").includes(op ?? "")}
-										disabled={pending}
-										onCheckedChange={(checked) => {
-											const selected = new Set(permissions.ops.split(",").filter(Boolean));
-											if (checked) selected.add(op ?? "");
-											else selected.delete(op ?? "");
-											setPermissions({
-												...permissions,
-												ops: ["r", "w", "u", "d"].filter((value) => selected.has(value)).join(","),
-											});
-										}}
-									/>
-									{label}
-								</label>
-							))}
-						</div>
-					</fieldset>
-					<Field label="Space scope" htmlFor={`${id}-scope`} required>
+				<Grid
+					columns={2}
+					gap="sm"
+					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 13rem), 1fr))" }}
+				>
+					<Field label="角色模板" htmlFor={`${id}-role`} required>
 						<Select
-							value={permissions.scope}
-							onValueChange={(scope) =>
-								setPermissions({ ...permissions, scope: scope as KeyPermissions["scope"] })
-							}
+							value={role}
 							disabled={pending}
+							onValueChange={(value) => {
+								const next = value as KeyRole;
+								setRole(next);
+								setPermissions(rolePermissions(next));
+							}}
 						>
-							<SelectTrigger id={`${id}-scope`}>
-								<SelectValue />
+							<SelectTrigger id={`${id}-role`}>
+								<SelectValue>{roleLabels[role]}</SelectValue>
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="spaces">Selected spaces</SelectItem>
-								<SelectItem value="own">Owned spaces</SelectItem>
-								<SelectItem value="all">All spaces</SelectItem>
+								{roles.map((value) => (
+									<SelectItem key={value} value={value}>
+										{roleLabels[value]}
+									</SelectItem>
+								))}
 							</SelectContent>
 						</Select>
 					</Field>
-					{permissions.scope === "spaces" && (
-						<Field label="Space IDs" hint="Comma-separated; at least one is required." required>
-							<Input
-								value={spaces}
-								onChange={(event) => setSpaces(event.target.value)}
-								required
+					<Field label="到期时间" hint="本地时间；留空表示永不过期。">
+						<Input
+							type="datetime-local"
+							value={expiry}
+							onChange={(event) => setExpiry(event.target.value)}
+							disabled={pending}
+						/>
+					</Field>
+				</Grid>
+				{role === "custom" ? (
+					<>
+						<Checkbox.Group
+							value={permissions.ops.split(",").filter(Boolean)}
+							disabled={pending}
+							onValueChange={(values) =>
+								setPermissions({
+									...permissions,
+									ops: ["r", "w", "u", "d"].filter((op) => values.includes(op)).join(","),
+								})
+							}
+						>
+							<Checkbox.Legend>允许的操作</Checkbox.Legend>
+							<Grid columns={4} gap="sm" style={{ alignItems: "center" }}>
+								{[
+									["r", "读取"],
+									["w", "创建"],
+									["u", "更新"],
+									["d", "删除"],
+								].map(([op, label]) => (
+									<Checkbox.Item key={op} value={op ?? ""}>
+										{label}
+									</Checkbox.Item>
+								))}
+							</Grid>
+						</Checkbox.Group>
+						<Field label="空间范围" htmlFor={`${id}-scope`} required>
+							<Select
+								value={permissions.scope}
+								onValueChange={(scope) =>
+									setPermissions({ ...permissions, scope: scope as KeyPermissions["scope"] })
+								}
+								disabled={pending}
+							>
+								<SelectTrigger id={`${id}-scope`}>
+									<SelectValue>{scopeLabels[permissions.scope]}</SelectValue>
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="spaces">指定空间</SelectItem>
+									<SelectItem value="own">自有空间</SelectItem>
+									<SelectItem value="all">全部空间</SelectItem>
+								</SelectContent>
+							</Select>
+						</Field>
+						{permissions.scope === "spaces" && (
+							<Field label="空间标识" hint="以逗号分隔；至少指定一个空间。" required>
+								<Input
+									value={spaces}
+									onChange={(event) => setSpaces(event.target.value)}
+									required
+									disabled={pending}
+								/>
+							</Field>
+						)}
+						<Field label="仅更新或删除此代理的记忆" htmlFor={`${id}-own`}>
+							<Switch
+								id={`${id}-own`}
+								checked={permissions.own_entries_only}
+								onCheckedChange={(own_entries_only) =>
+									setPermissions({ ...permissions, own_entries_only })
+								}
 								disabled={pending}
 							/>
 						</Field>
-					)}
-					<label className="ops-inline" htmlFor={`${id}-own`}>
-						<Switch
-							id={`${id}-own`}
-							checked={permissions.own_entries_only}
-							onCheckedChange={(own_entries_only) =>
-								setPermissions({ ...permissions, own_entries_only })
-							}
-							disabled={pending}
-						/>
-						Only update or delete this agent's entries
-					</label>
-					<label className="ops-inline" htmlFor={`${id}-auto-space`}>
-						<Switch
-							id={`${id}-auto-space`}
-							checked={permissions.auto_own_space}
-							onCheckedChange={(auto_own_space) =>
-								setPermissions({ ...permissions, auto_own_space })
-							}
-							disabled={pending}
-						/>
-						Automatically create an owned space
-					</label>
-				</>
-			) : (
-				<p className="ops-muted">
-					Operations: {permissions.ops}. Scope: {permissions.scope}. API keys cannot manage keys or
-					gateway settings.
-				</p>
-			)}
-			{error && <p role="alert">{error}</p>}
-			<DialogFooter>
-				<Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
-					Cancel
-				</Button>
-				<Button type="submit" loading={pending}>
-					{initial ? "Save permissions" : "Create key"}
-				</Button>
-			</DialogFooter>
+						<Field label="自动创建自有空间" htmlFor={`${id}-auto-space`}>
+							<Switch
+								id={`${id}-auto-space`}
+								checked={permissions.auto_own_space}
+								onCheckedChange={(auto_own_space) =>
+									setPermissions({ ...permissions, auto_own_space })
+								}
+								disabled={pending}
+							/>
+						</Field>
+					</>
+				) : (
+					<p className="text-basalt-sm text-basalt-muted-foreground">
+						操作：{operationText(permissions.ops)}；范围：{scopeLabels[permissions.scope]}
+						。接口密钥不能管理密钥或网关设置。
+					</p>
+				)}
+				{error && <p role="alert">{error}</p>}
+				<DialogFooter>
+					<Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
+						取消
+					</Button>
+					<Button type="submit" icon={<Save aria-hidden="true" />} loading={pending}>
+						{initial ? "保存权限" : "创建密钥"}
+					</Button>
+				</DialogFooter>
+			</Grid>
 		</form>
 	);
 }
@@ -285,77 +314,84 @@ export function KeysPage() {
 	const columns: DataTableColumn<KeyMetadata>[] = [
 		{
 			id: "name",
-			header: "Agent",
+			header: "代理",
 			sortValue: (key) => key.name,
 			accessor: (key) => (
 				<span>
 					<strong>{key.name}</strong>
 					<br />
-					<span className="ops-muted">{key.id}</span>
+					<span className="text-basalt-sm text-basalt-muted-foreground">{key.id}</span>
 				</span>
 			),
 		},
 		{
 			id: "role",
-			header: "Role / scope",
-			sortValue: (key) => key.role,
+			header: "角色 / 范围",
+			sortValue: (key) => roleLabels[key.role],
 			accessor: (key) => (
 				<span>
-					{key.role}
+					{roleLabels[key.role]}
 					<br />
-					<span className="ops-muted">
-						{key.scope} / {key.ops}
+					<span className="text-basalt-sm text-basalt-muted-foreground">
+						{scopeLabels[key.scope]} / {operationText(key.ops)}
 					</span>
 				</span>
 			),
 		},
 		{
 			id: "status",
-			header: "Status",
-			sortValue: (key) => keyStatus(key),
+			header: "状态",
+			sortValue: (key) => statusLabels[keyStatus(key)],
 			accessor: (key) => (
 				<Badge variant={keyStatus(key) === "active" ? "success" : "secondary"}>
-					{keyStatus(key)}
+					{keyStatus(key) === "active" ? (
+						<Check className="size-basalt-icon" aria-hidden="true" />
+					) : keyStatus(key) === "expired" ? (
+						<Clock className="size-basalt-icon" aria-hidden="true" />
+					) : (
+						<Ban className="size-basalt-icon" aria-hidden="true" />
+					)}
+					{statusLabels[keyStatus(key)]}
 				</Badge>
 			),
 		},
 		{
 			id: "expiry",
-			header: "Expiry",
+			header: "到期时间",
 			sortValue: (key) => key.expires_at ?? Number.POSITIVE_INFINITY,
-			accessor: (key) => time(key.expires_at),
+			accessor: (key) => (key.expires_at === null ? "永不过期" : time(key.expires_at)),
 		},
 		{
 			id: "last",
-			header: "Last used",
+			header: "最近使用",
 			sortValue: (key) => key.last_used_at ?? Number.POSITIVE_INFINITY,
 			accessor: (key) => time(key.last_used_at),
 		},
 		{
 			id: "usage",
-			header: "Recent calls",
+			header: "近期调用",
 			sortable: false,
 			accessor: (key) =>
 				key.usage.length ? (
-					<div className="ops-spark">
+					<Grid columns={1} gap="sm" className="ops-sparkline">
 						<Sparkline
 							data={key.usage.map((calls, index) => ({ x: index + 1, y: calls }))}
-							ariaLabel={`Recent calls for ${key.name}`}
+							ariaLabel={`${key.name} 的近期调用`}
 							summary={
 								<span className="sr-only">
-									{key.usage.reduce((total, calls) => total + calls, 0)} calls across{" "}
-									{key.usage.length} periods.
+									{key.usage.reduce((total, calls) => total + calls, 0)} 次调用，覆盖{" "}
+									{key.usage.length} 个时段。
 								</span>
 							}
 							dataAlternative={
 								<Collapsible>
-									<CollapsibleTrigger>Values</CollapsibleTrigger>
+									<CollapsibleTrigger>数值</CollapsibleTrigger>
 									<CollapsibleContent unstyled>
-										<Table aria-label={`Recent calls data for ${key.name}`}>
+										<Table aria-label={`${key.name} 的近期调用数据`}>
 											<TableHeader>
 												<TableRow>
-													<TableHead>Period</TableHead>
-													<TableHead textAlign="end">Calls</TableHead>
+													<TableHead>时段</TableHead>
+													<TableHead textAlign="end">调用次数</TableHead>
 												</TableRow>
 											</TableHeader>
 											<TableBody>
@@ -373,27 +409,36 @@ export function KeysPage() {
 								</Collapsible>
 							}
 						/>
-					</div>
+					</Grid>
 				) : (
-					"No calls"
+					"暂无调用"
 				),
 		},
 		{
 			id: "actions",
-			header: "Actions",
+			header: "操作",
 			sortable: false,
 			accessor: (key) => (
-				<div className="ops-actions">
+				<Grid
+					columns={3}
+					gap="sm"
+					style={{
+						gridTemplateColumns: "repeat(3, max-content)",
+						alignItems: "center",
+					}}
+				>
 					<Button
+						icon={<Pencil aria-hidden="true" />}
 						size="sm"
 						variant="outline"
 						disabled={state.pending || key.revoked_at !== null}
 						onClick={() => setEditor(key)}
-						aria-label={`Edit ${key.name}`}
+						aria-label={`编辑 ${key.name}`}
 					>
-						Edit
+						编辑
 					</Button>
 					<Button
+						icon={<RotateCw aria-hidden="true" />}
 						size="sm"
 						variant="outline"
 						disabled={state.pending || keyStatus(key) !== "active"}
@@ -401,68 +446,96 @@ export function KeysPage() {
 							setRotating(key);
 							setGrace("0");
 						}}
-						aria-label={`Rotate ${key.name}`}
+						aria-label={`轮换 ${key.name}`}
 					>
-						Rotate
+						轮换
 					</Button>
 					<Button
+						icon={<Ban aria-hidden="true" />}
 						size="sm"
 						variant="ghost"
 						disabled={state.pending || key.revoked_at !== null}
 						onClick={() => setRevoking(key)}
-						aria-label={`Revoke ${key.name}`}
+						aria-label={`撤销 ${key.name}`}
 					>
-						Revoke
+						撤销
 					</Button>
-				</div>
+				</Grid>
 			),
 		},
 	];
 	return (
-		<div className="ops-page">
+		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="API keys"
-				description="Agent permissions, expiry and usage. Plaintext is revealed once, never persisted."
+				title="接口密钥"
+				description="明文仅展示一次，绝不持久化。"
 				actions={
 					<>
-						<Button variant="outline" onClick={() => void model.load()} disabled={state.loading}>
-							Refresh
+						<Button
+							icon={<RefreshCw aria-hidden="true" />}
+							variant="outline"
+							onClick={() => void model.load()}
+							disabled={state.loading}
+						>
+							刷新
 						</Button>
 						<Button
+							icon={<Plus aria-hidden="true" />}
 							ref={createTrigger}
 							onClick={() => setEditor("create")}
 							disabled={state.pending}
 						>
-							Create key
+							创建密钥
 						</Button>
 					</>
 				}
 			/>
 			{state.error && (
 				<p role="alert">
-					{state.error}{" "}
+					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}{" "}
 					<Button variant="ghost" size="sm" onClick={() => void model.load()}>
-						Retry
+						重试
 					</Button>
 				</p>
 			)}
-			<LayerCard>
-				<DataTable
-					aria-label="API keys"
-					data={state.items}
-					columns={columns}
-					getRowId={(key) => key.id}
-					edge="attached"
-					loading={state.loading && state.items.length === 0}
-					error={state.items.length === 0 ? state.error : null}
-					onRetry={() => void model.load()}
-					empty={
-						state.loaded
-							? "No API keys. Create an agent key to get started."
-							: "API key list is unknown. Refresh to load keys."
-					}
-				/>
-			</LayerCard>
+			<SectionRule title="密钥列表">
+				<LayerCard padding="none">
+					{state.loading && state.items.length === 0 ? (
+						<LayerCard.Loading label="正在加载接口密钥" />
+					) : (
+						<DataTable
+							aria-label="接口密钥"
+							data={state.items}
+							columns={columns}
+							getRowId={(key) => key.id}
+							edge="attached"
+							error={state.items.length === 0 ? state.error : null}
+							retryLabel="重试"
+							onRetry={() => void model.load()}
+							empty={
+								state.loaded ? (
+									<LayerCard.Empty
+										icon={<KeyRound aria-hidden="true" />}
+										title="暂无接口密钥。"
+										description="为代理创建第一把密钥。"
+										action={
+											<Button
+												icon={<Plus aria-hidden="true" />}
+												disabled={state.pending}
+												onClick={() => setEditor("create")}
+											>
+												创建密钥
+											</Button>
+										}
+									/>
+								) : (
+									"接口密钥列表尚未加载，请刷新。"
+								)
+							}
+						/>
+					)}
+				</LayerCard>
+			</SectionRule>
 			<Dialog
 				open={editor !== null}
 				onOpenChange={(open) => {
@@ -471,10 +544,8 @@ export function KeysPage() {
 			>
 				<DialogContent size="lg">
 					<DialogHeader>
-						<DialogTitle>{editor === "create" ? "Create API key" : "Edit API key"}</DialogTitle>
-						<DialogDescription>
-							Permissions apply to data only. Key management remains Access-only.
-						</DialogDescription>
+						<DialogTitle>{editor === "create" ? "创建接口密钥" : "编辑接口密钥"}</DialogTitle>
+						<DialogDescription>权限仅适用于数据；密钥管理仍仅限 Access 访问。</DialogDescription>
 					</DialogHeader>
 					{editor !== null && (
 						<KeyForm
@@ -499,45 +570,49 @@ export function KeysPage() {
 			>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Rotate {rotating?.name}</DialogTitle>
+						<DialogTitle>轮换 {rotating?.name}</DialogTitle>
 						<DialogDescription>
-							The previous secret remains valid only during the selected grace period. Zero
-							invalidates it immediately.
+							旧密钥仅在所选宽限期内有效；设为零会立即使其失效。
 						</DialogDescription>
 					</DialogHeader>
 					<form
-						className="ops-stack"
 						onSubmit={async (event) => {
 							event.preventDefault();
 							if (rotating) reveal(await model.rotate(rotating.id, Number(grace)));
 						}}
 					>
-						<Field label="Grace period (seconds)" hint="0 to 604800 (7 days)." required>
-							<Input
-								type="number"
-								min={0}
-								max={604800}
-								step={1}
-								value={grace}
-								onChange={(event) => setGrace(event.target.value)}
-								required
-								disabled={state.pending}
-							/>
-						</Field>
-						{state.error && <p role="alert">{state.error}</p>}
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setRotating(null)}
-								disabled={state.pending}
-							>
-								Cancel
-							</Button>
-							<Button type="submit" loading={state.pending}>
-								Rotate key
-							</Button>
-						</DialogFooter>
+						<Grid columns={1} gap="sm">
+							<Field label="宽限期（秒）" hint="0 至 604800 秒（7 天）。" required>
+								<Input
+									type="number"
+									min={0}
+									max={604800}
+									step={1}
+									value={grace}
+									onChange={(event) => setGrace(event.target.value)}
+									required
+									disabled={state.pending}
+								/>
+							</Field>
+							{state.error && <p role="alert">{state.error}</p>}
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setRotating(null)}
+									disabled={state.pending}
+								>
+									取消
+								</Button>
+								<Button
+									type="submit"
+									icon={<RotateCw aria-hidden="true" />}
+									loading={state.pending}
+								>
+									轮换密钥
+								</Button>
+							</DialogFooter>
+						</Grid>
 					</form>
 				</DialogContent>
 			</Dialog>
@@ -546,15 +621,16 @@ export function KeysPage() {
 				onOpenChange={(open) => {
 					if (!open) setRevoking(null);
 				}}
-				title={`Revoke ${revoking?.name ?? "key"}?`}
+				title={`撤销 ${revoking?.name ?? "密钥"}？`}
 				description={
 					<>
-						{"All secrets for this key stop working immediately. This cannot be undone."}
+						{"此密钥的所有凭据将立即失效，且无法撤销此操作。"}
 						{state.error && <span role="alert">{state.error}</span>}
 					</>
 				}
 				variant="destructive"
-				confirmLabel="Revoke key"
+				cancelLabel="取消"
+				confirmLabel="撤销密钥"
 				loading={state.pending}
 				onConfirm={async () => {
 					if (revoking && (await model.revoke(revoking.id))) setRevoking(null);
@@ -575,14 +651,13 @@ export function KeysPage() {
 					}}
 				>
 					<DialogHeader>
-						<DialogTitle>Copy your key now</DialogTitle>
+						<DialogTitle>请立即复制密钥</DialogTitle>
 						<DialogDescription>
-							This is the only time the plaintext is shown. Closing this dialog permanently clears
-							it from this page.
+							明文仅展示这一次；关闭对话框会将其从此页面彻底清除。
 						</DialogDescription>
 					</DialogHeader>
 					{secret !== null && (
-						<Field label="API key">
+						<Field label="接口密钥">
 							<Input
 								readOnly
 								value={secret}
@@ -593,10 +668,11 @@ export function KeysPage() {
 						</Field>
 					)}
 					<DialogFooter>
-						<Button variant="outline" onClick={clearSecret}>
-							Close and clear
+						<Button icon={<X aria-hidden="true" />} variant="outline" onClick={clearSecret}>
+							关闭并清除
 						</Button>
 						<Button
+							icon={copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
 							loading={copying}
 							onClick={async () => {
 								if (!secret || copying) return;
@@ -606,17 +682,17 @@ export function KeysPage() {
 									await navigator.clipboard.writeText(secret);
 									if (active.current && revision === secretRevision.current) setCopied(true);
 								} catch {
-									toast.error("Unable to copy. Select the key and copy it manually.");
+									toast.error("无法复制，请选中密钥后手动复制。");
 								} finally {
 									if (active.current) setCopying(false);
 								}
 							}}
 						>
-							{copied ? "Copied" : "Copy key"}
+							{copied ? "已复制" : "复制密钥"}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
-		</div>
+		</Grid>
 	);
 }
