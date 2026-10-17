@@ -52,6 +52,11 @@ so search can report staleness; synchronization does not fabricate an embedding.
 - **配置位置：** dashboard 的「向量模型」设置页（`/settings/embedding`），只走 Access 保护的 `/api/admin/settings/embedding`，**绝不**通过 `/api/v1` 或任何 API key 暴露。
 - **字段：** `base_url`、`api_key`、`model`（默认 `text-embedding-3-small`）、`dims`（默认 1536）、`backfill_enabled`（默认关）。
 - **API key 的存储：** 在 D1 `settings` 表中用 AES-GCM 加密保存，master key 是 Worker secret `OCTO_SETTINGS_KEY`。只能写不能读：GET 只返回 `api_key_set: true/false` 和末 4 位掩码，从不回显明文；可以整体替换或清除。明文只在提交那次请求体和 Worker 内存中出现，不进日志。
+
+`OCTO_SETTINGS_KEY` is a canonical base64 encoding of exactly 32 random bytes.
+The all-zero value in `dev.vars.example` is a public local-development fixture,
+not a production secret. Production provisioning must supply an independent
+random key. Malformed keys fail closed; there is no password derivation fallback.
 - **「测试连接」按钮：** `POST /api/admin/settings/embedding/test` 用当前（或尚未保存的）配置嵌入一个固定短文本，返回耗时、实际维度、维度是否匹配和错误码（不返回上游原始错误）。
 - **调用方式：** `QueryEmbedder` 端口，实现为 `GatewayEmbedder`：`POST {base_url}/v1/embeddings`，请求头 `Authorization: Bearer <api_key>`、`Content-Type: application/json`，并且**始终带** `User-Agent: octo/<APP_VERSION>`（网关不带 UA 会返回 403）；body `{"model", "input": [...]}`；超时 5 秒；结果校验维度后做 L2 归一化。
 - **dashboard 搜索：** 查询文本经 `QueryEmbedder` 转成向量后走混合搜索。未配置或调用失败时**降级为全文 + 过滤**，响应带 `channels.vector = {skipped: "embedder_unavailable"}`，UI 显示提示条。

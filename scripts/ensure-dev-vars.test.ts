@@ -15,6 +15,12 @@ async function withDir(run: (root: string) => Promise<void>): Promise<void> {
 }
 
 describe("ensureDevVars", () => {
+	it("ships a local-only example with a valid AES-256 key encoding", async () => {
+		const example = await readFile("dev.vars.example", "utf8");
+		const key = example.match(/^OCTO_SETTINGS_KEY=(.+)$/m)?.[1] ?? "";
+		expect(Buffer.from(key, "base64").length).toBe(32);
+	});
+
 	it("copies the example when missing", async () => {
 		await withDir(async (root) => {
 			await writeFile(join(root, "dev.vars.example"), "API_KEY_PEPPER=x");
