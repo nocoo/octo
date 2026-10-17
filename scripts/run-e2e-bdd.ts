@@ -13,7 +13,6 @@ import {
 	root,
 	stopChild,
 	waitLive,
-	wranglerDevArgs,
 } from "./e2e";
 import { generateJwksPair, startJwksStub } from "./jwks-stub";
 import { L3_WORKER_PORT } from "./ports";
@@ -104,7 +103,21 @@ export async function runE2eBdd(options: RunBddOptions = {}): Promise<number> {
 			throw new Error("expected an allocated local JWKS port");
 		}
 		await writeFile(envFile, e2eEnvContents(jwksPort, L3_WORKER_PORT));
-		const args = wranglerDevArgs(L3_WORKER_PORT, paths.persist, config, envFile);
+		const args = [
+			"dev",
+			"--local",
+			"--ip",
+			"127.0.0.1",
+			"--host",
+			"127.0.0.1",
+			"--local-upstream",
+			"127.0.0.1",
+			"--port",
+			String(L3_WORKER_PORT),
+			`--persist-to=${paths.persist}`,
+			`--config=${config}`,
+			`--env-file=${envFile}`,
+		];
 		const env = { ...process.env, WRANGLER_DISABLE_REQUEST_BODY_DRAINING: "true" };
 		worker = options.startWorker
 			? options.startWorker(args, env)

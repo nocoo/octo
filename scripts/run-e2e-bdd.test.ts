@@ -99,8 +99,22 @@ describe("L3 runner", () => {
 		});
 		deps.startWorker = vi.fn((args, env) => {
 			order.push("worker");
-			expect(args).toContain("--local");
-			expect(args).toContain("27059");
+			const paths = bddPaths("unit-run", deps.root);
+			expect(args).toEqual([
+				"dev",
+				"--local",
+				"--ip",
+				"127.0.0.1",
+				"--host",
+				"127.0.0.1",
+				"--local-upstream",
+				"127.0.0.1",
+				"--port",
+				"27059",
+				`--persist-to=${paths.persist}`,
+				`--config=${join(paths.run, "wrangler.toml")}`,
+				`--env-file=${join(paths.run, ".env")}`,
+			]);
 			expect(env.WRANGLER_DISABLE_REQUEST_BODY_DRAINING).toBe("true");
 			queueMicrotask(() => {
 				worker.stdout?.emit("data", Buffer.from(""));
