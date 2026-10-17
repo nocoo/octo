@@ -1,4 +1,4 @@
-import { LinkProvider, ThemeProvider, Toaster, TooltipProvider } from "@nocoo/basalt";
+import { LinkProvider, ThemeProvider, TooltipProvider } from "@nocoo/basalt";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { AccentProvider } from "@nocoo/basalt/providers/accent";
 import { lazy, type ReactNode } from "react";
@@ -10,6 +10,7 @@ import {
 	RouterProvider,
 } from "react-router";
 import { AppShell } from "./components/layout/app-shell";
+import { notificationViewport } from "./components/layout/notifications";
 
 const OverviewPage = lazy(() =>
 	import("./routes/overview").then((page) => ({ default: page.OverviewPage })),
@@ -110,7 +111,7 @@ export function App() {
 			<AccentProvider defaultAccent="primary" persist={false}>
 				<LinkProvider render={RouterLink}>
 					<TooltipProvider>
-						<Toaster />
+						{notificationViewport}
 						<RouterProvider router={router} />
 					</TooltipProvider>
 				</LinkProvider>
