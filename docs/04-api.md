@@ -1,5 +1,7 @@
 # 04 — REST API
 
+MCP 客户端使用独立的 `/mcp` 无状态 Streamable HTTP 端点，工具直接调用本章 API 的同一服务层而非 HTTP 自转发；九个工具的输入/输出 schema、错误语义及知识库 bot 配置见 [09](09-mcp.md)。REST 路由与信封保持不变。
+
 > 返回 [文档目录](README.md)
 
 Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/api/v1`）。只接受 JSON（附件上传除外）。认证用 `Authorization: Bearer octo_…`（见 [05](05-auth-permissions-audit.md)）。**没有速率限制。**

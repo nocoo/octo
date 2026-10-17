@@ -12,7 +12,7 @@ Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not re
 
 ## Project invariants
 
-- Single Hono Worker serving `/api/v1/*` (API-key auth), `/api/admin/*` + SPA (Cloudflare Access) and, in phase 2, `/mcp`. No Durable Objects. No rate limiting.
+- Single Hono Worker serving `/api/v1/*` (API-key auth), `/api/admin/*` + SPA (Cloudflare Access) and `/mcp` (the same API keys). MCP uses official SDK 1.32.1, fresh Web Standard Streamable HTTP transports per request, JSON responses and no sessions; contract and bot setup: [docs/09-mcp.md](docs/09-mcp.md). No Durable Objects. No rate limiting.
 - Production `https://octo.hexly.ai` (`workers_dev = false`); local `https://octo.dev.hexly.ai` via Caddy.
 - Access: verify `Cf-Access-Jwt-Assertion` against `https://nocoo.cloudflareaccess.com` JWKS, `iss` and AUD `9ab761cf…88d67` (code constants in `server/lib/access-config.ts` as in giraffe; not secrets; env overrides only in tests). `/api/v1/*` and `/mcp` bypass Access and use Worker-verified API keys.
 - D1 `octo-db` is the source of truth; Vectorize is a derived index rebuilt from vectors stored in D1; R2 `octo-files` holds attachments.

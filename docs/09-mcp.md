@@ -10,7 +10,7 @@
 
 - `dist/esm/server/webStandardStreamableHttp.d.ts` 明确支持 Cloudflare Workers、原生 `Request` / `Response`，并注明 `sessionIdGenerator: undefined` 关闭 session 管理。
 - 同名 `.js` 的 `handleRequest()` 拒绝复用无状态 transport；每次 HTTP 请求必须新建 `Server` 和 `WebStandardStreamableHTTPServerTransport`，处理完毕后关闭。
-- 设置 `enableJsonResponse: true`；不设置 `eventStore`，不保存 session、消息历史或初始化状态，不使用 Durable Objects。所有响应均不生成 `Mcp-Session-Id`。
+- 设置 `enableJsonResponse: true`；省略 `sessionIdGenerator`（即运行时 undefined，符合 SDK 的 exact-optional 类型声明）和 `eventStore`，不保存 session、消息历史或初始化状态，不使用 Durable Objects。所有响应均不生成 `Mcp-Session-Id`。
 - SDK `types.js` 的最新协议是 `2025-11-25`；协议协商和版本头校验交给 SDK。初始化之后的请求携带协商的 `MCP-Protocol-Version`，不依赖落到同一个实例。
 
 上游版本证据：[SDK v1.32.1](https://github.com/modelcontextprotocol/typescript-sdk/tree/v1.32.1/src/server)。安装固定版本并记录到 lockfile；不提交镜像 URL。
@@ -24,6 +24,8 @@
 
 POST 必须带 `Content-Type: application/json`、`Accept: application/json, text/event-stream`。虽然成功响应选 JSON，客户端仍须声明两种 Streamable HTTP 媒体类型。拒绝 JSON-RPC batch（包括空数组），从而一个请求最多调用一个工具。复用 v1 的有限 JSON 读取器（请求上限 6,100,000 UTF-8 字节）；memory 的 `body` 上限仍为 1,000,000 UTF-8 字节。
 
+只声明 tools capability，不支持 task-augmented execution、服务端主动通知或恢复游标；请求 task 扩展返回 `-32602`，不创建后台 MCP 任务。
+
 ## 2. 认证、权限与审计
 
 - 每个请求（包括 initialize、通知、GET 和 DELETE）使用 v1 的 Bearer middleware。没有 key、key 错误、过期或吊销均为 HTTP `401`，使用原有 Octo 错误信封。Access cookie / JWT 不能代替 API key。
@@ -31,6 +33,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 - 非浏览器 bot 不需要 `Origin`；如有 `Origin`，必须精确匹配生产域名，开发环境匹配开发域名。不反射 Origin，不启用跨域 CORS。
 - 每次工具调用从本次已验证的 principal 构造 v1 authz，使用原有服务及 `authorize()`。不可见 space / memory 是 `not_found`；列表、搜索、计数、batchGet 和变更流不暴露不可见对象。`own_entries_only` 和移动的源/目标权限保持不变。
 - 不增加 key 管理、embedding 设置、硬删除、附件或恢复工具。`delete_memory` 只移入回收站。
+- 标签名称是 v1 的全局字典；`list_tags` 与同 key 的 REST 列表完全一致，不可见 space 的引用不计入 use_count（可以为 0），不把全局标签误当成按 space 私有的资源。
 - 写工具复用 v1 的 staged `memoryService()`，并在返回成功前执行一次 D1 batch（memory、版本、tags、FTS、change event 等同批提交）。失败不提交残留 statements；成功后按 v1 的机制调度派生索引任务。
 - 外层 audit middleware 对每个 HTTP 调用记录一次 `route=/mcp`、actor、HTTP status、request id、耗时和字节数。不记录工具 arguments、响应正文、key、原始 URL 或任意客户端提供的工具名。HTTP `200` 的工具失败仍记录 Octo `error_code`，不能误报为成功。
 
@@ -54,22 +57,22 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 ## 4. 工具输出 schema
 
-成功的 MCP `CallToolResult` 同时包含 `structuredContent: Result` 和 `content: [{type: "text", text: JSON.stringify(Result)}]`。`tools/list.outputSchema` 描述成功的 Result 对象，失败走下节单独的 error 对象。数据字段与 v1 相同，不添加 REST 外层信封或 MCP 专属数据副本。
+成功的 MCP `CallToolResult` 同时包含 `structuredContent: Result` 和 `content: [{type: "text", text: JSON.stringify(Result)}]`。`tools/list.outputSchema` 是 object，`anyOf` 明确描述成功 Result 或下节 error 对象；官方 SDK 1.32.1 客户端即使收到 `isError=true`，仍会校验存在的 structuredContent，因此失败分支也必须在 schema 中。数据字段与 v1 相同，不添加 REST 外层信封或 MCP 专属数据副本。
 
 | 工具 | Result 对象 schema |
 |---|---|
-| `search` | `{items: SearchMemory[], channels: {fts: {candidates: integer, partial: boolean}, vector: {candidates: integer, truncated: boolean, profile: object\|null}}}` |
+| `search` | `{items: SearchMemory[], channels: {fts: {candidates: integer, partial: boolean}, vector: {candidates: integer, truncated: boolean, profile: string\|null}}}` |
 | `get_memory` / `create_memory` / `update_memory` | `Memory` |
-| `batch_get` | `{items: Memory[], missing: string[]}` |
+| `batch_get` | `{items: MemorySummary[], missing: string[]}` |
 | `delete_memory` | `{trashed_at: string}`（UTC ISO） |
 | `list_changes` | `{items: Change[], next_cursor: string\|null}` |
 | `list_tags` | `{items: Tag[], next_cursor: null}` |
 | `list_spaces` | `{items: Space[], next_cursor: null}` |
 
 - `Memory`：id、space、title、body、type、tags（string[]）、importance（number）、event_time（string|null）、version（integer）、content_hash、source_key_id、updated_by_key_id、created_at、updated_at。可选扩展为 versions_count、attachments、vector_status、deleted_at、deleted_by，按 v1 include 和序列化器决定。
-- `SearchMemory` 是 Memory 加 scores 对象、可选 snippet；channels 和 scores 沿用 [03](03-search.md)。
+- `MemorySummary` 是 v1 搜索/batchGet 的既有投影：id、space、title、body、type、tags、importance、event_time、created_at、updated_at，不包含 CRUD 的版本与来源字段。`SearchMemory` 是 MemorySummary 加 scores 对象、可选 snippet；channels 和 scores 沿用 [03](03-search.md)。
 - `Change`：seq、entity、entity_id、op、at；非删除事件另有 space_id、version、actor。删除事件不返回这些扩展。
-- `Tag`：id、name、display_name、use_count、created_at、updated_at；保留 v1 的可选 merged_into。
+- `Tag`：id、name、display_name、use_count，与 v1 标签列表的投影一致；列表不返回时间戳或 merged_into。
 - `Space`：id、slug、name、description、owner_key_id（string|null）、memory_count、created_at、updated_at。
 
 ## 5. 错误映射

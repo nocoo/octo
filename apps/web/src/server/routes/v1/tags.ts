@@ -1,11 +1,12 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
-import { authorize, principalActor, visibleSpaceIds } from "../../auth/authorize";
+import { authorize, principalActor } from "../../auth/authorize";
 import type { AppVars, Env } from "../../env";
 import { ApiError, jsonOk } from "../../lib/errors";
-import { listEnvelope, serializeTag } from "../../lib/http";
+import { serializeTag } from "../../lib/http";
 import { parseStrict, readJson } from "../../lib/validate";
 import { TagRepo } from "../../repo/tags";
+import { listTags } from "../../services/catalog";
 
 const renameSchema = z.strictObject({ new_name: z.string().min(1) });
 const mergeSchema = z.strictObject({ into: z.string().min(1) });
@@ -24,12 +25,7 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
 
 	app.get("/", async (c) => {
-		const key = c.get("apiKey");
-		if (!key.ops.has("r")) {
-			throw new ApiError("forbidden", "forbidden");
-		}
-		const tags = await new TagRepo(c.env.DB).listWithCounts(visibleSpaceIds(key));
-		return jsonOk(listEnvelope(tags.map(serializeTag)));
+		return jsonOk(await listTags(c.env.DB, c.get("apiKey")));
 	});
 
 	app.post("/:name/rename", async (c) => {

@@ -35,7 +35,7 @@ async function writeAudit(context: AuditContext, started: number): Promise<void>
 	const template = route ? route.path.replace(/\{[^}]*\}/g, "") : "unmatched";
 	const status = context.res.status;
 	const errorCode =
-		status < 400
+		status < 400 && !context.get("responseErrorCode")
 			? null
 			: (context.get("responseErrorCode") ??
 				(context.error instanceof ApiError

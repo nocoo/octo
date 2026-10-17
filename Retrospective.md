@@ -505,3 +505,35 @@ duplicate name, File object and byte payload; it does not buffer or shorten
 the upload. A focused regression verifies the actual client class plus file
 identity and duplicate fields. Library support must be checked through its
 serializer, not inferred from a structural entry-point type alone.
+
+## 2026-10-18 — Validate MCP schemas with the consuming SDK
+
+The first MCP adapter described tag list items using the broader tag serializer
+shape rather than the actual `listWithCounts` projection. Handwritten HTTP
+assertions accepted the results, but the official MCP client's output-schema
+validation rejected `list_tags` because the published schema required timestamps
+that v1 intentionally does not return. The red client-interoperability test now
+exercises all nine tools after `tools/list`; the schema and Chinese contract
+describe the existing projection instead of changing the v1 response.
+
+That same test next exposed that SDK 1.32.1 validates `structuredContent` even
+when `isError` is true. Each published output schema now explicitly admits
+either the v1 success projection or the common redacted error envelope. Both
+success and failure remain machine-readable and pass the official client.
+Adding hybrid/vector search to that test also caught a mistaken profile object:
+v1 returns its profile ID string. Exercise optional non-null branches when
+deriving schemas; a text-only search with a null profile cannot prove that shape.
+
+The SDK's low-level request parser also surfaced malformed tool-call parameters
+as an internal JSON-RPC error. The adapter validates known request schemas before
+dispatch and returns a sanitized invalid-parameters error. Protocol tests must
+verify wire error codes and official-client consumption, not just HTTP success.
+Local command wrappers must avoid zsh's read-only `status` variable; a security
+scan completed successfully but its first result-printing wrapper failed for
+that unrelated shell reason. The underlying scan log was checked directly.
+
+The first real-HTTP rollback probe could not reach its injected failure: its
+seven-way UNION count query exceeded workerd D1's compound SELECT limit. Seven
+scalar COUNT subqueries retain all table-level rollback assertions without
+changing production code, adding retries, or reducing the fixture. Native
+SQLite unit helpers are not evidence of D1 SQL-limit compatibility.

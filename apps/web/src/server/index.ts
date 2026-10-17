@@ -8,6 +8,7 @@ import { runScheduledTasks } from "./http/cron";
 import { idempotencyMiddleware } from "./http/idempotency";
 import { jsonError, toErrorResponse } from "./lib/errors";
 import { newRequestId, withOctoHeaders } from "./lib/request";
+import { mcpRoutes } from "./mcp";
 import { accessMiddleware } from "./middleware/access";
 import { adminAuditRoutes } from "./routes/admin/audit";
 import { keysRoutes } from "./routes/admin/keys";
@@ -65,6 +66,7 @@ export function createApp(): Hono<{
 		return c.env.ASSETS.fetch(c.req.raw);
 	});
 	app.get("/api/live", (c) => liveResponse(c.env));
+	app.route("/mcp", mcpRoutes());
 	app.use("/api/v1/*", postCommitMiddleware(runDerivedTasks));
 	app.use("/api/admin/*", postCommitMiddleware(runDerivedTasks));
 	app.use("/api/v1/*", bearerMiddleware);
