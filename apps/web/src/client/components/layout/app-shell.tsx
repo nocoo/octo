@@ -49,7 +49,7 @@ import {
 	Tags,
 	Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
@@ -250,8 +250,10 @@ export function AppShell() {
 			<AppMain tabIndex={-1}>
 				<AppHeader
 					density="compact"
-					title={pageTitle(location.pathname)}
-					breadcrumbs={location.pathname === "/" ? [] : [{ href: "/", label: "工作台" }]}
+					breadcrumbs={[
+						...(location.pathname === "/" ? [] : [{ href: "/", label: "工作台" }]),
+						{ label: pageTitle(location.pathname) },
+					]}
 					leading={
 						mobile ? (
 							<Button
@@ -301,7 +303,9 @@ export function AppShell() {
 								action={<Banner.Action onClick={() => void model.load()}>重试</Banner.Action>}
 							/>
 						)}
-						<Outlet />
+						<Suspense fallback={<p role="status">正在加载页面…</p>}>
+							<Outlet />
+						</Suspense>
 					</ContentIsland>
 				</div>
 			</AppMain>
