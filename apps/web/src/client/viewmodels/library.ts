@@ -44,6 +44,7 @@ export interface LibraryState {
 	spaces: LibrarySpace[];
 	keys: LibraryKey[];
 	truncated: boolean;
+	nextCursor: string | null;
 	failures: { id: string; message: string }[];
 	purge: { id: string; title: string; stage: "title" | "confirm" } | null;
 }
@@ -64,6 +65,8 @@ export function libraryError(error: unknown): string {
 }
 
 export class LibraryModel extends Store<LibraryState> {
+	private trashCursors = new Set<string>();
+
 	constructor(
 		readonly kind: LibraryKind,
 		private readonly api: AdminClient = adminApi,
@@ -78,6 +81,7 @@ export class LibraryModel extends Store<LibraryState> {
 			spaces: [],
 			keys: [],
 			truncated: false,
+			nextCursor: null,
 			failures: [],
 			purge: null,
 		});
@@ -98,6 +102,10 @@ export class LibraryModel extends Store<LibraryState> {
 	}
 
 	private async read(): Promise<void> {
+		if (this.kind === "trash") {
+			await this.readTrash(null);
+			return;
+		}
 		if (this.kind === "spaces") {
 			const spaces = await this.api.request<ListPage<LibrarySpace>>("/spaces");
 			const keys = await this.api.request<ListPage<LibraryKey>>("/keys");
@@ -114,9 +122,7 @@ export class LibraryModel extends Store<LibraryState> {
 		do {
 			const query = new URLSearchParams({ limit: "200" });
 			if (cursor) query.set("cursor", cursor);
-			const page: ListPage<LibraryMemory> = await this.api.request(
-				`/${this.kind === "trash" ? "trash" : "memories"}?${query}`,
-			);
+			const page: ListPage<LibraryMemory> = await this.api.request(`/memories?${query}`);
 			memories.push(...page.items);
 			cursor = page.next_cursor;
 			if (cursor && seen.has(cursor)) throw new Error("Repeated pagination cursor");
@@ -127,6 +133,26 @@ export class LibraryModel extends Store<LibraryState> {
 
 	load(): Promise<boolean> {
 		return this.run(() => this.read());
+	}
+
+	private async readTrash(cursor: string | null): Promise<void> {
+		const query = new URLSearchParams({ limit: "200" });
+		if (cursor) query.set("cursor", cursor);
+		const page = await this.api.request<ListPage<LibraryMemory>>(`/trash?${query}`);
+		const seen = cursor ? new Set(this.trashCursors) : new Set<string>();
+		if (page.next_cursor && seen.has(page.next_cursor))
+			throw new Error("Repeated pagination cursor");
+		if (page.next_cursor) seen.add(page.next_cursor);
+		const memories = new Map((cursor ? this.state.memories : []).map((item) => [item.id, item]));
+		for (const item of page.items) memories.set(item.id, item);
+		this.trashCursors = seen;
+		this.set({ memories: [...memories.values()], nextCursor: page.next_cursor, ready: true });
+	}
+
+	loadMore(): Promise<boolean> {
+		const cursor = this.state.nextCursor;
+		if (this.kind !== "trash" || !cursor) return Promise.resolve(false);
+		return this.run(() => this.readTrash(cursor));
 	}
 
 	private async refreshCommitted(): Promise<void> {

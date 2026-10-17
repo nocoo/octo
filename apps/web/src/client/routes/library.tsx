@@ -623,7 +623,10 @@ export function TrashPage() {
 					</div>
 				}
 			/>
-			<LibraryStatus state={state} onRetry={() => void model.load()} />
+			<LibraryStatus
+				state={state}
+				onRetry={() => void (state.nextCursor && state.ready ? model.loadMore() : model.load())}
+			/>
 			{state.failures.map((failure) => (
 				<p key={failure.id} role="alert">
 					{failure.id}: {failure.message}
@@ -641,8 +644,24 @@ export function TrashPage() {
 					pageSize={25}
 					edge="attached"
 					loading={state.busy && !state.ready}
-					empty="Trash is empty for these filters."
+					empty={
+						state.nextCursor
+							? "No loaded memories match these filters. Load more to search older trash."
+							: "Trash is empty for these filters."
+					}
 				/>
+				<LayerCard.Footer>
+					<div className="library-actions">
+						<p className="library-muted" role="status">
+							{state.memories.length} memories loaded. Filters apply to loaded memories.
+						</p>
+						{state.nextCursor && (
+							<Button variant="outline" loading={state.busy} onClick={() => void model.loadMore()}>
+								Load more
+							</Button>
+						)}
+					</div>
+				</LayerCard.Footer>
 			</LayerCard>
 			<Dialog
 				open={state.purge?.stage === "title"}
