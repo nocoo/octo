@@ -25,6 +25,8 @@ export interface Env extends CloudflareBindings {
 	CF_ACCESS_AUD?: string;
 	ACCESS_JWKS_URL?: string;
 	ACCESS_DEV_BYPASS_EMAIL?: string;
+	/** L2 only: set to `1` to serialize vector sync jobs and avoid workerd drain deadlocks. */
+	OCTO_VECTOR_SYNC_PARALLEL?: string;
 }
 
 export const WORKER_BINDINGS = ["DB", "FILES", "ASSETS"] as const;

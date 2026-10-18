@@ -4,6 +4,7 @@ import { MAX_MULTIPART_OVERHEAD_BYTES } from "../../apps/web/src/server/attachme
 import { signAttachmentUrl } from "../../apps/web/src/server/attachments/url-sign";
 import { seedAttachmentKey } from "../../scripts/attachment-fixtures";
 import { e2eFetch as fetch } from "../../scripts/e2e-fetch";
+import { waitForFixtureBackground } from "../../scripts/fixture-d1";
 import {
 	cleanupAttachmentFixtures,
 	setupAttachmentFixtures as setup,
@@ -440,6 +441,15 @@ describe("attachments API", { sequential: true }, () => {
 
 	it("bounds multipart envelope and extra-field bytes", async () => {
 		const { header } = await setup();
+		const extra = new FormData();
+		extra.append("file", new File(["x"], "a.pdf", { type: "application/pdf" }));
+		extra.append(
+			"note",
+			new Blob([new Uint8Array(MAX_ATTACHMENT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES)]),
+			"extra.bin",
+		);
+		await expectError(await multipartUpload(header, extra), 413, "payload_too_large");
+		await waitForFixtureBackground(base, fetch);
 		const form = new FormData();
 		form.append("file", new File(["x"], "a.pdf", { type: "application/pdf" }));
 		const encoded = new Request(`${base}${memoryPath}`, { method: "POST", body: form });
@@ -458,13 +468,5 @@ describe("attachments API", { sequential: true }, () => {
 			413,
 			"payload_too_large",
 		);
-		const extra = new FormData();
-		extra.append("file", new File(["x"], "a.pdf", { type: "application/pdf" }));
-		extra.append(
-			"note",
-			new Blob([new Uint8Array(MAX_ATTACHMENT_BYTES + MAX_MULTIPART_OVERHEAD_BYTES)]),
-			"extra.bin",
-		);
-		await expectError(await multipartUpload(header, extra), 413, "payload_too_large");
 	});
 });

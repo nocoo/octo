@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { beforeAll, describe, expect, it } from "vitest";
+import { waitForFixtureBackground } from "../../scripts/fixture-d1";
 import { L2_ACCESS_AUD, l2AccessIss, loadJwksState, signAccessJwt } from "../../scripts/jwks-stub";
 import { L2_JWKS_PORT } from "../../scripts/ports";
 import { base, e2eD1, query, seedKey, seedSpace, sqlText } from "../fixtures/l2-batch";
@@ -105,6 +106,7 @@ describe("admin profiles and durable derived work over HTTP", () => {
 	});
 
 	it("backfills committed text with a User-Agent and preserves caller ownership", async () => {
+		await waitForFixtureBackground(base);
 		const db = await e2eD1();
 		const space = await seedSpace(db);
 		const requests: Array<{

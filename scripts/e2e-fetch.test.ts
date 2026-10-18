@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import { FormData as ClientFormData, request } from "undici";
+import { request } from "undici";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { e2eFetch } from "./e2e-fetch";
 
@@ -46,12 +46,12 @@ describe("L2 HTTP response ownership", () => {
 		expect(call?.[0]).toBe("http://127.0.0.1:9/upload");
 		expect(call?.[1]?.body).toBe(body);
 		expect(call?.[1]?.method).toBe("POST");
-		expect(call?.[1]?.headers).toEqual({ "content-type": "image/png" });
+		expect(call?.[1]?.headers).toEqual({ "content-type": "image/png", connection: "close" });
 		expect(call?.[1]?.signal).toBeNull();
 		expect(fetch).not.toHaveBeenCalled();
 	});
 
-	it("preserves multipart bodies and abort signals", async () => {
+	it("preserves encoded multipart bodies and abort signals", async () => {
 		const body = new FormData();
 		const file = new File(["contents"], "file.png", { type: "image/png" });
 		body.set("file", file);
@@ -71,10 +71,11 @@ describe("L2 HTTP response ownership", () => {
 		expect(request).toHaveBeenCalledOnce();
 		const options = vi.mocked(request).mock.calls[0]?.[1];
 		expect(options?.signal).toBe(controller.signal);
-		expect(options?.body).toBeInstanceOf(ClientFormData);
-		const sent = options?.body as ClientFormData;
-		expect(sent.get("file")).toBe(file);
-		expect(sent.getAll("note")).toEqual(["first", "second"]);
+		expect(options?.body).toBeInstanceOf(Uint8Array);
+		const requestHeaders = options?.headers as
+			| Record<string, string | string[] | undefined>
+			| undefined;
+		expect(requestHeaders?.["content-type"]).toMatch(/^multipart\/form-data; boundary=/);
 	});
 
 	it("streams chunked request and response bytes without buffering the upload", async () => {
