@@ -15,6 +15,22 @@ describe("batchCreateBodySchema", () => {
 });
 
 describe("batchUpdateBodySchema", () => {
+	it("accepts zero expected_version in flat and nested updates for OCC", () => {
+		expect(
+			batchUpdateBodySchema.parse({
+				items: [
+					{ id: "first", title: "flat", expected_version: 0 },
+					{ id: "second", patch: { title: "nested", expected_version: 0 } },
+				],
+			}),
+		).toEqual({
+			items: [
+				{ id: "first", title: "flat", expected_version: 0 },
+				{ id: "second", title: "nested", expected_version: 0 },
+			],
+		});
+	});
+
 	it("accepts flat and nested items and normalizes both to flat patches", () => {
 		expect(
 			batchUpdateBodySchema.parse({
@@ -48,7 +64,7 @@ describe("batchUpdateBodySchema", () => {
 		{ id: "id", patch: { title: "missing version" } },
 		{ id: "id", expected_version: 1 },
 		{ id: "id", patch: { expected_version: 1 } },
-		{ id: "id", title: "invalid version", expected_version: 0 },
+		{ id: "id", title: "invalid version", expected_version: -1 },
 		{ id: "id", patch: { title: "invalid version", expected_version: 1.5 } },
 		{ id: "", title: "empty id", expected_version: 1 },
 	])("rejects invalid or mixed update forms %j", (item) => {

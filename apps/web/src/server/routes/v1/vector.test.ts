@@ -96,7 +96,7 @@ describe("memory vector PUT", () => {
 
 	it.each([
 		[{ profile: "tiny-3", values: [1, 0, 0] }, 400],
-		[{ profile: "tiny-3", values: [1, 0, 0], expected_version: 0 }, 400],
+		[{ profile: "tiny-3", values: [1, 0, 0], expected_version: 0 }, 409],
 		[{ profile: "tiny-3", values: [1, 0, 0], expected_version: -1 }, 400],
 		[{ profile: "tiny-3", values: [1, 0, 0], expected_version: 1.5 }, 400],
 		[{ profile: "tiny-3", values: [1, 0, 0], expected_version: "1" }, 400],

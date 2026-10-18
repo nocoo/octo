@@ -65,6 +65,20 @@ describe("memoryPatchSchema", () => {
 		expect(memoryPatchSchema.safeParse({}).success).toBe(false);
 	});
 
+	it("accepts zero expected_version for OCC", () => {
+		expect(memoryPatchSchema.parse({ title: "new", expected_version: 0 })).toEqual({
+			title: "new",
+			expected_version: 0,
+		});
+	});
+
+	it.each([-1, 1.5, "0", null, Number.POSITIVE_INFINITY])(
+		"rejects invalid expected_version %s",
+		(expected_version) => {
+			expect(memoryPatchSchema.safeParse({ title: "new", expected_version }).success).toBe(false);
+		},
+	);
+
 	it("allows null event_time and rejects non-UTC timestamps", () => {
 		expect(memoryPatchSchema.safeParse({ event_time: null }).success).toBe(true);
 		expect(memoryPatchSchema.safeParse({ event_time: "2026-01-01T00:00:00Z" }).success).toBe(true);

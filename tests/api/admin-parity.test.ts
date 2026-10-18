@@ -327,7 +327,6 @@ describe("admin parity real HTTP", () => {
 				});
 			for (const invalid of [
 				{ profile: body.profile, values },
-				{ ...body, expected_version: 0 },
 				{ ...body, expected_version: -1 },
 				{ ...body, expected_version: 1.5 },
 				{ ...body, expected_version: "1" },
@@ -342,6 +341,7 @@ describe("admin parity real HTTP", () => {
 				expect((await put(invalid)).status).toBe(400);
 			expect((await put(body, { "If-Match": "invalid" })).status).toBe(400);
 			expect((await put(body, { "If-Match": "2" })).status).toBe(400);
+			expect((await put({ ...body, expected_version: 0 })).status).toBe(409);
 			expect((await put({ ...body, expected_version: 7 })).status).toBe(409);
 			const updated = await put(body, { "Idempotency-Key": `vector-${id}` });
 			expect(updated.status).toBe(200);
