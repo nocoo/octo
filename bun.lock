@@ -8,7 +8,7 @@
         "@modelcontextprotocol/sdk": "1.32.1",
         "diff": "^9.0.0",
         "hono": "^4.13.12",
-        "zod": "^4.5.0-canary.20260825T041357",
+        "zod": "^4.6.7",
       },
       "devDependencies": {
         "@biomejs/biome": "2.5.15",
@@ -48,7 +48,7 @@
         "remark-gfm": "^4.0.1",
         "remark-parse": "^11.0.0",
         "unified": "^11.0.5",
-        "zod": "^4.5.0-canary.20260825T041357",
+        "zod": "^4.6.7",
       },
     },
   },
@@ -1178,7 +1178,7 @@
 
     "youch-core": ["youch-core@0.3.3", "", { "dependencies": { "@poppinss/exception": "^1.2.2", "error-stack-parser-es": "^1.0.5" } }, "sha1-xdPYWu6g2Lx7Nul2TtPxS3zt3H0="],
 
-    "zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
+    "zod": ["zod@4.6.7", "", {}, "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="],
 
     "zod-to-json-schema": ["zod-to-json-schema@3.25.2", "", { "peerDependencies": { "zod": "^3.25.28 || ^4" } }, "sha1-P6eZp7rdVUVBRy+2WEP9xGCy5ao="],
 
