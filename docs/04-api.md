@@ -284,9 +284,9 @@ Audit returns `{items,next_cursor}`. Items contain
 `at` is ISO UTC; byte counts and `ip_hash` can be null. `action` matches the
 normalized route template exactly (or `unmatched`), not the HTTP method or raw
 URL. `from`/`to` accept UTC dates or ISO-Z timestamps; day bounds are inclusive.
-Usage returns `{items,next_cursor}` with daily rows
-`{day,key_id,calls,errors,writes,bytes_in,bytes_out}` from the hourly rollup,
-not a live request-time aggregation. Its date bounds accept inclusive UTC days.
+Usage 返回 `{items,next_cursor}`，每日行结构为
+`{day,key_id,calls,errors,writes,bytes_in,bytes_out}`，随审计 batch 提交实时增量更新；
+小时 cron 仅负责幂等修复，查询时不会重新扫描审计日志。日期范围包含起止 UTC 日期。
 Without `key_id`, admin usage lists per-day/per-key rows; v1 always uses the
 authenticated key and ignores a supplied `key_id`. Both endpoints accept
 `limit` (1–200, default 50) and signed cursors bound to the effective filters
