@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { spyBusinessBatch } from "../../../../../tests/fixtures/business-batch";
 import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import { mintApiKey } from "../auth/api-key";
 import type { Env } from "../env";
@@ -78,7 +79,7 @@ describe("production batch HTTP transactions", () => {
 			const scenario = await fixture();
 			const id = await create(scenario);
 			const batch = scenario.db.batch.bind(scenario.db);
-			const spy = vi.spyOn(scenario.db, "batch").mockImplementationOnce(async (statements) => {
+			const spy = spyBusinessBatch(scenario.db).mockImplementationOnce(async (statements) => {
 				await batch(statements);
 				throw new Error("lost committed acknowledgment");
 			});
@@ -122,7 +123,7 @@ describe("production batch HTTP transactions", () => {
 		};
 		expect(new TextEncoder().encode(JSON.stringify(payload)).byteLength).toBeGreaterThan(6_100_000);
 		const batch = scenario.db.batch.bind(scenario.db);
-		const spy = vi.spyOn(scenario.db, "batch").mockImplementationOnce(async (statements) => {
+		const spy = spyBusinessBatch(scenario.db).mockImplementationOnce(async (statements) => {
 			await batch(statements);
 			throw new Error("lost committed acknowledgment");
 		});
@@ -174,7 +175,7 @@ describe("production batch HTTP transactions", () => {
 
 	it("does not persist a lazily created own space when the HTTP transaction fails", async () => {
 		const scenario = await fixture("w", true);
-		const batch = vi.spyOn(scenario.db, "batch");
+		const batch = spyBusinessBatch(scenario.db);
 		scenario.sqlite.exec(
 			"CREATE TRIGGER fail_replay BEFORE INSERT ON idempotency_response_chunks BEGIN SELECT RAISE(ABORT, 'response failure'); END",
 		);
@@ -377,7 +378,7 @@ describe("production batch HTTP transactions", () => {
 
 	it("commits real memory, version, tag, FTS, change and replay effects together", async () => {
 		const scenario = await fixture();
-		const batch = vi.spyOn(scenario.db, "batch");
+		const batch = spyBusinessBatch(scenario.db);
 		const response = await scenario.post(
 			"Create",
 			{ items: [input, { ...input, title: "second" }] },
@@ -573,7 +574,7 @@ describe("production batch HTTP transactions", () => {
 		const scenario = await fixture();
 		const id = await create(scenario);
 		const batch = scenario.db.batch.bind(scenario.db);
-		vi.spyOn(scenario.db, "batch").mockImplementationOnce(async (statements) => {
+		spyBusinessBatch(scenario.db).mockImplementationOnce(async (statements) => {
 			scenario.sqlite
 				.prepare("UPDATE memories SET title = 'concurrent', version = 2 WHERE id = ?")
 				.run(id);

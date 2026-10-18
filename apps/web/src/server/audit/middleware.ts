@@ -4,6 +4,7 @@ import { hashSecret } from "../auth/api-key";
 import type { AppVars, Env } from "../env";
 import { ApiError } from "../lib/errors";
 import { newUlid } from "../lib/ulid";
+import { usageIncrement } from "./usage";
 
 type AuditContext = Context<{ Bindings: Env; Variables: AppVars }>;
 const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
@@ -102,11 +103,15 @@ async function writeAudit(
 		bytes,
 		ipHash,
 	);
+	const statements = [statement];
 	if (context.get("mcpWrite")) {
-		await context.env.DB.batch([
-			statement,
+		statements.push(
 			context.env.DB.prepare("INSERT INTO mcp_audit_writes (audit_id) VALUES (?)").bind(auditId),
-		]);
+		);
+	}
+	if (key) statements.push(usageIncrement(context.env.DB, auditId));
+	if (statements.length > 1) {
+		await context.env.DB.batch(statements);
 	} else {
 		await statement.run();
 	}
