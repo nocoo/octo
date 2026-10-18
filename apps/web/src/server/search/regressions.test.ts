@@ -19,6 +19,7 @@ function fixture(
 	const sqlite = new DatabaseSync(":memory:");
 	databases.push(sqlite);
 	sqlite.exec(migrationSqlForNode(readFileSync("migrations/0001_core.sql", "utf8")));
+	sqlite.exec(readFileSync("migrations/0006_tag_positions.sql", "utf8"));
 	sqlite.exec(`INSERT INTO spaces VALUES ('s1','visible','Visible','',NULL,1,1), ('s2','hidden','Hidden','',NULL,1,1);
 		INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
 		VALUES ('m1','s1','cloudflare 部署','public','note','k','hash',1,1);
@@ -72,7 +73,7 @@ describe("bounded search SQL", () => {
 			const names = Array.from({ length: 50 }, (_, i) => `tag${i}`);
 			for (const name of names) {
 				sqlite.prepare("INSERT INTO tags VALUES (?,?,?,NULL,1,1)").run(name, name, name);
-				sqlite.prepare("INSERT INTO memory_tags VALUES ('m1',?)").run(name);
+				sqlite.prepare("INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1',?)").run(name);
 			}
 			const result = await runFtsChannel(
 				db,
@@ -104,7 +105,7 @@ describe("bounded search SQL", () => {
 		for (const id of ids) {
 			addMemory(sqlite, id, "cloudflare", 1);
 			for (const name of names)
-				sqlite.prepare("INSERT INTO memory_tags VALUES (?,?)").run(id, name);
+				sqlite.prepare("INSERT INTO memory_tags (memory_id, tag_id) VALUES (?,?)").run(id, name);
 		}
 		const result = await searchMemories(
 			authz,
@@ -193,10 +194,10 @@ describe("same-statement memory visibility", () => {
 					sqlite.exec(`
 				UPDATE memories SET space_id='s2' WHERE id='m1';
 				DELETE FROM memory_tags WHERE memory_id='m1';
-				INSERT INTO memory_tags VALUES ('m1','secret');`);
+				INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1','secret');`);
 			});
 			sqlite.exec(
-				"INSERT INTO tags VALUES ('public','public','Public',NULL,1,1), ('secret','secret','Secret',NULL,1,1); INSERT INTO memory_tags VALUES ('m1','public')",
+				"INSERT INTO tags VALUES ('public','public','Public',NULL,1,1), ('secret','secret','Secret',NULL,1,1); INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1','public')",
 			);
 			const result =
 				operation === "search"
@@ -265,7 +266,7 @@ describe("same-statement memory visibility", () => {
 					if (sql.includes("m.body, m.type")) sqlite.exec(mutation);
 				});
 				sqlite.exec(
-					"INSERT INTO tags VALUES ('t1','infra','Infra',NULL,1,1); INSERT INTO memory_tags VALUES ('m1','t1')",
+					"INSERT INTO tags VALUES ('t1','infra','Infra',NULL,1,1); INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1','t1')",
 				);
 				const result = await searchMemories(
 					authz,
@@ -311,7 +312,7 @@ describe("same-statement memory visibility", () => {
 	it.each(["all", "any"] as const)("checks tags_%s in the final content read", async (kind) => {
 		const { db, sqlite } = fixture();
 		sqlite.exec(
-			"INSERT INTO tags VALUES ('t1','infra','infra',NULL,1,1); INSERT INTO memory_tags VALUES ('m1','t1')",
+			"INSERT INTO tags VALUES ('t1','infra','infra',NULL,1,1); INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m1','t1')",
 		);
 		const filters = kind === "all" ? { tags_all: ["infra"] } : { tags_any: ["infra"] };
 		expect(

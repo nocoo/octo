@@ -69,6 +69,15 @@ export function migratedSqlite(): { raw: DatabaseSync; d1: D1Database } {
 			"utf8",
 		),
 	);
+	raw.exec(
+		readFileSync(
+			join(
+				dirname(fileURLToPath(import.meta.url)),
+				"../../../../../../migrations/0006_tag_positions.sql",
+			),
+			"utf8",
+		),
+	);
 	return { raw, d1: sqliteD1(raw) };
 }
 

@@ -53,7 +53,7 @@ export class FakeD1 {
 		string,
 		{ id: string; space_id: string; deleted_at: number | null; title?: string; body?: string }
 	>();
-	memoryTags: Array<{ memory_id: string; tag_id: string }> = [];
+	memoryTags: Array<{ memory_id: string; tag_id: string; position?: number }> = [];
 	changes: Array<Record<string, unknown>> = [];
 	fts = new Map<string, string>();
 	hiddenNames = new Set<string>();
@@ -316,6 +316,15 @@ export class FakeD1 {
 					.map((link) => this.tags.get(link.tag_id)?.name)
 					.filter((name): name is string => Boolean(name));
 				this.fts.set(memId, names.join(" "));
+			}
+			return [];
+		}
+		if (sql.includes("UPDATE memory_tags SET position = MIN")) {
+			for (const target of this.memoryTags.filter((tag) => tag.tag_id === binds[1])) {
+				const source = this.memoryTags.find(
+					(tag) => tag.memory_id === target.memory_id && tag.tag_id === binds[0],
+				);
+				if (source) target.position = Math.min(target.position ?? 0, source.position ?? 0);
 			}
 			return [];
 		}

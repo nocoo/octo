@@ -266,6 +266,11 @@ export class TagRepo {
 				changeInsert,
 				this.db
 					.prepare(
+						"UPDATE memory_tags SET position = MIN(position, (SELECT source.position FROM memory_tags source WHERE source.memory_id = memory_tags.memory_id AND source.tag_id = ?)) WHERE tag_id = ? AND EXISTS (SELECT 1 FROM memory_tags source WHERE source.memory_id = memory_tags.memory_id AND source.tag_id = ?)",
+					)
+					.bind(from.id, into.id, from.id),
+				this.db
+					.prepare(
 						"DELETE FROM memory_tags WHERE tag_id = ? AND memory_id IN (SELECT memory_id FROM memory_tags WHERE tag_id = ?)",
 					)
 					.bind(from.id, into.id),

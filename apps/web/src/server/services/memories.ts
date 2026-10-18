@@ -573,7 +573,7 @@ export class MemoryService {
 			const canonical = await this.tags.follow(row);
 			resolved.set(canonical.id, canonical);
 		}
-		return [...resolved.values()].sort((left, right) => left.name.localeCompare(right.name));
+		return [...resolved.values()];
 	}
 
 	private async filterSpaceIds(

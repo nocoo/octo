@@ -4,6 +4,8 @@
 
 The round-one tag visibility fixture added an independent hidden-space tag to a memory already used by the merge assertion. The index-snapshot hook correctly rejected the first commit because that assertion still expected only the merged tag. The expected associations now include the unrelated tag, proving merge preserves it. When extending a shared fixture, inspect all later exact-state assertions before committing; never weaken the hook. Initial repository discovery also used an unsupported Herdr command and guessed absent paths; those read-only probes had no side effects. Discover commands and directories before addressing them.
 
+The tag-position migration exposed that the local startup runner reapplies every post-core SQL file. Earlier files were idempotent table creation, but repeating an ALTER TABLE failed. A regression now checks restarting preserves an already stored non-default position; local startup checks the column before replaying this additive migration. Production must apply numbered migrations once through D1 migration management. Inspect every migration executor, not just clean-database fixtures, before adding a schema change.
+
 ### 2026-10-18 — Check binding assertions beyond adapter tests
 
 The Vectorize metadata fix passed the focused adapter suite, but the first commit was blocked by a route-level production-binding assertion that still expected the invalid boolean. The hook stayed enabled and no failing commit was created. Update binding expectations at both the adapter and its HTTP callers before considering focused tests sufficient; port-level boolean inputs remain unchanged.

@@ -41,7 +41,7 @@ export async function loadMemoriesByIds(
         m.created_at, m.updated_at, m.event_time,
         (SELECT json_group_array(name) FROM (
           SELECT t.name FROM memory_tags mt JOIN tags t ON t.id = mt.tag_id
-          WHERE mt.memory_id = m.id ORDER BY t.name
+          WHERE mt.memory_id = m.id ORDER BY mt.position, mt.tag_id
         )) AS tags_json
        FROM memories m
        JOIN spaces s ON s.id = m.space_id

@@ -228,7 +228,7 @@ describe("TagRepo", () => {
 		expect(result.memories).toBe(2);
 		expect(db.tags.get("a")?.merged_into).toBe("b");
 		expect(db.memoryTags).toEqual([
-			{ memory_id: "m1", tag_id: "b" },
+			{ memory_id: "m1", tag_id: "b", position: 0 },
 			{ memory_id: "m2", tag_id: "b" },
 		]);
 		expect(db.changes).toHaveLength(2);

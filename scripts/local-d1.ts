@@ -59,6 +59,17 @@ export function applyMigrations(d1: D1Exec, migrationsDir = join(root, "migratio
 		if (file === "0001_core.sql") {
 			continue;
 		}
+		if (file === "0006_tag_positions.sql") {
+			const output = d1([
+				"--command",
+				"SELECT name FROM pragma_table_info('memory_tags') WHERE name = 'position'",
+				"--json",
+			]);
+			const result = JSON.parse(output.slice(output.indexOf("["))) as Array<{
+				results?: Array<{ name: string }>;
+			}>;
+			if (result[0]?.results?.some((column) => column.name === "position")) continue;
+		}
 		d1([`--file=${join(migrationsDir, file)}`]);
 	}
 }

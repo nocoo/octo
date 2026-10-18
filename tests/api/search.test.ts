@@ -76,7 +76,7 @@ INSERT INTO memories_fts(title,body,tags) VALUES ('部署 cloudflare worker','�
 INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;
 INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
 VALUES ('${id}','te3-small-1536','text-embedding-3-small',1536,X'${blob}','hash',${now});
-INSERT INTO memory_tags VALUES ('${id}','tag_srch_infra');`);
+INSERT INTO memory_tags (memory_id, tag_id) VALUES ('${id}','tag_srch_infra');`);
 	}
 	for (const [id, body] of [
 		[ACCENT, "e\u0301t"],

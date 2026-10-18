@@ -142,7 +142,7 @@ export class MemoryRepo {
 		}
 		const { results } = await this.db
 			.prepare(
-				"SELECT mt.memory_id AS memory_id, t.name AS name FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id IN (SELECT value FROM json_each(?)) ORDER BY t.name",
+				"SELECT mt.memory_id AS memory_id, t.name AS name FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id IN (SELECT value FROM json_each(?)) ORDER BY mt.position, mt.tag_id",
 			)
 			.bind(JSON.stringify(ids))
 			.all<{ memory_id: string; name: string }>();
@@ -156,7 +156,7 @@ export class MemoryRepo {
 
 	async tagIdsByMemory(id: string): Promise<string[]> {
 		const { results } = await this.db
-			.prepare("SELECT tag_id FROM memory_tags WHERE memory_id = ? ORDER BY tag_id")
+			.prepare("SELECT tag_id FROM memory_tags WHERE memory_id = ? ORDER BY position, tag_id")
 			.bind(id)
 			.all<{ tag_id: string }>();
 		return results.map((row) => row.tag_id);
@@ -479,7 +479,7 @@ export class MemoryRepo {
 			del,
 			this.db
 				.prepare(
-					"INSERT INTO memory_tags (memory_id, tag_id) SELECT ?, CASE WHEN EXISTS (SELECT 1 FROM tags WHERE id = json_extract(value, '$.id') AND name = json_extract(value, '$.name') AND merged_into IS NULL) THEN json_extract(value, '$.id') ELSE NULL END FROM json_each(?) WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)",
+					"INSERT INTO memory_tags (memory_id, tag_id, position) SELECT ?, CASE WHEN EXISTS (SELECT 1 FROM tags WHERE id = json_extract(value, '$.id') AND name = json_extract(value, '$.name') AND merged_into IS NULL) THEN json_extract(value, '$.id') ELSE NULL END, CAST(key AS INTEGER) FROM json_each(?) WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)",
 				)
 				.bind(
 					input.id,

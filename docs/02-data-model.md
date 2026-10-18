@@ -80,6 +80,7 @@ CREATE TABLE tags (
 CREATE TABLE memory_tags (
   memory_id TEXT NOT NULL REFERENCES memories(id),
   tag_id TEXT NOT NULL REFERENCES tags(id),
+  position INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (memory_id, tag_id)
 );
 CREATE INDEX memory_tags_tag ON memory_tags(tag_id);
@@ -218,6 +219,7 @@ process never reaches a catch handler.
 ## 4. 版本
 
 - 每次 create / update / rollback / restore / move 都生成新版本。版本号从 1 开始，按 memory 自增。
+- 标签数组的顺序属于版本内容：仅重排标签也生成新版本，diff 返回 `tags` 字段的前后数组；未提交标签的更新保持当前顺序。
 - 只存完整快照，不存增量；diff 在读取时由服务端用 jsdiff 计算（行级 + 字段级）。
 - 回滚 = 把旧版本复制成新版本，`op=rollback`、`rollback_of=N`；历史不改写。
 - 版本永久保留。正文按平均 2 KB 估算，D1 单库 10 GB 足够用很久；容量告警放进健康页。
@@ -225,6 +227,8 @@ process never reaches a catch handler.
 ## 5. 标签
 
 - 标签是全局的，不分 space。写入时规范化：trim、NFKC、拉丁字母小写，长度 1–64。
+- 标签按调用方顺序规范化、解析合并别名并去重，保留第一次出现的位置。`memory_tags.position` 存储顺序，CRUD、list、search、batchGet 和版本快照均保留此顺序。重命名不移动位置；合并时重复标签保留两者最靠前的位置。
+- 加法式迁移 `0006_tag_positions.sql` 增加 `position` 并按旧 API 的名称字典序初始化既有关系，不删除数据、不改写历史版本。历史快照保留原数组；回滚后按该快照顺序写入新版本。
 - 重命名：只改 `display_name` / `name`；有冲突时返回 409 并建议改用合并。
 - 合并 A→B：在一个 batch 内把 `memory_tags` 从 A 改到 B（去重）、设置 `A.merged_into=B`、对受影响的 memory 各写一条 `changes(op=tag_merged)`。**不**生成新的 memory 版本（标签变化单独记在 change feed 里）；之后用 A 的名字写入会自动重定向到 B。
 - API key 的标签列表（REST / MCP）只返回至少被一个可见 space 内未删除 memory 使用的标签，`use_count` 也只统计这些引用；没有可见空间时返回空列表。Access 后台保留完整全局标签字典（包括零引用标签），计数仍只统计未删除 memory。

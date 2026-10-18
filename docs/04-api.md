@@ -13,6 +13,7 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 - 每个响应都带 `X-Request-Id` 和 `X-Octo-Version`。
 - 乐观并发：PATCH / rollback 必须带 `If-Match: <version>`（或 body 里的 `expected_version`）；不匹配返回 409。
 - 未知字段 → 400 `validation_failed`（zod strict）。
+- 标签数组按提交顺序规范化、去重（保留第一次出现），响应不按字母排序；纯重排也是更新，产生新版本并出现在版本 diff 的 `tags` 字段中。重命名不重排，合并去重保留最靠前的位置。
 
 ## 2. 错误信封
 

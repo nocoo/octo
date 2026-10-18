@@ -17,7 +17,7 @@ async function fixture() {
 		INSERT INTO spaces (id, slug, name, created_at, updated_at) VALUES ('m3-s', 'm3-s', 's', 1, 1);
 		INSERT INTO tags (id, name, display_name, created_at, updated_at) VALUES ('a', 'alpha', 'Alpha', 1, 1), ('b', 'beta', 'Beta', 1, 1);
 		INSERT INTO memories (id, space_id, title, body, type, importance, source_key_id, version, content_hash, created_at, updated_at) VALUES ('m', 'm3-s', 'title', 'body', 'note', 0.5, 'k', 1, 'h', 1, 1);
-		INSERT INTO memory_tags VALUES ('m', 'a');
+		INSERT INTO memory_tags (memory_id, tag_id) VALUES ('m', 'a');
 	`);
 	const app = createApp();
 	const post = (
@@ -56,7 +56,9 @@ describe("M3 mutations at the M6 HTTP transaction boundary", () => {
 				{ name: "alpha", merged_into: null },
 			]);
 			expect(f.rows("SELECT * FROM changes")).toEqual([]);
-			expect(f.rows("SELECT * FROM memory_tags")).toEqual([{ memory_id: "m", tag_id: "a" }]);
+			expect(f.rows("SELECT * FROM memory_tags")).toEqual([
+				{ memory_id: "m", tag_id: "a", position: 0 },
+			]);
 			expect(f.rows("SELECT * FROM idempotency_records")).toEqual([]);
 			f.sqlite.exec("DROP TRIGGER fail_chunks");
 			const first = await f.post(op, body);
