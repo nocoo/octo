@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { spyBusinessBatch } from "../../../../../../tests/fixtures/business-batch";
 import { sqliteD1 } from "../../../../../../tests/fixtures/sqlite-d1";
 import { mintApiKey } from "../../auth/api-key";
 import type { Env } from "../../env";
@@ -63,7 +64,7 @@ describe("memory vector PUT", () => {
 		"atomically versions and normalizes vectors through %s",
 		async (prefix) => {
 			const { db, sqlite, id, put, keyId } = await fixture(prefix);
-			const batch = vi.spyOn(db, "batch");
+			const batch = spyBusinessBatch(db);
 			const response = await put();
 			expect(response.status).toBe(200);
 			expect(await response.json()).toMatchObject({
@@ -136,7 +137,7 @@ describe("memory vector PUT", () => {
 				sqlite.exec("UPDATE memories SET source_key_id = 'other-key'");
 			}
 			if (denial === "trashed") sqlite.exec("UPDATE memories SET deleted_at = 1");
-			const batch = vi.spyOn(db, "batch");
+			const batch = spyBusinessBatch(db);
 			expect(
 				(
 					await put(
@@ -200,11 +201,11 @@ describe("memory vector PUT", () => {
 
 	it("rolls back failed commits and rejects snapshot races", async () => {
 		const { db, sqlite, put } = await fixture();
-		vi.spyOn(db, "batch").mockRejectedValueOnce(new Error("private vector commit"));
+		spyBusinessBatch(db).mockRejectedValueOnce(new Error("private vector commit"));
 		expect((await put()).status).toBe(503);
 		expect(sqlite.prepare("SELECT * FROM memory_vectors").all()).toEqual([]);
 		const batch = db.batch.bind(db);
-		vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+		spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 			sqlite.exec("UPDATE memories SET version = 2");
 			return batch(statements);
 		});

@@ -8,6 +8,11 @@ describe("MCP audit and usage semantics", () => {
 		await rpc("tools/list");
 		await call("get_memory", { id: "missing" });
 		await flush();
+		expect(
+			sqlite
+				.prepare("SELECT calls, errors, writes FROM usage_daily WHERE key_id = ?")
+				.get(key.row.id),
+		).toEqual({ calls: 2, errors: 1, writes: 0 });
 		await rollupUsage(db);
 		expect(
 			sqlite
@@ -23,6 +28,11 @@ describe("MCP audit and usage semantics", () => {
 		await call("update_memory", { id: created.id, patch: { title: "stale", expected_version: 1 } });
 		await call("delete_memory", { id: created.id });
 		await flush();
+		expect(
+			sqlite
+				.prepare("SELECT calls, errors, writes FROM usage_daily WHERE key_id = ?")
+				.get(key.row.id),
+		).toEqual({ calls: 7, errors: 2, writes: 3 });
 		await rollupUsage(db);
 		expect(
 			sqlite

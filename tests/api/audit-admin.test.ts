@@ -301,6 +301,6 @@ describe("GET /api/v1/embedding-profiles", () => {
 				database,
 				`SELECT count(*) AS n FROM usage_daily WHERE key_id = ${sqlText(reader.id)}`,
 			),
-		).toEqual([{ n: 2 }]);
+		).toEqual([{ n: 3 }]);
 	});
 });

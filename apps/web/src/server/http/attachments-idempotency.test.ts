@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { spyBusinessBatch } from "../../../../../tests/fixtures/business-batch";
 import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import { MAX_ATTACHMENT_BYTES } from "../attachments/content-type";
 import { generateApiKeyMaterial, hashSecret } from "../auth/api-key";
@@ -70,7 +71,7 @@ describe("M5 writes at the M6 transaction boundary", () => {
 	it("commits upload metadata, event and replay in one batch", async () => {
 		const f = await fixture();
 		try {
-			const batch = vi.spyOn(f.db, "batch");
+			const batch = spyBusinessBatch(f.db);
 			const first = await f.post();
 			expect(first.status).toBe(201);
 			const saved = await first.text();
@@ -111,7 +112,7 @@ describe("M5 writes at the M6 transaction boundary", () => {
 		const f = await fixture();
 		try {
 			const batch = f.db.batch.bind(f.db);
-			vi.spyOn(f.db, "batch").mockImplementationOnce(async (statements) => {
+			spyBusinessBatch(f.db).mockImplementationOnce(async (statements) => {
 				await batch(statements);
 				throw new Error("acknowledgement lost");
 			});
@@ -243,7 +244,7 @@ describe("M5 writes at the M6 transaction boundary", () => {
 			expect(f.rows("SELECT * FROM changes WHERE op = 'trashed'")).toEqual([]);
 			expect(f.rows("SELECT * FROM idempotency_records")).toEqual([]);
 			f.sqlite.exec("DROP TRIGGER fail_m5");
-			const batch = vi.spyOn(f.db, "batch");
+			const batch = spyBusinessBatch(f.db);
 			expect((await f.remove(id)).status).toBe(200);
 			expect(batch).toHaveBeenCalledOnce();
 			const replay = await f.remove(id);
@@ -282,7 +283,7 @@ describe("M5 writes at the M6 transaction boundary", () => {
 			f.sqlite.exec("DROP TRIGGER fail_m5_event");
 			const { id } = (await (await f.post(new Uint8Array([1]), null)).json()) as { id: string };
 			const batch = f.db.batch.bind(f.db);
-			vi.spyOn(f.db, "batch").mockImplementationOnce(async (statements) => {
+			spyBusinessBatch(f.db).mockImplementationOnce(async (statements) => {
 				f.sqlite.exec("UPDATE attachments SET deleted_at = 5");
 				return batch(statements);
 			});

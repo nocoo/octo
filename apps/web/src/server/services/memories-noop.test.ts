@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { spyBusinessBatch } from "../../../../../tests/fixtures/business-batch";
 import type { MemoryPatch } from "../../lib/schema/memory";
 import { rollupUsage } from "../audit/usage";
 import { setup } from "../mcp/__tests__/app";
@@ -79,7 +80,7 @@ describe("memory no-op updates", () => {
 		const { db, service, authz, created, id, snapshot } = await fixture();
 		const before = snapshot();
 		const prepare = vi.spyOn(db, "prepare");
-		const batch = vi.spyOn(db, "batch");
+		const batch = spyBusinessBatch(db);
 		expect(await service.patch(authz, id, patch, "1")).toEqual(created);
 		expect(batch).not.toHaveBeenCalled();
 		expect(
@@ -93,7 +94,7 @@ describe("memory no-op updates", () => {
 	it("compares normalized vectors, including an omitted or unchanged vector", async () => {
 		const { db, service, authz, created, id, snapshot } = await fixture(true);
 		const before = snapshot();
-		const batch = vi.spyOn(db, "batch");
+		const batch = spyBusinessBatch(db);
 		for (const patch of [
 			{ title: input.title },
 			{ vector: { profile: "tiny-3", values: [0, 6, 8] } },

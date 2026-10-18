@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { spyBusinessBatch } from "../../../../../tests/fixtures/business-batch";
 import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import { mintApiKey } from "../auth/api-key";
 import type { Env } from "../env";
@@ -63,7 +64,7 @@ describe("memory HTTP transaction boundary", () => {
 		const body = kind === "single" ? item : { items: [item] };
 		if (mode === "lost-ack") {
 			const batch = db.batch.bind(db);
-			vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+			spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 				await batch(statements);
 				throw new Error("committed acknowledgment lost");
 			});
@@ -100,7 +101,7 @@ describe("memory HTTP transaction boundary", () => {
 				.bind(keyId)
 				.run();
 			const batch = db.batch.bind(db);
-			vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+			spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 				await batch(statements);
 				sqlite
 					.prepare("UPDATE spaces SET owner_key_id = 'another-key' WHERE slug = 'transferred'")
@@ -152,7 +153,7 @@ describe("memory HTTP transaction boundary", () => {
 				id = ((await (await request()).json()) as { id: string }).id;
 			}
 			const batch = db.batch.bind(db);
-			const spy = vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+			const spy = spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 				await batch(statements);
 				throw new Error("lost committed acknowledgment");
 			});
@@ -200,7 +201,7 @@ describe("memory HTTP transaction boundary", () => {
 					throw new Error("private diagnostic DB failure");
 				return prepare(sql);
 			});
-			vi.spyOn(db, "batch").mockImplementationOnce(async () => {
+			spyBusinessBatch(db).mockImplementationOnce(async () => {
 				diagnosing = true;
 				throw new Error("commit failed");
 			});
@@ -234,7 +235,7 @@ describe("memory HTTP transaction boundary", () => {
 			)
 			.run(keyId);
 		const batch = db.batch.bind(db);
-		const spy = vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+		const spy = spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 			await batch(statements);
 			sqlite
 				.prepare("UPDATE memories SET space_id = 'space:other', version = 3 WHERE id = ?")
@@ -263,7 +264,7 @@ describe("memory HTTP transaction boundary", () => {
 			return prepare(sql);
 		});
 		const batch = db.batch.bind(db);
-		vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+		spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 			await batch(statements);
 			recovering = true;
 			throw new Error("lost committed acknowledgment");
@@ -299,7 +300,7 @@ describe("memory HTTP transaction boundary", () => {
 		};
 		expect((await request("/memories", "POST", input, "invalid-own")).status).toBe(400);
 		expect(await db.prepare("SELECT * FROM spaces WHERE slug = 'new-own'").first()).toBeNull();
-		const batch = vi.spyOn(db, "batch");
+		const batch = spyBusinessBatch(db);
 		const created = await request("/memories", "POST", { ...input, tags: ["valid"] }, "valid-own");
 		expect(created.status).toBe(201);
 		expect(batch).toHaveBeenCalledTimes(1);
@@ -381,7 +382,7 @@ describe("memory HTTP transaction boundary", () => {
 		const tags = new TagRepo(db);
 		await tags.resolveMany(["beta"]);
 		const batch = db.batch.bind(db);
-		vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+		spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 			await batch((await tags.merge("alpha", "beta", "admin:test")).statements);
 			return batch(statements);
 		});
@@ -411,7 +412,7 @@ describe("memory HTTP transaction boundary", () => {
 			[`/memories/${id}`, "DELETE", undefined, "trash"],
 			[`/trash/${id}/restore`, "POST", {}, "restore"],
 		] as const) {
-			const batch = vi.spyOn(db, "batch");
+			const batch = spyBusinessBatch(db);
 			batch.mockClear();
 			const response = await request(path, method, body, key);
 			expect(response.status).toBe(200);
@@ -430,7 +431,7 @@ describe("memory HTTP transaction boundary", () => {
 			const { db, sqlite, request } = await fixture();
 			const { id } = (await (await request()).json()) as { id: string };
 			const batch = db.batch.bind(db);
-			vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
+			spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 				sqlite
 					.prepare("UPDATE memories SET space_id = 'space:other', version = 2 WHERE id = ?")
 					.run(id);
@@ -460,7 +461,7 @@ describe("memory HTTP transaction boundary", () => {
 
 	it("commits memory effects and replay outcome in the same batch", async () => {
 		const { db, request } = await fixture();
-		const batch = vi.spyOn(db, "batch");
+		const batch = spyBusinessBatch(db);
 		const response = await request();
 		expect(response.status).toBe(201);
 		expect(batch).toHaveBeenCalledTimes(1);
@@ -482,7 +483,7 @@ describe("memory HTTP transaction boundary", () => {
 	it("rolls back memory effects when replay persistence fails", async () => {
 		const { db, request } = await fixture();
 		const batch = db.batch.bind(db);
-		vi.spyOn(db, "batch").mockImplementation(async (statements) => {
+		spyBusinessBatch(db).mockImplementation(async (statements) => {
 			if (
 				statements.some((statement) =>
 					(statement as unknown as { sql: string }).sql.includes("INSERT INTO idempotency_records"),

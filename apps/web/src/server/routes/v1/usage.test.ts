@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PEPPER } from "../../audit/__tests__/app";
 import { queryFixture } from "../../audit/__tests__/queries";
 import { mintApiKey } from "../../auth/api-key";
@@ -10,8 +10,10 @@ afterEach(async () => {
 		await fixtureData.flush();
 		fixtureData.sqlite.close();
 	}
+	vi.restoreAllMocks();
 });
 async function fixture() {
+	vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 17));
 	const fixtureData = queryFixture();
 	fixtureData.app.route("/api/v1/usage", usageRoutes());
 	const own = await mintApiKey(fixtureData.db, PEPPER, {
