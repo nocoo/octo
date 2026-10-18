@@ -23,16 +23,85 @@ describe("tokenizeQuery", () => {
 		});
 	});
 
-	it("preserves CJK, mixed-script tokens and meaningful short English terms", () => {
+	it("filters Chinese stopwords but preserves mixed-script and short English terms", () => {
 		expect(tokenizeQuery("what 早上 喝 什么 the密钥 cf")).toEqual({
 			longTerms: ["the密钥"],
-			shortTerms: ["早上", "喝", "什么", "cf"],
+			shortTerms: ["早上", "喝", "cf"],
 			allShort: false,
 		});
 		expect(tokenizeQuery("密钥 多久 轮换")).toEqual({
 			longTerms: [],
-			shortTerms: ["密钥", "多久", "轮换"],
+			shortTerms: ["密钥", "轮换"],
 			allShort: true,
+		});
+	});
+
+	it("keeps literal terms when every term is a Chinese or English stopword", () => {
+		expect(tokenizeQuery("什么 多久")).toEqual({
+			longTerms: [],
+			shortTerms: ["什么", "多久"],
+			allShort: true,
+		});
+		expect(tokenizeQuery("what 的")).toEqual({
+			longTerms: ["what"],
+			shortTerms: ["的"],
+			allShort: false,
+		});
+	});
+
+	it.each(
+		`什么 多久 怎么 怎样 如何 为什么 为何 哪 哪里 哪个 哪些 吗 呢 吧 啊 的 了 着 是 有
+没有 在 和 与 或 请问 一下 他 她 它 你 您 我 我们 你们 他们 她们 它们`.split(/\s+/),
+	)("removes the whole Chinese function word %s", (word) => {
+		expect(tokenizeQuery(`咖啡 ${word}`)).toEqual({
+			longTerms: [],
+			shortTerms: ["咖啡"],
+			allShort: true,
+		});
+	});
+
+	it.each(["黑咖啡", "每天早上喝黑咖啡", "在场证明", "是非问题", "有机咖啡", "了解情况", "目的地"])(
+		"preserves the literal CJK phrase %s",
+		(query) => {
+			expect(tokenizeQuery(query)).toEqual({ longTerms: [query], shortTerms: [], allShort: false });
+		},
+	);
+
+	it.each([
+		{ query: "他早上喝什么", longTerms: ["早上喝"], shortTerms: [] },
+		{ query: "密钥多久轮换一次", longTerms: ["轮换一次"], shortTerms: ["密钥"] },
+		{ query: "咖啡怎么喝", longTerms: [], shortTerms: ["咖啡", "喝"] },
+		{ query: "为什么喝黑咖啡", longTerms: ["喝黑咖啡"], shortTerms: [] },
+		{ query: "请问密钥如何轮换", longTerms: [], shortTerms: ["密钥", "轮换"] },
+		{ query: "黑咖啡吗", longTerms: ["黑咖啡"], shortTerms: [] },
+	])(
+		"filters unspaced questions without breaking remaining phrases: $query",
+		({ query, longTerms, shortTerms }) => {
+			expect(tokenizeQuery(query)).toEqual({
+				longTerms,
+				shortTerms,
+				allShort: longTerms.length === 0,
+			});
+		},
+	);
+
+	it.each(["没有权限", "一次性密钥", "再怎么说", "咖啡的香气", "the什么", "密钥多久API"])(
+		"does not rewrite negation, content compounds or mixed-script token %s",
+		(query) => {
+			expect(tokenizeQuery(query)).toEqual({ longTerms: [query], shortTerms: [], allShort: false });
+		},
+	);
+
+	it("falls back to original tokens when unspaced questions contain only stopwords", () => {
+		expect(tokenizeQuery("请问什么呢")).toEqual({
+			longTerms: ["请问什么呢"],
+			shortTerms: [],
+			allShort: false,
+		});
+		expect(tokenizeQuery("what 请问什么呢")).toEqual({
+			longTerms: ["what", "请问什么呢"],
+			shortTerms: [],
+			allShort: false,
 		});
 	});
 

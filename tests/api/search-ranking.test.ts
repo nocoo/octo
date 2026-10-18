@@ -8,13 +8,13 @@ const profile = "te3-small-1536";
 const memories = [
 	{
 		id: "coffee",
-		title: "Drink preference / 早上喝什么",
+		title: "Drink preference / 饮品偏好",
 		body: "Every morning he drinks black coffee. 他每天早上喝黑咖啡。",
 	},
 	{
 		id: "rotation",
-		title: "Key rotation / 密钥多久轮换",
-		body: "Production keys are rotated every 90 days. 生产密钥每90天轮换一次。",
+		title: "Key rotation / 轮换策略",
+		body: "Production keys are rotated every 90 days. 密钥每 90 天轮换一次。",
 	},
 	{
 		id: "dashboard",
@@ -106,6 +106,16 @@ const memories = [
 		title: "Shell preference / 终端偏好",
 		body: "He uses zsh with a small set of aliases. 他在终端使用 zsh。",
 	},
+	{
+		id: "noncontiguous-coffee",
+		title: "Unrelated words / 不连续的词",
+		body: "A blacklist and a cafe. 黑名单和咖啡并列，不构成词组。",
+	},
+	{
+		id: "quoted-question",
+		title: "Literal quotation / 字面引用",
+		body: "什么 多久。",
+	},
 ];
 const memoryId = (id: string) => `mem_ranking_${id}`;
 const idsSql = memories.map(({ id }) => sqlText(memoryId(id))).join(",");
@@ -174,6 +184,12 @@ describe.each(["fts", "hybrid"])("representative search ranking in %s mode", (mo
 		{ query: "how often are keys rotated", target: "rotation", axis: 1 },
 		{ query: "早上 喝 什么", target: "coffee", axis: 0 },
 		{ query: "密钥 多久 轮换", target: "rotation", axis: 1 },
+		{ query: "他早上喝什么", target: "coffee", axis: 0 },
+		{ query: "密钥多久轮换一次", target: "rotation", axis: 1 },
+		{ query: "黑咖啡", target: "coffee", axis: 0 },
+		{ query: "每天早上喝黑咖啡", target: "coffee", axis: 0 },
+		{ query: "早上 喝", target: "coffee", axis: 0 },
+		{ query: "什么 多久", target: "quoted-question", axis: 21 },
 	])("ranks the answer first for $query", async ({ query, target, axis }) => {
 		const result = await search(query, mode, axis);
 		expect(result.items[0]?.id).toBe(memoryId(target));
