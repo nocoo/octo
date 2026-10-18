@@ -75,12 +75,21 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 		embedding: ["/settings/embedding"],
 	};
 	page.on("pageerror", (error) => errors.push(error.message));
-	for (const variant of ["desktop-light", "mobile-dark", "desktop-dark-reduced"] as const) {
+	for (const variant of [
+		"desktop-light",
+		"tablet-light",
+		"mobile-dark",
+		"desktop-dark-reduced",
+	] as const) {
 		await page.setViewportSize(
-			variant === "mobile-dark" ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+			variant === "mobile-dark"
+				? { width: 390, height: 844 }
+				: variant === "tablet-light"
+					? { width: 768, height: 900 }
+					: { width: 1440, height: 1000 },
 		);
 		await page.emulateMedia({
-			colorScheme: variant === "desktop-light" ? "light" : "dark",
+			colorScheme: variant.endsWith("light") ? "light" : "dark",
 			reducedMotion: variant === "desktop-dark-reduced" ? "reduce" : "no-preference",
 		});
 		for (const [name, path, heading] of routes) {
@@ -96,6 +105,16 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 			await expect(
 				page.getByRole("heading", { level: 1, name: heading, exact: true }),
 			).toBeVisible();
+			if (variant === "tablet-light" && name !== "reader") {
+				const lines = await page
+					.getByRole("heading", { level: 1, name: heading, exact: true })
+					.evaluate(
+						(element) =>
+							element.getBoundingClientRect().height /
+							Number.parseFloat(getComputedStyle(element).lineHeight),
+					);
+				expect(lines, `${name}: page actions must not crush a short heading`).toBeLessThan(1.2);
+			}
 			await expect(page.getByRole("alert")).toHaveCount(0);
 			await expect(page.getByRole("main").getByText(/^(正在|.*尚未加载)/)).toHaveCount(0);
 			expect(

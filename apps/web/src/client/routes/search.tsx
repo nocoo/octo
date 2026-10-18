@@ -21,7 +21,6 @@ import {
 } from "../viewmodels/search";
 import { Choice, MemoryFilters } from "./memories-filters";
 import { MemoryLink } from "./memories-navigation";
-import "./search.css";
 
 export function SearchPage() {
 	const [params, setParams] = useSearchParams();
@@ -65,29 +64,6 @@ export function SearchPage() {
 						title="搜索"
 						actions={
 							<>
-								<Grid
-									columns={1}
-									gap="sm"
-									className="octo-search-query"
-									style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center" }}
-								>
-									<Input
-										ref={queryInput}
-										key={query}
-										id="search-query"
-										name="q"
-										form="search-options"
-										aria-label="搜索记忆"
-										data-search-input
-										defaultValue={params.get("q") ?? ""}
-										placeholder="输入关键词"
-										required
-									/>
-									<Button type="submit" form="search-options" loading={state.loading}>
-										<Search aria-hidden="true" />
-										搜索
-									</Button>
-								</Grid>
 								{filterTrigger}
 								<Button
 									type="button"
@@ -101,6 +77,31 @@ export function SearchPage() {
 									融合选项
 								</Button>
 							</>
+						}
+						filters={
+							<Grid
+								columns={1}
+								gap="sm"
+								className="w-full"
+								style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center" }}
+							>
+								<Input
+									ref={queryInput}
+									key={query}
+									id="search-query"
+									name="q"
+									form="search-options"
+									aria-label="搜索记忆"
+									data-search-input
+									defaultValue={params.get("q") ?? ""}
+									placeholder="输入关键词"
+									required
+								/>
+								<Button type="submit" form="search-options" loading={state.loading}>
+									<Search aria-hidden="true" />
+									搜索
+								</Button>
+							</Grid>
 						}
 					/>
 				)}

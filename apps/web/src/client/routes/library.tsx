@@ -137,9 +137,11 @@ function SpaceFilter({
 			value={value || "__all__"}
 			onValueChange={(next) => onChange(next === "__all__" ? "" : next)}
 		>
-			<SelectTrigger aria-label="按空间筛选" className="w-basalt-36 max-w-full">
-				<SelectValue placeholder="全部空间" />
-			</SelectTrigger>
+			<Field label="空间">
+				<SelectTrigger aria-label="按空间筛选" className="w-basalt-36 max-w-full">
+					<SelectValue placeholder="全部空间" />
+				</SelectTrigger>
+			</Field>
 			<SelectContent>
 				<SelectItem value="__all__">全部空间</SelectItem>
 				{spaces.map((space) => (
@@ -352,7 +354,7 @@ export function TagsPage() {
 				actions={
 					<>
 						<Input
-							className="w-basalt-56 max-w-full"
+							className="w-basalt-40 max-w-full"
 							ref={focusFallback}
 							aria-label="筛选标签"
 							placeholder="查找标签"
@@ -592,7 +594,7 @@ export function SpacesPage() {
 				actions={
 					<>
 						<Input
-							className="w-basalt-56 max-w-full"
+							className="w-basalt-40 max-w-full"
 							aria-label="筛选空间"
 							value={params.get("q") ?? ""}
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
@@ -767,18 +769,6 @@ export function TrashPage() {
 				description="回收站不会自动清空。可恢复记忆；永久删除需要两次确认。"
 				actions={
 					<>
-						<Input
-							className="w-basalt-56 max-w-full"
-							aria-label="筛选回收站"
-							placeholder="查找已删除的记忆"
-							value={params.get("q") ?? ""}
-							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
-						/>
-						<SpaceFilter
-							memories={state.memories}
-							value={params.get("space") ?? ""}
-							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
-						/>
 						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
@@ -800,6 +790,32 @@ export function TrashPage() {
 							恢复所选记忆（{selected.length}）
 						</Button>
 					</>
+				}
+				filters={
+					<Grid
+						columns={1}
+						style={{
+							display: "flex",
+							flexWrap: "wrap",
+							alignItems: "end",
+							gap: "var(--basalt-space-layout-sm)",
+						}}
+					>
+						<Field label="查找记忆">
+							<Input
+								className="w-basalt-56 max-w-full"
+								aria-label="筛选回收站"
+								placeholder="查找已删除的记忆"
+								value={params.get("q") ?? ""}
+								onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
+							/>
+						</Field>
+						<SpaceFilter
+							memories={state.memories}
+							value={params.get("space") ?? ""}
+							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
+						/>
+					</Grid>
 				}
 			/>
 			<LibraryStatus
@@ -976,7 +992,21 @@ export function GraphPage() {
 			<PageHeader
 				title="关系图"
 				actions={
-					<>
+					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
+						<RefreshCw size={16} aria-hidden="true" />
+						刷新
+					</Button>
+				}
+				filters={
+					<Grid
+						columns={1}
+						style={{
+							display: "flex",
+							flexWrap: "wrap",
+							alignItems: "end",
+							gap: "var(--basalt-space-layout-sm)",
+						}}
+					>
 						<SegmentControl
 							legend="关系类型"
 							value={options.mode}
@@ -1001,11 +1031,7 @@ export function GraphPage() {
 								onChange={(event) => setParams(updateLibraryUrl(params, "cap", event.target.value))}
 							/>
 						</Field>
-						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-							<RefreshCw size={16} aria-hidden="true" />
-							刷新
-						</Button>
-					</>
+					</Grid>
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
@@ -1110,7 +1136,21 @@ export function TimelinePage() {
 					<PageHeader
 						title="时间线"
 						actions={
-							<>
+							<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
+								<RefreshCw size={16} aria-hidden="true" />
+								刷新
+							</Button>
+						}
+						filters={
+							<Grid
+								columns={1}
+								style={{
+									display: "flex",
+									flexWrap: "wrap",
+									alignItems: "end",
+									gap: "var(--basalt-space-layout-sm)",
+								}}
+							>
 								<SegmentControl
 									legend="时间依据"
 									value={options.field}
@@ -1136,11 +1176,7 @@ export function TimelinePage() {
 										筛选
 									</Button>
 								</CollapsibleTrigger>
-								<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-									<RefreshCw size={16} aria-hidden="true" />
-									刷新
-								</Button>
-							</>
+							</Grid>
 						}
 					/>
 					<CollapsibleContent unstyled>
@@ -1149,7 +1185,7 @@ export function TimelinePage() {
 							style={{
 								gridTemplateColumns:
 									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
-								alignItems: "end",
+								alignItems: "start",
 							}}
 						>
 							<SpaceFilter
