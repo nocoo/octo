@@ -1,7 +1,6 @@
 import {
 	Badge,
 	Button,
-	Checkbox,
 	ConfirmDialog,
 	Dialog,
 	DialogContent,
@@ -12,7 +11,6 @@ import {
 	Field,
 	Input,
 	LayerCard,
-	Switch,
 	toast,
 } from "@nocoo/basalt";
 import { Sparkline } from "@nocoo/basalt/charts/sparkline";
@@ -20,13 +18,6 @@ import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-t
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@nocoo/basalt/components/select";
 import {
 	Ban,
 	Check,
@@ -38,260 +29,18 @@ import {
 	Plus,
 	RefreshCw,
 	RotateCw,
-	Save,
 	X,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useModel } from "../components/layout/use-model";
 import { KeyUsageModel } from "../viewmodels/operations-key-usage";
-import {
-	type KeyDraft,
-	type KeyMetadata,
-	type KeyPermissions,
-	type KeyRole,
-	KeysModel,
-	keyStatus,
-	rolePermissions,
-} from "../viewmodels/operations-keys";
+import { type KeyMetadata, KeysModel, keyStatus } from "../viewmodels/operations-keys";
+import { KeyForm, operationText, roleLabels, scopeLabels } from "./key-form";
 import "./operations.css";
 
-const roles: KeyRole[] = ["project", "drop", "readonly", "admin", "custom"];
-const roleLabels = {
-	project: "项目",
-	drop: "仅投递",
-	readonly: "只读",
-	admin: "管理员",
-	custom: "自定义",
-};
-const scopeLabels = { all: "全部空间", spaces: "指定空间", own: "自有空间" };
 const statusLabels = { active: "有效", expired: "已过期", revoked: "已撤销" };
-const operationLabels: Record<string, string> = { r: "读取", w: "创建", u: "更新", d: "删除" };
-const operationText = (ops: string) =>
-	ops
-		.split(",")
-		.map((op) => operationLabels[op] ?? "未授权")
-		.join("、");
 const time = (value: string | null): string =>
 	value === null ? "从未" : new Date(value).toLocaleString("zh-CN");
-function localDate(value: string | null): string {
-	if (value === null) return "";
-	const date = new Date(value);
-	return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-}
-
-function KeyForm({
-	initial,
-	pending,
-	error,
-	onSubmit,
-	onCancel,
-}: {
-	initial: KeyMetadata | null;
-	pending: boolean;
-	error: string | null;
-	onSubmit: (draft: KeyDraft) => Promise<void>;
-	onCancel: () => void;
-}) {
-	const id = useId();
-	const [name, setName] = useState(initial?.name ?? "");
-	const [role, setRole] = useState<KeyRole>(initial?.role ?? "project");
-	const [expiry, setExpiry] = useState(localDate(initial?.expires_at ?? null));
-	const [permissions, setPermissions] = useState<KeyPermissions>(() =>
-		initial
-			? {
-					ops: initial.ops,
-					scope: initial.scope,
-					space_ids: initial.space_ids,
-					own_entries_only: initial.own_entries_only,
-					auto_own_space: initial.auto_own_space,
-				}
-			: rolePermissions("project"),
-	);
-	const [spaces, setSpaces] = useState(initial?.space_ids.join(", ") ?? "");
-	return (
-		<form
-			onSubmit={async (event) => {
-				event.preventDefault();
-				await onSubmit({
-					name,
-					role,
-					expires_at: expiry ? new Date(expiry).toISOString() : null,
-					permissions: {
-						...permissions,
-						space_ids:
-							permissions.scope === "spaces"
-								? spaces
-										.split(",")
-										.map((space) => space.trim())
-										.filter(Boolean)
-								: [],
-					},
-				});
-			}}
-		>
-			<Grid columns={1} gap="sm">
-				<Field
-					label="代理名称"
-					required
-					hint="项目或自动创建空间的名称须为 1 至 64 位小写字母、数字与单连字符。"
-				>
-					<Input
-						value={name}
-						onChange={(event) => setName(event.target.value)}
-						required
-						disabled={pending || initial !== null}
-						autoComplete="off"
-					/>
-				</Field>
-				<Grid
-					columns={2}
-					gap="sm"
-					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 13rem), 1fr))" }}
-				>
-					<Field label="角色模板" htmlFor={`${id}-role`} required>
-						<Select
-							value={role}
-							disabled={pending}
-							onValueChange={(value) => {
-								const next = value as KeyRole;
-								setRole(next);
-								setPermissions(rolePermissions(next));
-							}}
-						>
-							<SelectTrigger id={`${id}-role`}>
-								<SelectValue>{roleLabels[role]}</SelectValue>
-							</SelectTrigger>
-							<SelectContent>
-								{roles.map((value) => (
-									<SelectItem key={value} value={value}>
-										{roleLabels[value]}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</Field>
-					<Field label="到期时间" hint="本地时间；留空表示永不过期。">
-						<Input
-							type="datetime-local"
-							value={expiry}
-							onChange={(event) => setExpiry(event.target.value)}
-							disabled={pending}
-						/>
-					</Field>
-				</Grid>
-				{role === "custom" ? (
-					<>
-						<Checkbox.Group
-							value={permissions.ops.split(",").filter(Boolean)}
-							disabled={pending}
-							onValueChange={(values) =>
-								setPermissions({
-									...permissions,
-									ops: ["r", "w", "u", "d"].filter((op) => values.includes(op)).join(","),
-								})
-							}
-						>
-							<Checkbox.Legend>允许的操作</Checkbox.Legend>
-							<Grid
-								columns={4}
-								gap="sm"
-								className="ops-key-permissions"
-								style={{
-									gridTemplateColumns:
-										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), 1fr))",
-									alignItems: "center",
-								}}
-							>
-								{[
-									["r", "读取"],
-									["w", "创建"],
-									["u", "更新"],
-									["d", "删除"],
-								].map(([op, label]) => (
-									<Checkbox.Item key={op} value={op ?? ""}>
-										{label}
-									</Checkbox.Item>
-								))}
-							</Grid>
-						</Checkbox.Group>
-						<Field label="空间范围" htmlFor={`${id}-scope`} required>
-							<Select
-								value={permissions.scope}
-								onValueChange={(scope) =>
-									setPermissions({ ...permissions, scope: scope as KeyPermissions["scope"] })
-								}
-								disabled={pending}
-							>
-								<SelectTrigger id={`${id}-scope`}>
-									<SelectValue>{scopeLabels[permissions.scope]}</SelectValue>
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="spaces">指定空间</SelectItem>
-									<SelectItem value="own">自有空间</SelectItem>
-									<SelectItem value="all">全部空间</SelectItem>
-								</SelectContent>
-							</Select>
-						</Field>
-						{permissions.scope === "spaces" && (
-							<Field label="空间标识" hint="以逗号分隔；至少指定一个空间。" required>
-								<Input
-									value={spaces}
-									onChange={(event) => setSpaces(event.target.value)}
-									required
-									disabled={pending}
-								/>
-							</Field>
-						)}
-						<Field label="仅更新或删除此代理的记忆" htmlFor={`${id}-own`}>
-							<Switch
-								id={`${id}-own`}
-								checked={permissions.own_entries_only}
-								onCheckedChange={(own_entries_only) =>
-									setPermissions({ ...permissions, own_entries_only })
-								}
-								disabled={pending}
-							/>
-						</Field>
-						<Field label="自动创建自有空间" htmlFor={`${id}-auto-space`}>
-							<Switch
-								id={`${id}-auto-space`}
-								checked={permissions.auto_own_space}
-								onCheckedChange={(auto_own_space) =>
-									setPermissions({ ...permissions, auto_own_space })
-								}
-								disabled={pending}
-							/>
-						</Field>
-					</>
-				) : (
-					<p className="text-basalt-sm text-basalt-muted-foreground">
-						操作：{operationText(permissions.ops)}；范围：{scopeLabels[permissions.scope]}
-						。接口密钥不能管理密钥或网关设置。
-					</p>
-				)}
-				{role === "drop" && (
-					<Field label="空间标识" hint="以逗号分隔；至少指定一个空间。" required>
-						<Input
-							value={spaces}
-							onChange={(event) => setSpaces(event.target.value)}
-							required
-							disabled={pending}
-						/>
-					</Field>
-				)}
-				{error && <p role="alert">{error}</p>}
-				<DialogFooter>
-					<Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
-						取消
-					</Button>
-					<Button type="submit" icon={<Save aria-hidden="true" />} loading={pending}>
-						{initial ? "保存权限" : "创建密钥"}
-					</Button>
-				</DialogFooter>
-			</Grid>
-		</form>
-	);
-}
 
 export function KeysPage() {
 	const [model] = useState(() => new KeysModel());
@@ -322,6 +71,11 @@ export function KeysPage() {
 		void usageModel.load();
 		return () => usageModel.dispose();
 	}, [usageModel]);
+	function openEditor(value: KeyMetadata | "create") {
+		model.clearFormErrors();
+		setEditor(value);
+		void model.loadSpaces();
+	}
 	function reveal(value: string | null) {
 		if (!active.current || !value) return;
 		setEditor(null);
@@ -442,7 +196,7 @@ export function KeysPage() {
 						disabled={state.pending || key.revoked_at !== null}
 						onClick={(event) => {
 							editorTrigger.current = event.currentTarget;
-							setEditor(key);
+							openEditor(key);
 						}}
 						aria-label={`编辑 ${key.name}`}
 					>
@@ -499,7 +253,7 @@ export function KeysPage() {
 							ref={createTrigger}
 							onClick={(event) => {
 								editorTrigger.current = event.currentTarget;
-								setEditor("create");
+								openEditor("create");
 							}}
 							disabled={state.pending}
 						>
@@ -508,7 +262,7 @@ export function KeysPage() {
 					</>
 				}
 			/>
-			{state.error && (
+			{state.error && editor === null && (
 				<p role="alert">
 					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}{" "}
 					<Button variant="ghost" size="sm" onClick={() => void model.load()}>
@@ -556,7 +310,7 @@ export function KeysPage() {
 												disabled={state.pending}
 												onClick={(event) => {
 													editorTrigger.current = event.currentTarget;
-													setEditor("create");
+													openEditor("create");
 												}}
 											>
 												创建密钥
@@ -594,6 +348,14 @@ export function KeysPage() {
 							initial={editor === "create" ? null : editor}
 							pending={state.pending}
 							error={state.error}
+							fieldErrors={state.fieldErrors}
+							spaces={state.spaces}
+							spacesLoading={state.spacesLoading}
+							spacesLoaded={state.spacesLoaded}
+							spacesError={state.spacesError}
+							onLoadSpaces={() => void model.loadSpaces()}
+							onClearErrors={() => model.clearFormErrors()}
+							onClearFieldError={(field) => model.clearFieldError(field)}
 							onCancel={() => setEditor(null)}
 							onSubmit={async (draft) => {
 								if (editor === "create") reveal(await model.create(draft));

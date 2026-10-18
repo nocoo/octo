@@ -148,7 +148,8 @@ describe("installed Basalt operations composition", () => {
 		expect(editor).toContain("editorTrigger.current?.focus()");
 		expect(rotation).toContain("onCloseAutoFocus");
 		expect(rotation).toContain("rotateTrigger.current?.focus()");
-		expect(source).toContain('className="ops-key-permissions"');
+		const form = readFileSync(new URL("./key-form.tsx", import.meta.url), "utf8");
+		expect(form).toContain('className="ops-key-permissions"');
 		const revoke = source.slice(
 			source.indexOf("<ConfirmDialog"),
 			source.indexOf("</ConfirmDialog>"),
