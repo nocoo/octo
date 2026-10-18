@@ -56,6 +56,7 @@ test("embedding defaults, write-only masking, real connection test, and clear", 
 			dims: 1536,
 			match: true,
 			error_code: null,
+			reason: null,
 		});
 		await expect(page.getByText("连接成功", { exact: true })).toBeVisible();
 		expect(gateway.observations.length).toBeGreaterThan(0);
