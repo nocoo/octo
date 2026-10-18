@@ -69,12 +69,12 @@ export const memoryPatchSchema = z
 		{ message: "patch requires at least one field" },
 	);
 
-const versionedPatchSchema = memoryPatchSchema.safeExtend({
-	expected_version: z.number().int().positive(),
-});
+const versionedPatchSchema = memoryPatchSchema
+	.safeExtend({ expected_version: z.number().int().positive() })
+	.meta({ minProperties: 2 });
 const memoryUpdateId = z.string().min(1).max(64);
 export const memoryUpdateSchema = z.union([
-	versionedPatchSchema.safeExtend({ id: memoryUpdateId }),
+	versionedPatchSchema.safeExtend({ id: memoryUpdateId }).meta({ minProperties: 3 }),
 	z
 		.strictObject({ id: memoryUpdateId, patch: versionedPatchSchema })
 		.transform(({ id, patch }) => ({ id, ...patch })),

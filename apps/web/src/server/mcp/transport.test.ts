@@ -1,3 +1,4 @@
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JSON_BODY_MAX_BYTES } from "../lib/validate";
 import { names, setup } from "./__tests__/app";
@@ -5,6 +6,40 @@ import { names, setup } from "./__tests__/app";
 afterEach(() => vi.restoreAllMocks());
 
 describe("stateless MCP transport", () => {
+	it("publishes an update schema that rejects empty patches and mixed forms", async () => {
+		const { rpc, flush } = await setup();
+		const response = await rpc("tools/list");
+		const body = (await response.json()) as {
+			result: { tools: { name: string; inputSchema: Record<string, unknown> }[] };
+		};
+		const schema = body.result.tools.find((tool) => tool.name === "update_memory")?.inputSchema;
+		expect(schema).toBeDefined();
+		const validate = new AjvJsonSchemaValidator().getValidator(schema ?? {});
+		for (const input of [
+			{ id: "m", expected_version: 1, title: "flat" },
+			{ id: "m", patch: { expected_version: 1, title: "nested" } },
+			{ id: "m", expected_version: 1, importance: 0 },
+			{ id: "m", patch: { expected_version: 1, importance: 1 } },
+		]) {
+			expect(validate(input).valid, JSON.stringify(input)).toBe(true);
+		}
+		for (const input of [
+			{ id: "m", expected_version: 1 },
+			{ id: "m", patch: { expected_version: 1 } },
+			{ id: "m", title: "missing version" },
+			{ id: "m", patch: { title: "missing version" } },
+			{ id: "m", expected_version: 1, patch: { expected_version: 1, title: "mixed" } },
+			{ id: "m", title: "mixed", patch: { expected_version: 1, body: "other field" } },
+			{ id: "m", expected_version: 1, title: "flat", unknown: true },
+			{ id: "m", patch: { expected_version: 1, title: "nested", unknown: true } },
+			{ id: "m", expected_version: 0, title: "invalid version" },
+			{ id: "m", expected_version: 1, importance: 1.1 },
+		]) {
+			expect(validate(input).valid, JSON.stringify(input)).toBe(false);
+		}
+		await flush();
+	});
+
 	it("initializes, accepts notifications and lists schemas without sessions", async () => {
 		const { rpc, request, flush } = await setup();
 		const initialized = await rpc("initialize", {
