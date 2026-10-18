@@ -21,6 +21,16 @@ describe("error envelope", () => {
 });
 
 describe("responses", () => {
+	it("declares exact UTF-8 lengths for JSON success and early-error responses", async () => {
+		for (const response of [
+			jsonOk({ text: "团子☕" }),
+			jsonError("payload_too_large", "正文过长", "req"),
+		]) {
+			const bytes = (await response.arrayBuffer()).byteLength;
+			expect(response.headers.get("Content-Length")).toBe(String(bytes));
+		}
+	});
+
 	it("serializes jsonError and jsonOk", async () => {
 		const err = jsonError("unavailable", "d1 down", "r3");
 		expect(err.status).toBe(503);

@@ -14,17 +14,15 @@ import { APP_VERSION } from "../../lib/version";
 import { bearerMiddleware } from "../auth/bearer";
 import { allowedAdminOrigin } from "../auth/origin";
 import type { AppVars, Env } from "../env";
-import { ApiError } from "../lib/errors";
+import { ApiError, jsonOk } from "../lib/errors";
 import { readJsonLimited } from "../lib/validate";
 import { callTool, createTools, type McpContext } from "./tools";
 
 function rpcError(status: number, code: number, message: string): Response {
-	return Response.json(
+	return jsonOk(
 		{ jsonrpc: "2.0", id: null, error: { code, message } },
-		{
-			status,
-			...(status === 405 ? { headers: { Allow: "POST" } } : {}),
-		},
+		status,
+		status === 405 ? { Allow: "POST" } : undefined,
 	);
 }
 

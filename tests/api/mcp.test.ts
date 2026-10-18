@@ -949,6 +949,7 @@ describe("stateless MCP Streamable HTTP", () => {
 			type: "note",
 			tags: [],
 		});
+		const expectedBytesOut = (await invalidRequest.clone().arrayBuffer()).byteLength;
 		await toolError(invalidRequest, "validation_failed");
 		const requestId = invalidRequest.headers.get("X-Request-Id");
 		expect(requestId).toBeTruthy();
@@ -965,13 +966,6 @@ describe("stateless MCP Streamable HTTP", () => {
 			d1,
 			`SELECT actor, method, route, status, request_id, error_code, bytes_in, bytes_out FROM audit_log WHERE request_id = ${sqlText(requestId as string)}`,
 		);
-		const contentLength = invalidRequest.headers.get("Content-Length");
-		const expectedBytesOut =
-			contentLength !== null &&
-			/^\\d{1,10}$/.test(contentLength) &&
-			Number(contentLength) <= 4_294_967_295
-				? Number(contentLength)
-				: null;
 		expect(audit).toEqual([
 			{
 				actor: `key:${key.id}`,

@@ -47,18 +47,17 @@ export function jsonError(
 	details: Record<string, unknown> | null = null,
 	status: number = HTTP_STATUS_BY_CODE[code],
 ): Response {
-	return new Response(JSON.stringify(errorEnvelope(code, message, requestId, details)), {
-		status,
-		headers: { "content-type": "application/json; charset=utf-8" },
-	});
+	return jsonOk(errorEnvelope(code, message, requestId, details), status);
 }
 
 export function jsonOk(body: unknown, status = 200, headers?: Record<string, string>): Response {
-	return new Response(JSON.stringify(body), {
+	const serialized = JSON.stringify(body);
+	return new Response(serialized, {
 		status,
 		headers: {
 			"content-type": "application/json; charset=utf-8",
 			...headers,
+			"content-length": String(new TextEncoder().encode(serialized).byteLength),
 		},
 	});
 }

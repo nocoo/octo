@@ -103,6 +103,7 @@ CREATE TABLE mcp_audit_writes (
 
 - `bytes_in` 仍只读取合法的请求 `Content-Length`，缺失或非法时为 `NULL`；不为统计读取或排空上传流。
 - `bytes_out` 对 `HEAD` 或没有 body 的响应记为 `0`，即使长度头描述了 GET 表示的大小。其他响应优先信任合法 `Content-Length`，不读取 body，也不验证长度是否与实际传输一致；客户端提前断开时仍记声明长度。合法长度沿用边界：1–10 位十进制数字，数值在 `0` 至 `4294967295` 之间。
+- 共用 JSON 序列化器在创建响应时声明已序列化正文的精确 UTF-8 长度，错误响应也走同一路径；这保留 workerd 提前拒绝上传时的定长响应，不为统计把已知长度的 JSON 改成未知长度流。SDK 或其他没有声明长度的响应仍走下述流式计数。
 - 缺失或非法响应长度头时，以单路 `TransformStream` 透传，累加成功入队的 `Uint8Array.byteLength`。UTF-8 文本按编码后的字节计，不按字符数计；二进制原样透传。不使用 `clone()` / `tee()` 或整份 body 缓冲，输出队列最多一块，保留源流和管线自身的有界预读及背压，不随慢客户端积压完整响应。
 - 未知长度响应在 EOF、客户端取消或源流错误使管线结束后写审计；取消向源传播，源错误仍传给响应读取者。失败/取消时只记已经过计数流的前缀，HTTP 状态和业务错误码不改写。`duration_ms` 仍是响应就绪耗时，不含流传输和 D1 写入耗时。
 - 当前 `compatibility_date=2026-04-01` 已启用标准 `TransformStream` 构造器（2022-11-30 起）及背压修复（2024-12-16 起）；无需额外兼容标志，依据见 [Workers compatibility flags](https://developers.cloudflare.com/workers/configuration/compatibility-flags/)。

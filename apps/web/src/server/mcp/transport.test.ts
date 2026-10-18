@@ -195,6 +195,9 @@ describe("stateless MCP transport", () => {
 		]) {
 			const response = await rpc("tools/list", undefined, extra);
 			expect(response.status).toBe(413);
+			expect(response.headers.get("Content-Length")).toBe(
+				String((await response.arrayBuffer()).byteLength),
+			);
 		}
 		await flush();
 	});
