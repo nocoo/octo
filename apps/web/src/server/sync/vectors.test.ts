@@ -244,6 +244,41 @@ describe("durable vector synchronization", () => {
 		expect(indexed()).toBe(100);
 	});
 
+	it("leaves a newer live lease to its holder when a stale operation finishes", async () => {
+		const { env, store, sqlite, indexed } = fixture();
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let newer: ReturnType<typeof synchronizeVectors> | undefined;
+		store.upsert
+			.mockImplementationOnce(async () => {
+				sqlite.exec("UPDATE memories SET importance = 0.1 WHERE id = 'memory'");
+				newer = synchronizeVectors(env, { store, now: 101 + SYNC_LEASE_MS });
+				await entered.promise;
+			})
+			.mockImplementationOnce(async () => {
+				entered.resolve();
+				await release.promise;
+			});
+		try {
+			expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 0 });
+			expect(store.upsert).toHaveBeenCalledTimes(2);
+			expect(indexed()).toBeNull();
+			expect(sqlite.prepare("SELECT lease_token, lease_until FROM vector_sync_jobs").get()).toEqual(
+				{
+					lease_token: expect.any(String),
+					lease_until: 101 + 2 * SYNC_LEASE_MS,
+				},
+			);
+		} finally {
+			release.resolve();
+			await newer;
+		}
+		expect(store.upsert).toHaveBeenCalledTimes(3);
+		expect(indexed()).toBe(101 + SYNC_LEASE_MS);
+		const job = sqlite.prepare("SELECT * FROM vector_sync_jobs").get();
+		expect(job?.synced_generation).toBe(job?.generation);
+	});
+
 	it("invalidates slug changes and vector removal, but rolls back failed writes", async () => {
 		const { env, store, sqlite, indexed } = fixture();
 		await synchronizeVectors(env, { store, now: 100 });

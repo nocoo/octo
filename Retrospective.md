@@ -633,7 +633,6 @@ On resuming against newer main, the first UI commit hook caught a lost permissio
 
 A Herdr resize issued with `--current` unexpectedly targeted the focused pane in another tab rather than the caller pane. The returned pane IDs exposed the mistake immediately; explicit pane IDs restored both controller layouts to the prescribed left third. Use explicit verified pane IDs for layout mutations and verify the returned target before continuing.
 
-# 2026-10-18 — Preserve exact optional types in race fixtures
+### 2026-10-18 — Preserve exact optional types in race fixtures
 
 The vector requeue race passed its runtime regression after the fix, but the commit hook rejected assigning `undefined` to an optional string binding under `exactOptionalPropertyTypes`. The fixture now omits the binding for the default mode rather than assigning `undefined`. Runtime test success does not replace strict fixture typechecking; the hook remained enabled and blocked the invalid snapshot.
-
