@@ -48,7 +48,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 | `get_memory` | `{id: nonempty string, include?: (trashed\|versions_count\|attachments\|vector_status)[]}` | `MemoryService.get`；`r`，含 trashed 还需 `d` |
 | `batch_get` | 原 `batchGetRequestSchema`：`{ids: nonempty string[1..100]}` | `batchGetMemories` + `requireSearchRead`；`r`，不可见 ID 与不存在 ID 一同放入 missing |
 | `create_memory` | 原 `memoryCreateSchema`：`{space, title, body, type, tags, importance?: number[0,1], event_time?, vector?}` | staged `MemoryService.create`；目标 space 的 `w` |
-| `update_memory` | `{id, expected_version, ...fields}` 或 `{id, patch: {expected_version, ...fields}}`，严格二选一；fields 至少改一个字段，`importance?: number[0,1]` | staged `MemoryService.patch`；`u`，移动同时检查两端 |
+| `update_memory` | `{id, expected_version, ...fields}` 或 `{id, patch: {expected_version, ...fields}}`，严格二选一；fields 至少提供一个可更新字段，`importance?: number[0,1]` | staged `MemoryService.patch`；`u`，移动同时检查两端 |
 | `delete_memory` | `{id: nonempty string}` | staged `MemoryService.remove`；`d` |
 | `list_changes` | `{cursor?: nonempty string, limit?: integer[1,200], spaces?: nonempty string[]}`；默认 limit 50，cursor 是原 v1 不透明游标 | `MemoryService.listChanges`；`r` |
 | `list_tags` | `{}` | v1 标签列表服务；`r`，只返回可见 space 中有未删除 memory 引用的标签及正数计数 |
@@ -57,6 +57,8 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 `Vector`、`Filters`、`Fusion` 直接复用 `apps/web/src/lib/schema/{memory,filters,search}.ts`，不另设 MCP 方言。`space` 最长 64，`title` 1–500，tags 最多 100 个且各 1–64，importance 在 0–1；type 为 fact / preference / decision / procedure / event / log / note；event_time 是 UTC ISO 日期。更新允许清空 event_time / vector。向量维数由原有 profile 校验，最多 1536。
 
 `update_memory` 与 REST `POST /api/v1/memories:batchUpdate` 的每个 item 复用同一严格 schema：`id` 是 1–64 字符，`expected_version` 是正整数，位于所选形式的字段层；可更新字段为 `space,title,body,type,tags,importance,event_time,vector`。不得同时提供 `patch` 和任何 flat 更新字段或外层 `expected_version`，即使字段不重名也拒绝；外层及 patch 内的未知字段都拒绝。只传版本号不构成有效更新。两种形式在验证后进入相同服务路径，版本不匹配均返回 `version_conflict`，不合并、覆盖或猜测字段优先级。
+
+提供字段但规范化后与当前资源完全相同是有效的 no-op：`update_memory` 返回当前 `Memory`，对应 REST PATCH 返回 200，batchUpdate 对应 item 成功。标签按规范化后的顺序比较，仅换顺序仍是实际更新。no-op 不增加 version，不修改更新时间，也不写版本快照、change event 或派生索引任务；`expected_version` 和权限仍先验证，旧版本即使提交相同值也报 `version_conflict`（REST 409，MCP 为 HTTP 200 内的工具错误）。这不是“只传版本号”的空 patch，也不是幂等键或并发校验旁路。
 
 ```json
 {"id":"01J…","expected_version":3,"title":"更新标题","importance":0.8}

@@ -2,7 +2,12 @@ import type { MemoryCreate, MemoryPatch } from "../../lib/schema/memory";
 import type { ApiPrincipal } from "../auth/authorize";
 import type { AppVars } from "../env";
 import { ApiError } from "../lib/errors";
-import { MemoryRepo, type MemoryWrite, type MemoryRecord as StoredMemory } from "../repo/memories";
+import {
+	MemoryRepo,
+	type MemoryWrite,
+	type MemoryRecord as StoredMemory,
+	type StoredVector,
+} from "../repo/memories";
 import { TagRepo } from "../repo/tags";
 import { authzFrom, MemoryService as M2MemoryService, publicMemory } from "./memories";
 
@@ -47,6 +52,7 @@ class BatchMemoryRepo extends MemoryRepo {
 	private rows = new Map<string, StoredMemory>();
 	private tags = new Map<string, string[]>();
 	private tagIds = new Map<string, string[]>();
+	private vectors = new Map<string, StoredVector[]>();
 	private errors = new Map<string, WriteError>();
 	private readonly stagedErrors: WriteError[] = [];
 	private committedReads = false;
@@ -62,6 +68,7 @@ class BatchMemoryRepo extends MemoryRepo {
 		const rows = new Map(this.rows);
 		const tags = new Map(this.tags);
 		const tagIds = new Map(this.tagIds);
+		const vectors = new Map(this.vectors);
 		const errors = new Map(this.errors);
 		const errorCount = this.stagedErrors.length;
 		const statementCount = this.ctx.statements.length;
@@ -69,6 +76,7 @@ class BatchMemoryRepo extends MemoryRepo {
 			this.rows = rows;
 			this.tags = tags;
 			this.tagIds = tagIds;
+			this.vectors = vectors;
 			this.errors = errors;
 			this.stagedErrors.length = errorCount;
 			this.ctx.statements.length = statementCount;
@@ -93,6 +101,10 @@ class BatchMemoryRepo extends MemoryRepo {
 		return this.tagIds.get(id) ?? super.tagIdsByMemory(id);
 	}
 
+	override async vectorsByMemory(id: string): Promise<StoredVector[]> {
+		return this.vectors.get(id) ?? super.vectorsByMemory(id);
+	}
+
 	override async write(input: MemoryWrite): Promise<StoredMemory> {
 		const index = this.stagedErrors.length;
 		const row = await super.write(input);
@@ -105,6 +117,23 @@ class BatchMemoryRepo extends MemoryRepo {
 			row.id,
 			input.tags.map((tag) => tag.id),
 		);
+		if (input.vector === null) {
+			this.vectors.set(row.id, []);
+		} else if (input.vector) {
+			const vector = input.vector;
+			this.vectors.set(row.id, [
+				...(await this.vectorsByMemory(row.id)).filter(
+					(stored) => stored.profile_id !== vector.profileId,
+				),
+				{
+					profile_id: vector.profileId,
+					embedding_model: vector.embeddingModel,
+					dim: vector.dim,
+					vector: vector.vector,
+					content_hash: row.content_hash,
+				},
+			]);
+		}
 		this.retainInitialVersionError(row.id, index);
 		return row;
 	}

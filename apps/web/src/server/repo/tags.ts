@@ -119,15 +119,18 @@ export class TagRepo {
 				}
 				continue;
 			}
-			const id = this.id();
-			const ts = this.now();
-			await this.db
-				.prepare(
-					"INSERT OR IGNORE INTO tags (id, name, display_name, merged_into, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
-				)
-				.bind(id, name, display, ts, ts)
-				.run();
-			const row = await this.getByName(name);
+			let row = await this.getByName(name);
+			if (!row) {
+				const id = this.id();
+				const ts = this.now();
+				await this.db
+					.prepare(
+						"INSERT OR IGNORE INTO tags (id, name, display_name, merged_into, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
+					)
+					.bind(id, name, display, ts, ts)
+					.run();
+				row = await this.getByName(name);
+			}
 			if (!row) {
 				throw new ApiError("internal", "failed to resolve tag");
 			}

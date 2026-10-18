@@ -9,6 +9,8 @@ export function postCommitMiddleware(
 		if (
 			!["POST", "PUT", "PATCH", "DELETE"].includes(context.req.method) ||
 			context.res.status >= 400 ||
+			(/\/memories(?:\/|:|$)/.test(context.req.path) &&
+				context.get("writeStatements")?.length === 0) ||
 			(context.req.method === "POST" &&
 				["/search", "/memories:batchGet", "/settings/embedding/test"].some((suffix) =>
 					context.req.path.endsWith(suffix),

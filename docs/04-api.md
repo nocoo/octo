@@ -75,7 +75,7 @@ unknown errors still return the generic `internal error` envelope without intern
 
 Vector PUT uses the same versioned write contract as PATCH: supply
 `expected_version` in the body or the matching `If-Match` header. It requires
-`u` permission (not `r`), returns the updated memory, increments its version,
+`u` permission (not `r`), returns the memory, increments its version only for an effective change,
 and supports idempotency through the same atomic write boundary. The body is
 `{profile,values,expected_version?}`, not a nested `vector` object.
 
@@ -91,6 +91,10 @@ and supports idempotency through the same atomic write boundary. The body is
 每条的 `id` 长度 1–64，`expected_version` 为正整数，且至少有一个可更新字段：`space`、`title`、`body`、`type`、`tags`、`importance`（0–1）、`event_time`、`vector`。使用 `patch` 时外层只能有 `id` 和 `patch`；即使字段不重复，也拒绝外层更新字段或外层 `expected_version`。内外层未知字段同样拒绝。任何结构错误都在写入前拒绝整个批次，HTTP 400 `validation_failed`；合法结构的业务失败仍按条返回 `{ok:false,error}`，整体 HTTP 200。幂等键仍覆盖整个批次。
 
 单条 REST `PATCH /memories/:id` 仍使用 flat 更新字段（不接收 `patch` 包装），版本通过 `If-Match` 或 body 的 `expected_version` 提供；同时提供时必须一致。`POST /memories/:id/rollback` 是 `{"to_version":1}` + `If-Match: 3`，或 `{"to_version":1,"expected_version":3}`，不是 `version` 或 `patch`。`to_version` 为要恢复的历史版本，乐观锁版本为当前版本。
+
+**无有效变化的更新：** `PATCH /memories/:id`、`batchUpdate.items[]`、MCP `update_memory`（以及共用写路径的 vector PUT）在规范化后的完整结果与当前资源相同时，直接返回当前资源；REST HTTP 200，批量条目为 `{ok:true,item}`。不增加 `version`，不改 `updated_at` / `updated_by_key_id`，不写版本快照、变更事件、标签关联、FTS 或向量，也不触发派生同步。空间按解析后的 ID 比较；标签先规范化、跟随合并别名、按第一次出现去重，再比较身份和顺序，因此大小写或兼容字符差异可为无变化，纯重排仍是有效更新。标量逐字段比较，`event_time` 按 UTC 时间戳比较；省略向量保留现状，没有向量时再次传 `vector:null` 为无变化。同一 profile、模型、维度和内容哈希下，L2 归一化为相同 float32 值的向量也为无变化；替换、删除已有向量或刷新过期内容哈希仍是有效更新。
+
+权限、输入及乐观锁检查先于无变化短路：相同字段配上错误的 `expected_version` 仍返回 409 `version_conflict`（批量为该条 `{ok:false,error}`；MCP 使用工具错误信封）。同批次重复 ID 按条观察先前暂存的资源、标签和向量状态；无变化的条目不消耗版本号。审计及请求幂等记录仍按原契约执行，MCP 无变化更新不记为已提交写入。回滚和恢复不属于无变化短路，仍创建新版本。
 
 ### 版本
 

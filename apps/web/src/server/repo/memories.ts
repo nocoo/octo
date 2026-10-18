@@ -52,6 +52,14 @@ export type MemoryWriteStage = (
 	mapError: (error: unknown) => Promise<ApiError | undefined>,
 ) => void;
 
+export type StoredVector = {
+	profile_id: string;
+	embedding_model: string;
+	dim: number;
+	vector: ArrayBuffer | Uint8Array;
+	content_hash: string;
+};
+
 export type ListQuery = {
 	filters: MemoryFilters;
 	visible: VisibleSpaces;
@@ -213,7 +221,57 @@ export class MemoryRepo {
 		}));
 	}
 
+	async vectorsByMemory(id: string): Promise<StoredVector[]> {
+		const { results } = await this.db
+			.prepare(
+				"SELECT profile_id, embedding_model, dim, vector, content_hash FROM memory_vectors WHERE memory_id = ?",
+			)
+			.bind(id)
+			.all<StoredVector>();
+		return results;
+	}
+
+	private async unchanged(input: MemoryWrite): Promise<boolean> {
+		const current = input.previous;
+		if (
+			input.op !== "update" ||
+			!current ||
+			input.spaceId !== current.space_id ||
+			input.title !== current.title ||
+			input.body !== current.body ||
+			input.type !== current.type ||
+			input.importance !== current.importance ||
+			input.eventTime !== current.event_time
+		)
+			return false;
+		const tags = await this.tagIdsByMemory(input.id);
+		if (tags.length !== input.tags.length || tags.some((id, index) => id !== input.tags[index]?.id))
+			return false;
+		if (input.vector === undefined) return true;
+		const vectors = await this.vectorsByMemory(input.id);
+		if (input.vector === null) return vectors.length === 0;
+		const incoming = input.vector;
+		const stored = vectors.find((vector) => vector.profile_id === incoming.profileId);
+		if (
+			!stored ||
+			stored.embedding_model !== incoming.embeddingModel ||
+			stored.dim !== incoming.dim ||
+			stored.content_hash !== current.content_hash
+		)
+			return false;
+		const values = new Float32Array(incoming.vector);
+		const previous = new Float32Array(Uint8Array.from(new Uint8Array(stored.vector)).buffer);
+		return (
+			values.length === previous.length && values.every((value, index) => value === previous[index])
+		);
+	}
+
 	async write(input: MemoryWrite): Promise<MemoryRecord> {
+		if ((await this.unchanged(input)) && input.previous) {
+			const conflict = await this.conflict(input.id, input.expectedVersion, false);
+			if (conflict) throw conflict;
+			return input.previous;
+		}
 		const nextVersion = input.expectedVersion == null ? 1 : input.expectedVersion + 1;
 		const hash = await contentHash(input.title, input.body);
 		const stmts = [
