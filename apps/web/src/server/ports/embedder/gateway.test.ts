@@ -8,6 +8,19 @@ afterEach(() => {
 });
 
 describe("GatewayEmbedder", () => {
+	it.each([
+		["https://gateway.example", "https://gateway.example/v1/embeddings"],
+		["https://gateway.example/v1", "https://gateway.example/v1/embeddings"],
+		["https://gateway.example/v1///", "https://gateway.example/v1/embeddings"],
+		["https://gateway.example/proxy/v1/", "https://gateway.example/proxy/v1/embeddings"],
+		["https://gateway.example/proxy", "https://gateway.example/proxy/v1/embeddings"],
+	])("normalizes API base %s without duplicating v1", async (baseUrl, endpoint) => {
+		const fetcher = vi.fn(async () => Response.json({ data: [{ embedding: [1, 0] }] }));
+		vi.stubGlobal("fetch", fetcher);
+		await new GatewayEmbedder({ ...config, baseUrl }).embed(["fixed"]);
+		expect(fetcher).toHaveBeenCalledWith(endpoint, expect.any(Object));
+	});
+
 	it("strips a trailing slash from the base URL", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo) => {
 			expect(String(input)).toBe("http://127.0.0.1:9/v1/embeddings");

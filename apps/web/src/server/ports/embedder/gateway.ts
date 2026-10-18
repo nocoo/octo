@@ -17,7 +17,9 @@ export class GatewayEmbedder implements QueryEmbedder {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 5_000);
 		try {
-			const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}/v1/embeddings`, {
+			const baseUrl = this.config.baseUrl.replace(/\/+$/, "");
+			const endpoint = `${baseUrl}${baseUrl.endsWith("/v1") ? "" : "/v1"}/embeddings`;
+			const res = await fetch(endpoint, {
 				method: "POST",
 				redirect: "manual",
 				headers: {
