@@ -40,6 +40,12 @@ export const keyRotateSchema = z.strictObject({
 type KeyInput = z.infer<typeof keyPatchSchema>;
 export type ResolvedKeyInput = Required<MintInput>;
 
+function fieldError(message: string, paths: (keyof typeof fields)[]): ApiError {
+	return new ApiError("validation_failed", message, {
+		issues: paths.map((path) => ({ path, message })),
+	});
+}
+
 function storedSpaceIds(json: string): string[] {
 	let value: unknown;
 	try {
@@ -65,13 +71,16 @@ export async function resolveKeyInput(
 	const ops = input.ops ?? (reset ? template?.ops : existing.ops);
 	const scope = input.scope ?? (reset ? template?.scope : existing.scope);
 	if (ops === undefined || scope === undefined) {
-		throw new ApiError("validation_failed", "custom keys require explicit ops and scope");
+		throw fieldError("custom keys require explicit ops and scope", [
+			...(ops === undefined ? ["ops" as const] : []),
+			...(scope === undefined ? ["scope" as const] : []),
+		]);
 	}
 	const autoOwnSpace =
 		input.auto_own_space ??
 		(reset ? (template?.autoOwnSpace ?? false) : existing.auto_own_space === 1);
 	const name = input.name ?? (existing as ApiKeyRow).name;
-	if (autoOwnSpace) parseStrict(spaceSlugSchema, name);
+	if (autoOwnSpace) parseStrict(z.strictObject({ name: spaceSlugSchema }), { name });
 	if (template) {
 		const permittedScope =
 			role === "drop"
@@ -80,22 +89,23 @@ export async function resolveKeyInput(
 					? scope === "all" || scope === "spaces"
 					: scope === template.scope;
 		if (ops !== template.ops || !permittedScope || autoOwnSpace !== template.autoOwnSpace) {
-			throw new ApiError(
-				"validation_failed",
-				"template permissions cannot be overridden; use custom",
-			);
+			throw fieldError("template permissions cannot be overridden; use custom", [
+				...(ops !== template.ops ? ["ops" as const] : []),
+				...(!permittedScope ? ["scope" as const] : []),
+				...(autoOwnSpace !== template.autoOwnSpace ? ["auto_own_space" as const] : []),
+			]);
 		}
 	}
 	const ids = input.space_ids ?? (reset ? [] : storedSpaceIds(existing.space_ids_json));
 	if (scope !== "spaces" && ids.length > 0) {
-		throw new ApiError("validation_failed", "space ids require spaces scope");
+		throw fieldError("space ids require spaces scope", ["space_ids"]);
 	}
 	if (ids.length > 0) {
 		const { results } = await db
 			.prepare("SELECT id FROM spaces WHERE id IN (SELECT value FROM json_each(?))")
 			.bind(JSON.stringify(ids))
 			.all<{ id: string }>();
-		if (results.length !== ids.length) throw new ApiError("validation_failed", "unknown space id");
+		if (results.length !== ids.length) throw fieldError("unknown space id", ["space_ids"]);
 	}
 	return {
 		name,

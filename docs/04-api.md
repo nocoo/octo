@@ -161,15 +161,33 @@ these routes. Write requests require both Access and the allowed Origin.
 | DELETE | `/trash/:id` | Purge a trashed memory; durable external cleanup |
 
 Key metadata uses snake_case fields from the permission model, with `space_ids`
-as an array and boolean flags. Role templates are `admin`, `project`, `drop`,
+as an array of existing space IDs from `GET /api/admin/spaces` `items[].id`,
+not `items[].slug`. Boolean flags must be JSON booleans. Role templates are `admin`, `project`, `drop`,
 `readonly`, and `custom`. Mint and rotate return `{key,plaintext}` exactly once;
 other responses never include plaintext or either secret hash.
 
 Create requires `{name,role}`; custom roles additionally require `ops` (a
-comma-separated subset of `r,w,u,d`) and `scope` (`all`, `spaces`, or `own`).
+comma-separated string of unique flags from `r,w,u,d`, not an array) and
+`scope` (`all`, `spaces`, or `own`). An empty `ops` string grants no operations.
 Optional fields are `space_ids`, `own_entries_only`, `auto_own_space`, and
-`expires_at` (ISO UTC or null). PATCH accepts a nonempty subset of these fields.
-Templates reject incompatible permission overrides; use `custom` instead.
+`expires_at` (ISO UTC ending in `Z`, or null). Requests use a flat strict object;
+nested `permissions`, stored-format aliases and other extra fields are rejected.
+PATCH accepts a nonempty subset of these fields. `space_ids` must be unique,
+and a nonempty list is only valid with `scope: "spaces"`.
+
+| Role | Fixed `ops` | Permitted `scope` | Fixed `auto_own_space` |
+|---|---|---|---|
+| `admin` | `r,w,u,d` | `all` | `false` |
+| `project` | `r,w,u,d` | `own` | `true` |
+| `drop` | `w` | `spaces` (default), `own` | `false` |
+| `readonly` | `r` | `all` (default), `spaces` | `false` |
+
+Templates reject incompatible permission overrides; use `custom` to choose
+`ops`, `scope` and `auto_own_space` independently. Custom `auto_own_space`
+defaults to `false`; all roles default `own_entries_only` to `false` and
+`space_ids` to `[]`. These defaults apply on create or a role change. Otherwise,
+PATCH preserves omitted permissions. Expiry defaults to null on create and
+is preserved when omitted from PATCH, including a role change.
 Metadata includes `id,name,role,ops,scope,space_ids,own_entries_only,auto_own_space`
 and nullable ISO timestamps `expires_at,revoked_at,last_used_at`, plus
 `created_at,updated_at`. Read, PATCH and revoke return this metadata object.
@@ -180,6 +198,18 @@ public memory/space change stream.
 Space slugs are 1–64 lowercase alphanumeric characters with single interior
 hyphens. Keys with `auto_own_space` enabled, including `project`, require a name
 meeting the same slug contract so their space can be used by memory writes.
+This also applies when PATCH enables auto-own for an existing display name.
+Key schema and semantic validation errors return `validation_failed` with
+`details.issues[]` entries containing a dot-separated `path` and `message`.
+Unknown space IDs identify `space_ids`; auto-owned name violations identify
+`name`; missing custom permissions and incompatible template overrides identify
+the affected permission fields. Semantic messages do not echo submitted values.
+Object-level errors, such as extra keys or an empty PATCH, use an empty path
+and should be shown at form level.
+
+```json
+{"error":{"code":"validation_failed","message":"unknown space id","details":{"issues":[{"path":"space_ids","message":"unknown space id"}]},"request_id":"…"}}
+```
 
 Audit returns `{items,next_cursor}`. Items contain
 `id,at,actor,method,route,status,error_code,request_id,duration_ms,bytes_in,bytes_out,ip_hash`.

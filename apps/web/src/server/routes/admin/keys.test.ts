@@ -4,7 +4,7 @@ import { loadKey, revokeKey, rotateKey, updateKey } from "../../admin/keys";
 import { lookupApiKey } from "../../auth/api-key";
 import type { AppVars, Env } from "../../env";
 import { toErrorResponse } from "../../lib/errors";
-import { migratedSqlite } from "../../repo/__tests__/sqlite-d1";
+import { insertSpace, migratedSqlite } from "../../repo/__tests__/sqlite-d1";
 import { ChangeRepo } from "../../repo/changes";
 import { keysRoutes } from "./keys";
 
@@ -49,6 +49,22 @@ describe("admin keys", () => {
 		return (await response.json()) as { key: KeyMetadata; plaintext: string };
 	}
 
+	async function expectFieldErrors(response: Response, paths: string[]) {
+		expect(response.status).toBe(400);
+		const body = await response.json();
+		expect(body).toMatchObject({
+			error: {
+				code: "validation_failed",
+				details: {
+					issues: expect.arrayContaining(
+						paths.map((path) => ({ path, message: expect.any(String) })),
+					),
+				},
+			},
+		});
+		return body;
+	}
+
 	it("mints a usable HMAC-only key and never returns stored hashes", async () => {
 		const { key, plaintext } = await mint();
 		expect(plaintext).toMatch(new RegExp(`^octo_${key.id}_[A-Z2-7]{52}$`));
@@ -77,13 +93,158 @@ describe("admin keys", () => {
 		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM changes").get()).toMatchObject({ n: 0 });
 	});
 
-	it("requires auto-owned space names to satisfy the space slug contract", async () => {
-		for (const name of ["a".repeat(65), "UpperCase", "with space", "with/slash"]) {
-			expect((await request("", "POST", { name, role: "project" })).status).toBe(400);
-		}
-		const { key } = await mint({ name: "a".repeat(64), role: "project" });
-		expect((await request(`/${key.id}`, "PATCH", { name: "b".repeat(65) })).status).toBe(400);
+	it.each(["project", "custom"] as const)(
+		"returns name field errors for invalid auto-owned %s names on create and edit",
+		async (role) => {
+			const permissions =
+				role === "custom" ? { ops: "r,w", scope: "own", auto_own_space: true } : {};
+			const { key } = await mint({ name: "a".repeat(64), role, ...permissions });
+			for (const name of [
+				"a".repeat(65),
+				"UpperCase",
+				"with space",
+				"with/slash",
+				"double--hyphen",
+			]) {
+				for (const response of [
+					await request("", "POST", { name, role, ...permissions }),
+					await request(`/${key.id}`, "PATCH", { name }),
+				]) {
+					const error = await expectFieldErrors(response, ["name"]);
+					expect(JSON.stringify(error)).not.toContain(name);
+				}
+			}
+		},
+	);
+
+	it("creates and edits project keys with fixed permissions and slug-valid names", async () => {
+		const { key } = await mint({ name: "project-agent", role: "project", expires_at: null });
+		expect(key).toMatchObject({
+			ops: "r,w,u,d",
+			scope: "own",
+			space_ids: [],
+			own_entries_only: false,
+			auto_own_space: true,
+			expires_at: null,
+		});
+		const edited = await request(`/${key.id}`, "PATCH", {
+			name: "renamed-project",
+			role: "project",
+			expires_at: "2099-01-01T00:00:00.000Z",
+		});
+		expect(edited.status).toBe(200);
+		expect(await edited.json()).toMatchObject({
+			name: "renamed-project",
+			role: "project",
+			ops: "r,w,u,d",
+			scope: "own",
+			auto_own_space: true,
+			expires_at: "2099-01-01T00:00:00.000Z",
+		});
 		await mint({ name: "long-display-name-".repeat(6), role: "readonly" });
+	});
+
+	it("rejects the old custom form's space slug but accepts existing ids on create and edit", async () => {
+		const spaceId = "01JSPACE0000000000000000001";
+		const nextSpaceId = "01JSPACE0000000000000000002";
+		await insertSpace(store.d1, { id: spaceId, slug: "project-room" });
+		await insertSpace(store.d1, { id: nextSpaceId, slug: "other-room" });
+		const oldPayload = {
+			name: "custom-agent",
+			role: "custom",
+			ops: "r,w,u,d",
+			scope: "spaces",
+			space_ids: ["project-room"],
+			own_entries_only: false,
+			auto_own_space: false,
+			expires_at: null,
+		};
+		const invalid = await expectFieldErrors(await request("", "POST", oldPayload), ["space_ids"]);
+		expect(invalid).toMatchObject({ error: { message: "unknown space id" } });
+		expect(JSON.stringify(invalid)).not.toContain("project-room");
+		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM api_keys").get()).toMatchObject({ n: 0 });
+		const { key } = await mint({ ...oldPayload, space_ids: [spaceId] });
+		expect(key).toMatchObject({ ...oldPayload, space_ids: [spaceId] });
+		await expectFieldErrors(await request(`/${key.id}`, "PATCH", oldPayload), ["space_ids"]);
+		const edited = await request(`/${key.id}`, "PATCH", {
+			...oldPayload,
+			name: "edited-custom-agent",
+			space_ids: [spaceId, nextSpaceId],
+			own_entries_only: true,
+		});
+		expect(edited.status).toBe(200);
+		expect(await edited.json()).toMatchObject({
+			...oldPayload,
+			name: "edited-custom-agent",
+			space_ids: [spaceId, nextSpaceId],
+			own_entries_only: true,
+		});
+		expect((await loadKey(store.d1, key.id)).space_ids_json).toBe(
+			JSON.stringify([spaceId, nextSpaceId]),
+		);
+	});
+
+	it("validates an existing display name when custom auto-own is enabled", async () => {
+		const { key } = await mint({ name: "Display Name", role: "custom", ops: "w", scope: "own" });
+		expect(key.auto_own_space).toBe(false);
+		await expectFieldErrors(await request(`/${key.id}`, "PATCH", { auto_own_space: true }), [
+			"name",
+		]);
+		const edited = await request(`/${key.id}`, "PATCH", {
+			name: "custom-owner",
+			auto_own_space: true,
+		});
+		expect(edited.status).toBe(200);
+		expect(await edited.json()).toMatchObject({ name: "custom-owner", auto_own_space: true });
+		expect((await request(`/${key.id}`, "PATCH", { auto_own_space: false })).status).toBe(200);
+	});
+
+	it("identifies semantic permission fields without changing role templates", async () => {
+		const { key } = await mint();
+		for (const [body, paths] of [
+			[{ role: "custom" }, ["ops", "scope"]],
+			[{ role: "custom", ops: "r" }, ["scope"]],
+			[{ role: "custom", scope: "all" }, ["ops"]],
+			[{ role: "readonly", ops: "r,w" }, ["ops"]],
+			[{ role: "project", scope: "all" }, ["scope"]],
+			[{ role: "project", auto_own_space: false }, ["auto_own_space"]],
+			[{ space_ids: ["unsubmitted-space-id"] }, ["space_ids"]],
+		] as const) {
+			await expectFieldErrors(
+				await request("", "POST", { name: "invalid-permissions", role: "admin", ...body }),
+				[...paths],
+			);
+			await expectFieldErrors(await request(`/${key.id}`, "PATCH", body), [...paths]);
+		}
+		expect(await loadKey(store.d1, key.id)).toMatchObject({ role: "admin", ops: "r,w,u,d" });
+	});
+
+	it("keeps flat strict schemas, comma-separated ops, booleans and ISO UTC expiry", async () => {
+		const { key } = await mint({ role: "custom", ops: "r", scope: "all" });
+		for (const [body, paths] of [
+			[{ permissions: { ops: "w" } }, [""]],
+			[{ ops: ["r", "w"] }, ["ops"]],
+			[{ ops: "r,r" }, ["ops"]],
+			[{ expires_at: "2026-10-18T12:00" }, ["expires_at"]],
+			[{ expires_at: "2026-10-18T12:00:00+08:00" }, ["expires_at"]],
+			[{ expires_at: "submitted-invalid-expiry" }, ["expires_at"]],
+			[{ auto_own_space: 1 }, ["auto_own_space"]],
+			[{ own_entries_only: "false" }, ["own_entries_only"]],
+		] as const) {
+			for (const response of [
+				await request("", "POST", {
+					name: "invalid-format",
+					role: "custom",
+					ops: "r",
+					scope: "all",
+					...body,
+				}),
+				await request(`/${key.id}`, "PATCH", body),
+			]) {
+				const error = await expectFieldErrors(response, [...paths]);
+				expect(JSON.stringify(error)).not.toContain("submitted-invalid-expiry");
+			}
+		}
 	});
 
 	it("marks plaintext responses as non-cacheable and accepts omitted rotation options", async () => {
