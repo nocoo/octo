@@ -34,8 +34,8 @@ describe("derived work coordination", () => {
 			"fetch",
 			vi.fn(async () => {
 				calls++;
-				const held = calls <= 50;
-				if (calls === 50) entered.resolve();
+				const held = calls <= 4;
+				if (calls === 4) entered.resolve();
 				if (held) await release.promise;
 				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
 			}),
@@ -48,8 +48,8 @@ describe("derived work coordination", () => {
 					.prepare(`SELECT count(*) AS count FROM vector_sync_jobs
 				WHERE lease_token IS NOT NULL AND lease_until = ? AND due_at = 100`)
 					.get(100 + SYNC_LEASE_MS)?.count,
-			).toBe(50);
-			expect(await runDerivedTasks(env, 101)).toEqual({ synced: 1, failed: 0 });
+			).toBe(4);
+			expect(await runDerivedTasks(env, 101)).toEqual({ synced: 47, failed: 0 });
 			expect(calls).toBe(50);
 			expect(
 				raw
@@ -59,20 +59,20 @@ describe("derived work coordination", () => {
 					.get()?.synced_generation,
 			).toBe(1);
 			const recoveredAt = 101 + SYNC_LEASE_MS;
-			expect(await runDerivedTasks(env, recoveredAt)).toEqual({ synced: 50, failed: 0 });
-			expect(calls).toBe(100);
+			expect(await runDerivedTasks(env, recoveredAt)).toEqual({ synced: 4, failed: 0 });
+			expect(calls).toBe(54);
 			expect(
 				raw
 					.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at = ?")
 					.get(recoveredAt)?.count,
-			).toBe(50);
+			).toBe(4);
 			release.resolve();
 			expect(await abandoned).toEqual({ synced: 0, failed: 0 });
 			expect(
 				raw
 					.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at = ?")
 					.get(recoveredAt)?.count,
-			).toBe(50);
+			).toBe(4);
 		} finally {
 			release.resolve();
 			await abandoned;

@@ -59,16 +59,28 @@ export function applyMigrations(d1: D1Exec, migrationsDir = join(root, "migratio
 		if (file === "0001_core.sql") {
 			continue;
 		}
-		if (file === "0006_tag_positions.sql") {
+		const addedColumns = {
+			"0006_tag_positions.sql": { table: "memory_tags", names: ["position"] },
+			"0007_vector_sync_retries.sql": {
+				table: "vector_sync_jobs",
+				names: ["attempts", "last_error", "dead_at"],
+			},
+		}[file];
+		if (addedColumns) {
 			const output = d1([
 				"--command",
-				"SELECT name FROM pragma_table_info('memory_tags') WHERE name = 'position'",
+				`SELECT name FROM pragma_table_info('${addedColumns.table}')`,
 				"--json",
 			]);
 			const result = JSON.parse(output.slice(output.indexOf("["))) as Array<{
 				results?: Array<{ name: string }>;
 			}>;
-			if (result[0]?.results?.some((column) => column.name === "position")) continue;
+			if (
+				addedColumns.names.every((name) =>
+					result[0]?.results?.some((column) => column.name === name),
+				)
+			)
+				continue;
 		}
 		d1([`--file=${join(migrationsDir, file)}`]);
 	}

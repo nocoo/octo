@@ -179,11 +179,17 @@ After a successful HTTP commit, `waitUntil` runs bounded reconciliation through
 the `VectorStore` port. A D1 lease serializes work for each memory; the worker
 reads the current active-profile vector and metadata, upserts live vectors, and
 deletes missing/trashed vectors. Only the claimed generation may acknowledge
-`indexed_at`. If a concurrent mutation or transient failure requeues a job,
-the same drain reclaims it, with at most three attempts per selected job.
-Concurrent drains skip live leases and leave this retry to the holder. Jobs
-still pending after the bound, and expired leases, remain retryable by subsequent
-writes or the hourly cron. HTTP writes, MCP writes and cron use this same path.
+`indexed_at`. A concurrent mutation can be reclaimed within the same drain,
+with at most three generation-repair rounds per selected job. Provider failures
+are never retried in-run: migration `0007_vector_sync_retries.sql` persists
+`attempts`, redacted `last_error`, and `dead_at`. Each failure increments attempts
+and sets `due_at = now + min(2^attempts, 24) hours` (first retry after two hours).
+The eighth consecutive failure parks the job with `dead_at`, excludes it from
+selection/claims, and emits `vector_sync_dead` once for that transition. Success
+clears retry state. A new authoritative memory/vector/space-slug mutation resets
+the failure budget and revives the job; an expired or stale completion cannot
+consume a newer generation's budget or clear its backoff. HTTP writes, MCP writes
+and cron use this same path.
 Failures emit structured `vector_sync_failed` logs with the memory ID, an
 allowlisted error name/code, a fixed stage-specific message, and `error_message`
 limited to 300 characters. Message redaction retains only known public Vectorize
@@ -195,18 +201,34 @@ Completed jobs and purge tombstones remain available
 for periodic anti-entropy reconciliation: a lease alone cannot fence an old
 Vectorize call after a process pauses or crashes in the non-transactional gap.
 Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.
-Each drain processes at most 50 jobs, with a 60-second lease and a one-hour
+Each drain selects 50 jobs by default (explicit limits are capped at 500), with a 60-second lease and a one-hour
 anti-entropy interval. Failed work is moved behind untouched due work, so a
 persistently failing prefix cannot starve later updates or purge tombstones.
 Claiming a lease also advances its queue position before the external call;
 an abandoned or hung call therefore cannot reclaim the queue head forever.
-The same claim covers embedding backfill before any gateway call. Up to 50
-claimed jobs run concurrently; another drain skips their live leases and can
+The same claim covers embedding backfill before any gateway call. At most four
+jobs run concurrently; another drain skips their live leases and can
 reach untouched deletion tombstones. After backfill, synchronization rechecks
 lease ownership and reads the current generation before reading the vector;
 an expired owner's completion cannot acknowledge a newer owner's work.
 Completed rows and tombstones are intentionally retained; this is the durable
 recovery cost of a destination without conditional/fenced writes.
+
+Deletes are grouped into `deleteByIds` chunks of at most 100 IDs. A rejected
+chunk defers only its own jobs; other chunks acknowledge independently. Successful
+chunks acknowledge each generation separately, repairing concurrent restores
+without repeating successful unrelated deletes. `OCTO_VECTOR_SYNC_CONCURRENCY`
+accepts positive integers, capped at four; absent, fractional or invalid values
+use four. The local workerd harness sets it to `1` and awaits test post-commit
+work to avoid drain deadlocks. The old inverted parallel flag is removed.
+
+Apply migration 0007 before deploying this worker version. Inspect dead work with
+`SELECT memory_id, attempts, last_error, dead_at FROM vector_sync_jobs WHERE dead_at IS NOT NULL`.
+After fixing the provider, an authorized operator can explicitly retry dead rows
+with `UPDATE vector_sync_jobs SET attempts = 0, last_error = NULL, dead_at = NULL, due_at = 0 WHERE dead_at IS NOT NULL`.
+This is not automatic purge or a client-facing API; it neither deletes D1 vectors
+nor changes authoritative memories. Do not run operational SQL against production
+without separate authorization.
 
 The local D1 brute-force adapter already reads the authoritative state, so its
 write-port operations do not mutate or delete the source vectors. Tests exercise

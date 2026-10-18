@@ -56,7 +56,7 @@ describe("e2e helpers", () => {
 		expect(e2eEnvContents(17057)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:17059");
 		expect(e2eEnvContents(17057, 18059)).toContain("ATTACHMENT_URL_HOST=http://127.0.0.1:18059");
 		expect(e2eEnvContents(17057)).toContain("RESOURCE_ENV=test");
-		expect(e2eEnvContents(17057)).toContain("OCTO_VECTOR_SYNC_PARALLEL=1");
+		expect(e2eEnvContents(17057)).toContain("OCTO_VECTOR_SYNC_CONCURRENCY=1");
 		const settingsKey = e2eEnvContents(17057).match(/^OCTO_SETTINGS_KEY=(.+)$/m)?.[1] ?? "";
 		expect(Buffer.from(settingsKey, "base64").length).toBe(32);
 		expect(e2eEnvContents(17057)).toContain("http://127.0.0.1:17057/cdn-cgi/access/certs");

@@ -22,6 +22,100 @@ function fixture() {
 }
 
 describe("durable vector synchronization", () => {
+	it("backs off deletions exponentially, parks them after eight failures and revives on restore", async () => {
+		const { env, store, sqlite } = fixture();
+		sqlite.exec("UPDATE memories SET deleted_at = 50 WHERE id = 'memory'");
+		store.delete.mockRejectedValue(new Error("service unavailable: private body"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		let now = 100;
+		for (let attempts = 1; attempts <= 8; attempts++) {
+			expect(await synchronizeVectors(env, { store, now })).toEqual({ synced: 0, failed: 1 });
+			const due = now + Math.min(2 ** attempts, 24) * RECONCILE_INTERVAL_MS;
+			expect(
+				sqlite.prepare("SELECT attempts, due_at, dead_at, last_error FROM vector_sync_jobs").get(),
+			).toEqual({
+				attempts,
+				due_at: due,
+				dead_at: attempts === 8 ? now : null,
+				last_error: "service unavailable [redacted]",
+			});
+			expect(await synchronizeVectors(env, { store, now: due - 1 })).toEqual({
+				synced: 0,
+				failed: 0,
+			});
+			now = due;
+		}
+		expect(await synchronizeVectors(env, { store, now })).toEqual({ synced: 0, failed: 0 });
+		expect(store.delete).toHaveBeenCalledTimes(8);
+		expect(log.mock.calls.filter(([entry]) => entry.event === "vector_sync_dead")).toHaveLength(1);
+		expect(JSON.stringify(log.mock.calls)).not.toContain("private body");
+		sqlite.exec("UPDATE memories SET deleted_at = NULL WHERE id = 'memory'");
+		expect(
+			sqlite.prepare("SELECT attempts, last_error, dead_at, due_at FROM vector_sync_jobs").get(),
+		).toEqual({ attempts: 0, last_error: null, dead_at: null, due_at: 0 });
+		expect(await synchronizeVectors(env, { store, now })).toEqual({ synced: 1, failed: 0 });
+		log.mockRestore();
+	});
+
+	it("batches deletes into at most 100 IDs and retries only a failed chunk", async () => {
+		const { env, sqlite } = fixture();
+		sqlite.exec("DELETE FROM vector_sync_jobs");
+		for (let index = 0; index < 205; index++) {
+			sqlite
+				.prepare("INSERT INTO vector_sync_jobs (memory_id) VALUES (?)")
+				.run(`deleted-${String(index).padStart(3, "0")}`);
+		}
+		const deleteByIds = vi.fn(async (ids: string[]) => {
+			if (ids.includes("deleted-100")) throw new Error("service unavailable");
+			return { mutationId: "done" };
+		});
+		const store = new CloudflareVectorStore({ deleteByIds } as never);
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(await synchronizeVectors(env, { store, now: 100, limit: 205 })).toEqual({
+			synced: 105,
+			failed: 100,
+		});
+		expect(deleteByIds.mock.calls.map(([ids]) => ids.length)).toEqual([100, 100, 5]);
+		expect(
+			sqlite.prepare("SELECT COUNT(*) AS count FROM vector_sync_jobs WHERE attempts = 1").get()
+				?.count,
+		).toBe(100);
+		deleteByIds.mockResolvedValue({ mutationId: "recovered" });
+		sqlite.exec("UPDATE vector_sync_jobs SET due_at = 999999999 WHERE attempts = 0");
+		expect(
+			await synchronizeVectors(env, { store, now: 100 + 2 * RECONCILE_INTERVAL_MS, limit: 205 }),
+		).toEqual({ synced: 100, failed: 0 });
+		expect(deleteByIds.mock.lastCall?.[0]).toEqual(
+			Array.from({ length: 100 }, (_, index) => `deleted-${100 + index}`),
+		);
+		log.mockRestore();
+	});
+
+	it.each([undefined, "1", "2", "999", "invalid", "0", "1.5"])(
+		"bounds active work with concurrency %s",
+		async (setting) => {
+			const { env, sqlite, store } = fixture();
+			if (setting !== undefined) env.OCTO_VECTOR_SYNC_CONCURRENCY = setting;
+			for (let index = 0; index < 12; index++)
+				sqlite
+					.prepare("INSERT INTO vector_sync_jobs (memory_id) VALUES (?)")
+					.run(`missing-${index}`);
+			let active = 0;
+			let maximum = 0;
+			await synchronizeVectors(env, {
+				store,
+				now: 100,
+				beforeSync: async () => {
+					active++;
+					maximum = Math.max(maximum, active);
+					await new Promise((resolve) => setTimeout(resolve, 1));
+					active--;
+				},
+			});
+			expect(maximum).toBe(setting === "1" ? 1 : setting === "2" ? 2 : 4);
+		},
+	);
+
 	it("advances abandoned claims so expired leases cannot starve untouched jobs", async () => {
 		const { env, store, sqlite } = fixture();
 		sqlite.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-healthy')");
@@ -100,13 +194,29 @@ describe("durable vector synchronization", () => {
 		]);
 	});
 
-	it("retries transient failures in the same drain without changing authoritative vectors", async () => {
-		const { env, store, indexed } = fixture();
+	it("defers transient failures without changing authoritative vectors", async () => {
+		const { env, store, indexed, sqlite } = fixture();
 		store.upsert.mockRejectedValueOnce(new Error("private provider details"));
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
-		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 1, failed: 1 });
-		expect(store.upsert).toHaveBeenCalledTimes(2);
-		expect(indexed()).toBe(100);
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 1 });
+		expect(store.upsert).toHaveBeenCalledTimes(1);
+		expect(indexed()).toBeNull();
+		expect(
+			sqlite.prepare("SELECT attempts, last_error, due_at FROM vector_sync_jobs").get(),
+		).toEqual({
+			attempts: 1,
+			last_error: "[redacted]",
+			due_at: 100 + 2 * RECONCILE_INTERVAL_MS,
+		});
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 0, failed: 0 });
+		expect(await synchronizeVectors(env, { store, now: 100 + 2 * RECONCILE_INTERVAL_MS })).toEqual({
+			synced: 1,
+			failed: 0,
+		});
+		expect(sqlite.prepare("SELECT attempts, last_error FROM vector_sync_jobs").get()).toEqual({
+			attempts: 0,
+			last_error: null,
+		});
 		expect(log.mock.calls.flat().join(" ")).not.toContain("private provider");
 		log.mockRestore();
 	});
@@ -115,15 +225,18 @@ describe("durable vector synchronization", () => {
 		const { env, store, indexed, sqlite } = fixture();
 		store.upsert.mockRejectedValue(new Error("provider failure"));
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
-		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 3 });
-		expect(store.upsert).toHaveBeenCalledTimes(3);
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 1 });
+		expect(store.upsert).toHaveBeenCalledTimes(1);
 		expect(indexed()).toBeNull();
 		expect(
 			sqlite.prepare("SELECT due_at, lease_until, lease_token FROM vector_sync_jobs").get(),
-		).toEqual({ due_at: 100, lease_until: 0, lease_token: null });
+		).toEqual({ due_at: 100 + 2 * RECONCILE_INTERVAL_MS, lease_until: 0, lease_token: null });
 		store.upsert.mockResolvedValue(undefined);
-		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
-		expect(indexed()).toBe(101);
+		expect(await synchronizeVectors(env, { store, now: 100 + 2 * RECONCILE_INTERVAL_MS })).toEqual({
+			synced: 1,
+			failed: 0,
+		});
+		expect(indexed()).toBe(100 + 2 * RECONCILE_INTERVAL_MS);
 		log.mockRestore();
 	});
 
@@ -154,7 +267,7 @@ describe("durable vector synchronization", () => {
 				now: 100,
 				beforeSync: stage === "backfill" ? fail : async () => {},
 			});
-			expect(log).toHaveBeenCalledTimes(3);
+			expect(log).toHaveBeenCalledTimes(1);
 			expect(log).toHaveBeenCalledWith({
 				event: "vector_sync_failed",
 				memory_id: "memory",
@@ -212,7 +325,7 @@ describe("durable vector synchronization", () => {
 		"drains overlapping writes to the latest generation (mode %s)",
 		async (mode) => {
 			const { env, store, sqlite, indexed } = fixture();
-			if (mode) env.OCTO_VECTOR_SYNC_PARALLEL = mode;
+			if (mode) env.OCTO_VECTOR_SYNC_CONCURRENCY = mode;
 			store.upsert.mockImplementationOnce(async () => {
 				sqlite.exec(
 					"UPDATE memories SET space_id = 'space:dest', updated_at = 40 WHERE id = 'memory'",

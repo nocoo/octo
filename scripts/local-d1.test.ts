@@ -69,11 +69,25 @@ describe("local-d1", () => {
 		expect(tableExists(d1, "spaces")).toBe(false);
 		applyMigrations(d1);
 		expect(tableExists(d1, "spaces")).toBe(true);
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM pragma_table_info('vector_sync_jobs') WHERE name IN ('attempts', 'last_error', 'dead_at')",
+				)
+				.all(),
+		).toHaveLength(3);
 		db.exec(`INSERT INTO spaces (id,slug,name,created_at,updated_at) VALUES ('order','order','Order',1,1);
 			INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at) VALUES ('order','order','','','note','key','hash',1,1);
 			INSERT INTO tags (id,name,display_name,created_at,updated_at) VALUES ('order','order','Order',1,1);
 			INSERT INTO memory_tags (memory_id,tag_id,position) VALUES ('order','order',7);`);
 		applyMigrations(d1);
+		expect(
+			db
+				.prepare(
+					"SELECT attempts, last_error, dead_at FROM vector_sync_jobs WHERE memory_id = 'order'",
+				)
+				.get(),
+		).toEqual({ attempts: 0, last_error: null, dead_at: null });
 		expect(db.prepare("SELECT position FROM memory_tags WHERE memory_id = 'order'").get()).toEqual({
 			position: 7,
 		});

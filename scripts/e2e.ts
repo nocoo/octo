@@ -227,7 +227,7 @@ export function e2eEnvContents(jwksPort = L2_JWKS_PORT, workerPort = L2_WORKER_P
 		`CF_ACCESS_TEAM_DOMAIN=${iss}`,
 		`CF_ACCESS_AUD=${L2_ACCESS_AUD}`,
 		`ACCESS_JWKS_URL=${l2JwksUrl(jwksPort)}`,
-		"OCTO_VECTOR_SYNC_PARALLEL=1",
+		"OCTO_VECTOR_SYNC_CONCURRENCY=1",
 		"",
 	].join("\n");
 }

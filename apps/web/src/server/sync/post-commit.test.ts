@@ -40,7 +40,7 @@ describe("post-commit derived work", () => {
 
 	it("awaits derived work inline for the L2 serialized vector sync binding", async () => {
 		const { app, ctx, events, pending, process } = fixture();
-		const env = { RESOURCE_ENV: "test", OCTO_VECTOR_SYNC_PARALLEL: "1" } as Env;
+		const env = { RESOURCE_ENV: "test", OCTO_VECTOR_SYNC_CONCURRENCY: "1" } as Env;
 		expect((await app.request("/api/v1/memories", { method: "POST" }, env, ctx)).status).toBe(200);
 		expect(pending).toHaveLength(0);
 		expect(events).toEqual(["prepare", "commit", "derived"]);
