@@ -12,7 +12,7 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 - 单个资源直接返回对象；列表返回 `{ "items": [...], "next_cursor": "…" | null }`。
 - 每个响应都带 `X-Request-Id` 和 `X-Octo-Version`。
 - 乐观并发：PATCH / rollback 必须带 `If-Match: <version>`（或 body 里的 `expected_version`）；不匹配返回 409。
-- `importance` 在创建、更新、响应以及过滤器 `importance.min` / `importance.max` 中都是 0–1（含端点）的数值；创建时省略默认 0.5，过滤器另须 `min ≤ max`。
+- `importance` 在创建、更新、响应以及过滤器 `importance.min` / `importance.max` 中都是 0–1（含端点）的数值；创建时省略默认 0.5。上下限反转不会命中任何记录。
 - 未知字段 → 400 `validation_failed`（zod strict）。
 - 标签数组按提交顺序规范化、去重（保留第一次出现），响应不按字母排序；纯重排也是更新，产生新版本并出现在版本 diff 的 `tags` 字段中。重命名不重排，合并去重保留最靠前的位置。
 
@@ -64,7 +64,7 @@ unknown errors still return the generic `internal error` envelope without intern
 |---|---|---|---|
 | POST | `/memories` | write | 创建。body：`space`、`title`、`body`、`type`、`tags[]`、`importance?`（0–1）、`event_time?`、`vector?` |
 | GET | `/memories/:id` | read | `?include=versions_count,attachments,vector_status` |
-| PATCH | `/memories/:id` | update | 部分更新 + `If-Match`；可以改 `space`（需要两边都有写权限，记为 `op=move`） |
+| PATCH | `/memories/:id` | update | 部分更新 + `If-Match`；可以改 `space`（需要两边都有 update 权限，记为 `op=move`） |
 | DELETE | `/memories/:id` | delete | 移入回收站；返回 `{trashed_at}` |
 | GET | `/memories` | read | 过滤条件同搜索（spaces/tags/types/sources/time/importance，重要度上下限均为 0–1）+ 游标 |
 | POST | `/memories:batchCreate` | write | ≤100 条；每条结果单独给出（`results[i] = {ok, item|error}`），整体 207 风格但返回 200 |
@@ -106,7 +106,7 @@ and supports idempotency through the same atomic write boundary. The body is
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
 | POST | `/search` | read | 见 [03](03-search.md) |
-| GET | `/changes` | read | `?cursor&limit&spaces[]`，按 seq 升序 |
+| GET | `/changes` | read | `?cursor&limit&spaces=slug-a,slug-b`，按 seq 升序 |
 | GET | `/changes/head` | read | 返回当前最新游标 |
 
 ### 标签与 space
@@ -128,7 +128,7 @@ and supports idempotency through the same atomic write boundary. The body is
 | POST | `/memories/:id/attachments` | update | `multipart/form-data` 或原始 body + `Content-Type` + `X-Filename`；返回附件元数据和 markdown 引用 `![](octo://att/<id>)` |
 | GET | `/memories/:id/attachments` | read | 列表 |
 | GET | `/attachments/:id/url` | read | 返回短时签名 URL `{url, expires_at}`（默认 5 分钟，见 02 §8） |
-| GET | `/files/<r2_key>?exp&sig` | 签名 | 不需要 API key；签名和有效期校验通过后流式返回；`Content-Disposition`、`ETag`=sha256；SVG 强制 `attachment` 下载 |
+| GET | `/files/<r2_key>?exp&sig`（站点根路径，不带 `/api/v1`） | 签名 | 不需要 API key；签名和有效期校验通过后流式返回；`Content-Disposition`、`ETag`=sha256；SVG 强制 `attachment` 下载 |
 | DELETE | `/attachments/:id` | delete | 软删除（随 memory purge 时物理删除） |
 
 Multipart uploads accept exactly one `file` part (no extra fields), with at most 50 MiB of file bytes and 64 KiB of envelope bytes. Raw uploads accept at most 50 MiB. Declared oversize requests are rejected before acquiring a body reader; the runtime owns cleanup of that unused body. Actual bytes are bounded while reading; on overflow, the application stops reading and releases its reader lock without cancelling the transport before the error response. The runtime terminates the incoming stream when the response proxy task completes or the client disconnects; see [the ownership proof](07-dev-workflow.md#7-attachment-early-response-proof). Keyed uploads identify the validated filename, normalized content type and SHA-256 of file bytes; multipart boundaries do not affect replay identity. Attachment mutations, change events and replay outcomes commit in one D1 batch.
@@ -149,6 +149,47 @@ Multipart uploads accept exactly one `file` part (no extra fields), with at most
 | GET | `/me` | 任意有效 key | key 名、角色、权限、可见 space、过期时间（不返回 key 本身） |
 | GET | `/usage?from&to` | 任意有效 key | 本 key 的按日调用数、错误数、写入字节数 |
 | GET | `/embedding-profiles` | read | 可用的 profile 和活跃 profile |
+
+### 不可见空间的逐端点行为
+
+以下均以有效 key、具备端点操作权限、合法输入为前提；没有 key 返回 401，缺操作权限返回 403，输入校验可能先返回 400。不可见空间与不存在资源不加区分，不透露正文、标签、计数或版本。列表的空间参数采用 `spaces=slug-a,slug-b`；搜索 JSON 使用 `filters.spaces`，两者均与 key 的可见空间求交集（未知空间也被过滤）。
+
+| 方法与路径 | 目标空间不可见时 |
+|---|---|
+| `POST /memories` | 404 `not_found`，不创建记录 |
+| `GET /memories/:id` | 404 `not_found`，即使带 `include=trashed` 或其他扩展 |
+| `PATCH /memories/:id` | 源空间或移动目标空间任一不可见即 404，不更新 |
+| `DELETE /memories/:id` | 404，不移入回收站 |
+| `PUT /memories/:id/vector` | 404，不写向量 |
+| `GET /memories` | 200，仅可见结果；交集为空时 `{items:[],next_cursor:null}` |
+| `POST /memories:batchCreate` | 200，该条 `{ok:false,error:{code:"not_found",…}}`；其他合法条目继续处理 |
+| `POST /memories:batchGet` | 200，隐藏、已删除或不存在的 id 进入 `missing[]`，不进入 `items[]` |
+| `POST /memories:batchUpdate` | 200，源或移动目标不可见的该条为 `not_found`，不修改该条 |
+| `POST /memories:batchDelete` | 200，该条为 `not_found`，不删除该条 |
+| `GET /memories/:id/versions` | 404，不返回版本列表 |
+| `GET /memories/:id/versions/:v` | 404，不返回历史快照 |
+| `GET /memories/:id/diff` | 404，不计算或返回差异 |
+| `POST /memories/:id/rollback` | 当前空间或历史快照的目标空间不可见时 404，不回滚 |
+| `POST /search` | 200，FTS / vector / hybrid 均过滤不可见记录，D1 复验候选；交集为空时结果及候选计数为零 |
+| `GET /changes` | 200，仅可见空间的事件；交集为空时空列表 |
+| `GET /changes/head` | 200，游标只取可见事件的最高序号；交集为空时游标编码 `{"s":0}` |
+| `GET /tags` | 200，仅可见空间内未删除 memory 使用的标签及其可见引用数 |
+| `POST /tags/:name/rename` | 全局操作；非 `scope=all` 或缺 `u` 返回 403，不通过名称探测其他空间 |
+| `POST /tags/:name/merge` | 同上 |
+| `GET /spaces` | 200，仅可见空间及其未删除 memory 计数 |
+| `GET /spaces/:slug` | 404，不返回详情或计数 |
+| `POST /memories/:id/attachments` | 404，在读取上传内容前拒绝 |
+| `GET /memories/:id/attachments` | 404，不是空列表 |
+| `GET /attachments/:id/url` | 所属 memory 不可见时 404，不签发 URL |
+| `DELETE /attachments/:id` | 所属 memory 不可见时 404，不软删除附件 |
+| `GET /files/<r2_key>?exp&sig` | 不读取 API key 空间权限；已签发 URL 是到期前有效的下载凭证，不能把它当成再次鉴权 |
+| `GET /trash` | 200，仅可见空间的回收站记录 |
+| `POST /trash/:id/restore` | 404，不恢复 |
+| `GET /me` | 200，返回当前 key 自身的权限与可见空间，不提供查询其他 key 的入口 |
+| `GET /usage` | 200，只返回当前 key 的用量，不按空间查询其他 key |
+| `GET /embedding-profiles` | 200，返回全局模型配置的公开元数据；不返回 embedding 网关设置或凭据 |
+
+直接 HTTP 验证见 `tests/api/memories-matrix.test.ts`、`batch.test.ts`、`search.test.ts`、`attachments.test.ts`、`spaces.test.ts` 及本轮新增回归。MCP 对应工具复用相同服务与错误 code，外层遵循 [09](09-mcp.md) 的 HTTP 200 + `isError` 约定。
 
 ## 6. Admin API（只给 dashboard）
 

@@ -27,7 +27,7 @@ it("round-trips caller tag order and versions a pure reorder over HTTP", async (
 	const path = `${base}/api/v1/memories/${memory.id}`;
 	expect(await (await fetch(path, { headers })).json()).toMatchObject({ tags });
 	expect(
-		await (await fetch(`${base}/api/v1/memories?spaces[]=order-kbr1`, { headers })).json(),
+		await (await fetch(`${base}/api/v1/memories?spaces=order-kbr1`, { headers })).json(),
 	).toMatchObject({ items: [expect.objectContaining({ tags })] });
 	const batch = await fetch(`${base}/api/v1/memories:batchGet`, {
 		method: "POST",
