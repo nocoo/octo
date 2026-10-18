@@ -75,8 +75,10 @@ export async function synchronizeVectors(
 				.bind(token, now + SYNC_LEASE_MS, now, job.memory_id, now, now)
 				.first<{ generation: number }>();
 		if (!claim) return;
+		let stage = "backfill";
 		try {
 			await options.beforeSync?.(job.memory_id);
+			stage = "read";
 			const current = await env.DB.prepare(`SELECT generation FROM vector_sync_jobs
 				WHERE memory_id = ? AND lease_token = ?`)
 				.bind(job.memory_id, token)
@@ -91,6 +93,7 @@ export async function synchronizeVectors(
 					.bind(job.memory_id, profileId)
 					.first<SourceVector>();
 			if (source) {
+				stage = "upsert";
 				await store.upsert([
 					{
 						id: source.id,
@@ -107,8 +110,10 @@ export async function synchronizeVectors(
 					},
 				]);
 			} else {
+				stage = "delete";
 				await store.delete([job.memory_id]);
 			}
+			stage = "acknowledge";
 			const results = await env.DB.batch([
 				env.DB.prepare(`UPDATE memory_vectors SET indexed_at = ? WHERE memory_id = ? AND profile_id = ?
 					AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND lease_token = ?)
@@ -133,9 +138,19 @@ export async function synchronizeVectors(
 				totals.synced++;
 				return;
 			}
-		} catch {
+		} catch (error) {
 			totals.failed++;
-			console.error("vector_sync_failed");
+			console.error({
+				event: "vector_sync_failed",
+				memory_id: job.memory_id,
+				name:
+					error instanceof Error
+						? /^(Error|TypeError|RangeError|AbortError|TimeoutError)$/.test(error.name)
+							? error.name
+							: "Error"
+						: "UnknownError",
+				message: `Vector synchronization failed during ${stage}`,
+			});
 		}
 		await invalidate(env.DB, job.memory_id, token, now);
 		return true;

@@ -127,6 +127,45 @@ describe("durable vector synchronization", () => {
 		log.mockRestore();
 	});
 
+	it.each([
+		{ stage: "backfill", error: new TypeError("secret-token private body"), name: "TypeError" },
+		{
+			stage: "upsert",
+			error: Object.assign(new Error("secret-token"), { name: "private body" }),
+			name: "Error",
+		},
+		{ stage: "delete", error: { message: "secret-token private body" }, name: "UnknownError" },
+	])(
+		"logs safe structured $stage failures without provider details",
+		async ({ stage, error, name }) => {
+			const { env, store, sqlite } = fixture();
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			const fail = async () => {
+				throw error;
+			};
+			if (stage === "delete") {
+				sqlite.exec("UPDATE memories SET deleted_at = 50 WHERE id = 'memory'");
+				store.delete.mockImplementation(fail);
+			} else if (stage === "upsert") {
+				store.upsert.mockImplementation(fail);
+			}
+			await synchronizeVectors(env, {
+				store,
+				now: 100,
+				beforeSync: stage === "backfill" ? fail : async () => {},
+			});
+			expect(log).toHaveBeenCalledTimes(3);
+			expect(log).toHaveBeenCalledWith({
+				event: "vector_sync_failed",
+				memory_id: "memory",
+				name,
+				message: `Vector synchronization failed during ${stage}`,
+			});
+			expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|private body/);
+			log.mockRestore();
+		},
+	);
+
 	it("deletes on trash, reindexes restore and keeps purge tombstones", async () => {
 		const { env, store, sqlite, indexed } = fixture();
 		sqlite.exec("UPDATE memories SET deleted_at = 50 WHERE id = 'memory'");
