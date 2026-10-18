@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fixture, SECRET, SETTINGS } from "./__tests__/fixture";
 import {
+	configFromState,
 	getEmbeddingSettings,
-	loadEmbeddingConfig,
+	readEmbeddingState,
 	saveEmbeddingSettings,
 	testEmbeddingSettings,
 } from "./config";
@@ -23,7 +24,7 @@ describe("embedding settings", () => {
 			api_key_set: false,
 			api_key_mask: null,
 		});
-		expect(await loadEmbeddingConfig(env)).toBeNull();
+		expect(await configFromState(env, await readEmbeddingState(env))).toBeNull();
 	});
 
 	it("encrypts credentials, preserves on omission, replaces and clears", async () => {
@@ -43,7 +44,7 @@ describe("embedding settings", () => {
 			api_key_set: true,
 			api_key_mask: "****ABCD",
 		});
-		expect(await loadEmbeddingConfig(env)).toEqual({
+		expect(await configFromState(env, await readEmbeddingState(env))).toEqual({
 			baseUrl: SETTINGS.base_url,
 			apiKey: SECRET,
 			model: "tiny",
@@ -69,7 +70,7 @@ describe("embedding settings", () => {
 			api_key_mask: null,
 			base_url: null,
 		});
-		expect(await loadEmbeddingConfig(env)).toBeNull();
+		expect(await configFromState(env, await readEmbeddingState(env))).toBeNull();
 		expect(
 			raw.prepare("SELECT * FROM settings WHERE key = 'embedding.api_key'").get(),
 		).toBeUndefined();
@@ -112,7 +113,7 @@ describe("embedding settings", () => {
 		resumeSave();
 		await rejectedSave;
 		expect(raw.prepare("SELECT * FROM settings ORDER BY key").all()).toEqual(committed);
-		expect(await loadEmbeddingConfig(env)).toMatchObject({
+		expect(await configFromState(env, await readEmbeddingState(env))).toMatchObject({
 			baseUrl: "https://new-gateway.example",
 			apiKey: "new-gateway-credential",
 			backfillEnabled: false,
@@ -145,7 +146,9 @@ describe("embedding settings", () => {
 		const { env, raw } = fixture();
 		await saveEmbeddingSettings(env, SETTINGS, "admin:e@local");
 		raw.exec("UPDATE embedding_profiles SET model = 'changed' WHERE active = 1");
-		await expect(loadEmbeddingConfig(env)).rejects.toMatchObject({ code: "unavailable" });
+		await expect(configFromState(env, await readEmbeddingState(env))).rejects.toMatchObject({
+			code: "unavailable",
+		});
 		raw.exec("UPDATE embedding_profiles SET active = 0");
 		await expect(getEmbeddingSettings(env)).rejects.toMatchObject({ code: "unavailable" });
 		raw.exec("UPDATE embedding_profiles SET active = 1");
@@ -175,7 +178,9 @@ describe("embedding settings", () => {
 			"admin:e@local",
 		);
 		env.RESOURCE_ENV = "production";
-		await expect(loadEmbeddingConfig(env)).rejects.toMatchObject({ code: "unavailable" });
+		await expect(configFromState(env, await readEmbeddingState(env))).rejects.toMatchObject({
+			code: "unavailable",
+		});
 	});
 
 	it("tests fixed text using current or unsaved config, UA, without saving or exposing vectors/secrets", async () => {
@@ -196,6 +201,7 @@ describe("embedding settings", () => {
 			dims: 3,
 			match: true,
 			error_code: null,
+			reason: null,
 		});
 		expect(raw.prepare("SELECT COUNT(*) AS n FROM settings").get()?.n).toBe(0);
 		await saveEmbeddingSettings(env, SETTINGS, "admin:e@local");
@@ -236,6 +242,7 @@ describe("embedding settings", () => {
 			dims: null,
 			match: false,
 			error_code: "embedder_unavailable",
+			reason: { stage: "request" },
 		});
 		expect(JSON.stringify(result)).not.toContain(SECRET);
 		await expect(testEmbeddingSettings(env, { dims: 2 })).rejects.toMatchObject({
@@ -261,6 +268,7 @@ describe("embedding settings", () => {
 			dims: null,
 			match: false,
 			error_code: "embedder_unavailable",
+			reason: { stage: "parse" },
 		});
 		expect(JSON.stringify(result)).not.toContain(SECRET);
 		expect(raw.prepare("SELECT COUNT(*) AS n FROM settings").get()?.n).toBe(0);
@@ -288,9 +296,13 @@ it("lets an admin replace a formerly-local URL after entering production", async
 		"admin:e@local",
 	);
 	env.RESOURCE_ENV = "production";
-	await expect(loadEmbeddingConfig(env)).rejects.toMatchObject({ code: "unavailable" });
+	await expect(configFromState(env, await readEmbeddingState(env))).rejects.toMatchObject({
+		code: "unavailable",
+	});
 	await expect(
 		saveEmbeddingSettings(env, { base_url: "https://gateway.example" }, "admin:e@local"),
 	).resolves.toMatchObject({ base_url: "https://gateway.example" });
-	expect(await loadEmbeddingConfig(env)).toMatchObject({ baseUrl: "https://gateway.example" });
+	expect(await configFromState(env, await readEmbeddingState(env))).toMatchObject({
+		baseUrl: "https://gateway.example",
+	});
 });

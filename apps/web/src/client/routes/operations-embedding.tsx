@@ -30,6 +30,7 @@ import {
 	type EmbeddingFields,
 	EmbeddingModel,
 	type EmbeddingProfile,
+	embeddingFailureStageLabel,
 	SettingsModel,
 } from "../viewmodels/operations-embedding";
 import { operationsError } from "../viewmodels/operations-errors";
@@ -247,6 +248,22 @@ export function EmbeddingPage() {
 									value: state.testResult.dims ?? "暂无数据",
 								},
 								{ label: "配置匹配", value: state.testResult.match ? "是" : "否" },
+								...(state.testResult.reason
+									? [
+											{
+												label: "失败阶段",
+												value: embeddingFailureStageLabel(state.testResult.reason.stage),
+											},
+											...(state.testResult.reason.upstream_status === undefined
+												? []
+												: [
+														{
+															label: "上游状态码",
+															value: String(state.testResult.reason.upstream_status),
+														},
+													]),
+										]
+									: []),
 							]}
 						/>
 						{state.testResult.error_code && (

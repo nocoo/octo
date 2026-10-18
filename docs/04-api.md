@@ -198,13 +198,19 @@ Embedding fields are `base_url,model,dims,backfill_enabled`. GET additionally
 returns `api_key_set` and `api_key_mask` (only the last four characters). PUT
 omitting `api_key` preserves it, `null` clears it, and a nonempty string replaces
 it. Model/dimensions must match the active profile. Test returns only
-`{latency_ms,dims,match,error_code}`; no upstream response body or credential.
-`dims` is a number or null, and `error_code` is null,
-`embedder_unavailable`, or `vector_dimension_mismatch`. An empty test body `{}`
-uses saved settings; partial fields override without persisting. Concurrent
-PUTs compare the complete observed settings snapshot and reject a stale save
-with `validation_failed`, rather than pairing newer credentials with an old URL.
-`OCTO_SETTINGS_KEY` must be canonical base64 encoding exactly 32 random bytes.
+`{latency_ms,dims,match,error_code,reason}`; no upstream response body, credential,
+full URL, host, or secret string. `dims` is a number or null, and `error_code` is
+null, `embedder_unavailable`, or `vector_dimension_mismatch`. `reason` is required:
+null on success, otherwise
+`{stage:"config"|"decrypt"|"request"|"status"|"redirect"|"timeout"|"parse"|"dims",
+upstream_status?: number}` (HTTP status only for `status`/`redirect`). Gateway
+requests reject redirects (`redirect:"manual"`), use a five-second timeout, and
+join `base_url` as a root or trailing `/v1` without duplicating `/v1`. Structured
+failure logs emit only safe `{event,stage,upstream_status?,host}` fields. An empty
+test body `{}` uses saved settings; partial fields override without persisting.
+Concurrent PUTs compare the complete observed settings snapshot and reject a stale
+save with `validation_failed`, rather than pairing newer credentials with an old
+URL. `OCTO_SETTINGS_KEY` must be canonical base64 encoding exactly 32 random bytes.
 
 Memory, version, diff, rollback, batch, trash/restore, changes, tags, attachments,
 and search endpoints mirror their `/api/v1` methods and suffixes under this

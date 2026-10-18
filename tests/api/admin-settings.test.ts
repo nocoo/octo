@@ -65,7 +65,7 @@ describe("Access-only embedding settings", () => {
 			backfill_enabled: false,
 		});
 		const secret = "settings-e2e-private-key-ABCD";
-		let mode: "ok" | "wrong-dims" | "failure" = "ok";
+		let mode: "ok" | "wrong-dims" | "failure" | "redirect" | "parse" = "ok";
 		let calls = 0;
 		const server = createServer(async (req, res) => {
 			calls++;
@@ -79,6 +79,16 @@ describe("Access-only embedding settings", () => {
 				input: ["Octo embedding connection test."],
 			});
 			res.setHeader("Content-Type", "application/json");
+			if (mode === "redirect") {
+				res.statusCode = 302;
+				res.setHeader("Location", "/private-redirect-target");
+				res.end(secret);
+				return;
+			}
+			if (mode === "parse") {
+				res.end(secret);
+				return;
+			}
 			if (mode === "failure") {
 				res.statusCode = 403;
 				res.end(JSON.stringify({ error: secret }));
@@ -94,7 +104,7 @@ describe("Access-only embedding settings", () => {
 			const address = server.address();
 			if (!address || typeof address === "string") throw new Error("stub address unavailable");
 			const config = {
-				base_url: `http://127.0.0.1:${address.port}`,
+				base_url: `http://127.0.0.1:${address.port}/v1/`,
 				api_key: secret,
 				model: profile.model,
 				dims: profile.dims,
@@ -111,6 +121,7 @@ describe("Access-only embedding settings", () => {
 				dims: profile.dims,
 				match: true,
 				error_code: null,
+				reason: null,
 			});
 			expect(await query(d1, "SELECT * FROM settings WHERE key GLOB 'embedding.*'")).toEqual([]);
 			const saved = await put(config);
@@ -140,6 +151,7 @@ describe("Access-only embedding settings", () => {
 				match: false,
 				dims: 2,
 				error_code: "vector_dimension_mismatch",
+				reason: { stage: "dims" },
 			});
 			mode = "failure";
 			const failed = await post({});
@@ -148,7 +160,35 @@ describe("Access-only embedding settings", () => {
 				dims: null,
 				match: false,
 				error_code: "embedder_unavailable",
+				reason: { stage: "status", upstream_status: 403 },
 			});
+			for (const failure of ["redirect", "parse"] as const) {
+				mode = failure;
+				const response = await post({});
+				const result = await response.json();
+				expect(result).toMatchObject({
+					dims: null,
+					match: false,
+					error_code: "embedder_unavailable",
+					reason:
+						failure === "redirect"
+							? { stage: "redirect", upstream_status: 302 }
+							: { stage: "parse" },
+				});
+				expect(JSON.stringify(result)).not.toContain(secret);
+			}
+			await d1([
+				"--command",
+				"UPDATE settings SET key_version = 2 WHERE key = 'embedding.api_key'",
+			]);
+			expect(await (await post({})).json()).toMatchObject({
+				error_code: "embedder_unavailable",
+				reason: { stage: "decrypt" },
+			});
+			await d1([
+				"--command",
+				"UPDATE settings SET key_version = 1 WHERE key = 'embedding.api_key'",
+			]);
 			for (const invalid of [
 				{ dims: profile.dims === 1 ? 2 : 1 },
 				{ model: "other-model" },
@@ -177,7 +217,7 @@ describe("Access-only embedding settings", () => {
 				api_key_mask: null,
 			});
 			expect(await (await post({})).json()).toMatchObject({ error_code: "embedder_unavailable" });
-			expect(calls).toBe(4);
+			expect(calls).toBe(6);
 		} finally {
 			await d1(["--command", "DELETE FROM settings WHERE key GLOB 'embedding.*'"]);
 			await new Promise<void>((resolve, reject) =>

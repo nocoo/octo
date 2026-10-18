@@ -51,9 +51,10 @@ describe("GatewayEmbedder", () => {
 				return response;
 			});
 			vi.stubGlobal("fetch", fetcher);
-			await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toEqual(
-				new Error(`embedder status ${status}`),
-			);
+			await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toMatchObject({
+				message: `embedder status ${status}`,
+				reason: { stage: "redirect", upstream_status: status },
+			});
 			expect(fetcher).toHaveBeenCalledTimes(1);
 			expect(String(fetcher.mock.calls[0]?.[0])).toBe("http://127.0.0.1:9/v1/embeddings");
 			expect(readBody).not.toHaveBeenCalled();
@@ -80,9 +81,10 @@ describe("GatewayEmbedder", () => {
 			"fetch",
 			vi.fn(async () => Response.json({ data: [{ embedding }] })),
 		);
-		await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toEqual(
-			new Error("invalid embedding"),
-		);
+		await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toMatchObject({
+			message: "invalid embedding",
+			reason: { stage: "parse" },
+		});
 	});
 
 	it("rejects a null embedding row with the same static error", async () => {
@@ -90,9 +92,10 @@ describe("GatewayEmbedder", () => {
 			"fetch",
 			vi.fn(async () => Response.json({ data: [null] })),
 		);
-		await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toEqual(
-			new Error("invalid embedding"),
-		);
+		await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toMatchObject({
+			message: "invalid embedding",
+			reason: { stage: "parse" },
+		});
 	});
 
 	it.each([

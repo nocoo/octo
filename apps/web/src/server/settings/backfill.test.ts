@@ -219,8 +219,8 @@ describe("post-commit embedding backfill", () => {
 		raw.exec("UPDATE settings SET ciphertext = x'00' WHERE key = 'embedding.api_key'");
 		expect(await backfillMemory(env, "m")).toBe(false);
 		expect(logger.mock.calls.slice(0, 2)).toEqual([
-			["embedding backfill failed"],
-			["embedding backfill failed"],
+			[{ event: "embedding_backfill_failed", stage: "request", host: "gateway.example" }],
+			[{ event: "embedding_backfill_failed", stage: "config", host: "gateway.example" }],
 		]);
 		expect(raw.prepare("SELECT COUNT(*) AS n FROM memory_vectors").get()?.n).toBe(0);
 	});

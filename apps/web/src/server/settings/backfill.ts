@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { EmbeddingFailure, reportEmbeddingFailure } from "../ports/embedder/diagnostics";
 import { GatewayEmbedder } from "../ports/embedder/gateway";
 import type { QueryEmbedder } from "../ports/embedder/types";
 import { vectorBlobFromValues } from "../search/vector-write";
@@ -18,11 +19,13 @@ type ObservedMemory = {
 };
 
 export async function backfillMemory(env: Env, memoryId: string): Promise<boolean> {
+	let baseUrl: string | null = null;
 	try {
 		const state = await readEmbeddingState(env);
 		if (!state.settings.backfill_enabled) return false;
+		baseUrl = state.settings.base_url;
 		const config = await configFromState(env, state);
-		if (!config) return false;
+		if (!config) throw new EmbeddingFailure({ stage: "config" });
 		const memory = await env.DB.prepare(
 			`SELECT memory.id, memory.title, memory.body, memory.version, memory.content_hash, vector.content_hash AS vector_hash, vector.embedding_model AS vector_model, vector.dim AS vector_dim FROM memories memory LEFT JOIN memory_vectors vector ON vector.memory_id = memory.id AND vector.profile_id = ? WHERE memory.id = ? AND memory.deleted_at IS NULL`,
 		)
@@ -65,8 +68,8 @@ export async function backfillMemory(env: Env, memoryId: string): Promise<boolea
 				)
 				.run();
 		return result.meta.changes > 0;
-	} catch {
-		console.error("embedding backfill failed");
+	} catch (error) {
+		reportEmbeddingFailure("embedding_backfill_failed", error, baseUrl);
 		return false;
 	}
 }

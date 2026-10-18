@@ -194,19 +194,82 @@ describe("embedding configuration visibility", () => {
 
 describe("M7 embedding test result SSR", () => {
 	it.each([
-		["embedder_unavailable", "嵌入服务暂时不可用。"],
-		["vector_dimension_mismatch", "向量维度不匹配。"],
-	] as const)("shows only safe Chinese and documented code %s", (code, message) => {
+		["embedder_unavailable", "嵌入服务暂时不可用。", "status", "上游状态异常", 503],
+		["vector_dimension_mismatch", "向量维度不匹配。", "dims", "向量维度不匹配", undefined],
+	] as const)(
+		"shows only safe Chinese, documented code %s, stage and numeric status",
+		(code, message, stage, stageLabel, status) => {
+			fixture.state = {
+				loaded: true,
+				testResult: {
+					latency_ms: 12,
+					dims: 8,
+					match: false,
+					error_code: code,
+					reason: status === undefined ? { stage } : { stage, upstream_status: status },
+				},
+			};
+			const html = renderToStaticMarkup(<EmbeddingPage />);
+			expect(html).toContain(message);
+			expect(html).toContain(code);
+			expect(html).toContain("失败阶段");
+			expect(html).toContain(stageLabel);
+			expect(html).toContain("实际维度");
+			expect(html).toContain("12 毫秒");
+			if (status === undefined) {
+				expect(html).not.toContain("上游状态码");
+			} else {
+				expect(html).toContain("上游状态码");
+				expect(html).toContain(String(status));
+			}
+			const well = html.slice(html.indexOf("连接结果"));
+			expect(well).not.toMatch(/gateway\.example|private-upstream|Authorization|Bearer /);
+		},
+	);
+
+	it.each([
+		["config", "配置不完整"],
+		["decrypt", "密钥解密失败"],
+		["request", "网关请求失败"],
+		["redirect", "上游重定向被拒绝"],
+		["timeout", "网关请求超时"],
+		["parse", "上游响应解析失败"],
+	] as const)("renders Chinese stage label for %s without leaking bodies", (stage, label) => {
 		fixture.state = {
 			loaded: true,
-			testResult: { latency_ms: 12, dims: 8, match: false, error_code: code },
+			testResult: {
+				latency_ms: 4,
+				dims: null,
+				match: false,
+				error_code: "embedder_unavailable",
+				reason: { stage },
+			},
 		};
 		const html = renderToStaticMarkup(<EmbeddingPage />);
-		expect(html).toContain(message);
-		expect(html).toContain(code);
-		expect(html).toContain("实际维度");
-		expect(html).toContain("12 毫秒");
+		const well = html.slice(html.indexOf("连接结果"));
+		expect(well).toContain(label);
+		expect(well).toContain("失败阶段");
+		expect(well).not.toContain("upstream");
+		expect(well).not.toMatch(/gateway\.example|private-body|Authorization|Bearer /);
 	});
+
+	it("hides failure stage details on a successful probe", () => {
+		fixture.state = {
+			loaded: true,
+			testResult: {
+				latency_ms: 5,
+				dims: 1536,
+				match: true,
+				error_code: null,
+				reason: null,
+			},
+		};
+		const html = renderToStaticMarkup(<EmbeddingPage />);
+		expect(html).toContain("连接成功");
+		expect(html).not.toContain("失败阶段");
+		expect(html).not.toContain("上游状态码");
+	});
+
 	it("does not fabricate a server version or generic settings payload", () => {
 		const html = renderToStaticMarkup(
 			<MemoryRouter>

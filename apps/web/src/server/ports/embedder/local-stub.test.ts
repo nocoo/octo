@@ -57,12 +57,12 @@ describe("real local embedding gateway", () => {
 	});
 
 	it.each([
-		{ embedding: [1], error: "dimension mismatch" },
-		{ embedding: [0, 0], error: "zero vector" },
-		{ embedding: [NaN, 0], error: "finite" },
-	])("rejects malformed real upstream vectors: $error", async ({ embedding, error }) => {
+		{ embedding: [1], stage: "dims" },
+		{ embedding: [0, 0], stage: "parse" },
+		{ embedding: [NaN, 0], stage: "parse" },
+	])("rejects malformed real upstream vectors: $embedding", async ({ embedding, stage }) => {
 		const local = await stub({ embedding });
-		await expect(embedder(local.baseUrl).embed(["x"])).rejects.toThrow(error);
+		await expect(embedder(local.baseUrl).embed(["x"])).rejects.toMatchObject({ reason: { stage } });
 	});
 
 	it("rejects a real HTTP response missing an embedding for one input", async () => {
@@ -87,7 +87,7 @@ describe("real local embedding gateway", () => {
 		const local = await stub({ delayMs: 10_000 });
 		const start = performance.now();
 		await expect(embedder(local.baseUrl).embed(["slow"])).rejects.toMatchObject({
-			name: "AbortError",
+			reason: { stage: "timeout" },
 		});
 		expect(performance.now() - start).toBeGreaterThanOrEqual(4_500);
 		expect(performance.now() - start).toBeLessThan(8_000);
@@ -97,7 +97,7 @@ describe("real local embedding gateway", () => {
 	it("honors an explicit shorter abort timeout", async () => {
 		const local = await stub({ delayMs: 10_000 });
 		await expect(embedder(local.baseUrl, 20).embed(["slow"])).rejects.toMatchObject({
-			name: "AbortError",
+			reason: { stage: "timeout" },
 		});
 	});
 

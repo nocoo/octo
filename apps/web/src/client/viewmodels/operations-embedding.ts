@@ -1,3 +1,4 @@
+import type { EmbeddingFailureReason } from "../../lib/schema/embedding";
 import { type AdminClient, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
 import { operationsError } from "./operations-errors";
@@ -18,6 +19,54 @@ export interface EmbeddingTestResult {
 	dims: number | null;
 	match: boolean;
 	error_code: "embedder_unavailable" | "vector_dimension_mismatch" | null;
+	reason: EmbeddingFailureReason | null;
+}
+
+const FAILURE_STAGES = new Set<EmbeddingFailureReason["stage"]>([
+	"config",
+	"decrypt",
+	"request",
+	"status",
+	"redirect",
+	"timeout",
+	"parse",
+	"dims",
+]);
+
+const STAGE_LABELS: Record<EmbeddingFailureReason["stage"], string> = {
+	config: "配置不完整",
+	decrypt: "密钥解密失败",
+	request: "网关请求失败",
+	status: "上游状态异常",
+	redirect: "上游重定向被拒绝",
+	timeout: "网关请求超时",
+	parse: "上游响应解析失败",
+	dims: "向量维度不匹配",
+};
+
+export function embeddingFailureStageLabel(stage: EmbeddingFailureReason["stage"]): string {
+	return STAGE_LABELS[stage];
+}
+
+function readReason(
+	reason: unknown,
+	errorCode: EmbeddingTestResult["error_code"],
+): EmbeddingFailureReason | null {
+	if (errorCode === null) {
+		if (reason !== null) throw new Error("Invalid embedding test reason");
+		return null;
+	}
+	if (reason === null || typeof reason !== "object")
+		throw new Error("Invalid embedding test reason");
+	const stage = (reason as { stage?: unknown }).stage;
+	if (typeof stage !== "string" || !FAILURE_STAGES.has(stage as EmbeddingFailureReason["stage"]))
+		throw new Error("Invalid embedding test reason");
+	const upstream = (reason as { upstream_status?: unknown }).upstream_status;
+	if (upstream !== undefined && (typeof upstream !== "number" || !Number.isInteger(upstream)))
+		throw new Error("Invalid embedding test reason");
+	return upstream === undefined
+		? { stage: stage as EmbeddingFailureReason["stage"] }
+		: { stage: stage as EmbeddingFailureReason["stage"], upstream_status: upstream };
 }
 interface EmbeddingState {
 	config: EmbeddingConfig;
@@ -150,6 +199,7 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 				method: "POST",
 				json: payload(fields, secret),
 			});
+			if (!Object.hasOwn(result, "reason")) throw new Error("Invalid embedding test reason");
 			const { latency_ms, dims, match, error_code } = result;
 			if (
 				error_code !== null &&
@@ -157,7 +207,8 @@ export class EmbeddingModel extends Store<EmbeddingState> {
 				error_code !== "vector_dimension_mismatch"
 			)
 				throw new Error("Invalid embedding test error code");
-			if (this.alive) this.set({ testResult: { latency_ms, dims, match, error_code } });
+			const reason = readReason(result.reason, error_code);
+			if (this.alive) this.set({ testResult: { latency_ms, dims, match, error_code, reason } });
 		} catch (error) {
 			if (this.alive) this.set({ error: operationsError(error, "无法测试嵌入连接。") });
 		} finally {

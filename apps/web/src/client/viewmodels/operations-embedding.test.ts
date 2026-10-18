@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { EmbeddingModel, SettingsModel } from "./operations-embedding";
+import { EmbeddingModel, embeddingFailureStageLabel, SettingsModel } from "./operations-embedding";
 
 const fields = {
 	base_url: "https://gateway.example",
@@ -115,7 +115,7 @@ describe("embedding settings", () => {
 				const pending = model[action](fields, "secret");
 				model.dispose();
 				if (fail) reject(new Error("secret"));
-				else resolve({ latency_ms: 1, dims: 1536, match: true, error_code: null });
+				else resolve({ latency_ms: 1, dims: 1536, match: true, error_code: null, reason: null });
 				await pending;
 				expect(model.state).toMatchObject({ error: null, pending: false, testResult: null });
 				expect(JSON.stringify(model.state)).not.toContain("secret");
@@ -187,7 +187,8 @@ describe("embedding settings", () => {
 			latency_ms: 23,
 			dims: 3,
 			match: false,
-			error_code: "vector_dimension_mismatch",
+			error_code: "vector_dimension_mismatch" as const,
+			reason: { stage: "dims" as const },
 		};
 		const request = vi
 			.fn()
@@ -207,9 +208,11 @@ describe("embedding settings", () => {
 			dims: 1536,
 			match: true,
 			error_code: null,
+			reason: null,
 		});
 		await model.test(fields);
 		expect(model.state.testResult?.match).toBe(true);
+		expect(model.state.testResult?.reason).toBeNull();
 		request.mockRejectedValueOnce(new Error("test-secret"));
 		await model.test(fields, null);
 		expect(model.state.error).toBe("无法测试嵌入连接。");
@@ -217,14 +220,92 @@ describe("embedding settings", () => {
 		await model.test({ ...fields, dims: -1 });
 	});
 
-	it("rejects undocumented diagnostics rather than retaining or displaying them", async () => {
-		const request = vi.fn().mockResolvedValueOnce(saved).mockResolvedValueOnce({
-			latency_ms: 1,
+	it("requires a structured reason and keeps only stage plus numeric upstream status", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(saved)
+			.mockResolvedValueOnce({
+				latency_ms: 9,
+				dims: null,
+				match: false,
+				error_code: "embedder_unavailable",
+				reason: {
+					stage: "status",
+					upstream_status: 401,
+					body: "private-upstream-body",
+					url: "https://gateway.example/secret",
+					host: "gateway.example",
+					api_key: "secret-key",
+				},
+			});
+		const model = new EmbeddingModel({ request });
+		await model.load();
+		await model.test(fields);
+		expect(model.state.testResult).toEqual({
+			latency_ms: 9,
 			dims: null,
 			match: false,
-			error_code: "upstream-secret-response",
-			upstream_error: "private",
+			error_code: "embedder_unavailable",
+			reason: { stage: "status", upstream_status: 401 },
 		});
+		expect(JSON.stringify(model.state.testResult)).not.toMatch(
+			/private-upstream|secret-key|gateway\.example|\/secret/,
+		);
+	});
+
+	it("rejects missing, undocumented or mismatched reason payloads", async () => {
+		const request = vi.fn().mockResolvedValue(saved);
+		const model = new EmbeddingModel({ request });
+		await model.load();
+		for (const payload of [
+			{
+				latency_ms: 1,
+				dims: null,
+				match: false,
+				error_code: "embedder_unavailable",
+			},
+			{
+				latency_ms: 1,
+				dims: null,
+				match: false,
+				error_code: "embedder_unavailable",
+				reason: { stage: "upstream-secret" },
+			},
+			{
+				latency_ms: 1,
+				dims: 1536,
+				match: true,
+				error_code: null,
+				reason: { stage: "config" },
+			},
+			{
+				latency_ms: 1,
+				dims: null,
+				match: false,
+				error_code: "embedder_unavailable",
+				reason: { stage: "status", upstream_status: 12.5 },
+			},
+		]) {
+			request.mockResolvedValueOnce(payload);
+			await model.test(fields);
+			expect(model.state.testResult).toBeNull();
+			expect(model.state.error).toBe("无法测试嵌入连接。");
+		}
+		expect(JSON.stringify(model.state)).not.toMatch(/upstream-secret|12\.5/);
+	});
+
+	it("rejects undocumented diagnostics rather than retaining or displaying them", async () => {
+		const request = vi
+			.fn()
+			.mockResolvedValueOnce(saved)
+			.mockResolvedValueOnce({
+				latency_ms: 1,
+				dims: null,
+				match: false,
+				error_code: "upstream-secret-response",
+				reason: { stage: "status", upstream_status: 500 },
+				upstream_error: "private",
+			});
 		const model = new EmbeddingModel({ request });
 		await model.load();
 		await model.test(fields);
@@ -281,10 +362,21 @@ describe("embedding settings", () => {
 		await model.test(fields);
 		expect(request).toHaveBeenCalledTimes(1);
 		model.dispose();
-		finish({ latency_ms: 1, dims: 1, match: false, error_code: null });
+		finish({ latency_ms: 1, dims: 1, match: false, error_code: null, reason: null });
 		await pending;
 		expect(model.state.testResult).toBeNull();
 		expect(model.state.pending).toBe(false);
+	});
+
+	it("exposes Chinese labels for every documented failure stage", () => {
+		expect(embeddingFailureStageLabel("config")).toBe("配置不完整");
+		expect(embeddingFailureStageLabel("decrypt")).toBe("密钥解密失败");
+		expect(embeddingFailureStageLabel("request")).toBe("网关请求失败");
+		expect(embeddingFailureStageLabel("status")).toBe("上游状态异常");
+		expect(embeddingFailureStageLabel("redirect")).toBe("上游重定向被拒绝");
+		expect(embeddingFailureStageLabel("timeout")).toBe("网关请求超时");
+		expect(embeddingFailureStageLabel("parse")).toBe("上游响应解析失败");
+		expect(embeddingFailureStageLabel("dims")).toBe("向量维度不匹配");
 	});
 });
 

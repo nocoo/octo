@@ -1,6 +1,8 @@
 import { z } from "zod";
+import type { EmbeddingFailureReason } from "../../lib/schema/embedding";
 import type { Env } from "../env";
 import { ApiError } from "../lib/errors";
+import { EmbeddingFailure, reportEmbeddingFailure } from "../ports/embedder/diagnostics";
 import { EmbeddingDimensionError, GatewayEmbedder } from "../ports/embedder/gateway";
 import type { EmbedderConfig, QueryEmbedder } from "../ports/embedder/types";
 import type { EmbeddingProfile } from "../repo/memories-vector";
@@ -102,11 +104,15 @@ async function storedApiKey(env: Env, state: EmbeddingState): Promise<string | n
 	if (!row) return null;
 	const bytes = (hex: string) =>
 		Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16));
-	return decryptApiKey(env.OCTO_SETTINGS_KEY, {
-		ciphertext: bytes(row.ciphertext_hex),
-		iv: bytes(row.iv_hex),
-		key_version: row.key_version ?? 0,
-	});
+	try {
+		return await decryptApiKey(env.OCTO_SETTINGS_KEY, {
+			ciphertext: bytes(row.ciphertext_hex),
+			iv: bytes(row.iv_hex),
+			key_version: row.key_version ?? 0,
+		});
+	} catch {
+		throw new EmbeddingFailure({ stage: "decrypt" }, "embedding settings unavailable");
+	}
 }
 
 function mergedSettings(env: Env, state: EmbeddingState, input: SettingsInput) {
@@ -161,10 +167,6 @@ export async function configFromState(
 		profileId: state.profile.id,
 		backfillEnabled: state.settings.backfill_enabled,
 	};
-}
-
-export async function loadEmbeddingConfig(env: Env): Promise<LoadedEmbeddingConfig | null> {
-	return configFromState(env, await readEmbeddingState(env));
 }
 
 export async function saveEmbeddingSettings(
@@ -238,24 +240,29 @@ export async function testEmbeddingSettings(
 	dims: number | null;
 	match: boolean;
 	error_code: "embedder_unavailable" | "vector_dimension_mismatch" | null;
+	reason: EmbeddingFailureReason | null;
 }> {
 	const input = parseInput(body);
-	const state = await readEmbeddingState(env);
-	const settings = mergedSettings(env, state, input);
+	let baseUrl: string | null = null;
 	const started = performance.now();
 	const result = (
 		dims: number | null,
 		match: boolean,
 		error_code: "embedder_unavailable" | "vector_dimension_mismatch" | null,
+		reason: EmbeddingFailureReason | null = null,
 	) => ({
 		latency_ms: Math.max(0, Math.round(performance.now() - started)),
 		dims,
 		match,
 		error_code,
+		reason,
 	});
 	try {
+		const state = await readEmbeddingState(env);
+		baseUrl = input.base_url === undefined ? state.settings.base_url : input.base_url;
+		const settings = mergedSettings(env, state, input);
 		const apiKey = input.api_key === undefined ? await storedApiKey(env, state) : input.api_key;
-		if (!settings.base_url || !apiKey) return result(null, false, "embedder_unavailable");
+		if (!settings.base_url || !apiKey) throw new EmbeddingFailure({ stage: "config" });
 		const embedder: QueryEmbedder = new GatewayEmbedder({
 			baseUrl: settings.base_url,
 			apiKey,
@@ -265,8 +272,10 @@ export async function testEmbeddingSettings(
 		await embedder.embed(["Octo embedding connection test."]);
 		return result(settings.dims, true, null);
 	} catch (error) {
+		const reason = reportEmbeddingFailure("embedding_test_failed", error, baseUrl);
+		if (error instanceof ApiError && !(error instanceof EmbeddingFailure)) throw error;
 		return error instanceof EmbeddingDimensionError
-			? result(error.actualDims, false, "vector_dimension_mismatch")
-			: result(null, false, "embedder_unavailable");
+			? result(error.actualDims, false, "vector_dimension_mismatch", reason)
+			: result(null, false, "embedder_unavailable", reason);
 	}
 }

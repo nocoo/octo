@@ -107,6 +107,7 @@ describe("admin embedding settings routes", () => {
 			dims: 3,
 			match: true,
 			error_code: null,
+			reason: null,
 		});
 		expect(raw.prepare("SELECT COUNT(*) AS n FROM settings").get()?.n).toBe(0);
 		await request("PUT", "", SETTINGS);
