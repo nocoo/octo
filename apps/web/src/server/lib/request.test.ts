@@ -28,8 +28,8 @@ describe("newRequestId", () => {
 
 describe("withOctoHeaders", () => {
 	it("sets request and version headers", () => {
-		const res = withOctoHeaders(new Response("ok"), "rid", "0.1.0");
+		const res = withOctoHeaders(new Response("ok"), "rid", "0.1.1");
 		expect(res.headers.get("X-Request-Id")).toBe("rid");
-		expect(res.headers.get("X-Octo-Version")).toBe("0.1.0");
+		expect(res.headers.get("X-Octo-Version")).toBe("0.1.1");
 	});
 });

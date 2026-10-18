@@ -5,8 +5,8 @@ import { APP_VERSION, versionLabel } from "./version";
 describe("APP_VERSION", () => {
 	it("matches package.json", () => {
 		expect(APP_VERSION).toBe(pkg.version);
-		expect(APP_VERSION).toBe("0.1.0");
-		expect(versionLabel(APP_VERSION)).toBe("octo/0.1.0");
+		expect(APP_VERSION).toBe("0.1.1");
+		expect(versionLabel(APP_VERSION)).toBe("octo/0.1.1");
 		expect(versionLabel("1.2.3", "x")).toBe("x/1.2.3");
 	});
 });
