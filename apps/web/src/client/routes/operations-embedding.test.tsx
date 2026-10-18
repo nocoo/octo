@@ -278,7 +278,7 @@ describe("M7 embedding test result SSR", () => {
 			</MemoryRouter>,
 		);
 		expect(html).not.toContain("版本");
-		expect(html).not.toContain("0.1.0");
+		expect(html).not.toContain("0.1.1");
 	});
 });
 
