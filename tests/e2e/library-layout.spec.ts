@@ -28,7 +28,9 @@ test("space creation keeps errors in its short-screen dialog and restores the ac
 	});
 	await page.goto("/spaces");
 	const opener = page.getByRole("button", { name: "创建空间", exact: true }).first();
+	await expect(opener).toBeEnabled();
 	await opener.focus();
+	await expect(opener).toBeFocused();
 	await opener.press("Enter");
 	const dialog = page.getByRole("dialog", { name: "创建空间", exact: true });
 	await dialog.getByLabel("空间标识", { exact: true }).fill("failure-fixture");

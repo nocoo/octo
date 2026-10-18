@@ -153,8 +153,12 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 	await admin.json(`/keys/${credential.key.id}/revoke`, "POST");
 });
 
-test("successful empty search uses a Chinese icon and primary action", async ({ page }, info) => {
-	await page.goto("/search?q=不存在的知识条目92741059");
+test("successful empty search uses a Chinese icon and primary action", async ({
+	page,
+	admin,
+}, info) => {
+	await admin.memory("知识条目用于验证空搜索不会误匹配已有记录。");
+	await page.goto("/search?q=zqxvnonexistent92741059");
 	await expect(page.getByText("没有匹配结果", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: "重新搜索", exact: true })).toBeVisible();
 	expect(await page.getByRole("main").locator("svg.lucide-search").count()).toBeGreaterThan(0);
