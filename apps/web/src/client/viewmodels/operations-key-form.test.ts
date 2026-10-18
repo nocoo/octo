@@ -7,6 +7,72 @@ const permissions = { ...rolePermissions("custom"), ops: "r,w", space_ids: [spac
 const draft = { name: "Research agent", role: "custom" as const, expires_at: null, permissions };
 
 describe("key form contract and validation", () => {
+	it("persists permitted readonly space changes rather than discarding the picker selection", async () => {
+		const request = vi.fn().mockResolvedValue({ items: [space] });
+		const model = new KeysModel({ request });
+		await model.loadSpaces();
+		const readonly = {
+			...rolePermissions("readonly"),
+			scope: "spaces" as const,
+			space_ids: [space.id],
+		};
+		expect(
+			await model.update("readonly", {
+				name: "Reader",
+				role: "readonly",
+				expires_at: null,
+				permissions: readonly,
+			}),
+		).toBe(true);
+		expect(request).toHaveBeenCalledWith("/keys/readonly", {
+			method: "PATCH",
+			json: { role: "readonly", expires_at: null, scope: "spaces", space_ids: [space.id] },
+		});
+		expect(
+			await model.update("readonly", {
+				role: "readonly",
+				expires_at: null,
+				permissions: { ...readonly, space_ids: [space.slug] },
+			}),
+		).toBe(false);
+		expect(model.state.fieldErrors.space_ids).toBeTruthy();
+	});
+	it("creates restricted readonly keys and rejects a scope forbidden by the template", async () => {
+		const request = vi.fn().mockResolvedValue({ items: [space], plaintext: "once" });
+		const model = new KeysModel({ request });
+		await model.loadSpaces();
+		const readonly = {
+			...rolePermissions("readonly"),
+			scope: "spaces" as const,
+			space_ids: [space.id],
+		};
+		expect(
+			await model.create({
+				name: "Reader",
+				role: "readonly",
+				expires_at: null,
+				permissions: readonly,
+			}),
+		).toBe("once");
+		expect(request).toHaveBeenCalledWith("/keys", {
+			method: "POST",
+			json: {
+				name: "Reader",
+				role: "readonly",
+				expires_at: null,
+				scope: "spaces",
+				space_ids: [space.id],
+			},
+		});
+		expect(
+			await model.update("readonly", {
+				role: "readonly",
+				expires_at: null,
+				permissions: { ...readonly, scope: "own", space_ids: [] },
+			}),
+		).toBe(false);
+		expect(model.state.fieldErrors.scope).toBeTruthy();
+	});
 	it("rejects the exact old slug-as-id custom payload before submitting, then sends picked ids", async () => {
 		const request = vi.fn().mockResolvedValue({ items: [space], plaintext: "one-time" });
 		const model = new KeysModel({ request });

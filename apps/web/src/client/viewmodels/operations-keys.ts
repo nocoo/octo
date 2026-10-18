@@ -91,6 +91,14 @@ export function rolePermissions(role: KeyRole): KeyPermissions {
 	};
 }
 
+function draftPermissions(role: KeyRole, permissions?: KeyPermissions): KeyPermissions | undefined {
+	if (role === "custom" || role === "drop") return permissions;
+	const template = rolePermissions(role);
+	return role === "readonly" && permissions
+		? { ...template, scope: permissions.scope, space_ids: permissions.space_ids }
+		: template;
+}
+
 export function keyStatus(key: KeyMetadata, now = Date.now()): "active" | "expired" | "revoked" {
 	if (key.revoked_at !== null) return "revoked";
 	return key.expires_at !== null && Date.parse(key.expires_at) <= now ? "expired" : "active";
@@ -198,10 +206,7 @@ export class KeysModel extends Store<KeysState> {
 	}
 
 	async create(draft: KeyDraft): Promise<string | null> {
-		const permissions =
-			draft.role === "custom" || draft.role === "drop"
-				? draft.permissions
-				: rolePermissions(draft.role);
+		const permissions = draftPermissions(draft.role, draft.permissions);
 		if (!this.validate(draft, permissions) || !permissions) return null;
 		const result = await this.change<{ plaintext: string }>("/keys", "POST", {
 			name: draft.name.trim(),
@@ -211,7 +216,9 @@ export class KeysModel extends Store<KeysState> {
 				? permissions
 				: draft.role === "drop"
 					? { space_ids: permissions.space_ids }
-					: {}),
+					: draft.role === "readonly" && draft.permissions
+						? { scope: permissions.scope, space_ids: permissions.space_ids }
+						: {}),
 		});
 		return result?.plaintext ?? null;
 	}
@@ -238,12 +245,7 @@ export class KeysModel extends Store<KeysState> {
 			permissions?: KeyPermissions;
 		},
 	): Promise<boolean> {
-		const permissions =
-			patch.role === "custom" || patch.role === "drop"
-				? patch.permissions
-				: patch.role
-					? rolePermissions(patch.role)
-					: undefined;
+		const permissions = patch.role ? draftPermissions(patch.role, patch.permissions) : undefined;
 		if (
 			!this.validate(
 				{ ...patch, name: patch.name ?? this.state.items.find((item) => item.id === id)?.name },
@@ -261,7 +263,9 @@ export class KeysModel extends Store<KeysState> {
 								? permissions
 								: patch.role === "drop"
 									? { space_ids: permissions?.space_ids }
-									: {}),
+									: patch.role === "readonly" && patch.permissions
+										? { scope: permissions?.scope, space_ids: permissions?.space_ids }
+										: {}),
 						}
 					: {}),
 			})) !== null
@@ -295,6 +299,8 @@ export class KeysModel extends Store<KeysState> {
 			)
 				errors.ops = fieldMessages.ops;
 			if (!permissions) errors.scope = fieldMessages.scope;
+			if (draft.role === "readonly" && permissions?.scope === "own")
+				errors.scope = fieldMessages.scope;
 			if (permissions?.auto_own_space && draft.name !== undefined && !isKeySpaceSlug(draft.name))
 				errors.name = fieldMessages.name;
 			if (
