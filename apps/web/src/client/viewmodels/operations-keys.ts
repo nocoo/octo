@@ -1,4 +1,5 @@
-import { type AdminClient, adminApi } from "../lib/api";
+import { z } from "zod";
+import { type AdminClient, ApiError, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
 import { operationsError } from "./operations-errors";
 
@@ -26,12 +27,58 @@ export interface KeyDraft {
 	expires_at: string | null;
 	permissions?: KeyPermissions;
 }
+export type KeyField =
+	| "name"
+	| "role"
+	| "ops"
+	| "scope"
+	| "space_ids"
+	| "own_entries_only"
+	| "auto_own_space"
+	| "expires_at";
+export type KeyFieldErrors = Partial<Record<KeyField, string>>;
+export interface KeySpace {
+	id: string;
+	slug: string;
+	name: string;
+}
 interface KeysState {
 	items: KeyMetadata[];
 	loading: boolean;
 	loaded: boolean;
 	pending: boolean;
 	error: string | null;
+	fieldErrors: KeyFieldErrors;
+	spaces: KeySpace[];
+	spacesLoading: boolean;
+	spacesLoaded: boolean;
+	spacesError: string | null;
+}
+
+const fieldMessages: Record<KeyField, string> = {
+	name: "名称无效；自动创建空间时须为 1 至 64 位小写字母、数字与单连字符。",
+	role: "请选择有效的角色模板。",
+	ops: "请至少选择一项操作，且不能重复。",
+	scope: "请选择有效的空间范围。",
+	space_ids: "请选择有效的现有空间；空间可能已删除，请刷新列表。",
+	own_entries_only: "请检查仅操作本人记忆的设置。",
+	auto_own_space: "请检查自动创建自有空间的设置和角色模板。",
+	expires_at: "请填写有效的到期时间，或留空表示永不过期。",
+};
+const formError = "请检查标记的字段后重试。";
+
+export function isKeySpaceSlug(name: string): boolean {
+	return name.trim().length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name.trim());
+}
+
+function serverFieldErrors(error: unknown): KeyFieldErrors {
+	if (!(error instanceof ApiError) || error.code !== "validation_failed") return {};
+	const errors: KeyFieldErrors = {};
+	for (const issue of error.details?.issues ?? []) {
+		const field = issue.path.split(".")[0] as KeyField;
+		if (Object.hasOwn(fieldMessages, field)) errors[field] = fieldMessages[field];
+	}
+	return errors;
 }
 
 export function rolePermissions(role: KeyRole): KeyPermissions {
@@ -83,26 +130,58 @@ function metadata(key: KeyMetadata): KeyMetadata {
 }
 
 function validExpiry(value: string | null): boolean {
-	return (
-		value === null ||
-		(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value) &&
-			Number.isFinite(Date.parse(value)))
-	);
-}
-
-function validPermissions(value: KeyPermissions): boolean {
-	return (
-		/^(?:[rwud](?:,[rwud])*)$/.test(value.ops) &&
-		new Set(value.ops.split(",")).size === value.ops.split(",").length &&
-		(value.scope !== "spaces" || value.space_ids.length > 0)
-	);
+	return value === null || z.iso.datetime().safeParse(value).success;
 }
 
 export class KeysModel extends Store<KeysState> {
 	private revision = 0;
+	private spacesRevision = 0;
 	private alive = true;
 	constructor(private readonly api: AdminClient = adminApi) {
-		super({ items: [], loading: false, loaded: false, pending: false, error: null });
+		super({
+			items: [],
+			loading: false,
+			loaded: false,
+			pending: false,
+			error: null,
+			fieldErrors: {},
+			spaces: [],
+			spacesLoading: false,
+			spacesLoaded: false,
+			spacesError: null,
+		});
+	}
+
+	clearFormErrors(): void {
+		this.set({ error: null, fieldErrors: {} });
+	}
+
+	clearFieldError(field: KeyField): void {
+		const fieldErrors = { ...this.state.fieldErrors };
+		delete fieldErrors[field];
+		this.set({ fieldErrors, ...(Object.keys(fieldErrors).length === 0 ? { error: null } : {}) });
+	}
+
+	async loadSpaces(): Promise<void> {
+		if (!this.alive) return;
+		const revision = ++this.spacesRevision;
+		this.set({ spacesLoading: true, spacesError: null });
+		try {
+			const result = await this.api.request<{ items: KeySpace[] }>("/spaces");
+			if (this.alive && revision === this.spacesRevision)
+				this.set({
+					spaces: result.items.map(({ id, slug, name }) => ({ id, slug, name })),
+					spacesLoading: false,
+					spacesLoaded: true,
+				});
+		} catch (error) {
+			if (this.alive && revision === this.spacesRevision)
+				this.set({
+					spacesLoading: false,
+					spacesLoaded: false,
+					spacesError: operationsError(error, "无法加载空间列表，请重试。"),
+				});
+		}
 	}
 
 	async load(): Promise<void> {
@@ -123,17 +202,7 @@ export class KeysModel extends Store<KeysState> {
 			draft.role === "custom" || draft.role === "drop"
 				? draft.permissions
 				: rolePermissions(draft.role);
-		if (
-			!draft.name.trim() ||
-			(permissions?.auto_own_space && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.name.trim())) ||
-			(permissions?.auto_own_space && draft.name.trim().length > 64) ||
-			!validExpiry(draft.expires_at) ||
-			!permissions ||
-			!validPermissions(permissions)
-		) {
-			this.set({ error: "请填写名称、有效的到期时间并明确授权范围。" });
-			return null;
-		}
+		if (!this.validate(draft, permissions) || !permissions) return null;
 		const result = await this.change<{ plaintext: string }>("/keys", "POST", {
 			name: draft.name.trim(),
 			role: draft.role,
@@ -162,22 +231,26 @@ export class KeysModel extends Store<KeysState> {
 
 	async update(
 		id: string,
-		patch: { expires_at: string | null; role?: KeyRole; permissions?: KeyPermissions },
+		patch: {
+			name?: string;
+			expires_at: string | null;
+			role?: KeyRole;
+			permissions?: KeyPermissions;
+		},
 	): Promise<boolean> {
-		if (!validExpiry(patch.expires_at)) {
-			this.set({ error: "请填写有效的到期时间。" });
-			return false;
-		}
 		const permissions =
 			patch.role === "custom" || patch.role === "drop"
 				? patch.permissions
 				: patch.role
 					? rolePermissions(patch.role)
 					: undefined;
-		if (patch.role && (!permissions || !validPermissions(permissions))) {
-			this.set({ error: "请明确授权范围。" });
+		if (
+			!this.validate(
+				{ ...patch, name: patch.name ?? this.state.items.find((item) => item.id === id)?.name },
+				permissions,
+			)
+		)
 			return false;
-		}
 		return (
 			(await this.change(`/keys/${encodeURIComponent(id)}`, "PATCH", {
 				expires_at: patch.expires_at,
@@ -202,7 +275,39 @@ export class KeysModel extends Store<KeysState> {
 	dispose(): void {
 		this.alive = false;
 		this.revision++;
-		this.set({ pending: false, loading: false });
+		this.spacesRevision++;
+		this.set({ pending: false, loading: false, spacesLoading: false });
+	}
+
+	private validate(
+		draft: { name?: string | undefined; role?: KeyRole; expires_at: string | null },
+		permissions?: KeyPermissions,
+	): boolean {
+		const errors: KeyFieldErrors = {};
+		if (draft.name !== undefined && (!draft.name.trim() || draft.name.trim().length > 128))
+			errors.name = "请填写 1 至 128 位的名称。";
+		if (!validExpiry(draft.expires_at)) errors.expires_at = fieldMessages.expires_at;
+		if (draft.role) {
+			if (
+				!permissions ||
+				!/^[rwud](?:,[rwud])*$/.test(permissions.ops) ||
+				new Set(permissions.ops.split(",")).size !== permissions.ops.split(",").length
+			)
+				errors.ops = fieldMessages.ops;
+			if (!permissions) errors.scope = fieldMessages.scope;
+			if (permissions?.auto_own_space && draft.name !== undefined && !isKeySpaceSlug(draft.name))
+				errors.name = fieldMessages.name;
+			if (
+				permissions?.scope === "spaces" &&
+				(!this.state.spacesLoaded ||
+					!permissions.space_ids.length ||
+					new Set(permissions.space_ids).size !== permissions.space_ids.length ||
+					permissions.space_ids.some((id) => !this.state.spaces.some((space) => space.id === id)))
+			)
+				errors.space_ids = fieldMessages.space_ids;
+		}
+		this.set({ fieldErrors: errors, error: Object.keys(errors).length ? formError : null });
+		return Object.keys(errors).length === 0;
 	}
 
 	private async change<Result>(
@@ -211,7 +316,7 @@ export class KeysModel extends Store<KeysState> {
 		json?: unknown,
 	): Promise<Result | null> {
 		if (!this.alive || this.state.pending) return null;
-		this.set({ pending: true, error: null });
+		this.set({ pending: true, error: null, fieldErrors: {} });
 		try {
 			const result = await this.api.request<Result>(path, {
 				method,
@@ -222,7 +327,15 @@ export class KeysModel extends Store<KeysState> {
 			if (!this.alive) return null;
 			return result;
 		} catch (error) {
-			if (this.alive) this.set({ error: operationsError(error, "无法修改接口密钥。") });
+			if (this.alive) {
+				const fieldErrors = serverFieldErrors(error);
+				this.set({
+					fieldErrors,
+					error: Object.keys(fieldErrors).length
+						? formError
+						: operationsError(error, "无法修改接口密钥。"),
+				});
+			}
 			return null;
 		} finally {
 			if (this.alive) this.set({ pending: false });

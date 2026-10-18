@@ -178,13 +178,15 @@ describe("key permissions and lifecycle", () => {
 	it("supports explicit custom scope, expiry updates, grace rotation and immediate revocation", async () => {
 		const request = vi.fn().mockResolvedValue({ items: [key], key, plaintext: "rotated_once" });
 		const model = new KeysModel({ request });
+		request.mockResolvedValueOnce({ items: [{ id: "inbox", slug: "inbox-slug", name: "Inbox" }] });
+		await model.loadSpaces();
 		await model.create({
 			name: "Custom",
 			role: "custom",
 			expires_at: null,
 			permissions: { ...rolePermissions("custom"), ops: "w", space_ids: ["inbox"] },
 		});
-		expect(request.mock.calls[0]?.[1].json.space_ids).toEqual(["inbox"]);
+		expect(request.mock.calls[1]?.[1].json.space_ids).toEqual(["inbox"]);
 		expect(await model.rotate(key.id, 604800)).toBe("rotated_once");
 		expect(request).toHaveBeenCalledWith("/keys/key%2F1/rotate", {
 			method: "POST",
@@ -213,6 +215,8 @@ describe("key permissions and lifecycle", () => {
 		}
 		expect(request).not.toHaveBeenCalled();
 		const permissions = { ...rolePermissions("drop"), space_ids: ["space-id"] };
+		request.mockResolvedValueOnce({ items: [{ id: "space-id", slug: "inbox", name: "Inbox" }] });
+		await model.loadSpaces();
 		expect(
 			await model.create({ name: "drop-agent", role: "drop", expires_at: null, permissions }),
 		).toBe("once");
