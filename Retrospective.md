@@ -654,3 +654,7 @@ The vector requeue race passed its runtime regression after the fix, but the com
 ### 2026-10-18 — Capture resumed regression evidence explicitly
 
 During the resumed vector requeue verification, the isolated baseline regression failed at the intended synchronization assertion, but the wrapper then tried to assign its exit code to zsh's read-only `status` parameter. The replay was repeated with a writable variable and explicitly recorded exit code 1; neither a wrapper failure nor an interrupted historical run counts as current gate evidence. Use nonreserved shell variable names and preserve each verification command's exit code before reporting its result.
+
+### 2026-10-18 — Drain setup audit work before installing write spies
+
+Response-byte accounting moved unknown-length response auditing behind stream completion. Its focused tests passed, but the index-snapshot commit gate caught ten MCP tests whose database-batch spies also observed the preceding create request's deferred audit batch. The tests now flush that setup request's waitUntil tasks before installing the spy, retaining the assertion that invalid updates perform no business batch. Await response consumption and the explicit background barrier when isolating a later request's side effects; do not change production audit timing or weaken assertions to accommodate an implicit scheduling assumption.

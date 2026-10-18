@@ -72,6 +72,23 @@ afterAll(async () => {
 });
 
 describe("GET /api/admin/audit", () => {
+	it("records the emitted response bytes through the real Worker stream", async () => {
+		const requestId = crypto.randomUUID();
+		const response = await fetch(`${base}/api/v1/embedding-profiles`, {
+			headers: { ...bearer(), "X-Request-Id": requestId },
+		});
+		expect(response.status).toBe(200);
+		const bytes = (await response.arrayBuffer()).byteLength;
+		expect(bytes).toBeGreaterThan(0);
+		const database = await e2eD1();
+		expect(
+			await query(
+				database,
+				`SELECT bytes_out FROM audit_log WHERE request_id = ${sqlText(requestId)}`,
+			),
+		).toEqual([{ bytes_out: bytes }]);
+	});
+
 	it("filters history with stable cursor pagination and rejects invalid filters", async () => {
 		const filters = new URLSearchParams({
 			from: "2020-01-02",

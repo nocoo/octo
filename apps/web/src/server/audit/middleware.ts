@@ -27,7 +27,35 @@ function byteLength(value: string | null): number | null {
 	return length <= 4_294_967_295 ? length : null;
 }
 
-async function writeAudit(context: AuditContext, started: number): Promise<void> {
+function responseBytes(context: AuditContext): number | Promise<number> {
+	const response = context.res;
+	if (context.req.method === "HEAD" || !response.body) return 0;
+	const length = byteLength(response.headers.get("Content-Length"));
+	if (length !== null) return length;
+	let bytes = 0;
+	const counter = new TransformStream<Uint8Array, Uint8Array>(
+		{
+			transform(chunk, controller) {
+				controller.enqueue(chunk);
+				bytes += chunk.byteLength;
+			},
+		},
+		undefined,
+		{ highWaterMark: 1 },
+	);
+	const finished = response.body.pipeTo(counter.writable).then(
+		() => bytes,
+		() => bytes,
+	);
+	context.res = new Response(counter.readable, response);
+	return finished;
+}
+
+async function writeAudit(
+	context: AuditContext,
+	started: number,
+	output: number | Promise<number>,
+): Promise<void> {
 	const key = context.get("apiKey");
 	const email = context.get("adminEmail");
 	const actor = email ? `admin:${email}` : key ? `key:${key.id}` : "anonymous";
@@ -51,9 +79,9 @@ async function writeAudit(context: AuditContext, started: number): Promise<void>
 			: crypto.randomUUID();
 	const duration = Math.max(0, Date.now() - started);
 	const input = byteLength(context.req.raw.headers.get("Content-Length"));
-	const output = byteLength(context.res.headers.get("Content-Length"));
 	const ip = context.req.raw.headers.get("CF-Connecting-IP");
 	const pepper = context.env.API_KEY_PEPPER;
+	const bytes = await output;
 	const ipHash = ip && pepper ? await hashSecret(pepper, ip) : null;
 	const auditId = newUlid(started);
 	const statement = context.env.DB.prepare(
@@ -71,7 +99,7 @@ async function writeAudit(context: AuditContext, started: number): Promise<void>
 		safeRequestId,
 		duration,
 		input,
-		output,
+		bytes,
 		ipHash,
 	);
 	if (context.get("mcpWrite")) {
@@ -90,7 +118,7 @@ export const auditMiddleware: MiddlewareHandler<{ Bindings: Env; Variables: AppV
 ) => {
 	const started = Date.now();
 	await next();
-	const task = writeAudit(context, started).catch(() => {
+	const task = writeAudit(context, started, responseBytes(context)).catch(() => {
 		console.error("audit_write_failed");
 	});
 	try {

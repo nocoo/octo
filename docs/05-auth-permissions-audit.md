@@ -95,11 +95,21 @@ CREATE TABLE mcp_audit_writes (
 ) WITHOUT ROWID;
 ```
 
-- 在响应发出后用 `ctx.waitUntil` 写入，不阻塞请求；写失败记到 observability 日志。
+- 响应就绪后用 `ctx.waitUntil` 跟踪字节计数和审计写入，不等待 D1 才返回响应；写失败只记录固定码 `audit_write_failed`，不记录异常内容。
 - 绝不记录请求体、正文或 key。
 - 永久保留（Zheng 2026-10-17 决定）；dashboard 健康页监控 D1 体积。
+
+### 5.1 字节口径
+
+- `bytes_in` 仍只读取合法的请求 `Content-Length`，缺失或非法时为 `NULL`；不为统计读取或排空上传流。
+- `bytes_out` 对 `HEAD` 或没有 body 的响应记为 `0`，即使长度头描述了 GET 表示的大小。其他响应优先信任合法 `Content-Length`，不读取 body，也不验证长度是否与实际传输一致；客户端提前断开时仍记声明长度。合法长度沿用边界：1–10 位十进制数字，数值在 `0` 至 `4294967295` 之间。
+- 缺失或非法响应长度头时，以单路 `TransformStream` 透传，累加成功入队的 `Uint8Array.byteLength`。UTF-8 文本按编码后的字节计，不按字符数计；二进制原样透传。不使用 `clone()` / `tee()` 或整份 body 缓冲，输出队列最多一块，保留源流和管线自身的有界预读及背压，不随慢客户端积压完整响应。
+- 未知长度响应在 EOF、客户端取消或源流错误使管线结束后写审计；取消向源传播，源错误仍传给响应读取者。失败/取消时只记已经过计数流的前缀，HTTP 状态和业务错误码不改写。`duration_ms` 仍是响应就绪耗时，不含流传输和 D1 写入耗时。
+- 当前 `compatibility_date=2026-04-01` 已启用标准 `TransformStream` 构造器（2022-11-30 起）及背压修复（2024-12-16 起）；无需额外兼容标志，依据见 [Workers compatibility flags](https://developers.cloudflare.com/workers/configuration/compatibility-flags/)。
+- 这是应用层响应 body 字节，不包括 HTTP 头、分块封装或平台后续压缩等传输开销，也不是客户端已确认收到的字节。输出队列里的字节可能在取消/错误时未抵达客户端。未知长度的未终止流暂没有审计行；运行时终止或响应完成/断连后的 `waitUntil` 共享 30 秒预算耗尽可能导致该行缺失，不承诺持久化投递（[Workers Context](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil)）。
 
 ## 6. 用量统计（替代速率限制）
 
 - cron 每小时把 `audit_log` 汇总到 `usage_daily(day, key_id, calls, errors, writes, bytes_in, bytes_out)`；用 upsert，重复跑结果不变。
 - `/api/v1/usage` 只返回调用者自己的数据；dashboard 能看所有 key。
+- 汇总只包含已经写入的审计行；流结束后迟到的行会在下一次 cron 纳入。修复前，普通 JSON 响应未提供 `Content-Length`，审计写入 `bytes_out=NULL`，汇总按 `0` 处理；旧响应正文从未保存，无法据此回填真实字节数。

@@ -81,6 +81,7 @@ describe("MCP v1 service adapter", () => {
 	])("rejects invalid or mixed update forms without writes %j", async (args) => {
 		const { call, db, sqlite, flush } = await setup();
 		const { id } = (await call("create_memory", memoryInput)).result.structuredContent;
+		await flush();
 		const batch = vi.spyOn(db, "batch");
 		expect((await call("update_memory", { id, ...args })).result).toMatchObject({
 			isError: true,

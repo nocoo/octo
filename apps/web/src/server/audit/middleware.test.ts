@@ -178,7 +178,7 @@ describe("audit middleware", () => {
 	});
 
 	it.each(["-1", "1e3", "1.2", "999999999999999999999", "4294967296", "+12", "abc", ""])(
-		"ignores unbounded or invalid byte header %s",
+		"ignores invalid input byte header %s and counts the response body instead",
 		async (length) => {
 			const { sqlite, env, app, ctx, flush } = setup();
 			app.get("/size", () => new Response("body", { headers: { "Content-Length": length } }));
@@ -189,7 +189,7 @@ describe("audit middleware", () => {
 				ctx,
 			);
 			await flush();
-			expect(rows(sqlite)[0]).toMatchObject({ bytes_in: null, bytes_out: null });
+			expect(rows(sqlite)[0]).toMatchObject({ bytes_in: null, bytes_out: 4 });
 			expect(rows(sqlite)[0]?.request_id).toMatch(/^[a-f0-9-]{36}$/);
 			sqlite.close();
 		},
