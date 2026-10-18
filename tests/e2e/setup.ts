@@ -1,9 +1,13 @@
+import { execFile } from "node:child_process";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { promisify } from "node:util";
 import { assertWranglerConfigLocal, root } from "../../scripts/e2e";
 import { L2_ACCESS_AUD, l2AccessIss, loadJwksState, signAccessJwt } from "../../scripts/jwks-stub";
-import { assertTestMarker, createD1Exec } from "../../scripts/local-d1";
+import { assertAsyncTestMarker, wranglerD1Args } from "../../scripts/local-d1";
 import { bddPaths } from "../../scripts/run-e2e-bdd";
+
+const execFileAsync = promisify(execFile);
 
 export async function accessHeaders(): Promise<Record<string, string>> {
 	const jwt = await signAccessJwt(await loadJwksState(), {
@@ -33,7 +37,14 @@ export async function assertL3Isolation(): Promise<void> {
 		throw new Error("L3 persistence must not be linked to another store");
 	}
 	assertWranglerConfigLocal(await readFile(config, "utf8"));
-	assertTestMarker(createD1Exec(join(root, "node_modules/.bin/wrangler"), root, persist, config));
+	await assertAsyncTestMarker(async (args) => {
+		const { stdout } = await execFileAsync(
+			join(root, "node_modules/.bin/wrangler"),
+			wranglerD1Args(args, persist, config),
+			{ cwd: root, encoding: "utf8" },
+		);
+		return stdout;
+	});
 }
 
 export default async function setup(): Promise<void> {
