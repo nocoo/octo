@@ -144,33 +144,57 @@ export function UsagePage() {
 						}}
 					>
 						<Grid
-							columns={5}
+							columns={1}
 							gap="sm"
+							className="ops-filter-fields"
 							style={{
-								gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 10rem), 1fr))",
+								gridTemplateColumns:
+									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
 								alignItems: "end",
 							}}
 						>
 							<Field label="密钥标识">
 								<Input name="key_id" defaultValue={filters.key_id} autoComplete="off" />
 							</Field>
-							<Field label="开始日期">
-								<Input type="date" name="from" defaultValue={filters.from} />
-							</Field>
-							<Field label="结束日期">
-								<Input type="date" name="to" defaultValue={filters.to} />
-							</Field>
-							<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
-								应用筛选
-							</Button>
-							<Button
-								type="button"
-								icon={<X aria-hidden="true" />}
-								variant="ghost"
-								onClick={() => setParams("")}
+							<Grid
+								columns={2}
+								gap="sm"
+								className="ops-date-range"
+								role="group"
+								aria-label="日期范围"
+								style={{
+									gridTemplateColumns:
+										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-40)), 1fr))",
+									alignItems: "end",
+								}}
 							>
-								清除筛选
-							</Button>
+								<Field label="开始日期">
+									<Input type="date" name="from" defaultValue={filters.from} />
+								</Field>
+								<Field label="结束日期">
+									<Input type="date" name="to" defaultValue={filters.to} />
+								</Field>
+							</Grid>
+							<Grid
+								columns={2}
+								gap="sm"
+								className="ops-filter-actions"
+								role="group"
+								aria-label="筛选操作"
+								style={{ gridTemplateColumns: "repeat(2, max-content)", alignItems: "end" }}
+							>
+								<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
+									应用筛选
+								</Button>
+								<Button
+									type="button"
+									icon={<X aria-hidden="true" />}
+									variant="ghost"
+									onClick={() => setParams("")}
+								>
+									清除筛选
+								</Button>
+							</Grid>
 						</Grid>
 					</form>
 				}
@@ -372,10 +396,12 @@ export function AuditPage() {
 						}}
 					>
 						<Grid
-							columns={7}
+							columns={1}
 							gap="sm"
+							className="ops-filter-fields"
 							style={{
-								gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 9rem), 1fr))",
+								gridTemplateColumns:
+									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
 								alignItems: "end",
 							}}
 						>
@@ -395,23 +421,45 @@ export function AuditPage() {
 									defaultValue={filters.status}
 								/>
 							</Field>
-							<Field label="开始日期">
-								<Input name="from" type="date" defaultValue={filters.from.slice(0, 10)} />
-							</Field>
-							<Field label="结束日期">
-								<Input name="to" type="date" defaultValue={filters.to.slice(0, 10)} />
-							</Field>
-							<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
-								应用筛选
-							</Button>
-							<Button
-								type="button"
-								icon={<X aria-hidden="true" />}
-								variant="ghost"
-								onClick={() => setParams("")}
+							<Grid
+								columns={2}
+								gap="sm"
+								className="ops-date-range"
+								role="group"
+								aria-label="日期范围"
+								style={{
+									gridTemplateColumns:
+										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-40)), 1fr))",
+									alignItems: "end",
+								}}
 							>
-								清除筛选
-							</Button>
+								<Field label="开始日期">
+									<Input name="from" type="date" defaultValue={filters.from.slice(0, 10)} />
+								</Field>
+								<Field label="结束日期">
+									<Input name="to" type="date" defaultValue={filters.to.slice(0, 10)} />
+								</Field>
+							</Grid>
+							<Grid
+								columns={2}
+								gap="sm"
+								className="ops-filter-actions"
+								role="group"
+								aria-label="筛选操作"
+								style={{ gridTemplateColumns: "repeat(2, max-content)", alignItems: "end" }}
+							>
+								<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
+									应用筛选
+								</Button>
+								<Button
+									type="button"
+									icon={<X aria-hidden="true" />}
+									variant="ghost"
+									onClick={() => setParams("")}
+								>
+									清除筛选
+								</Button>
+							</Grid>
 						</Grid>
 					</form>
 				}

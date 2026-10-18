@@ -192,7 +192,16 @@ function KeyForm({
 							}
 						>
 							<Checkbox.Legend>允许的操作</Checkbox.Legend>
-							<Grid columns={4} gap="sm" style={{ alignItems: "center" }}>
+							<Grid
+								columns={4}
+								gap="sm"
+								className="ops-key-permissions"
+								style={{
+									gridTemplateColumns:
+										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), 1fr))",
+									alignItems: "center",
+								}}
+							>
 								{[
 									["r", "读取"],
 									["w", "创建"],
@@ -299,6 +308,8 @@ export function KeysPage() {
 	const secretRevision = useRef(0);
 	const active = useRef(true);
 	const createTrigger = useRef<HTMLButtonElement>(null);
+	const editorTrigger = useRef<HTMLButtonElement | null>(null);
+	const rotateTrigger = useRef<HTMLButtonElement | null>(null);
 	useEffect(() => {
 		active.current = true;
 		void model.load();
@@ -429,7 +440,10 @@ export function KeysPage() {
 						size="sm"
 						variant="outline"
 						disabled={state.pending || key.revoked_at !== null}
-						onClick={() => setEditor(key)}
+						onClick={(event) => {
+							editorTrigger.current = event.currentTarget;
+							setEditor(key);
+						}}
 						aria-label={`编辑 ${key.name}`}
 					>
 						编辑
@@ -439,7 +453,8 @@ export function KeysPage() {
 						size="sm"
 						variant="outline"
 						disabled={state.pending || keyStatus(key) !== "active"}
-						onClick={() => {
+						onClick={(event) => {
+							rotateTrigger.current = event.currentTarget;
 							setRotating(key);
 							setGrace("0");
 						}}
@@ -482,7 +497,10 @@ export function KeysPage() {
 						<Button
 							icon={<Plus aria-hidden="true" />}
 							ref={createTrigger}
-							onClick={() => setEditor("create")}
+							onClick={(event) => {
+								editorTrigger.current = event.currentTarget;
+								setEditor("create");
+							}}
 							disabled={state.pending}
 						>
 							创建密钥
@@ -536,7 +554,10 @@ export function KeysPage() {
 											<Button
 												icon={<Plus aria-hidden="true" />}
 												disabled={state.pending}
-												onClick={() => setEditor("create")}
+												onClick={(event) => {
+													editorTrigger.current = event.currentTarget;
+													setEditor("create");
+												}}
 											>
 												创建密钥
 											</Button>
@@ -556,7 +577,13 @@ export function KeysPage() {
 					if (!open && !state.pending) setEditor(null);
 				}}
 			>
-				<DialogContent size="lg">
+				<DialogContent
+					size="lg"
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						editorTrigger.current?.focus();
+					}}
+				>
 					<DialogHeader>
 						<DialogTitle>{editor === "create" ? "创建接口密钥" : "编辑接口密钥"}</DialogTitle>
 						<DialogDescription>权限仅适用于数据；密钥管理仍仅限 Access 访问。</DialogDescription>
@@ -582,7 +609,12 @@ export function KeysPage() {
 					if (!open && !state.pending) setRotating(null);
 				}}
 			>
-				<DialogContent>
+				<DialogContent
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						rotateTrigger.current?.focus();
+					}}
+				>
 					<DialogHeader>
 						<DialogTitle>轮换 {rotating?.name}</DialogTitle>
 						<DialogDescription>
@@ -639,7 +671,14 @@ export function KeysPage() {
 				description={
 					<>
 						{"此密钥的所有凭据将立即失效，且无法撤销此操作。"}
-						{state.error && <span role="alert">{state.error}</span>}
+						{state.error && (
+							<span
+								className="mt-basalt-space-sm block font-medium text-basalt-danger"
+								role="alert"
+							>
+								{state.error}
+							</span>
+						)}
 					</>
 				}
 				variant="destructive"

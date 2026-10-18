@@ -194,3 +194,19 @@ it("renders only M7 daily writes and bytes, not fabricated infrastructure or per
 	expect(html).toMatch(/<td[^>]*>123<\/td>/);
 	expect(html).toMatch(/<td[^>]*>456<\/td>/);
 });
+
+it.each(["usage", "audit"] as const)(
+	"groups date ranges and keeps filter actions together on %s",
+	(page) => {
+		const html = render(page);
+		const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
+		expect(form).toContain('role="group" aria-label="日期范围"');
+		expect(form).toContain("ops-date-range");
+		expect(form).toContain('role="group" aria-label="筛选操作"');
+		expect(form).toContain("ops-filter-actions");
+		const actions =
+			form.match(/class="[^"]*ops-filter-actions[^"]*"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? "";
+		expect(actions).toContain("应用筛选");
+		expect(actions).toContain("清除筛选");
+	},
+);

@@ -133,4 +133,27 @@ describe("installed Basalt operations composition", () => {
 		expect(css).not.toMatch(/(?:padding|margin|gap):\s*\d/);
 		expect(css).not.toContain(".ops-sparkline");
 	});
+
+	it("restores focus from ordinary key dialogs and separates revoke failures", () => {
+		const source = readFileSync(new URL("./operations-keys.tsx", import.meta.url), "utf8");
+		const editor = source.slice(
+			source.indexOf("open={editor !== null}"),
+			source.indexOf("open={rotating !== null}"),
+		);
+		const rotation = source.slice(
+			source.indexOf("open={rotating !== null}"),
+			source.indexOf("open={secret !== null}"),
+		);
+		expect(editor).toContain("onCloseAutoFocus");
+		expect(editor).toContain("editorTrigger.current?.focus()");
+		expect(rotation).toContain("onCloseAutoFocus");
+		expect(rotation).toContain("rotateTrigger.current?.focus()");
+		expect(source).toContain('className="ops-key-permissions"');
+		const revoke = source.slice(
+			source.indexOf("<ConfirmDialog"),
+			source.indexOf("</ConfirmDialog>"),
+		);
+		expect(revoke).not.toContain('state.error && <span role="alert">{state.error}</span>');
+		expect(revoke).toContain("text-basalt-danger");
+	});
 });

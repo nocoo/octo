@@ -195,3 +195,34 @@ it("gives overview records readable wrapping columns inside package scroll regio
 	expect(html).toMatch(/<td[^>]*class="[^"]*whitespace-normal break-words[^>]*>移入回收站<\/td>/);
 	expect(html).toContain("知识工作台：检索与协作");
 });
+
+it("places compact knowledge shortcuts before charts and aligns overview tables", () => {
+	snapshot.state = {
+		...new OverviewModel().state,
+		memoryCount: 1,
+		usage: [],
+		changes: [
+			{ seq: 1, entity: "memory", entity_id: "m1", op: "updated", at: "2026-10-18T01:00:00Z" },
+		],
+		recent: [
+			{ id: "m1", title: "记忆", space: "工作", tags: [], updated_at: "2026-10-18T01:00:00Z" },
+		],
+	};
+	const html = renderToStaticMarkup(
+		<ThemeProvider persist={false}>
+			<MemoryRouter>
+				<OverviewPage />
+			</MemoryRouter>
+		</ThemeProvider>,
+	);
+	expect(html).not.toContain("self-start");
+	expect(html.indexOf("知识入口")).toBeLessThan(html.indexOf("调用趋势"));
+	expect([...html.matchAll(/管理密钥/g)]).toHaveLength(1);
+	for (const label of ["最近变更", "最近更新的记忆"]) {
+		const table = html.match(
+			new RegExp(`<table\\b[^>]*aria-label="${label}"[\\s\\S]*?<\\/table>`),
+		)?.[0];
+		expect(table).toContain("ps-basalt-table-edge");
+		expect(table).toContain("pe-basalt-table-edge");
+	}
+});

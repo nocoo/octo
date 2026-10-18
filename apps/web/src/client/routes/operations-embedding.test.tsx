@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { DataTableProps, DataTableSort } from "@nocoo/basalt/components/data-table";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
@@ -222,7 +223,7 @@ describe("M7 embedding test result SSR", () => {
 				expect(html).toContain("上游状态码");
 				expect(html).toContain(String(status));
 			}
-			const well = html.slice(html.indexOf("连接结果"));
+			const well = html.slice(html.indexOf(code));
 			expect(well).not.toMatch(/gateway\.example|private-upstream|Authorization|Bearer /);
 		},
 	);
@@ -246,7 +247,7 @@ describe("M7 embedding test result SSR", () => {
 			},
 		};
 		const html = renderToStaticMarkup(<EmbeddingPage />);
-		const well = html.slice(html.indexOf("连接结果"));
+		const well = html.slice(html.indexOf("embedder_unavailable"));
 		expect(well).toContain(label);
 		expect(well).toContain("失败阶段");
 		expect(well).not.toContain("upstream");
@@ -279,4 +280,65 @@ describe("M7 embedding test result SSR", () => {
 		expect(html).not.toContain("版本");
 		expect(html).not.toContain("0.1.0");
 	});
+});
+
+it("shows structured probe failures and technical details immediately after Test", () => {
+	fixture.state = {
+		loaded: true,
+		testResult: {
+			latency_ms: 12,
+			dims: 8,
+			match: false,
+			error_code: "embedder_unavailable",
+			reason: { stage: "status", upstream_status: 503 },
+		},
+	};
+	const html = renderToStaticMarkup(<EmbeddingPage />);
+	const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
+	expect(form).not.toContain("连接结果");
+	expect(form).toContain('role="alert"');
+	expect(form).toContain("embedder_unavailable");
+	expect(form).toContain("上游状态码");
+	expect(form).toContain("12 毫秒");
+	expect(form).toContain("grid gap-basalt-layout-sm");
+	expect(form).toContain("<dl");
+	expect(form.indexOf("测试连接")).toBeLessThan(form.indexOf("连接失败"));
+	expect([...form.matchAll(/连接失败/g)]).toHaveLength(1);
+});
+
+it("keeps transport failures beside the test action and keeps key clearing compact", () => {
+	fixture.state = { loaded: true, error: "无法测试嵌入连接。" };
+	const html = renderToStaticMarkup(<EmbeddingPage />);
+	const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
+	expect(form).toContain("无法测试嵌入连接。");
+	expect(form).toContain("ops-embedding-key-actions");
+	expect(form).toContain("ops-embedding-test-actions");
+});
+
+it("shows the current action error instead of a stale probe result", () => {
+	fixture.state = {
+		loaded: true,
+		error: "无法测试嵌入连接。",
+		testResult: {
+			latency_ms: 5,
+			dims: 1536,
+			match: true,
+			error_code: null,
+			reason: null,
+		},
+	};
+	const html = renderToStaticMarkup(<EmbeddingPage />);
+	const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
+	expect(form).toContain("无法测试嵌入连接。");
+	expect(form).not.toContain("向量维度与当前配置匹配。");
+	expect([...form.matchAll(/id="embedding-test-feedback"/g)]).toHaveLength(1);
+});
+
+it("scrolls only explicit connection-test feedback into view without moving focus", () => {
+	const source = readFileSync(new URL("./operations-embedding.tsx", import.meta.url), "utf8");
+	expect(source).toContain("testFeedbackRequested.current = true");
+	expect(source).toContain('scrollIntoView({ block: "nearest" })');
+	expect(source).toContain('id="embedding-test-feedback"');
+	expect(source).toContain("!clearing");
+	expect(source).not.toContain("focus()");
 });

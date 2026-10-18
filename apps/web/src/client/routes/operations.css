@@ -1,3 +1,12 @@
+.ops-filter-fields,
+.ops-date-range {
+	min-width: 0;
+}
+
+.ops-filter-actions {
+	justify-self: start;
+}
+
 .ops-plot {
 	inline-size: 100%;
 	block-size: clamp(14rem, 26vh, 20rem);

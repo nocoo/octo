@@ -134,6 +134,44 @@ export function OverviewPage() {
 			</p>
 			<LayerCard>
 				<LayerCard.Header>
+					<h2>知识入口</h2>
+				</LayerCard.Header>
+				<LayerCard.Body>
+					<Grid columns={1} gap="sm">
+						<Grid
+							gap="sm"
+							style={{
+								gridTemplateColumns:
+									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), max-content))",
+								justifyContent: "start",
+							}}
+						>
+							<Button asChild>
+								<Link to="/memories">
+									浏览记忆 <ArrowUpRight size={16} />
+								</Link>
+							</Button>
+							<Button variant="secondary" asChild>
+								<Link to="/search">
+									<Search size={16} aria-hidden="true" />
+									混合搜索
+								</Link>
+							</Button>
+							<Button variant="secondary" asChild>
+								<Link to="/graph">
+									<Network size={16} aria-hidden="true" />
+									探索关系
+								</Link>
+							</Button>
+						</Grid>
+						<p className="text-basalt-sm text-basalt-muted-foreground">
+							⌘ K 快速跳转，/ 开始搜索。
+						</p>
+					</Grid>
+				</LayerCard.Body>
+			</LayerCard>
+			<LayerCard>
+				<LayerCard.Header>
 					<h2>智能体活动 · 按密钥小时汇总</h2>
 				</LayerCard.Header>
 				<LayerCard.Well>
@@ -170,209 +208,151 @@ export function OverviewPage() {
 					</Grid>
 				</LayerCard.Well>
 			</LayerCard>
-			<Grid
-				style={{
-					gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, var(--basalt-space-80)), 1fr))",
-				}}
-			>
-				<LayerCard>
-					<LayerCard.Header>
-						<h2>调用趋势</h2>
-					</LayerCard.Header>
-					<LayerCard.Well>
-						<Grid columns={1}>
-							{activity.rows.length ? (
-								<AreaChart
-									data={activity.rows}
-									series={activityChartSeries(activity)}
-									stacked
-									showAxes
-									showLegend
-									className="h-basalt-80 w-full"
-									ariaLabel="按智能体堆叠的每日调用量"
-									summary="每日接口调用次数，纵轴从零开始。"
-								/>
-							) : state.usage ? (
-								<LayerCard.Empty
-									icon={<Activity aria-hidden="true" />}
-									title="暂无调用趋势"
-									action={
-										<Button asChild>
-											<Link to="/keys">
-												<KeyRound size={16} aria-hidden="true" />
-												管理密钥
-											</Link>
-										</Button>
-									}
-								/>
-							) : (
-								<p className="text-basalt-sm text-basalt-muted-foreground">
-									{state.loading ? "正在读取调用记录…" : "调用数据尚未加载"}
-								</p>
-							)}
-							<Collapsible>
-								<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
-								<CollapsibleContent unstyled>{table}</CollapsibleContent>
-							</Collapsible>
-						</Grid>
-					</LayerCard.Well>
-				</LayerCard>
-				<LayerCard>
-					<LayerCard.Header>
-						<h2>知识入口</h2>
-					</LayerCard.Header>
-					<LayerCard.Body>
-						<Grid columns={1}>
-							<Grid
-								gap="sm"
-								style={{
-									gridTemplateColumns:
-										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), 1fr))",
-								}}
-							>
-								<Button asChild>
-									<Link to="/memories">
-										浏览记忆 <ArrowUpRight size={16} />
-									</Link>
-								</Button>
-								<Button variant="secondary" asChild>
-									<Link to="/search">
-										<Search size={16} aria-hidden="true" />
-										混合搜索
-									</Link>
-								</Button>
-								<Button variant="secondary" asChild>
-									<Link to="/graph">
-										<Network size={16} aria-hidden="true" />
-										探索关系
-									</Link>
-								</Button>
-							</Grid>
+			<LayerCard>
+				<LayerCard.Header>
+					<h2>调用趋势</h2>
+				</LayerCard.Header>
+				<LayerCard.Well>
+					<Grid columns={1}>
+						{activity.rows.length ? (
+							<AreaChart
+								data={activity.rows}
+								series={activityChartSeries(activity)}
+								stacked
+								showAxes
+								showLegend
+								className="h-basalt-80 w-full"
+								ariaLabel="按智能体堆叠的每日调用量"
+								summary="每日接口调用次数，纵轴从零开始。"
+							/>
+						) : state.usage ? (
+							<LayerCard.Empty icon={<Activity aria-hidden="true" />} title="暂无调用趋势" />
+						) : (
 							<p className="text-basalt-sm text-basalt-muted-foreground">
-								⌘ K 快速跳转，/ 开始搜索。
-							</p>
-						</Grid>
-					</LayerCard.Body>
-				</LayerCard>
-			</Grid>
-			<SectionRule title="最近变更">
-				<LayerCard>
-					<LayerCard.Well>
-						<DataTable
-							aria-label="最近变更"
-							data={state.changes}
-							getRowId={(change) => String(change.seq)}
-							empty={null}
-							columns={[
-								{
-									id: "content",
-									header: "内容",
-									width: "28ch",
-									wrap: true,
-									sortable: false,
-									accessor: (change) =>
-										change.entity === "memory" && !["trashed", "purged"].includes(change.op) ? (
-											<Link to={`/memories/${encodeURIComponent(change.entity_id)}`}>
-												{change.entity_id}
-											</Link>
-										) : (
-											change.entity_id
-										),
-								},
-								{
-									id: "operation",
-									header: "操作",
-									width: "12ch",
-									wrap: true,
-									sortable: false,
-									accessor: (change) => changeLabels.get(change.op) ?? "其他操作",
-								},
-								{
-									id: "actor",
-									header: "操作者",
-									width: "28ch",
-									wrap: true,
-									sortable: false,
-									accessor: (change) => change.actor ?? "未提供",
-								},
-								{
-									id: "time",
-									header: "时间 · UTC",
-									width: "28ch",
-									wrap: true,
-									sortable: false,
-									accessor: (change) => <time dateTime={change.at}>{change.at}</time>,
-								},
-							]}
-						/>
-						{!state.changes.length && (
-							<p className="text-basalt-sm text-basalt-muted-foreground">
-								{state.memoryCount === null ? "变更记录尚未加载" : "暂无变更记录"}
+								{state.loading ? "正在读取调用记录…" : "调用数据尚未加载"}
 							</p>
 						)}
-					</LayerCard.Well>
+						<Collapsible>
+							<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
+							<CollapsibleContent unstyled>{table}</CollapsibleContent>
+						</Collapsible>
+					</Grid>
+				</LayerCard.Well>
+			</LayerCard>
+			<SectionRule title="最近变更">
+				<LayerCard padding="none">
+					<DataTable
+						aria-label="最近变更"
+						data={state.changes}
+						getRowId={(change) => String(change.seq)}
+						empty={null}
+						edge="attached"
+						columns={[
+							{
+								id: "content",
+								header: "内容",
+								width: "28ch",
+								wrap: true,
+								sortable: false,
+								accessor: (change) =>
+									change.entity === "memory" && !["trashed", "purged"].includes(change.op) ? (
+										<Link to={`/memories/${encodeURIComponent(change.entity_id)}`}>
+											{change.entity_id}
+										</Link>
+									) : (
+										change.entity_id
+									),
+							},
+							{
+								id: "operation",
+								header: "操作",
+								width: "12ch",
+								wrap: true,
+								sortable: false,
+								accessor: (change) => changeLabels.get(change.op) ?? "其他操作",
+							},
+							{
+								id: "actor",
+								header: "操作者",
+								width: "28ch",
+								wrap: true,
+								sortable: false,
+								accessor: (change) => change.actor ?? "未提供",
+							},
+							{
+								id: "time",
+								header: "时间 · UTC",
+								width: "28ch",
+								wrap: true,
+								sortable: false,
+								accessor: (change) => <time dateTime={change.at}>{change.at}</time>,
+							},
+						]}
+					/>
+					{!state.changes.length && (
+						<p className="px-basalt-panel-x py-basalt-panel-y text-basalt-sm text-basalt-muted-foreground">
+							{state.memoryCount === null ? "变更记录尚未加载" : "暂无变更记录"}
+						</p>
+					)}
 				</LayerCard>
 			</SectionRule>
 			<SectionRule title="最近更新的记忆">
-				<LayerCard>
-					<LayerCard.Body>
-						<Grid columns={1}>
-							<DataTable
-								aria-label="最近更新的记忆"
-								data={state.recent}
-								getRowId={(memory) => memory.id}
-								empty={null}
-								columns={[
-									{
-										id: "title",
-										header: "记忆",
-										width: "28ch",
-										wrap: true,
-										sortable: false,
-										accessor: (memory) => (
-											<Link to={`/memories/${encodeURIComponent(memory.id)}`}>{memory.title}</Link>
-										),
-									},
-									{
-										id: "space",
-										header: "空间",
-										width: "24ch",
-										wrap: true,
-										sortable: false,
-										accessor: (memory) => <Badge variant="secondary">{memory.space}</Badge>,
-									},
-									{
-										id: "updated",
-										header: "更新时间",
-										width: "24ch",
-										wrap: true,
-										sortable: false,
-										accessor: (memory) => new Date(memory.updated_at).toLocaleString("zh-CN"),
-									},
-								]}
+				<LayerCard padding="none">
+					<DataTable
+						aria-label="最近更新的记忆"
+						data={state.recent}
+						getRowId={(memory) => memory.id}
+						empty={null}
+						edge="attached"
+						columns={[
+							{
+								id: "title",
+								header: "记忆",
+								width: "28ch",
+								wrap: true,
+								sortable: false,
+								accessor: (memory) => (
+									<Link to={`/memories/${encodeURIComponent(memory.id)}`}>{memory.title}</Link>
+								),
+							},
+							{
+								id: "space",
+								header: "空间",
+								width: "24ch",
+								wrap: true,
+								sortable: false,
+								accessor: (memory) => <Badge variant="secondary">{memory.space}</Badge>,
+							},
+							{
+								id: "updated",
+								header: "更新时间",
+								width: "24ch",
+								wrap: true,
+								sortable: false,
+								accessor: (memory) => new Date(memory.updated_at).toLocaleString("zh-CN"),
+							},
+						]}
+					/>
+					{!state.recent.length &&
+						(state.memoryCount !== null ? (
+							<LayerCard.Empty
+								icon={<BookOpen aria-hidden="true" />}
+								title="还没有记忆"
+								description="从第一条记忆开始整理知识。"
+								action={
+									<Button asChild>
+										<Link to="/memories">
+											<ArrowUpRight size={16} aria-hidden="true" />
+											浏览记忆
+										</Link>
+									</Button>
+								}
 							/>
-							{!state.recent.length &&
-								(state.memoryCount !== null ? (
-									<LayerCard.Empty
-										icon={<BookOpen aria-hidden="true" />}
-										title="还没有记忆"
-										description="从第一条记忆开始整理知识。"
-										action={
-											<Button asChild>
-												<Link to="/memories">
-													<ArrowUpRight size={16} aria-hidden="true" />
-													浏览记忆
-												</Link>
-											</Button>
-										}
-									/>
-								) : (
-									<p className="text-basalt-sm text-basalt-muted-foreground">
-										{state.loading ? "正在读取记忆…" : "记忆数据尚未加载。"}
-									</p>
-								))}
-						</Grid>
-					</LayerCard.Body>
+						) : (
+							<p className="px-basalt-panel-x py-basalt-panel-y text-basalt-sm text-basalt-muted-foreground">
+								{state.loading ? "正在读取记忆…" : "记忆数据尚未加载。"}
+							</p>
+						))}
 				</LayerCard>
 			</SectionRule>
 		</Grid>

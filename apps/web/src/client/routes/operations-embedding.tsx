@@ -6,10 +6,10 @@ import {
 	Field,
 	Input,
 	LayerCard,
-	StatStrip,
 	Switch,
 	toast,
 } from "@nocoo/basalt";
+import { Banner } from "@nocoo/basalt/components/banner";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
@@ -41,6 +41,8 @@ export function EmbeddingPage() {
 	const state = useModel(model);
 	const [fields, setFields] = useState<EmbeddingFields>(state.config);
 	const [clearing, setClearing] = useState(false);
+	const [testAttempt, setTestAttempt] = useState(0);
+	const testFeedbackRequested = useRef(false);
 	const secret = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		void model.load();
@@ -53,6 +55,17 @@ export function EmbeddingPage() {
 		const { base_url, model: name, dims, backfill_enabled } = state.config;
 		setFields({ base_url, model: name, dims, backfill_enabled });
 	}, [state.config]);
+	useEffect(() => {
+		if (
+			testAttempt === 0 ||
+			!testFeedbackRequested.current ||
+			state.pending ||
+			(!state.error && !state.testResult)
+		)
+			return;
+		document.getElementById("embedding-test-feedback")?.scrollIntoView({ block: "nearest" });
+		testFeedbackRequested.current = false;
+	}, [testAttempt, state.error, state.pending, state.testResult]);
 	function takeSecret(): string | undefined {
 		const value = secret.current?.value || undefined;
 		if (secret.current) secret.current.value = "";
@@ -74,7 +87,7 @@ export function EmbeddingPage() {
 				}
 			/>
 			{state.loading && !state.loaded && <p role="status">正在加载网关设置……</p>}
-			{state.error && (
+			{state.error && !state.loaded && (
 				<p role="alert">
 					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}
 				</p>
@@ -137,6 +150,7 @@ export function EmbeddingPage() {
 									<Grid
 										columns={2}
 										gap="sm"
+										className="ops-embedding-key-actions"
 										style={{
 											gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
 											alignItems: "center",
@@ -150,6 +164,7 @@ export function EmbeddingPage() {
 											)}
 										</p>
 										<Button
+											className="justify-self-start"
 											icon={<Trash2 aria-hidden="true" />}
 											type="button"
 											variant="outline"
@@ -188,6 +203,7 @@ export function EmbeddingPage() {
 									<Grid
 										columns={2}
 										gap="sm"
+										className="ops-embedding-test-actions"
 										style={{
 											gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
 											alignItems: "center",
@@ -198,7 +214,11 @@ export function EmbeddingPage() {
 											type="button"
 											variant="outline"
 											loading={state.pending}
-											onClick={() => void model.test(fields, takeSecret())}
+											onClick={() => {
+												testFeedbackRequested.current = true;
+												setTestAttempt((attempt) => attempt + 1);
+												void model.test(fields, takeSecret());
+											}}
 										>
 											测试连接
 										</Button>
@@ -210,6 +230,79 @@ export function EmbeddingPage() {
 											保存设置
 										</Button>
 									</Grid>
+									{state.error && state.loaded && !clearing && (
+										<Banner
+											variant="error"
+											role="alert"
+											icon={<CircleAlert aria-hidden="true" />}
+											description={state.error}
+											id="embedding-test-feedback"
+										/>
+									)}
+									{state.testResult && !state.error && !clearing && (
+										<Grid columns={1} gap="sm">
+											<Banner
+												variant={
+													state.testResult.match && !state.testResult.error_code
+														? "default"
+														: "error"
+												}
+												role={
+													state.testResult.match && !state.testResult.error_code
+														? "status"
+														: "alert"
+												}
+												icon={
+													state.testResult.match && !state.testResult.error_code ? (
+														<CircleCheck aria-hidden="true" />
+													) : (
+														<CircleAlert aria-hidden="true" />
+													)
+												}
+												id="embedding-test-feedback"
+												title={
+													state.testResult.error_code
+														? "连接失败"
+														: state.testResult.match
+															? "连接成功"
+															: "维度不匹配"
+												}
+												description={
+													state.testResult.error_code ? (
+														<>
+															错误：{operationsError(state.testResult.error_code)}{" "}
+															<code>{state.testResult.error_code}</code>
+														</>
+													) : state.testResult.match ? (
+														"向量维度与当前配置匹配。"
+													) : (
+														"上游返回的向量维度与当前配置不匹配。"
+													)
+												}
+											/>
+											<DescriptionList>
+												<DescriptionList.Item term="延迟">
+													{state.testResult.latency_ms} 毫秒
+												</DescriptionList.Item>
+												<DescriptionList.Item term="实际维度">
+													{state.testResult.dims ?? "暂无数据"}
+												</DescriptionList.Item>
+												<DescriptionList.Item term="配置匹配">
+													{state.testResult.match ? "是" : "否"}
+												</DescriptionList.Item>
+												{state.testResult.reason && (
+													<DescriptionList.Item term="失败阶段">
+														{embeddingFailureStageLabel(state.testResult.reason.stage)}
+													</DescriptionList.Item>
+												)}
+												{state.testResult.reason?.upstream_status !== undefined && (
+													<DescriptionList.Item term="上游状态码">
+														{state.testResult.reason.upstream_status}
+													</DescriptionList.Item>
+												)}
+											</DescriptionList>
+										</Grid>
+									)}
 								</Grid>
 							</form>
 						) : (
@@ -218,63 +311,6 @@ export function EmbeddingPage() {
 					</LayerCard.Body>
 				</LayerCard>
 			</SectionRule>
-			{state.testResult && (
-				<LayerCard>
-					<LayerCard.Header>
-						连接结果{" "}
-						<Badge
-							variant={
-								state.testResult.match && !state.testResult.error_code ? "success" : "secondary"
-							}
-						>
-							{state.testResult.match && !state.testResult.error_code ? (
-								<CircleCheck className="size-basalt-icon" aria-hidden="true" />
-							) : (
-								<CircleAlert className="size-basalt-icon" aria-hidden="true" />
-							)}
-							{state.testResult.error_code
-								? "失败"
-								: state.testResult.match
-									? "连接成功"
-									: "维度不匹配"}
-						</Badge>
-					</LayerCard.Header>
-					<LayerCard.Well>
-						<StatStrip
-							items={[
-								{ label: "延迟", value: `${state.testResult.latency_ms} 毫秒` },
-								{
-									label: "实际维度",
-									value: state.testResult.dims ?? "暂无数据",
-								},
-								{ label: "配置匹配", value: state.testResult.match ? "是" : "否" },
-								...(state.testResult.reason
-									? [
-											{
-												label: "失败阶段",
-												value: embeddingFailureStageLabel(state.testResult.reason.stage),
-											},
-											...(state.testResult.reason.upstream_status === undefined
-												? []
-												: [
-														{
-															label: "上游状态码",
-															value: String(state.testResult.reason.upstream_status),
-														},
-													]),
-										]
-									: []),
-							]}
-						/>
-						{state.testResult.error_code && (
-							<p role="alert">
-								错误：{operationsError(state.testResult.error_code)}{" "}
-								<code>{state.testResult.error_code}</code>
-							</p>
-						)}
-					</LayerCard.Well>
-				</LayerCard>
-			)}
 			<ConfirmDialog
 				open={clearing}
 				onOpenChange={setClearing}
