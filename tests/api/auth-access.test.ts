@@ -33,7 +33,12 @@ describe("GET /api/admin/whoami", () => {
 		});
 		const ok = await whoami(valid);
 		expect(ok.status).toBe(200);
-		expect(await ok.json()).toEqual({ email: "e2e@local", actor: "admin:e2e@local" });
+		expect(await ok.json()).toEqual({
+			email: "e2e@local",
+			actor: "admin:e2e@local",
+			name: null,
+			avatar: null,
+		});
 		const wrongAud = await signAccessJwt(state, {
 			iss,
 			aud: "wrong",
