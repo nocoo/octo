@@ -44,6 +44,8 @@ unknown errors still return the generic `internal error` envelope without intern
 
 ## 3. 幂等
 
+`If-Match` / `expected_version` 为 0 时执行正常的权限和乐观并发检查：单条 PATCH、rollback、vector PUT 返回 409 `version_conflict`；batchUpdate 在既有 HTTP 200 的逐项错误信封中返回同一 code；MCP 在 HTTP 200 工具错误中返回同一 code。负数、非整数或非法 header 仍为 400；隐藏/不可见资源仍为 404，不因版本检查泄露信息。rollback 的 `to_version` 仍须为正整数。
+
 - 所有非 GET 的写请求都接受 `Idempotency-Key`（1–128 个可打印 ASCII 字符），作用域是 `(api_key, key)`。
 - 第一次请求：执行后把 `request_hash`、状态码和响应体存进 `idempotency_records`。
 - 重放：hash 相同就原样返回存下的响应，并带 `Idempotent-Replayed: true`；hash 不同返回 409 `idempotency_conflict`。
@@ -88,7 +90,7 @@ and supports idempotency through the same atomic write boundary. The body is
 ]}
 ```
 
-每条的 `id` 长度 1–64，`expected_version` 为正整数，且至少有一个可更新字段：`space`、`title`、`body`、`type`、`tags`、`importance`（0–1）、`event_time`、`vector`。使用 `patch` 时外层只能有 `id` 和 `patch`；即使字段不重复，也拒绝外层更新字段或外层 `expected_version`。内外层未知字段同样拒绝。任何结构错误都在写入前拒绝整个批次，HTTP 400 `validation_failed`；合法结构的业务失败仍按条返回 `{ok:false,error}`，整体 HTTP 200。幂等键仍覆盖整个批次。
+每条的 `id` 长度 1–64，`expected_version` 为非负整数（0 返回 version_conflict），且至少有一个可更新字段：`space`、`title`、`body`、`type`、`tags`、`importance`（0–1）、`event_time`、`vector`。使用 `patch` 时外层只能有 `id` 和 `patch`；即使字段不重复，也拒绝外层更新字段或外层 `expected_version`。内外层未知字段同样拒绝。任何结构错误都在写入前拒绝整个批次，HTTP 400 `validation_failed`；合法结构的业务失败仍按条返回 `{ok:false,error}`，整体 HTTP 200。幂等键仍覆盖整个批次。
 
 单条 REST `PATCH /memories/:id` 仍使用 flat 更新字段（不接收 `patch` 包装），版本通过 `If-Match` 或 body 的 `expected_version` 提供；同时提供时必须一致。`POST /memories/:id/rollback` 是 `{"to_version":1}` + `If-Match: 3`，或 `{"to_version":1,"expected_version":3}`，不是 `version` 或 `patch`。`to_version` 为要恢复的历史版本，乐观锁版本为当前版本。
 
@@ -200,6 +202,8 @@ Multipart uploads accept exactly one `file` part (no extra fields), with at most
 直接 HTTP 验证见 `tests/api/memories-matrix.test.ts`、`batch.test.ts`、`search.test.ts`、`attachments.test.ts`、`spaces.test.ts` 及本轮新增回归。MCP 对应工具复用相同服务与错误 code，外层遵循 [09](09-mcp.md) 的 HTTP 200 + `isError` 约定。
 
 ## 6. Admin API（只给 dashboard）
+
+`POST /api/admin/settings/search/backfill`：无正文，使用 Cloudflare Access 与同源 Origin 验证，推进最多 100 个 tag/memory 的分词索引回填，返回 `{tags, memories, complete}`。操作幂等可恢复，不修改 memory 版本；部署顺序、预算和完成检查见 [回填手册](round3-validation.md)。
 
 前缀 `/api/admin/*`，要求通过 Cloudflare Access JWT 校验，并且写请求必须同源（`Origin` 必须等于 `https://octo.hexly.ai`，开发环境是 `https://octo.dev.hexly.ai`）。功能：key 的增删改查、轮换、吊销；space 增删改；purge；审计查询；全局用量；embedding profile 管理；向量模型设置（`GET/PUT /api/admin/settings/embedding`，API key 只能写；`POST …/test` 测试连接）；回收站批量操作；以及与 v1 对等的读写（actor 记为 `admin:<email>`）。详见 [05](05-auth-permissions-audit.md)、[06](06-dashboard.md)。
 

@@ -84,6 +84,7 @@ export const TESTED_API_ROUTES: RouteKey[] = [
 	"POST /api/admin/memories:batchUpdate",
 	"POST /api/admin/search",
 	"POST /api/admin/settings/embedding/test",
+	"POST /api/admin/settings/search/backfill",
 	"POST /api/admin/spaces",
 	"POST /api/admin/tags/:name/merge",
 	"POST /api/admin/tags/:name/rename",

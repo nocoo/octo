@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tokenizeQuery } from "../../apps/web/src/server/search/tokenizer";
+import { supportsTrigram } from "../../apps/web/src/server/search/tokenizer";
 import { assertAsyncTestMarker } from "../../scripts/local-d1";
 import { e2eD1, query } from "../fixtures/l2-batch";
 
@@ -42,9 +42,7 @@ CREATE VIRTUAL TABLE m4_term_vocab USING fts5vocab(m4_term_probe, 'instance');`,
 			);
 			const indexed = new Set(tokens.map((token) => token.doc));
 			for (const [i, term] of terms.entries()) {
-				expect(tokenizeQuery(term).longTerms.length > 0, JSON.stringify(term)).toBe(
-					indexed.has(i + 1),
-				);
+				expect(supportsTrigram(term), JSON.stringify(term)).toBe(indexed.has(i + 1));
 			}
 			expect(tokens.filter((token) => token.doc === 2).map((token) => token.term)).toEqual(["eta"]);
 		} finally {

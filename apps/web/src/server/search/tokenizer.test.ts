@@ -1,170 +1,86 @@
 import { describe, expect, it } from "vitest";
-import { buildFtsMatchQuery, tokenizeQuery } from "./tokenizer";
+import {
+	buildFtsMatchQuery,
+	escapeFtsToken,
+	indexText,
+	segmentText,
+	supportsTrigram,
+	tokenizeQuery,
+} from "./tokenizer";
 
-describe("tokenizeQuery", () => {
+describe("shared word segmentation", () => {
 	it.each([
-		{ query: "what does he drink in the morning", longTerms: ["drink", "morning"] },
-		{ query: "how often are keys rotated", longTerms: ["often", "keys", "rotated"] },
-		{ query: "WHAT Does HE drink IN THE morning", longTerms: ["drink", "morning"] },
-	])("removes English function words from $query", ({ query, longTerms }) => {
-		expect(tokenizeQuery(query)).toEqual({ longTerms, shortTerms: [], allShort: false });
-	});
-
-	it("keeps the original terms when every term is an English stopword", () => {
-		expect(tokenizeQuery("what is it")).toEqual({
-			longTerms: ["what"],
-			shortTerms: ["is", "it"],
-			allShort: false,
-		});
-		expect(tokenizeQuery("he in")).toEqual({
-			longTerms: [],
-			shortTerms: ["he", "in"],
-			allShort: true,
-		});
-	});
-
-	it("filters Chinese stopwords but preserves mixed-script and short English terms", () => {
-		expect(tokenizeQuery("what 早上 喝 什么 the密钥 cf")).toEqual({
-			longTerms: ["the密钥"],
-			shortTerms: ["早上", "喝", "cf"],
-			allShort: false,
-		});
-		expect(tokenizeQuery("密钥 多久 轮换")).toEqual({
-			longTerms: [],
-			shortTerms: ["密钥", "轮换"],
-			allShort: true,
-		});
-	});
-
-	it("keeps literal terms when every term is a Chinese or English stopword", () => {
-		expect(tokenizeQuery("什么 多久")).toEqual({
-			longTerms: [],
-			shortTerms: ["什么", "多久"],
-			allShort: true,
-		});
-		expect(tokenizeQuery("what 的")).toEqual({
-			longTerms: ["what"],
-			shortTerms: ["的"],
-			allShort: false,
-		});
+		["他早上喝什么", ["早上", "喝"]],
+		["密钥多久轮换一次", ["密钥", "轮换", "一次"]],
+		["为什么选D1", ["选", "D1"]],
+		["周会是什么时候", ["周会"]],
+		["备份放在哪里", ["备份", "放在"]],
+		["请问猫几岁了", ["猫", "岁"]],
+		["what does he drink in the morning", ["drink", "morning"]],
+		["how often are keys rotated", ["often", "keys", "rotated"]],
+		["早上 喝 什么", ["早上", "喝"]],
+		["the密钥 cf", ["密钥", "cf"]],
+		["黑咖啡", ["黑", "咖啡"]],
+		["部署 cloudflare worker", ["部署", "cloudflare", "worker"]],
+	])("segments meaningful terms in %s", (query, expected) => {
+		expect(tokenizeQuery(query as string)).toEqual(expected);
 	});
 
 	it.each(
-		`什么 多久 怎么 怎样 如何 为什么 为何 哪 哪里 哪个 哪些 吗 呢 吧 啊 的 了 着 是 有
-没有 在 和 与 或 请问 一下 他 她 它 你 您 我 我们 你们 他们 她们 它们`.split(/\s+/),
-	)("removes the whole Chinese function word %s", (word) => {
-		expect(tokenizeQuery(`咖啡 ${word}`)).toEqual({
-			longTerms: [],
-			shortTerms: ["咖啡"],
-			allShort: true,
-		});
+		"什么 什么时候 多久 怎么 怎样 如何 为什么 为何 哪里 哪儿 在哪 哪个 哪些 几岁 几 多少 是不是 有没有 请问 他 她 它 你 您 我 我们 你们 他们 她们 它们 哪 吗 呢 吧 啊 的 了 着 是 有 没有 在 和 与 或 一下".split(
+			" ",
+		),
+	)("removes curated question words: %s", (word) => {
+		const result = tokenizeQuery(`咖啡 ${word}`);
+		if (word === "几岁") expect(result).toEqual(["咖啡", "岁"]);
+		else expect(result).toEqual(["咖啡"]);
 	});
 
-	it.each(["黑咖啡", "每天早上喝黑咖啡", "在场证明", "是非问题", "有机咖啡", "了解情况", "目的地"])(
-		"preserves the literal CJK phrase %s",
-		(query) => {
-			expect(tokenizeQuery(query)).toEqual({ longTerms: [query], shortTerms: [], allShort: false });
-		},
-	);
-
-	it.each([
-		{ query: "他早上喝什么", longTerms: ["早上喝"], shortTerms: [] },
-		{ query: "密钥多久轮换一次", longTerms: ["轮换一次"], shortTerms: ["密钥"] },
-		{ query: "咖啡怎么喝", longTerms: [], shortTerms: ["咖啡", "喝"] },
-		{ query: "为什么喝黑咖啡", longTerms: ["喝黑咖啡"], shortTerms: [] },
-		{ query: "请问密钥如何轮换", longTerms: [], shortTerms: ["密钥", "轮换"] },
-		{ query: "黑咖啡吗", longTerms: ["黑咖啡"], shortTerms: [] },
-	])(
-		"filters unspaced questions without breaking remaining phrases: $query",
-		({ query, longTerms, shortTerms }) => {
-			expect(tokenizeQuery(query)).toEqual({
-				longTerms,
-				shortTerms,
-				allShort: longTerms.length === 0,
-			});
-		},
-	);
-
-	it.each(["没有权限", "一次性密钥", "再怎么说", "咖啡的香气", "the什么", "密钥多久API"])(
-		"does not rewrite negation, content compounds or mixed-script token %s",
-		(query) => {
-			expect(tokenizeQuery(query)).toEqual({ longTerms: [query], shortTerms: [], allShort: false });
-		},
-	);
-
-	it("falls back to original tokens when unspaced questions contain only stopwords", () => {
-		expect(tokenizeQuery("请问什么呢")).toEqual({
-			longTerms: ["请问什么呢"],
-			shortTerms: [],
-			allShort: false,
-		});
-		expect(tokenizeQuery("what 请问什么呢")).toEqual({
-			longTerms: ["what", "请问什么呢"],
-			shortTerms: [],
-			allShort: false,
-		});
+	it("keeps content compounds, case, and literal stopword-only queries", () => {
+		expect(tokenizeQuery("在场证明 是非问题 有机咖啡 目的地")).toEqual([
+			"在场",
+			"证明",
+			"是非",
+			"问题",
+			"有机",
+			"咖啡",
+			"目的地",
+		]);
+		expect(tokenizeQuery("WHAT Does HE drink IN THE morning")).toEqual(["drink", "morning"]);
+		expect(tokenizeQuery("what is it")).toEqual(["what", "is", "it"]);
+		expect(tokenizeQuery("请问什么呢")).toEqual(["请问", "什么", "呢"]);
+		expect(tokenizeQuery("what 的")).toEqual(["what", "的"]);
 	});
 
-	it("counts only marks removed by FTS without normalizing the original terms", () => {
-		expect(tokenizeQuery("e\u0301t")).toEqual({
-			longTerms: [],
-			shortTerms: ["e\u0301t"],
-			allShort: true,
-		});
-		expect(tokenizeQuery("e\u0301t e\u0301ta ét étab 가나다 가나 가ᄂ 𠮷野 𠮷野家")).toEqual({
-			longTerms: ["e\u0301ta", "étab", "가나다", "가ᄂ", "𠮷野家"],
-			shortTerms: ["e\u0301t", "ét", "가나", "𠮷野"],
-			allShort: false,
-		});
-	});
-
-	it("retains combining marks that SQLite does not remove", () => {
-		const terms = ["e\u0345t", "e\u0363t", "e\u1ab0t", "e\u1dc0t", "e\u20d0t", "e\ufe20t", "किता"];
-		expect(tokenizeQuery(terms.join(" "))).toEqual({
-			longTerms: terms,
-			shortTerms: [],
-			allShort: false,
-		});
-	});
-	it("counts supplementary CJK code points for short, mixed and long terms", () => {
-		expect(tokenizeQuery("𠮷野")).toEqual({ longTerms: [], shortTerms: ["𠮷野"], allShort: true });
-		expect(tokenizeQuery("𠮷 𠮷野 𠮷野家 cloudflare")).toEqual({
-			longTerms: ["𠮷野家", "cloudflare"],
-			shortTerms: ["𠮷", "𠮷野"],
-			allShort: false,
-		});
-	});
-	it("splits mixed Chinese and punctuation", () => {
-		expect(tokenizeQuery("部署 cloudflare worker")).toEqual({
-			longTerms: ["cloudflare", "worker"],
-			shortTerms: ["部署"],
-			allShort: false,
-		});
-	});
-
-	it("marks all-short queries", () => {
-		expect(tokenizeQuery("部署 cf")).toEqual({
-			longTerms: [],
-			shortTerms: ["部署", "cf"],
-			allShort: true,
-		});
-	});
-
-	it("keeps short terms when long terms exist", () => {
-		expect(tokenizeQuery("ab 三个字")).toEqual({
-			longTerms: ["三个字"],
-			shortTerms: ["ab"],
-			allShort: false,
-		});
+	it("indexes complete words plus Han unigrams without crossing punctuation", () => {
+		const tokens = indexText("他早上只喝黑咖啡。密钥").split(" ");
+		for (const token of ["早上", "喝", "咖啡", "密钥"]) expect(tokens).toContain(token);
+		expect(tokens).not.toContain("啡密");
+		expect(indexText("𠮷野").split(" ")).toEqual(expect.arrayContaining(["𠮷", "野", "𠮷野"]));
+		expect(indexText("foo foo")).toBe("foo foo");
+		expect(segmentText("ＡＰＩ_Ｄ１")).toEqual(["ＡＰＩ_Ｄ１"]);
+		expect(tokenizeQuery("咖啡, 咖啡!")).toEqual(["咖啡"]);
+		expect(indexText("🌟")).toBe("");
 	});
 });
 
-describe("buildFtsMatchQuery", () => {
-	it("joins long terms with OR and quotes", () => {
-		expect(buildFtsMatchQuery(["cloudflare", "三个字"])).toBe('"cloudflare" OR "三个字"');
-	});
-
-	it("returns null when empty", () => {
+describe("FTS query construction", () => {
+	it("quotes independent tokens and prefers AND with explicit OR fallback", () => {
+		expect(buildFtsMatchQuery(["cloudflare", "部署"])).toBe('"cloudflare" AND "部署"');
+		expect(buildFtsMatchQuery(["cloudflare", "部署"], "OR")).toBe('"cloudflare" OR "部署"');
+		expect(escapeFtsToken('a"b')).toBe('"a""b"');
 		expect(buildFtsMatchQuery([])).toBeNull();
 	});
+	it.each(["e\u0301t", "ét", "部署", "𠮷野", "cf"])(
+		"does not send short term %s to trigram",
+		(term) => {
+			expect(supportsTrigram(term)).toBe(false);
+		},
+	);
+	it.each(["e\u0301ta", "étab", "𠮷野家", "e\u0345t", "cloudflare"])(
+		"supports trigram term %s",
+		(term) => {
+			expect(supportsTrigram(term)).toBe(true);
+		},
+	);
 });

@@ -3,7 +3,7 @@ import { setup } from "./__tests__/app";
 
 describe("MCP search completeness", () => {
 	it.each([
-		{ query: "团子", partial: true, partial_reason: "short_term_scan_limit" },
+		{ query: "团子", partial: false, partial_reason: null },
 		{ query: "octopus", partial: false, partial_reason: null },
 	])("explains completeness for $query", async ({ query, partial, partial_reason }) => {
 		const { call, flush } = await setup();
@@ -15,7 +15,7 @@ describe("MCP search completeness", () => {
 		await flush();
 	});
 
-	it("publishes the nullable reason enum in the search output schema", async () => {
+	it("publishes the retired reason as null in the search output schema", async () => {
 		const { rpc, flush } = await setup();
 		const response = await rpc("tools/list");
 		const body = (await response.json()) as {
@@ -25,7 +25,7 @@ describe("MCP search completeness", () => {
 			body.result.tools.find((tool) => tool.name === "search")?.outputSchema,
 		);
 		expect(schema).toContain('"partial_reason"');
-		expect(schema).toContain('"short_term_scan_limit"');
+		expect(schema).not.toContain('"short_term_scan_limit"');
 		await flush();
 	});
 });

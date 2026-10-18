@@ -56,7 +56,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 `Vector`、`Filters`、`Fusion` 直接复用 `apps/web/src/lib/schema/{memory,filters,search}.ts`，不另设 MCP 方言。`space` 最长 64，`title` 1–500，tags 最多 100 个且各 1–64，importance 在 0–1；type 为 fact / preference / decision / procedure / event / log / note；event_time 是 UTC ISO 日期。更新允许清空 event_time / vector。向量维数由原有 profile 校验，最多 1536。
 
-`update_memory` 与 REST `POST /api/v1/memories:batchUpdate` 的每个 item 复用同一严格 schema：`id` 是 1–64 字符，`expected_version` 是正整数，位于所选形式的字段层；可更新字段为 `space,title,body,type,tags,importance,event_time,vector`。不得同时提供 `patch` 和任何 flat 更新字段或外层 `expected_version`，即使字段不重名也拒绝；外层及 patch 内的未知字段都拒绝。只传版本号不构成有效更新。两种形式在验证后进入相同服务路径，版本不匹配均返回 `version_conflict`，不合并、覆盖或猜测字段优先级。
+`update_memory` 与 REST `POST /api/v1/memories:batchUpdate` 的每个 item 复用同一严格 schema：`id` 是 1–64 字符，`expected_version` 是非负整数（0 在工具执行时返回 version_conflict，不创建版本 0），位于所选形式的字段层；可更新字段为 `space,title,body,type,tags,importance,event_time,vector`。不得同时提供 `patch` 和任何 flat 更新字段或外层 `expected_version`，即使字段不重名也拒绝；外层及 patch 内的未知字段都拒绝。只传版本号不构成有效更新。两种形式在验证后进入相同服务路径，版本不匹配均返回 `version_conflict`，不合并、覆盖或猜测字段优先级。
 
 提供字段但规范化后与当前资源完全相同是有效的 no-op：`update_memory` 返回当前 `Memory`，对应 REST PATCH 返回 200，batchUpdate 对应 item 成功。标签按规范化后的顺序比较，仅换顺序仍是实际更新。no-op 不增加 version，不修改更新时间，也不写版本快照、change event 或派生索引任务；`expected_version` 和权限仍先验证，旧版本即使提交相同值也报 `version_conflict`（REST 409，MCP 为 HTTP 200 内的工具错误）。这不是“只传版本号”的空 patch，也不是幂等键或并发校验旁路。
 
@@ -76,7 +76,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 | 工具 | Result 对象 schema |
 |---|---|
-| `search` | `{items: SearchMemory[], channels: {fts: {candidates: integer, partial: boolean, partial_reason: "short_term_scan_limit"\|null}, vector: {candidates: integer, truncated: boolean, profile: string\|null}}}` |
+| `search` | `{items: SearchMemory[], channels: {fts: {candidates: integer, partial: boolean, partial_reason: null}, vector: {candidates: integer, truncated: boolean, profile: string\|null}}}` |
 | `get_memory` / `create_memory` / `update_memory` | `Memory` |
 | `batch_get` | `{items: MemorySummary[], missing: string[]}` |
 | `delete_memory` | `{trashed_at: string}`（UTC ISO） |
@@ -86,7 +86,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 - `Memory`：id、space、title、body、type、tags（string[]）、importance（number，0–1）、event_time（string|null）、version（integer）、content_hash、source_key_id、updated_by_key_id、created_at、updated_at。可选扩展为 versions_count、attachments、vector_status、deleted_at、deleted_by，按 v1 include 和序列化器决定。
 - `MemorySummary` 是 v1 搜索/batchGet 的既有投影：id、space、title、body、type、tags、importance（number，0–1）、event_time、created_at、updated_at，不包含 CRUD 的版本与来源字段。`SearchMemory` 是 MemorySummary 加 scores 对象、可选 snippet；channels 和 scores 沿用 [03](03-search.md)。
-- `channels.fts.partial_reason` 与 REST 相同且总是返回：全短词查询（如「团子」）进入最新 500 行有界扫描时为 `"short_term_scan_limit"`，同时 `partial=true`；其他路径为 `null`。这是扫描策略的保守提示，不意味着本次已达到上限或必然漏项；不会放宽可见性，也不代表最终 top-K 返回了所有匹配。中文停用词和无空格问句边界处理同 [03](03-search.md)，不另设 MCP 查询方言。
+- `channels.fts.partial_reason` 与 REST 相同且总是返回 null，`partial=false`。短词走预分词 FTS，不再进入最新 500 行扫描；完整规则见 [03](03-search.md)，不另设 MCP 查询方言。
 - `Change`：seq、entity、entity_id、op、at；非删除事件另有 space_id、version、actor。删除事件不返回这些扩展。
 - `Tag`：id、name、display_name、use_count（正整数，仅统计可见 space 的未删除 memory），与 v1 标签列表的投影一致；列表不返回时间戳或 merged_into。
 - `Space`：id、slug、name、description、owner_key_id（string|null）、memory_count、created_at、updated_at。

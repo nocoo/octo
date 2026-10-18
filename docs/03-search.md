@@ -2,33 +2,35 @@
 
 > 返回 [文档目录](README.md)
 
-两个通道：**全文**（D1 FTS5 trigram）和**向量**（Vectorize，调用方自带向量），在 Worker 里做混合融合，每个结果都返回各通道的分数。2026-10-17 已对照 Cloudflare 文档核实可行性（链接见 §7）。
+两个通道：**全文**（D1 预分词 FTS5，保留 trigram 子串补充）和**向量**（Vectorize，调用方自带向量）。FTS 的相关性分数仍是实际 BM25；跨通道继续使用 RRF 或加权融合。
 
-## 1. 全文：D1 FTS5 + trigram
+## 1. 全文：共享分词与独立 token
 
-```sql
-CREATE VIRTUAL TABLE memories_fts USING fts5(
-  title, body, tags,
-  content='', contentless_delete=1,
-  tokenize='trigram remove_diacritics 1'
-);
--- rowid 映射：memories_fts_map(memory_id TEXT PRIMARY KEY, fts_rowid INTEGER UNIQUE)
-```
+迁移 `0007_word_search.sql` 新增 `memories_words_fts(title, body, tags)`，使用 `unicode61 remove_diacritics 1`，与既有 trigram 表共用 `memories_fts_map` rowid。新表保存分词后的文本，允许标签改名/合并在同一 D1 事务内仅重写 tags，不需要读出正文再做有竞态的异步重建。原始 title/body、版本和 content hash 不变。
 
-- **为什么用 trigram：** `unicode61` / `porter` 按空格分词，中文整句会变成一个 token。trigram 用重叠的 3 字符窗口，中英文都能做子串匹配；Cloudflare D1 最佳实践文档也推荐用 FTS5 trigram 做任意子串搜索。
-- **查询停用词：** 按空白和标点切词后，查询侧移除固定英文虚词表中的完整词（不区分大小写，如 `what`、`does`、`he`、`in`、`the`、`how`、`are`），以及固定中文虚词表中的完整词（如「什么、多久、怎么、怎样、如何、为什么、为何、哪、哪里、哪个、哪些、吗、呢、吧、啊、的、了、着、是、有、没有、在、和、与、或、请问、一下」和人称代词）。完整表在 `tokenizer.ts`；不改写存储正文或索引，不做词干化。`what does he drink in the morning` 仍以 `drink OR morning` 召回，`often` 等内容词保留；「早上 喝 什么」只要求「早上、喝」，「密钥 多久 轮换」只要求「密钥、轮换」。若所有词都被移除（包括中英混合停用词和无空格问句），则恢复原始查询词，继续 MATCH / 有界短词扫描，而非返回所有条目或恒为空。规则同时用于 fts 和 hybrid 的 FTS 通道，默认 RRF 权重不变。
-- **无空格中文问句：** 只对纯汉字词使用原生 `Intl.Segmenter("zh", {granularity: "word"})` 判断词边界，删除完整的多字疑问词（「什么、多久、怎么、怎样、如何、为什么、为何、哪里、哪个、哪些、请问」）和位于词边界的句尾「吗、呢、吧、啊」。只有识别出这些词时，才允许去掉词首独立人称代词。其余单字虚词不在连续汉字内部删除；不拆「在场、是非、有机、了解、目的地」，也保留连续文本中的「没有」。删除位置分隔词，不跨缺口拼接；相邻未删除的分词片段仍保持原文连续。「他早上喝什么」得到「早上喝」；「密钥多久轮换一次」得到「密钥」和「轮换一次」。无安全删除位置时保留完整原词，因此「黑咖啡」「每天早上喝黑咖啡」仍是 trigram 字面子串，而不是拆成单字扫描。中英混写词（如 `the什么`、`密钥多久API`）不改写。
-- **分词依据（2026-10-18 本地实测）：** L2 的 Miniflare `5.20260930.0-alpha` / workerd `1.20260930.2` 和 Wrangler 内嵌 Miniflare `5.20261012.1-beta` / workerd `1.20261012.1`，在项目 compatibility date `2026-04-01` 下均支持 `Intl.Segmenter`，解析出的 locale 为 `zh`，不是仅在 Node/Bun 中验证。两者会把「黑咖啡」切成「黑／咖啡」，把「密钥」切成「密／钥」，所以不能直接拿全量分词结果替换检索词；这里只借用边界，没有新增分词依赖或兼容回退。
-- **自然语言已知限制：** 这不是语义理解或通用中文分词搜索。完整词边界能保护「再怎么说」里的「怎么说」，但也意味着部分问法不会被识别；未列出的疑问词、繁体变体、汉字和拉丁字母连写不自动处理。「多久以后」会被简化为「以后」，有歧义的字面疑问词不能保证不被改写。单独空格分开的「没有」属于停用词，但连续文本「没有权限」保留否定。时间、频率和内容词（「每天、一次、不、无」等）不删除，不做同义词或语序转换。长词仍 OR 召回，短词仍全部必含（AND），不会因为无空格问句改为全局 AND；两个长残余片段可能只命中其中一个。自然问题需更强语义匹配时使用向量通道。
-- **已知限制：** 少于 3 个字符的词没法单独靠 trigram 命中，而中文常见的二字词（如「部署」）正好在这个范围里。处理方式：
-  1. 查询经过上述切词和停用词处理，≥3 字符的走 `MATCH`；
-  2. <3 字符的词在 FTS 候选集上加 `instr` 过滤（title 或 body 包含）；如果整个查询都是短词，就在调用方可见且满足过滤条件的 memory 中按 `updated_at DESC, id DESC` 取最新 500 行，再做 `LIKE` 匹配，标记 `partial=true`、`partial_reason="short_term_scan_limit"`；
-  3. 实现前先做 spike，在本地 D1 上确认 trigram 分词器可用并测一下 bm25 表现（见 08 M0）。
+### 分词规则
 
-**Spike 结论（M0，L2 隔离本地 D1，复用 `migrations/0001_core.sql`）：** wrangler `--local` 的 FTS5 `tokenize='trigram remove_diacritics 1'` 与 `contentless_delete=1` 可用。英文子串（如 `cdef`）和 ≥3 字中文（如「三个字」）都能 `MATCH`；2 字中文（如「部署」）单独 `MATCH` 为空，必须走 `instr` / 有上限 `LIKE`。contentless 表不回填 title/body 列，读结果要靠 `memories_fts_map` 的 `rowid`。`DELETE WHERE rowid=?` 在 contentless_delete 下有效。`bm25(memories_fts, 5.0, 1.0, 2.0)` 返回数值并可排序（越小越相关）。
-- **排序：** `bm25(memories_fts, 5.0, 1.0, 2.0)`（title 权重高）。返回原始 bm25 和归一化分数。
-- **同步：** 在写路径的 batch 中显式 delete + insert（contentless-delete 模式），不用触发器，便于测试。
-- **备份注意：** D1 导出不支持包含虚拟表的库，所以备份依赖 D1 Time Travel；需要导出时先 drop FTS 再重建（脚本化，写进运行手册）。
+- 写入与查询均用原生 `Intl.Segmenter("zh", {granularity: "word"})`；不做会放大正文的兼容归一化，直接拆分汉字和非汉字连续段。因此「为什么选D1」得到「选 / D1」，不再保留混写整块。
+- 相邻、连续且均非停用词的两个单字汉字 token 合为双字词，例如 ICU 的「密 / 钥」和「周 / 会」。不跨空格、标点或被移除的疑问词连接，避免把「周末开会」当作「周会」。
+- 写入在词 token 外补充去重的汉字单字，不跨标点。这样查询「喝」能匹配正文的「只喝」，而非要求「早上喝」在正文中连续出现。补充 token 去重，原词频保留。
+- 查询移除固定中英文虚词与疑问词，包括「什么时候、在哪、哪里、哪儿、几、多少、是不是、有没有、请问」等；「几岁」按「几 / 岁」处理，保留内容词「岁」。完整表在 tokenizer.ts。若全被移除，恢复原始分词；不返回任意记录。完整词边界保留「有机、在场、是非、目的地」等内容词。未实现词干化、同义词、语义推理或否定识别。
+- unicode61 的大小写及变音符归一化同时适用于短词和长词，例如 é 与 e 的匹配不再因是否走短词扫描而不同。原文读取不变。
+
+### 召回与排序
+
+1. 在满足权限及所有过滤条件的词索引上用全部 token 的 **AND** 查询，按 `bm25(..., 5.0, 1.0, 2.0)` 排序、id 确定性破同分，最多返回 candidateK。
+2. 若无结果且全部 token 均能使用 trigram（去除其支持的变音符后至少 3 个码点），尝试 trigram AND，以保留英文子串及词形差异，例如 drink / drinks。
+3. 若仍为空且包含双汉字词，用单字 token 的 AND 从词索引取候选，并在 SQL 的 LIMIT **之前**校验该双字词连续出现在原始 title、body 或同一个规范标签名中。其他词仍要求词级匹配。这能召回「周会议程」中的「周会」和「咖啡豆」中的「咖啡」，不接受「周末开会」、跨字段或跨标签拼接。验证只处理索引匹配项，不截断到最新记录。
+4. 所有严格查询均为空才用 **OR**，仍依次尝试词索引、符合长度要求的 trigram、带连续性校验的单字索引。OR 是避免自然问句中一个额外内容词导致零召回的显式放宽，不会挤掉已有 AND 结果。
+5. 不直接相加不同 tokenizer 的 BM25。一次查询选择第一个有结果的检索层，保留该层的真实 BM25，再与向量通道融合。所有层都在 SQL 内重复应用 space、trash、owner、tag 等过滤；最终内容读取再次校验权限。
+
+已删除最新 500 行 LIKE 扫描与 LIMIT 后的短词过滤。1–2 字查询直接走全量词索引，不按更新时间裁掉旧记录；双字补充路径的 instr 校验位于 LIMIT 前。candidateK 仍是相关性候选上限，不是数据扫描窗口。公开响应保留 `partial`、`partial_reason` 字段，分别为 false、null；已废弃 short_term_scan_limit 原因。上线回填完成状态由管理员回填响应的 complete 表示，不用旧扫描标志代替索引初始化状态。
+
+### 存量回填
+
+每次 cron 或 `POST /api/admin/settings/search/backfill` 处理最多 100 个 tag/memory，正文输入通常不超过 1 MiB；单条超过预算时仍处理这一条以保证前进。先填标签 token，再按 memory id 游标处理非回收站记录。游标在 D1 中持久化，每个阶段的数据与检查点同批提交；重复、重启、并发触发不会倒退。回填用版本及 updated_at 条件保护，不能覆盖并发新写入。新建、更新、移动、回滚、恢复与词索引同批；trash/purge 同批删除词索引；无变化更新不会为补索引产生写入。
+
+运行步骤和 50k 本地基准见 [Round 3 验证](round3-validation.md)。迁移只加表，不在迁移 SQL 中全表同步分词，也不在请求热路径扫描历史记录。上线期间旧记录可能尚未进入词索引；先完成回填并确认 complete=true，再宣布历史短词召回已可用。
 
 ## 2. 向量：Vectorize（调用方自带向量）
 
@@ -129,7 +131,7 @@ POST /api/v1/search
 
 只被一个通道命中的结果，另一个通道的值为 `null`。响应还会附带 `channels: {fts: {candidates, partial, partial_reason}, vector: {candidates, truncated, profile}}`。
 
-`channels.fts.partial_reason` 在 REST 和 MCP 中都是必返字段，枚举为 `"short_term_scan_limit" | null`。仅启用全短词有界扫描时返回前者（例如「团子」或「早上 喝」）；这是保守的召回完整性提示，不代表已证实超过 500 行或本次一定漏项。即使实际只有少量记录、无命中，也仍报告这个原因。普通 trigram MATCH、长短词混合以及未运行 FTS 的 vector 模式返回 `partial=false, partial_reason=null`；这个 `false` 不承诺候选 top-K 或最终返回 limit 之外没有匹配项。权限或过滤条件已判定无可见候选、直接返回而未扫描时同样为 `false/null`，不会为解释原因额外查询不可见数据。
+`channels.fts.partial_reason` 在 REST 和 MCP 中都是必返字段，固定为 null；`partial` 固定为 false，旧的 500 行扫描路径已经删除。candidateK 与最终 limit 仍限制返回数量，false 不承诺返回所有匹配。存量索引初始化状态见管理员 backfill 响应的 complete。
 
 ## 5. 一致性和权限
 

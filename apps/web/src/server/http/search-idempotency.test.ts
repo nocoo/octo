@@ -14,7 +14,9 @@ VALUES (?,'search-reader',?,'project','r','spaces','["read-space"]',1,1)`)
 		.run(material.keyid, hash);
 	f.sqlite.exec(`INSERT INTO spaces (id,slug,name,created_at,updated_at) VALUES ('read-space','read-space','Read',1,1);
 INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
-VALUES ('read-one','read-space','First','aa','note','k','hash',1,1), ('read-two','read-space','Second','bb','note','k','hash',1,1);`);
+VALUES ('read-one','read-space','First','aa','note','k','hash',1,1), ('read-two','read-space','Second','bb','note','k','hash',1,1);
+INSERT INTO memories_fts_map VALUES ('read-one',1),('read-two',2);
+INSERT INTO memories_words_fts(rowid,title,body,tags) VALUES (1,'First','aa',''),(2,'Second','bb','');`);
 	const app = createApp();
 	const post = (path: string, body: unknown, key = "read-key") =>
 		app.request(

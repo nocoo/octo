@@ -5,7 +5,7 @@ import { migrationSqlForNode } from "../../../../../scripts/sqlite-test";
 import { batchGetMemories } from "./batch-get";
 import { runFtsChannel } from "./fts-channel";
 import { searchMemories } from "./service";
-import { FTS_SHORT_SCAN_LIMIT } from "./tokenizer";
+import { indexText } from "./tokenizer";
 
 const databases: DatabaseSync[] = [];
 afterEach(() => {
@@ -20,11 +20,13 @@ function fixture(
 	databases.push(sqlite);
 	sqlite.exec(migrationSqlForNode(readFileSync("migrations/0001_core.sql", "utf8")));
 	sqlite.exec(readFileSync("migrations/0006_tag_positions.sql", "utf8"));
+	sqlite.exec(readFileSync("migrations/0007_word_search.sql", "utf8"));
 	sqlite.exec(`INSERT INTO spaces VALUES ('s1','visible','Visible','',NULL,1,1), ('s2','hidden','Hidden','',NULL,1,1);
 		INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
 		VALUES ('m1','s1','cloudflare 部署','public','note','k','hash',1,1);
 		INSERT INTO memories_fts(rowid,title,body,tags) VALUES (1,'cloudflare 部署','public','');
-		INSERT INTO memories_fts_map VALUES ('m1',1);`);
+		INSERT INTO memories_fts_map VALUES ('m1',1);
+		INSERT INTO memories_words_fts(rowid,title,body,tags) VALUES (1,'cloudflare 部署','public','');`);
 	const db = {
 		prepare(sql: string) {
 			const execute = (binds: SQLInputValue[]) => {
@@ -53,17 +55,24 @@ function addMemory(sqlite: DatabaseSync, id: string, body: string, updated: numb
 		.run(id, body, updated);
 	sqlite.prepare("INSERT INTO memories_fts(title,body,tags) VALUES ('cloudflare',?,'')").run(body);
 	sqlite.prepare("INSERT INTO memories_fts_map VALUES (?,last_insert_rowid())").run(id);
+	sqlite
+		.prepare(
+			"INSERT INTO memories_words_fts(rowid,title,body,tags) SELECT fts_rowid, 'cloudflare', ?, '' FROM memories_fts_map WHERE memory_id = ?",
+		)
+		.run(indexText(body), id);
 }
 
 const authz = { keyId: "k", visibleSpaceIds: ["s1"] };
 
 describe("bounded search SQL", () => {
-	it("caps rows before LIKE even when the only match lies beyond the cap", async () => {
+	it("finds old short-term matches beyond the retired 500-row scan", async () => {
 		const { db, sqlite } = fixture();
 		sqlite.exec("UPDATE memories SET body='部署', updated_at=0");
-		for (let i = 0; i < FTS_SHORT_SCAN_LIMIT; i++) addMemory(sqlite, `n${i}`, "unrelated", i + 1);
+		for (let index = 0; index < 510; index++)
+			addMemory(sqlite, `n${index}`, "unrelated", index + 1);
 		const result = await runFtsChannel(db, "部署", ["s1"], undefined, 100);
-		expect(result).toEqual({ hits: [], partial: true });
+		expect(result.partial).toBe(false);
+		expect(result.hits.map((hit) => hit.id)).toEqual(["m1"]);
 	});
 
 	it.each([40, 41, 100])(

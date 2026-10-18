@@ -326,7 +326,7 @@ describe("stateless MCP Streamable HTTP", () => {
 			await callTool(key.token, "search", { query: "团子", mode: "fts" }),
 		);
 		expect(shortSearch.structuredContent).toMatchObject({
-			channels: { fts: { partial: true, partial_reason: "short_term_scan_limit" } },
+			channels: { fts: { partial: false, partial_reason: null } },
 		});
 
 		const gotten = await toolSuccess(await callTool(key.token, "get_memory", { id: existing.id }));

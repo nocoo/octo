@@ -3,6 +3,6 @@ import { tokenizeQuery } from "./tokenizer";
 
 describe("tokenizeQuery edge cases", () => {
 	it("handles empty input", () => {
-		expect(tokenizeQuery("   ")).toEqual({ longTerms: [], shortTerms: [], allShort: false });
+		expect(tokenizeQuery("   ")).toEqual([]);
 	});
 });

@@ -101,6 +101,8 @@ export class FakeD1 {
 	}
 
 	exec(sql: string, binds: unknown[]): unknown[] {
+		if (sql.includes("INSERT INTO search_tag_tokens") || sql.includes("UPDATE memories_words_fts"))
+			return [];
 		if (sql.includes("INSERT OR IGNORE INTO tags")) {
 			const [id, name, display, created, updated] = binds as [
 				string,

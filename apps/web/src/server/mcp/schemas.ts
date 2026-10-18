@@ -45,7 +45,7 @@ export const searchOutput = z.object({
 		fts: z.object({
 			candidates: z.number().int(),
 			partial: z.boolean(),
-			partial_reason: z.enum(["short_term_scan_limit"]).nullable(),
+			partial_reason: z.null(),
 		}),
 		vector: z.object({
 			candidates: z.number().int(),

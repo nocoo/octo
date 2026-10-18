@@ -1,26 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { GatewayEmbedder } from "../ports/embedder/gateway";
 import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
-import { runFtsChannel } from "./fts-channel";
 import { encodeFloat32Vector, l2Normalize } from "./math";
 import { highlightSnippet } from "./snippet";
-import { FTS_SHORT_SCAN_LIMIT, tokenizeQuery } from "./tokenizer";
+import { tokenizeQuery } from "./tokenizer";
 
 describe("branch harvest", () => {
 	it("covers snippet suffix and tokenizer short parts", () => {
 		expect(highlightSnippet("abcdef", ["cde"])).not.toContain("…");
-		expect(tokenizeQuery("a").shortTerms).toEqual(["a"]);
-	});
-
-	it("marks like scans partial at the limit", async () => {
-		const rows = Array.from({ length: FTS_SHORT_SCAN_LIMIT + 1 }, (_, i) => ({ id: `m${i}` }));
-		const db = {
-			prepare: () => ({
-				bind: () => ({ all: async () => ({ results: rows }) }),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "ab", ["s1"], undefined, FTS_SHORT_SCAN_LIMIT);
-		expect(result.partial).toBe(true);
+		expect(tokenizeQuery("a")).toEqual(["a"]);
 	});
 
 	it("scores multiple brute-force vectors", async () => {

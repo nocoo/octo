@@ -2,6 +2,7 @@ import type { MemoryFilters } from "../../lib/schema/filters";
 import type { VisibleSpaces } from "../auth/authorize";
 import { isUniqueConstraint } from "../lib/d1";
 import { ApiError } from "../lib/errors";
+import { tagTokenStatement, wordIndexStatements } from "../search/word-index";
 import { encodeCursor, type MemoryCursor } from "./memories-cursor";
 import type { VectorWrite } from "./memories-vector";
 
@@ -278,7 +279,9 @@ export class MemoryRepo {
 			...this.rowStmts(input, nextVersion, hash),
 			this.versionStmt(input, nextVersion),
 			...this.tagStmts(input, nextVersion),
+			...input.tags.map((tag) => tagTokenStatement(this.db, tag.id, tag.name)),
 			...this.ftsStmts(input.id, nextVersion, input.now),
+			...wordIndexStatements(this.db, { ...input, version: nextVersion, updated_at: input.now }),
 			this.changeStmt(input, nextVersion),
 			...this.vectorStmts(input, nextVersion, hash),
 		];
@@ -358,6 +361,11 @@ export class MemoryRepo {
 			this.db
 				.prepare(
 					"DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?) AND changes() > 0",
+				)
+				.bind(id),
+			this.db
+				.prepare(
+					"DELETE FROM memories_words_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?)",
 				)
 				.bind(id),
 		];
