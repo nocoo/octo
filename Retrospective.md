@@ -1,5 +1,9 @@
 # Retrospective
 
+### 2026-10-18 — Check binding assertions beyond adapter tests
+
+The Vectorize metadata fix passed the focused adapter suite, but the first commit was blocked by a route-level production-binding assertion that still expected the invalid boolean. The hook stayed enabled and no failing commit was created. Update binding expectations at both the adapter and its HTTP callers before considering focused tests sufficient; port-level boolean inputs remain unchanged.
+
 ## 2026-10-18 — Replace the L2 proxy, not the API assertions
 
 M5 accepted a local Wrangler ProxyWorker exception after early responses to finite oversized uploads produced a non-JSON 500 or broke the next request. Removing those cases made the local suite green but left the 50 MiB boundary and multipart envelope contract unproved over HTTP. M7 encountered the same proxy failure. A standalone comparison already showed direct Miniflare/workerd handling the same early responses correctly.

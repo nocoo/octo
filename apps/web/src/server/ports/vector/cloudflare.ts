@@ -62,7 +62,10 @@ export class CloudflareVectorStore implements VectorStore {
 		const filters = input.filter ? partitionFilter(input.filter) : [undefined];
 		const hits = new Map<string, VectorQueryHit>();
 		for (const filter of filters) {
-			const options: VectorizeQueryOptions = { topK, returnMetadata: input.returnMetadata };
+			const options: VectorizeQueryOptions = {
+				topK,
+				returnMetadata: input.returnMetadata ? "all" : "none",
+			};
 			if (filter) options.filter = filter;
 			const result = await this.index.query(input.vector, options);
 			for (const match of d1Results({ results: result.matches })) {

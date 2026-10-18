@@ -258,7 +258,7 @@ describe("v1 search routes", () => {
 		expect(response.status).toBe(200);
 		expect(query).toHaveBeenCalledExactlyOnceWith([0.6, 0.8], {
 			topK: 100,
-			returnMetadata: false,
+			returnMetadata: "none",
 			filter: {
 				space: { $in: ["slug-s1"] },
 				type: { $in: ["note"] },

@@ -124,7 +124,7 @@ describe("Vectorize filter byte budget", () => {
 			const query = vi.fn(async (vector: number[], options: VectorizeQueryOptions) => {
 				expect(vector).toEqual([0.6, 0.8]);
 				expect(options.topK).toBe(cap);
-				expect(options.returnMetadata).toBe(returnMetadata);
+				expect(options.returnMetadata).toBe(returnMetadata ? "all" : "none");
 				const emitted = options.filter as VectorizeVectorMetadataFilter;
 				expect(new TextEncoder().encode(JSON.stringify(emitted)).length).toBeLessThan(2048);
 				expect(Object.keys(emitted).sort()).toEqual(Object.keys(filter).sort());
