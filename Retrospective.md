@@ -636,3 +636,7 @@ A Herdr resize issued with `--current` unexpectedly targeted the focused pane in
 ### 2026-10-18 — Preserve exact optional types in race fixtures
 
 The vector requeue race passed its runtime regression after the fix, but the commit hook rejected assigning `undefined` to an optional string binding under `exactOptionalPropertyTypes`. The fixture now omits the binding for the default mode rather than assigning `undefined`. Runtime test success does not replace strict fixture typechecking; the hook remained enabled and blocked the invalid snapshot.
+
+### 2026-10-18 — Capture resumed regression evidence explicitly
+
+During the resumed vector requeue verification, the isolated baseline regression failed at the intended synchronization assertion, but the wrapper then tried to assign its exit code to zsh's read-only `status` parameter. The replay was repeated with a writable variable and explicitly recorded exit code 1; neither a wrapper failure nor an interrupted historical run counts as current gate evidence. Use nonreserved shell variable names and preserve each verification command's exit code before reporting its result.
