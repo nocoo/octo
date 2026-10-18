@@ -44,7 +44,6 @@ import {
 	LayoutDashboard,
 	Menu,
 	Network,
-	PanelLeft,
 	Search,
 	Settings,
 	ShieldCheck,
@@ -143,6 +142,20 @@ export function AppShell() {
 		return (
 			<Sidebar collapsed={isCollapsed}>
 				<SidebarHeader>
+					<Button
+						variant="ghost"
+						size="icon"
+						aria-label={isCollapsed ? "展开侧栏" : "收起侧栏"}
+						onClick={() => (mobile ? setDrawer(false) : setCollapsed(!collapsed))}
+					>
+						<img
+							src="/logo-24.png"
+							srcSet="/logo-24.png 1x, /logo-48.png 2x"
+							width={24}
+							height={24}
+							alt="Octo"
+						/>
+					</Button>
 					{!isCollapsed && (
 						<>
 							<Text as="strong" variant="heading" size="xl">
@@ -151,14 +164,6 @@ export function AppShell() {
 							<Badge variant="secondary">v{APP_VERSION}</Badge>
 						</>
 					)}
-					<Button
-						variant="ghost"
-						size="icon"
-						aria-label={isCollapsed ? "展开侧栏" : "收起侧栏"}
-						onClick={() => (mobile ? setDrawer(false) : setCollapsed(!collapsed))}
-					>
-						<PanelLeft aria-hidden="true" />
-					</Button>
 				</SidebarHeader>
 				<SidebarNav aria-label="主导航">
 					{!isCollapsed && (

@@ -1,0 +1,28 @@
+{
+	"study": "https://github.com/nocoo/hexly.ai/tree/f6e54b88/artwork/logo-family/octo/2026-10-18-07",
+	"localStudy": "artwork/logo-family/octo/2026-10-18-07",
+	"finishing": "02",
+	"model": "gpt-image-2.5-sunburst",
+	"nativeSize": 2048,
+	"rawSha256": "45a116b928a55c88463f205f76cdbc0a541baedb1e87e2f8fdf2128607ebb0e7",
+	"sourcePublication": "Finishing and adoption are local; no push or deployment",
+	"masters": [
+		{
+			"path": "logo.png",
+			"sha256": "99dd018d5be648af52f777a24eaac5dc627b8d17ff704f8ac2c5f1abc0fba3ad"
+		},
+		{
+			"path": "assets/brand/icon.png",
+			"sha256": "c2df57865a5a16373a2aacc56ee228facc4f6d3b172cf66a224d0289ee9ec880"
+		},
+		{
+			"path": "assets/brand/icon-rounded.png",
+			"sha256": "7053765748bfcda10390f3407eadfa5766728705a03c64587c38494f718b5aa7"
+		}
+	],
+	"placement": {
+		"scale": 1,
+		"offsetAt2048": [96, 0],
+		"note": "Integer placement protects the complete fin; no opaque RGB changed."
+	}
+}

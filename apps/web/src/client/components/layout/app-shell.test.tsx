@@ -45,6 +45,12 @@ it("leaves the single page heading to PageHeader", () => {
 	expect(html).toContain("总览");
 });
 
+it("uses the adopted transparent seahorse in the application rail", () => {
+	const html = renderShell();
+	expect(html).toContain('src="/logo-24.png"');
+	expect(html).toContain('alt="Octo"');
+});
+
 it("uses the Basalt shell without duplicate custom layout wrappers", () => {
 	const html = renderShell();
 	expect(html.match(/data-basalt-island=/g)).toHaveLength(1);
