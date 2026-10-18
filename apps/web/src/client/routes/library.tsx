@@ -16,6 +16,7 @@ import {
 	toast,
 } from "@nocoo/basalt";
 import { Timeline } from "@nocoo/basalt/charts/timeline";
+import { Banner } from "@nocoo/basalt/components/banner";
 import {
 	Collapsible,
 	CollapsibleContent,
@@ -32,6 +33,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
+import { Text } from "@nocoo/basalt/components/text";
 import {
 	AlertCircle,
 	ArrowDown,
@@ -85,11 +87,19 @@ function useLibrary(kind: LibraryKind) {
 	return { model, state };
 }
 
-function LibraryStatus({ state, onRetry }: { state: LibraryState; onRetry: () => void }) {
+function LibraryStatus({
+	state,
+	onRetry,
+	hideError = false,
+}: {
+	state: LibraryState;
+	onRetry: () => void;
+	hideError?: boolean;
+}) {
 	return (
 		<>
 			{!state.ready && !state.error && <p role="status">正在加载资料库…</p>}
-			{state.error && (
+			{state.error && !hideError && (
 				<p role="alert">
 					<AlertCircle className="inline" size={16} aria-hidden="true" /> {state.error}{" "}
 					<Button size="sm" variant="outline" onClick={onRetry} disabled={state.busy}>
@@ -263,6 +273,13 @@ export function TagsPage() {
 	const [operation, setOperation] = useState<"rename" | "merge">("rename");
 	const [target, setTarget] = useState("");
 	const [confirming, setConfirming] = useState(false);
+	const [confirmError, setConfirmError] = useState<string | null>(null);
+	const opener = useRef<HTMLButtonElement | null>(null);
+	const focusFallback = useRef<HTMLInputElement | null>(null);
+	const restoreFocus = (event: Event) => {
+		event.preventDefault();
+		(opener.current?.isConnected ? opener.current : focusFallback.current)?.focus();
+	};
 	const source = state.tags.find((tag) => tag.name === params.get("tag"));
 	const graph = useMemo(
 		() => buildGraph(filterMemories(state.memories, params), "cooccurrence", 150),
@@ -293,7 +310,7 @@ export function TagsPage() {
 		{
 			id: "actions",
 			header: "操作",
-			width: "28ch",
+			width: "24ch",
 			sortable: false,
 			accessor: (tag) => (
 				<Grid columns={2} gap="sm">
@@ -303,7 +320,9 @@ export function TagsPage() {
 							size="sm"
 							variant="outline"
 							disabled={state.busy}
-							onClick={() => {
+							onClick={(event) => {
+								opener.current = event.currentTarget;
+								setConfirmError(null);
 								setParams(updateLibraryUrl(params, "tag", tag.name));
 								setOperation(action);
 								setTarget("");
@@ -334,6 +353,7 @@ export function TagsPage() {
 					<>
 						<Input
 							className="w-basalt-56 max-w-full"
+							ref={focusFallback}
 							aria-label="筛选标签"
 							placeholder="查找标签"
 							value={query}
@@ -346,7 +366,7 @@ export function TagsPage() {
 					</>
 				}
 			/>
-			<LibraryStatus state={state} onRetry={() => void model.load()} />
+			<LibraryStatus state={state} onRetry={() => void model.load()} hideError={confirming} />
 			{state.ready && (
 				<>
 					<LayerCard padding="none">
@@ -415,7 +435,11 @@ export function TagsPage() {
 			>
 				<DialogContent
 					onCloseAutoFocus={(event) => {
-						if (confirming) event.preventDefault();
+						if (confirming) {
+							event.preventDefault();
+							return;
+						}
+						restoreFocus(event);
 					}}
 				>
 					<DialogHeader>
@@ -487,13 +511,21 @@ export function TagsPage() {
 					<>
 						{source?.display_name} → {target}。当前用于 {source?.use_count ?? 0} 条未删除记忆；
 						此操作也会影响回收站中的标签。
-						{state.error && <span role="alert">{state.error}</span>}
+						{confirmError && (
+							<Text as="span" role="alert" className="mt-basalt-space-sm block text-basalt-danger">
+								操作失败：{confirmError}
+							</Text>
+						)}
 					</>
 				}
 				loading={state.busy}
+				onCloseAutoFocus={restoreFocus}
 				confirmLabel={operation === "rename" ? "重命名标签" : "合并标签"}
 				onConfirm={async () => {
-					if (source && (await model.changeTag(operation, source.name, target))) close();
+					if (!source) return;
+					setConfirmError(null);
+					if (await model.changeTag(operation, source.name, target)) close();
+					else setConfirmError(model.state.error ?? "请求失败，请稍后重试。");
 				}}
 			/>
 		</Grid>
@@ -504,6 +536,13 @@ export function SpacesPage() {
 	const { model, state } = useLibrary("spaces");
 	const [params, setParams] = useSearchParams();
 	const [creating, setCreating] = useState(false);
+	const [createError, setCreateError] = useState<string | null>(null);
+	const opener = useRef<HTMLButtonElement | null>(null);
+	const openCreate = (button: HTMLButtonElement) => {
+		opener.current = button;
+		setCreateError(null);
+		setCreating(true);
+	};
 	const columns: DataTableColumn<LibrarySpace>[] = [
 		{
 			id: "name",
@@ -563,14 +602,14 @@ export function SpacesPage() {
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
-						<Button disabled={state.busy} onClick={() => setCreating(true)}>
+						<Button disabled={state.busy} onClick={(event) => openCreate(event.currentTarget)}>
 							<FolderPlus size={16} aria-hidden="true" />
 							创建空间
 						</Button>
 					</>
 				}
 			/>
-			<LibraryStatus state={state} onRetry={() => void model.load()} />
+			<LibraryStatus state={state} onRetry={() => void model.load()} hideError={creating} />
 			{state.ready && (
 				<LayerCard padding="none">
 					<DataTable
@@ -588,7 +627,7 @@ export function SpacesPage() {
 								title={params.get("q") ? "没有符合筛选条件的空间" : "还没有空间。"}
 								description="创建空间，整理你的记忆。"
 								action={
-									<Button onClick={() => setCreating(true)}>
+									<Button onClick={(event) => openCreate(event.currentTarget)}>
 										<FolderPlus size={16} aria-hidden="true" />
 										创建空间
 									</Button>
@@ -604,7 +643,14 @@ export function SpacesPage() {
 					if (!state.busy) setCreating(open);
 				}}
 			>
-				<DialogContent>
+				<DialogContent
+					onCloseAutoFocus={(event) => {
+						if (opener.current?.isConnected) {
+							event.preventDefault();
+							opener.current.focus();
+						}
+					}}
+				>
 					<DialogHeader>
 						<DialogTitle>创建空间</DialogTitle>
 						<DialogDescription>
@@ -615,14 +661,13 @@ export function SpacesPage() {
 						onSubmit={async (event) => {
 							event.preventDefault();
 							const form = new FormData(event.currentTarget);
-							if (
-								await model.createSpace({
-									slug: String(form.get("slug")),
-									name: String(form.get("name")),
-									description: String(form.get("description")),
-								})
-							)
-								setCreating(false);
+							const created = await model.createSpace({
+								slug: String(form.get("slug")),
+								name: String(form.get("name")),
+								description: String(form.get("description")),
+							});
+							if (created) setCreating(false);
+							else setCreateError(model.state.error ?? "请求失败，请稍后重试。");
 						}}
 					>
 						<Grid columns={1}>
@@ -642,7 +687,15 @@ export function SpacesPage() {
 							<Field label="说明" htmlFor="space-description">
 								<Input id="space-description" name="description" disabled={state.busy} />
 							</Field>
-							{state.error && <p role="alert">{state.error}</p>}
+							{createError && (
+								<Banner
+									role="alert"
+									variant="error"
+									size="sm"
+									title="创建失败"
+									description={createError}
+								/>
+							)}
 							<DialogFooter>
 								<Button variant="outline" disabled={state.busy} onClick={() => setCreating(false)}>
 									取消
@@ -663,7 +716,13 @@ export function TrashPage() {
 	const { model, state } = useLibrary("trash");
 	const [params, setParams] = useSearchParams();
 	const [title, setTitle] = useState("");
+	const [purgeError, setPurgeError] = useState<string | null>(null);
 	const region = useRef<HTMLDivElement>(null);
+	const opener = useRef<HTMLButtonElement | null>(null);
+	const restoreFocus = (event: Event) => {
+		event.preventDefault();
+		(opener.current?.isConnected ? opener.current : region.current)?.focus();
+	};
 	const selected = selectedIds(params);
 	const visible = filterMemories(state.memories, params);
 	const columns: DataTableColumn<LibraryMemory>[] = [
@@ -688,8 +747,10 @@ export function TrashPage() {
 					variant="destructive"
 					disabled={state.busy}
 					aria-label={`永久删除 ${item.title}`}
-					onClick={() => {
+					onClick={(event) => {
+						opener.current = event.currentTarget;
 						setTitle("");
+						setPurgeError(null);
 						model.beginPurge(item.id);
 					}}
 				>
@@ -744,6 +805,7 @@ export function TrashPage() {
 			<LibraryStatus
 				state={state}
 				onRetry={() => void (state.nextCursor && state.ready ? model.loadMore() : model.load())}
+				hideError={state.purge?.stage === "confirm"}
 			/>
 			{state.failures.map((failure) => (
 				<p key={failure.id} role="alert">
@@ -825,7 +887,7 @@ export function TrashPage() {
 				<DialogContent
 					onCloseAutoFocus={(event) => {
 						event.preventDefault();
-						if (!model.state.purge) region.current?.focus();
+						if (!model.state.purge) restoreFocus(event);
 					}}
 				>
 					<DialogHeader>
@@ -869,15 +931,16 @@ export function TrashPage() {
 				onOpenChange={(open) => {
 					if (!open) model.cancelPurge();
 				}}
-				onCloseAutoFocus={(event) => {
-					event.preventDefault();
-					region.current?.focus();
-				}}
+				onCloseAutoFocus={restoreFocus}
 				title="确认永久删除？"
 				description={
 					<>
 						最后确认：删除后将无法恢复「{state.purge?.title}」。
-						{state.error && <span role="alert">{state.error}</span>}
+						{purgeError && (
+							<Text as="span" role="alert" className="mt-basalt-space-sm block text-basalt-danger">
+								永久删除失败：{purgeError}
+							</Text>
+						)}
 					</>
 				}
 				confirmLabel="永久删除"
@@ -885,6 +948,7 @@ export function TrashPage() {
 				loading={state.busy}
 				onConfirm={async () => {
 					const id = state.purge?.id;
+					setPurgeError(null);
 					if (await model.purge())
 						setParams(
 							setSelection(
@@ -892,6 +956,7 @@ export function TrashPage() {
 								selected.filter((item) => item !== id),
 							),
 						);
+					else setPurgeError(model.state.error ?? "请求失败，请稍后重试。");
 				}}
 			/>
 		</Grid>
@@ -1133,12 +1198,17 @@ export function TimelinePage() {
 							<Grid columns={1}>
 								<Timeline
 									ariaLabel={`${group.label} 的记忆`}
-									events={group.items.map((item) => ({
-										id: item.id,
-										time: new Date(item.timestamp).toISOString(),
-										title: item.title,
-										subtitle: item.space,
-									}))}
+									items={group.items.map((item) => {
+										const timestamp = new Date(item.timestamp).toISOString();
+										return {
+											id: item.id,
+											title: item.title,
+											at:
+												options.zoom === "month"
+													? `${timestamp.slice(5, 10)} ${timestamp.slice(11, 16)} UTC`
+													: `${timestamp.slice(11, 16)} UTC`,
+										};
+									})}
 								/>
 								<DataTable
 									aria-label={`${group.label} 的时间线数据`}

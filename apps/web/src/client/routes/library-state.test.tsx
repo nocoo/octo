@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 it.each([
-	[TagsPage, "/tags", "标签", ["24ch", "10ch", "28ch"]],
+	[TagsPage, "/tags", "标签", ["24ch", "10ch", "24ch"]],
 	[SpacesPage, "/spaces", "空间", ["24ch", "36ch", "32ch", "24ch", "10ch"]],
 	[TrashPage, "/trash", "回收站中的记忆", ["24ch", "24ch", "24ch", "16ch"]],
 	[GraphPage, "/graph", "图谱节点", ["24ch", "12ch", "10ch"]],
@@ -78,6 +78,11 @@ it.each([
 		for (const [index, width] of widths.entries())
 			expect(heads[index]).toContain(`style="width:${width};min-width:${width}"`);
 		if (Page !== TagsPage) expect(table).toContain("whitespace-normal break-words");
+		if (Page === TagsPage || Page === SpacesPage) {
+			expect(html).toContain("ps-basalt-table-edge");
+			expect(html).toContain("pe-basalt-table-edge");
+		}
+		if (Page === TagsPage) expect(html).toContain('class="grid gap-basalt-layout-sm"');
 	},
 );
 
@@ -161,4 +166,57 @@ describe("library unknown, failed and empty states", () => {
 			expect(html).not.toContain("0 个节点");
 		}
 	});
+	it("renders contemporary events with compact UTC timestamps in chronological order", () => {
+		snapshot.state = {
+			...new LibraryModel("timeline").state,
+			ready: true,
+			memories: [
+				{
+					id: "later",
+					title: "稍后的资料",
+					space: "work",
+					tags: [],
+					version: 1,
+					created_at: "2026-10-18T03:45:00Z",
+					event_time: "2026-10-18T03:45:00Z",
+				},
+				{
+					id: "earlier",
+					title: "较早的资料",
+					space: "work",
+					tags: [],
+					version: 1,
+					created_at: "2026-10-18T03:15:00Z",
+					event_time: "2026-10-18T03:15:00Z",
+				},
+			],
+		};
+		const html = render(TimelinePage, "/timeline");
+		const stream =
+			html.match(/<ol[^>]*aria-label="2026-10-18 的记忆"[^>]*>[\s\S]*?<\/ol>/)?.[0] ?? "";
+		expect(stream).toContain("较早的资料");
+		expect(stream).toContain("稍后的资料");
+		expect(stream).toContain("03:15 UTC");
+		expect(stream).toContain("03:45 UTC");
+		expect(stream.indexOf("较早的资料")).toBeLessThan(stream.indexOf("稍后的资料"));
+		const table =
+			html.match(/<table\b[^>]*aria-label="2026-10-18 的时间线数据"[\s\S]*?<\/table>/)?.[0] ?? "";
+		expect(table).toContain("work");
+		expect(table).toContain("稍后的资料");
+		const monthlyHtml = render(TimelinePage, "/timeline?zoom=month");
+		const monthlyStream =
+			monthlyHtml.match(/<ol[^>]*aria-label="2026-10 的记忆"[^>]*>[\s\S]*?<\/ol>/)?.[0] ?? "";
+		expect(monthlyStream).toContain("10-18 03:15 UTC");
+		expect(monthlyStream).toContain("10-18 03:45 UTC");
+	});
+});
+
+it("does not duplicate a purge confirmation error in the background live region", () => {
+	snapshot.state = {
+		...new LibraryModel("trash").state,
+		ready: true,
+		error: "模拟永久删除失败",
+		purge: { id: "m1", title: "记忆", stage: "confirm" },
+	};
+	expect(render(TrashPage, "/trash")).not.toContain("模拟永久删除失败");
 });
