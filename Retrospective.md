@@ -1,5 +1,9 @@
 # Retrospective
 
+### 2026-10-18 — Verify pane mutation targets from returned metadata
+
+During round-one worker layout cleanup, `herdr pane resize --current --direction left --amount 0.34` unexpectedly returned a mutation of the focused pane in another tab instead of the calling pane. No repository files or processes there changed. The affected tab was restored to the prescribed one-third controller layout using an explicit pane ID; its exact previous ratio was not captured. The task tab was then resized with an explicit ID and verified against returned pane and tab IDs. Use explicit pane IDs for layout mutations, snapshot the original split ratios first, and inspect the returned target immediately rather than trusting caller-selection flags or option order.
+
 ### 2026-10-18 — Keep shared fixture assertions aligned
 
 The round-one tag visibility fixture added an independent hidden-space tag to a memory already used by the merge assertion. The index-snapshot hook correctly rejected the first commit because that assertion still expected only the merged tag. The expected associations now include the unrelated tag, proving merge preserves it. When extending a shared fixture, inspect all later exact-state assertions before committing; never weaken the hook. Initial repository discovery also used an unsupported Herdr command and guessed absent paths; those read-only probes had no side effects. Discover commands and directories before addressing them.
