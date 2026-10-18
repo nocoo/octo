@@ -72,7 +72,10 @@ describe("L2 HTTP response ownership", () => {
 		const options = vi.mocked(request).mock.calls[0]?.[1];
 		expect(options?.signal).toBe(controller.signal);
 		expect(options?.body).toBeInstanceOf(Uint8Array);
-		expect(options?.headers?.["content-type"]).toMatch(/^multipart\/form-data; boundary=/);
+		const requestHeaders = options?.headers as
+			| Record<string, string | string[] | undefined>
+			| undefined;
+		expect(requestHeaders?.["content-type"]).toMatch(/^multipart\/form-data; boundary=/);
 	});
 
 	it("streams chunked request and response bytes without buffering the upload", async () => {

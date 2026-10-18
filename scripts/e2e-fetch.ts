@@ -52,7 +52,11 @@ export async function e2eFetch(url: string | URL, init?: RequestInit): Promise<R
 				? Readable.fromWeb(init.body as unknown as NodeReadableStream<Uint8Array>)
 				: init?.body;
 		const headers = Object.fromEntries(new Headers(init?.headers));
-		return await dispatch(url, method, headers, (upload ?? null) as Dispatcher.DispatchOptions["body"], init?.signal);
+		const body: Exclude<Dispatcher.DispatchOptions["body"], undefined> | null =
+			upload === undefined || upload === null
+				? null
+				: (upload as Exclude<Dispatcher.DispatchOptions["body"], undefined>);
+		return await dispatch(url, method, headers, body, init?.signal);
 	} catch (cause) {
 		const { origin, pathname } = new URL(url);
 		throw new Error(`L2 request failed: ${init?.method ?? "GET"} ${origin}${pathname}`, { cause });

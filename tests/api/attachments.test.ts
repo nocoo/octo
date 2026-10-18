@@ -2,9 +2,9 @@ import { afterAll, describe, expect, it } from "vitest";
 import { MAX_ATTACHMENT_BYTES } from "../../apps/web/src/server/attachments/content-type";
 import { MAX_MULTIPART_OVERHEAD_BYTES } from "../../apps/web/src/server/attachments/upload";
 import { signAttachmentUrl } from "../../apps/web/src/server/attachments/url-sign";
-import { waitForFixtureBackground } from "../../scripts/fixture-d1";
 import { seedAttachmentKey } from "../../scripts/attachment-fixtures";
 import { e2eFetch as fetch } from "../../scripts/e2e-fetch";
+import { waitForFixtureBackground } from "../../scripts/fixture-d1";
 import {
 	cleanupAttachmentFixtures,
 	setupAttachmentFixtures as setup,
