@@ -51,20 +51,28 @@ describe("L2 HTTP response ownership", () => {
 		expect(fetch).not.toHaveBeenCalled();
 	});
 
-	it("preserves multipart bodies and abort signals via fetch", async () => {
+	it("preserves encoded multipart bodies and abort signals", async () => {
 		const body = new FormData();
 		const file = new File(["contents"], "file.png", { type: "image/png" });
 		body.set("file", file);
 		body.append("note", "first");
 		body.append("note", "second");
 		const controller = new AbortController();
-		const response = new Response("failure", { status: 500 });
-		const fetchMock = vi.fn().mockResolvedValue(response);
-		vi.stubGlobal("fetch", fetchMock);
-		const init = { method: "POST", body, signal: controller.signal };
-		expect((await e2eFetch("http://127.0.0.1:9/upload", init)).status).toBe(500);
-		expect(fetchMock).toHaveBeenCalledExactlyOnceWith("http://127.0.0.1:9/upload", init);
-		expect(request).not.toHaveBeenCalled();
+		vi.mocked(request).mockResolvedValue(response(500));
+		expect(
+			(
+				await e2eFetch("http://127.0.0.1:9/upload", {
+					method: "POST",
+					body,
+					signal: controller.signal,
+				})
+			).status,
+		).toBe(500);
+		expect(request).toHaveBeenCalledOnce();
+		const options = vi.mocked(request).mock.calls[0]?.[1];
+		expect(options?.signal).toBe(controller.signal);
+		expect(options?.body).toBeInstanceOf(Uint8Array);
+		expect(options?.headers?.["content-type"]).toMatch(/^multipart\/form-data; boundary=/);
 	});
 
 	it("streams chunked request and response bytes without buffering the upload", async () => {

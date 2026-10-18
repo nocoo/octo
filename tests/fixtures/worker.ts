@@ -66,7 +66,12 @@ export default {
 			observe = async () => {
 				const reader = getReader();
 				try {
-					const result = await reader.read();
+					const result = await Promise.race([
+						reader.read(),
+						new Promise<never>((_, reject) =>
+							setTimeout(() => reject(new Error("upload probe observe timeout")), 5_000),
+						),
+					]);
 					counts.observerBytes = result.value?.byteLength ?? 0;
 					counts.termination = result.done ? "EOF" : "still readable";
 				} catch (error) {
