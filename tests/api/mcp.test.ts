@@ -186,7 +186,30 @@ describe("stateless MCP Streamable HTTP", () => {
 			| undefined;
 		expect(tools?.map((tool) => tool.name).sort()).toEqual([...toolNames].sort());
 		for (const tool of tools ?? []) {
-			expect(tool.inputSchema).toMatchObject({ type: "object", additionalProperties: false });
+			expect(tool.inputSchema).toMatchObject({ type: "object" });
+			if (tool.name === "update_memory") {
+				expect(tool.inputSchema).toMatchObject({
+					anyOf: [
+						{
+							additionalProperties: false,
+							required: ["expected_version", "id"],
+							properties: {
+								importance: { minimum: 0, maximum: 1 },
+								expected_version: { type: "integer", exclusiveMinimum: 0 },
+							},
+						},
+						{
+							additionalProperties: false,
+							required: ["id", "patch"],
+							properties: {
+								patch: { additionalProperties: false, required: ["expected_version"] },
+							},
+						},
+					],
+				});
+			} else {
+				expect(tool.inputSchema).toMatchObject({ additionalProperties: false });
+			}
 			expect(tool.outputSchema).toMatchObject({ type: "object" });
 		}
 
@@ -489,19 +512,25 @@ describe("stateless MCP Streamable HTTP", () => {
 		const hiddenNeedle = `mcphidden${crypto.randomUUID().replaceAll("-", "")}`;
 		const visibleTag = `mcpvisibletag${crypto.randomUUID().replaceAll("-", "")}`;
 		const hiddenTag = `mcphiddentag${crypto.randomUUID().replaceAll("-", "")}`;
+		const sharedTag = `mcpsharedtag${crypto.randomUUID().replaceAll("-", "")}`;
+		const unusedTag = `mcpunusedtag${crypto.randomUUID().replaceAll("-", "")}`;
+		await d1([
+			"--command",
+			`INSERT INTO tags (id,name,display_name,created_at,updated_at) VALUES (${sqlText(unusedTag)},${sqlText(unusedTag)},${sqlText(unusedTag)},1,1)`,
+		]);
 		const shown = await createMemory(writer.token, {
 			space: visible.slug,
 			title: `visible ${visibleNeedle}`,
 			body: visibleNeedle,
 			type: "note",
-			tags: [visibleTag],
+			tags: [visibleTag, sharedTag],
 		});
 		const concealed = await createMemory(writer.token, {
 			space: hidden.slug,
 			title: `private ${hiddenNeedle}`,
 			body: hiddenNeedle,
 			type: "note",
-			tags: [hiddenTag],
+			tags: [hiddenTag, sharedTag],
 		});
 
 		await toolError(await callTool(scoped.token, "get_memory", { id: concealed.id }), "not_found");
@@ -539,7 +568,19 @@ describe("stateless MCP Streamable HTTP", () => {
 			use_count: number;
 		}>;
 		expect(tagItems).toContainEqual(expect.objectContaining({ name: visibleTag, use_count: 1 }));
-		expect(tagItems).toContainEqual(expect.objectContaining({ name: hiddenTag, use_count: 0 }));
+		expect(tagItems).toContainEqual(expect.objectContaining({ name: sharedTag, use_count: 1 }));
+		expect(tagItems.map((item) => item.name).sort()).toEqual([visibleTag, sharedTag].sort());
+		expect(tagItems.every((item) => item.use_count > 0)).toBe(true);
+		for (const name of [hiddenTag, unusedTag])
+			expect(tagItems.map((item) => item.name)).not.toContain(name);
+		const allTags = await toolSuccess(await callTool(writer.token, "list_tags", {}));
+		const allTagItems = (allTags.structuredContent?.items ?? []) as Array<{
+			name: string;
+			use_count: number;
+		}>;
+		expect(allTagItems).toContainEqual(expect.objectContaining({ name: sharedTag, use_count: 2 }));
+		expect(allTagItems).toContainEqual(expect.objectContaining({ name: hiddenTag, use_count: 1 }));
+		expect(allTagItems.map((item) => item.name)).not.toContain(unusedTag);
 
 		const changes = await toolSuccess(await callTool(scoped.token, "list_changes", {}));
 		const changeItems = (changes.structuredContent?.items ?? []) as Array<{
