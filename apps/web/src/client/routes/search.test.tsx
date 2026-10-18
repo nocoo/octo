@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { ThemeProvider } from "@nocoo/basalt";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
@@ -23,12 +24,12 @@ function renderResult() {
 	);
 }
 
-it("gives the query flexible width and keeps advanced fusion collapsed without losing form values", () => {
+it("exposes URL fusion options without losing form values and keeps filters below the header", () => {
 	const html = renderToStaticMarkup(
 		<ThemeProvider persist={false}>
 			<MemoryRouter
 				initialEntries={[
-					"/search?q=worker&mode=vector&fusion=weighted&k=35&fts_weight=0&vector_weight=2&limit=20",
+					"/search?q=worker&mode=vector&fusion=weighted&k=35&fts_weight=0&vector_weight=2&limit=20&spaces=notes",
 				]}
 			>
 				<SearchPage />
@@ -42,13 +43,19 @@ it("gives the query flexible width and keeps advanced fusion collapsed without l
 	const heading = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
 	expect(heading).toContain("data-search-input");
 	expect(heading).toContain("展开或收起记忆筛选");
+	expect(heading).toContain('aria-label="高级融合选项"');
+	expect(heading).toContain('aria-controls="search-options"');
 	expect(heading).not.toContain("结合全文与语义检索");
 	expect(heading).toContain('form="search-options"');
 	expect(html).toMatch(/<input[^>]*data-search-input/);
-	expect(html).toMatch(/<button[^>]*aria-label="高级融合选项"[^>]*aria-expanded="false"/);
-	const advanced = html.match(/<div\b[^>]*data-search-advanced="true"[^>]*>/)?.[0] ?? "";
-	expect(advanced).toContain('data-state="closed"');
-	expect(advanced).toContain('hidden=""');
+	expect(html).toMatch(/<button[^>]*aria-label="高级融合选项"[^>]*aria-expanded="true"/);
+	expect(heading).not.toContain("应用筛选");
+	expect(html.match(/aria-label="记忆筛选"/g)).toHaveLength(1);
+	expect(html.indexOf('aria-label="记忆筛选"')).toBeGreaterThan(html.indexOf("</header>"));
+	expect(html).toMatch(/<form[^>]*id="search-options"[^>]*noValidate=""/i);
+	const advanced = html.match(/<form\b[^>]*data-search-advanced="true"[^>]*>/)?.[0] ?? "";
+	expect(advanced).toContain('id="search-options"');
+	expect(advanced).not.toContain('hidden=""');
 	for (const name of ["mode", "fusion", "k", "fts_weight", "vector_weight", "limit"])
 		expect(html).toContain(`name="${name}"`);
 	for (const [name, value] of [
@@ -58,6 +65,35 @@ it("gives the query flexible width and keeps advanced fusion collapsed without l
 		["limit", "20"],
 	])
 		expect(html).toMatch(new RegExp(`<input[^>]*name="${name}"[^>]*value="${value}"`));
+});
+
+it("keeps default advanced values mounted and lets model errors reveal and focus hidden fields", () => {
+	const html = renderResult();
+	expect(html).toMatch(/<button[^>]*aria-label="高级融合选项"[^>]*aria-expanded="false"/);
+	expect(html).toMatch(/<input[^>]*name="k"[^>]*value="60"/);
+	expect(html).not.toMatch(/<input[^>]*name="k"[^>]*disabled/);
+});
+
+it("clears stale field errors on URL transitions without resetting them on draft or disclosure changes", () => {
+	const source = readFileSync(new URL("search.tsx", import.meta.url), "utf8");
+	expect(source).toMatch(
+		/useLayoutEffect\(\(\) => \{\s*if \(previousQuery.current !== query\) \{\s*previousQuery.current = query;\s*setFieldErrors\(\{\}\);\s*\}\s*\}, \[query\]\)/,
+	);
+	expect(source).toContain("key={query}");
+	expect(source).not.toContain("key={advancedOpen}");
+	expect(source).not.toContain("key={fieldErrors}");
+	expect(source).toMatch(/setFieldErrors\(\{\}\);\s*setParams\(new URLSearchParams\(\)\)/);
+});
+
+it("wraps result summary badges at intrinsic widths", () => {
+	overrides.state = {
+		result: { items: [], channels: { fts: { candidates: 0, partial: false }, vector: {} } },
+	};
+	const html = renderResult();
+	const summary = html.match(/<div[^>]*role="status"[^>]*>/)?.[0] ?? "";
+	expect(summary).toContain("display:flex");
+	expect(summary).toContain("flex-wrap:wrap");
+	expect(summary).not.toContain("8rem");
 });
 
 it("localizes channel evidence and leaves user content unchanged", () => {
@@ -87,9 +123,7 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 		"笔记",
 		"全文候选",
 		"向量候选",
-		"综合得分",
-		"第 1 名",
-		"余弦相似度",
+		"得分详情",
 		"全文搜索结果不完整",
 		"向量候选结果已截断",
 		"配置或测试嵌入网关",
@@ -103,8 +137,9 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 			items: [{ ...result.items[0], scores: { fused: 0, fts: null, vector: null } }],
 		},
 	};
-	expect(renderResult()).toContain("全文：无匹配");
-	expect(renderResult()).toContain("向量：无匹配");
+	expect(renderResult()).toContain("得分详情");
+	expect(renderResult()).not.toContain("全文：无匹配");
+	expect(renderResult()).not.toContain("向量：无匹配");
 });
 
 it("keeps long space metadata out of the result title row", () => {
@@ -135,7 +170,7 @@ it("keeps long space metadata out of the result title row", () => {
 	expect(body).toContain(space);
 	expect(body).toContain("笔记");
 	expect(body).toContain("field-notes");
-	expect(body).toContain("repeat(auto-fit, minmax(min(100%, 8rem), max-content))");
+	expect(body).toContain("flex-wrap:wrap");
 	expect(body).toContain("overflow-wrap:anywhere");
 });
 

@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { client } from "./__tests__/memories-fixtures";
-import { SearchModel, scoreBars, searchFromUrl, snippetParts } from "./search";
+import { SearchModel, scoreBars, searchFromUrl, searchOptionErrors, snippetParts } from "./search";
 
 describe("search URL contract", () => {
+	it("returns visible field errors for invalid advanced values without changing the draft", () => {
+		const params = new URLSearchParams("q=worker&k=0&fts_weight=-1&vector_weight=NaN&limit=201");
+		const before = params.toString();
+		expect(searchOptionErrors(params)).toEqual({
+			k: "请输入 1 至 200 之间的整数。",
+			fts_weight: "请输入不小于零的数字。",
+			vector_weight: "请输入不小于零的数字。",
+			limit: "请输入 1 至 200 之间的整数。",
+		});
+		expect(params.toString()).toBe(before);
+		expect(searchOptionErrors(new URLSearchParams("fts_weight=0&vector_weight=0"))).toEqual({
+			vector_weight: "至少一个搜索通道的权重须大于零。",
+		});
+		for (const field of ["k", "fts_weight", "vector_weight", "limit"])
+			expect(searchOptionErrors(new URLSearchParams(`${field}=`))).toHaveProperty(field);
+		expect(searchOptionErrors(new URLSearchParams())).toEqual({});
+		expect(
+			searchOptionErrors(new URLSearchParams("k=35&fts_weight=0&vector_weight=2&limit=20")),
+		).toEqual({});
+	});
 	it("builds hybrid, vector and weighted requests including all filters", () => {
 		expect(searchFromUrl(new URLSearchParams("q=worker"))).toEqual({
 			query: "worker",

@@ -13,7 +13,7 @@ import {
 	SelectValue,
 } from "@nocoo/basalt/components/select";
 import { Check, Filter, FilterX } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { filterKeys, memoryTypeLabels } from "../viewmodels/memories";
 import "../components/layout/markdown.css";
 
@@ -45,52 +45,58 @@ export function Choice({
 }) {
 	const [selected, setSelected] = useState(value);
 	return (
-		<Field label={label} {...(name ? { htmlFor: name } : {})}>
-			<Select
-				{...(name ? { name } : {})}
-				value={onChange ? value : selected}
-				onValueChange={(next) => {
-					setSelected(next);
-					onChange?.(next);
-				}}
-			>
-				<SelectTrigger id={name} aria-label={label}>
+		<Select
+			{...(name ? { name } : {})}
+			value={onChange ? value : selected}
+			onValueChange={(next) => {
+				setSelected(next);
+				onChange?.(next);
+			}}
+		>
+			<Field label={label} {...(name ? { htmlFor: name } : {})}>
+				<SelectTrigger aria-label={label}>
 					<SelectValue>
 						{optionLabels[onChange ? value : selected] ?? (onChange ? value : selected)}
 					</SelectValue>
 				</SelectTrigger>
-				<SelectContent>
-					{options.map((option) => (
-						<SelectItem value={option} key={option}>
-							{optionLabels[option] ?? option}
-						</SelectItem>
-					))}
-				</SelectContent>
-			</Select>
-		</Field>
+			</Field>
+			<SelectContent>
+				{options.map((option) => (
+					<SelectItem value={option} key={option}>
+						{optionLabels[option] ?? option}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
 	);
 }
 
 export function MemoryFilters({
 	params,
 	onChange,
+	children,
 }: {
 	params: URLSearchParams;
 	onChange: (params: URLSearchParams) => void;
+	children?: (trigger: ReactNode) => ReactNode;
 }) {
 	const [open, setOpen] = useState(filterKeys.some((key) => params.has(key)));
+	const valuesHint = useId();
+	const trigger = (
+		<CollapsibleTrigger asChild>
+			<Button variant="outline" aria-label="展开或收起记忆筛选">
+				<Filter aria-hidden="true" />
+				筛选{filterKeys.some((key) => params.has(key)) ? "（已启用）" : ""}
+			</Button>
+		</CollapsibleTrigger>
+	);
 	return (
 		<Collapsible
 			open={open}
 			onOpenChange={setOpen}
 			style={{ display: "grid", gap: "var(--basalt-space-layout)" }}
 		>
-			<CollapsibleTrigger asChild>
-				<Button variant="outline" aria-label="展开或收起记忆筛选">
-					<Filter aria-hidden="true" />
-					筛选{filterKeys.some((key) => params.has(key)) ? "（已启用）" : ""}
-				</Button>
-			</CollapsibleTrigger>
+			{children ? children(trigger) : trigger}
 			<CollapsibleContent unstyled>
 				<form
 					key={params.toString()}
@@ -111,11 +117,14 @@ export function MemoryFilters({
 						onChange(next);
 					}}
 				>
+					<p id={valuesHint} className="octo-muted">
+						多个值用英文逗号分隔。
+					</p>
 					<Grid
 						columns={1}
 						style={{
 							gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
-							alignItems: "end",
+							alignItems: "start",
 						}}
 					>
 						{[
@@ -125,15 +134,11 @@ export function MemoryFilters({
 							["types", "类型"],
 							["sources", "来源密钥 ID"],
 						].map(([name, label]) => (
-							<Field
-								key={name}
-								label={label}
-								htmlFor={`filter-${name}`}
-								hint="多个值用英文逗号分隔"
-							>
+							<Field key={name} label={label} htmlFor={`filter-${name}`}>
 								<Input
 									id={`filter-${name}`}
 									name={name}
+									aria-describedby={valuesHint}
 									defaultValue={params.get(name as string) ?? ""}
 								/>
 							</Field>

@@ -9,9 +9,15 @@ import { EditorModel, toDraft } from "../viewmodels/memories-editor";
 import { EditorPage, HistoryPage, MemoriesPage, MemoryPage } from "./memories";
 import { Choice } from "./memories-filters";
 
-const overrides = vi.hoisted(() => ({ list: {} as Record<string, unknown> }));
+const overrides = vi.hoisted(() => ({
+	list: {} as Record<string, unknown>,
+	editor: {} as Record<string, unknown>,
+	history: {} as Record<string, unknown>,
+}));
 afterEach(() => {
 	overrides.list = {};
+	overrides.editor = {};
+	overrides.history = {};
 });
 
 vi.mock("../components/layout/use-model", () => ({
@@ -20,7 +26,7 @@ vi.mock("../components/layout/use-model", () => ({
 			return { ...model.state, loaded: true, items: [memory], ...overrides.list };
 		if (model instanceof MemoryModel) return { ...model.state, memory };
 		if (model instanceof EditorModel)
-			return { ...model.state, base: memory, draft: toDraft(memory) };
+			return { ...model.state, base: memory, draft: toDraft(memory), ...overrides.editor };
 		if (model instanceof HistoryModel)
 			return {
 				...model.state,
@@ -32,6 +38,7 @@ vi.mock("../components/layout/use-model", () => ({
 					fields: [{ field: "title", from: "Before", to: "After" }],
 					body: { hunks: [] },
 				},
+				...overrides.history,
 			};
 		return model.state;
 	},
@@ -47,6 +54,104 @@ function render(Page: () => React.JSX.Element, path: string) {
 }
 
 describe("memory pages use installed Basalt layouts and Chinese copy", () => {
+	it("reveals one full-width filter form below the header for active URL filters", () => {
+		const html = render(MemoriesPage, "/memories?spaces=notes&selected=m1&view=cards");
+		const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
+		expect(header).toContain("展开或收起记忆筛选");
+		expect(header).toContain('aria-expanded="true"');
+		expect(header).not.toContain('aria-label="记忆筛选"');
+		expect(header).not.toContain("应用筛选");
+		expect(html.match(/aria-label="记忆筛选"/g)).toHaveLength(1);
+		expect(html.indexOf('aria-label="记忆筛选"')).toBeGreaterThan(html.indexOf("</header>"));
+	});
+	it("keeps the reader heading full-width and groups metadata with its single compact action toolbar", () => {
+		const html = render(MemoryPage, "/memories/m1");
+		const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
+		expect(html.match(/<header\b/g)).toHaveLength(1);
+		expect(header).not.toContain("版本历史");
+		expect(header).not.toContain("编辑记忆");
+		expect(html.indexOf("octo-memory-toolbar")).toBeGreaterThan(html.indexOf("</header>"));
+		expect(html.match(/>本页目录<\/button>/g)).toHaveLength(1);
+		const source = readFileSync(new URL("memories.tsx", import.meta.url), "utf8");
+		expect(source).toContain("<SheetDescription>");
+		expect(source).toMatch(/<Button[^>]*className="octo-memory-reader-compact"/);
+	});
+	it("top-aligns metadata/filter fields and associates one shared comma-separated-values hint", () => {
+		const editor = render(EditorPage, "/memories/m1/edit");
+		const metadata = editor.match(/<div[^>]*class="[^"]*octo-memory-metadata[^>]*>/)?.[0];
+		expect(metadata).toContain("align-items:start");
+		const filters = render(MemoriesPage, "/memories?spaces=notes");
+		const form = filters.match(/<form\b[^>]*aria-label="记忆筛选"[\s\S]*?<\/form>/)?.[0] ?? "";
+		expect(form).toContain("align-items:start");
+		expect(form).not.toContain("align-items:end");
+		expect(form.match(/多个值用英文逗号分隔/g)).toHaveLength(1);
+		const hintId = form.match(/<p[^>]*id="([^"]+)"[^>]*>多个值用英文逗号分隔/)?.[1];
+		expect(hintId).toBeTruthy();
+		for (const name of ["spaces", "tags_all", "tags_any", "types", "sources"]) {
+			const input = form.match(new RegExp(`<input[^>]*name="${name}"[^>]*>`))?.[0];
+			expect(input).toContain(`aria-describedby="${hintId}"`);
+		}
+	});
+	it("connects generated visible labels directly to unnamed Choice triggers", () => {
+		const html = renderToStaticMarkup(<Choice label="类型" value="note" options={["note"]} />);
+		const labelId = html.match(/<label[^>]*for="([^"]+)"/)?.[1];
+		expect(labelId).toBeTruthy();
+		expect(html).toContain(`id="${labelId}"`);
+		expect(html).toMatch(new RegExp(`<button[^>]*id="${labelId}"`));
+	});
+	it("announces persistent errors and uses intrinsic wrapping badges on attached tables", () => {
+		overrides.list = { error: "offline" };
+		const html = render(MemoriesPage, "/memories");
+		expect(html).toMatch(/role="alert"[^>]*>[\s\S]*?offline/);
+		expect(html).toContain("flex-wrap:wrap");
+		expect(html).toContain("ps-basalt-table-edge");
+		expect(html).toContain("pe-basalt-table-edge");
+		expect(html).not.toContain('data-slot="card-well"');
+	});
+	it("gives the editor title a full track and aligns both document panel headings", () => {
+		const html = render(EditorPage, "/memories/m1/edit");
+		expect(html).toContain("octo-memory-metadata");
+		expect(html).toContain("grid-column:1 / -1");
+		expect(html.match(/data-slot="card-header"/g)).toHaveLength(2);
+	});
+	it("wraps ordinary history values without nested preformatted padding", () => {
+		const long = "unbroken".repeat(120);
+		overrides.history = {
+			diff: {
+				from: 1,
+				to: 2,
+				fields: [{ field: "title", from: long, to: "After" }],
+				body: { hunks: [] },
+			},
+		};
+		const html = render(HistoryPage, "/memories/m1/history");
+		expect(html).toContain(`class="octo-memory-value">${long}</p>`);
+		expect(html).not.toContain(`<pre>"${long}"</pre>`);
+	});
+	it("keeps rollback failure feedback separate from the irreversible-action description", () => {
+		const source = readFileSync(new URL("memories.tsx", import.meta.url), "utf8");
+		expect(source).not.toContain('<span role="alert">{state.error}</span>');
+		expect(source).toMatch(
+			/<AlertDialogDescription>[\s\S]*?<\/AlertDialogDescription>[\s\S]*?<Banner[\s\S]*?description=\{state.error\}/,
+		);
+	});
+	it("composes reader responsiveness and overlay focus through public APIs", () => {
+		const html = render(MemoryPage, "/memories/m1");
+		expect(html).toContain("octo-memory-reader");
+		expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*>[\s\S]*?本页目录/);
+		const css = readFileSync(new URL("../components/layout/markdown.css", import.meta.url), "utf8");
+		expect(css).toContain("container-type: inline-size");
+		expect(css).toContain("@container memory-reader (min-width: 60rem)");
+		const source = readFileSync(new URL("memories.tsx", import.meta.url), "utf8");
+		expect(source).toContain("onCloseAutoFocus=");
+		expect(source).toMatch(
+			/onNavigate=\{\(target\) => \{\s*tocTarget.current = target;\s*setTocOpen\(false\);/,
+		);
+		expect(source).toContain(
+			"if (target && navigateToMarkdownHeading(target)) event.preventDefault()",
+		);
+		expect(source).toContain("toast.error(state.error");
+	});
 	it("preserves readable metadata beside long titles in the scrolling list", () => {
 		overrides.list = {
 			items: [

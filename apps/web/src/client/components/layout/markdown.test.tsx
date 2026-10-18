@@ -1,7 +1,45 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { markdownContents } from "../../viewmodels/memories-markdown";
-import { Markdown, MarkdownContents } from "./markdown";
+import { Markdown, MarkdownContents, navigateToMarkdownHeading } from "./markdown";
+
+afterEach(() => vi.unstubAllGlobals());
+
+it("requests explicit TOC navigation on every unmodified click, including repeated hash targets", () => {
+	const entry = { id: "heading-follow-up", text: "Follow-up", depth: 2, offset: 0 };
+	const onNavigate = vi.fn();
+	const contents = MarkdownContents({ entries: [entry], onNavigate });
+	const link = contents.props.children[0].props.children;
+	const preventDefault = vi.fn();
+	const event = { preventDefault, button: 0 };
+	expect(link.props.href).toBe("#heading-follow-up");
+	link.props.onClick(event);
+	link.props.onClick(event);
+	expect(preventDefault).toHaveBeenCalledTimes(2);
+	expect(onNavigate.mock.calls).toEqual([[entry.id], [entry.id]]);
+	link.props.onClick({ ...event, metaKey: true });
+	expect(onNavigate).toHaveBeenCalledTimes(2);
+	const native = MarkdownContents({ entries: [entry] }).props.children[0].props.children;
+	native.props.onClick(event);
+	expect(preventDefault).toHaveBeenCalledTimes(2);
+});
+
+it("focuses and scrolls to the actual heading after sheet dismissal even for the same hash", () => {
+	const heading = { focus: vi.fn(), scrollIntoView: vi.fn() };
+	const getElementById = vi.fn().mockReturnValue(heading);
+	const location = { hash: "heading-follow-up" };
+	vi.stubGlobal("document", { getElementById });
+	vi.stubGlobal("window", { location });
+	expect(navigateToMarkdownHeading("heading-follow-up")).toBe(true);
+	expect(navigateToMarkdownHeading("heading-follow-up")).toBe(true);
+	expect(location.hash).toBe("heading-follow-up");
+	expect(heading.focus.mock.calls).toEqual([[{ preventScroll: true }], [{ preventScroll: true }]]);
+	expect(heading.scrollIntoView.mock.calls).toEqual([[{ block: "start" }], [{ block: "start" }]]);
+	getElementById.mockReturnValue(null);
+	expect(navigateToMarkdownHeading("heading-missing")).toBe(false);
+	expect(heading.focus).toHaveBeenCalledTimes(2);
+	expect(location.hash).toBe("heading-follow-up");
+});
 
 it("renders installed Basalt TOC items directly under the list with indentation inside each item", () => {
 	const entries = [
@@ -30,6 +68,7 @@ it("localizes prose controls without translating user content", () => {
 	expect(html).toContain('aria-label="未完成任务"');
 	expect(html).toContain("正在加载附件");
 	expect(html).toContain("User title");
+	expect(html).toMatch(/<h1\b[^>]*tabindex="-1"/);
 	expect(renderToStaticMarkup(<MarkdownContents entries={[]} />)).toContain("本页目录");
 });
 

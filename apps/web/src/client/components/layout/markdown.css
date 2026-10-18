@@ -90,13 +90,39 @@
 .octo-markdown :is(.hljs-number, .hljs-built_in, .hljs-type) {
 	color: hsl(var(--basalt-warning));
 }
+.octo-memory-reader {
+	container-name: memory-reader;
+	container-type: inline-size;
+}
 .octo-memory-layout {
-	--octo-memory-columns: minmax(0, 1fr) minmax(13rem, 18rem);
+	--octo-memory-columns: minmax(0, 1fr);
+	min-width: 0;
 }
 .octo-memory-aside {
-	position: sticky;
-	top: var(--basalt-space-layout);
 	min-width: 0;
+}
+.octo-memory-reader-wide {
+	display: none;
+}
+.octo-memory-value {
+	margin: unset;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+@container memory-reader (min-width: 60rem) {
+	.octo-memory-layout {
+		--octo-memory-columns: minmax(0, 1fr) minmax(13rem, 18rem);
+	}
+	.octo-memory-aside {
+		position: sticky;
+		top: var(--basalt-space-layout);
+	}
+	.octo-memory-reader-wide {
+		display: grid;
+	}
+	.octo-memory-reader-compact {
+		display: none;
+	}
 }
 .octo-memory-editor textarea {
 	resize: vertical;
@@ -110,6 +136,7 @@
 	font-size: var(--basalt-text-sm);
 }
 .octo-memory-overflow {
+	min-width: 0;
 	max-width: 100%;
 	overflow-x: auto;
 }
@@ -143,15 +170,6 @@
 	padding-inline-start: var(--basalt-space-layout);
 }
 @media (max-width: 767px) {
-	.octo-memory-layout {
-		--octo-memory-columns: minmax(0, 1fr);
-	}
-	.octo-memory-aside {
-		position: static;
-	}
-	.octo-memory-desktop {
-		display: none;
-	}
 	.octo-memory-mobile {
 		display: block;
 	}

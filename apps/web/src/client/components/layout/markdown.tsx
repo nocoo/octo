@@ -1,32 +1,54 @@
 import { Checkbox } from "@nocoo/basalt";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { TableOfContents, TableOfContentsItem } from "@nocoo/basalt/components/table-of-contents";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import ReactMarkdown, { type Components, defaultUrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { type ContentsEntry, markdownContents } from "../../viewmodels/memories-markdown";
 import "./markdown.css";
 
+export function navigateToMarkdownHeading(id: string): boolean {
+	const heading = document.getElementById(id);
+	if (!heading) return false;
+	window.location.hash = id;
+	heading.focus({ preventScroll: true });
+	heading.scrollIntoView({ block: "start" });
+	return true;
+}
+
 export function MarkdownContents({
 	entries,
 	onNavigate,
 }: {
 	entries: ContentsEntry[];
-	onNavigate?: () => void;
+	onNavigate?: (id: string) => void;
 }) {
-	useEffect(() => {
-		if (!onNavigate) return;
-		window.addEventListener("hashchange", onNavigate);
-		return () => window.removeEventListener("hashchange", onNavigate);
-	}, [onNavigate]);
 	return (
 		<TableOfContents title="本页目录">
 			{entries.map((entry) => (
-				<TableOfContentsItem key={entry.id} href={`#${entry.id}`}>
-					<span className="octo-memory-toc-indent" data-depth={entry.depth}>
-						{entry.text || "未命名章节"}
-					</span>
+				<TableOfContentsItem key={entry.id}>
+					<a
+						href={`#${entry.id}`}
+						onClick={(event) => {
+							if (
+								!onNavigate ||
+								event.defaultPrevented ||
+								event.button !== 0 ||
+								event.metaKey ||
+								event.ctrlKey ||
+								event.shiftKey ||
+								event.altKey
+							)
+								return;
+							event.preventDefault();
+							onNavigate(entry.id);
+						}}
+					>
+						<span className="octo-memory-toc-indent" data-depth={entry.depth}>
+							{entry.text || "未命名章节"}
+						</span>
+					</a>
 				</TableOfContentsItem>
 			))}
 		</TableOfContents>
@@ -103,6 +125,7 @@ export function Markdown({
 			result[tag] = ({ node, children, ...props }) => (
 				<Tag
 					{...props}
+					tabIndex={-1}
 					id={entries.find((entry) => entry.offset === node?.position?.start.offset)?.id}
 				>
 					{children}

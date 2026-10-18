@@ -1,4 +1,8 @@
-import { type SearchRequest, searchRequestSchema } from "../../lib/schema/search";
+import {
+	type SearchRequest,
+	searchFusionSchema,
+	searchRequestSchema,
+} from "../../lib/schema/search";
 import { type AdminClient, adminApi } from "../lib/api";
 import { Store } from "../lib/store";
 import { errorMessage, filtersFromUrl, pageLimit } from "./memories";
@@ -24,6 +28,30 @@ export interface SearchResult {
 		fts: { candidates: number; partial: boolean };
 		vector: { candidates?: number; truncated?: boolean; profile?: string | null; skipped?: string };
 	};
+}
+
+export type SearchOptionField = "k" | "fts_weight" | "vector_weight" | "limit";
+
+export function searchOptionErrors(
+	params: URLSearchParams,
+): Partial<Record<SearchOptionField, string>> {
+	const errors: Partial<Record<SearchOptionField, string>> = {};
+	const integerMessage = "请输入 1 至 200 之间的整数。";
+	const weightMessage = "请输入不小于零的数字。";
+	const weights = searchFusionSchema.shape.weights.unwrap().shape;
+	for (const [field, schema, fallback, message] of [
+		["k", searchFusionSchema.shape.k, 60, integerMessage],
+		["fts_weight", weights.fts, 1, weightMessage],
+		["vector_weight", weights.vector, 1, weightMessage],
+		["limit", searchRequestSchema.shape.limit, 50, integerMessage],
+	] as const) {
+		const raw = params.get(field);
+		if (raw?.trim() === "" || !schema.safeParse(Number(raw ?? fallback)).success)
+			errors[field] = message;
+	}
+	if (Number(params.get("fts_weight") ?? 1) === 0 && Number(params.get("vector_weight") ?? 1) === 0)
+		errors.vector_weight = "至少一个搜索通道的权重须大于零。";
+	return errors;
 }
 
 export function searchFromUrl(params: URLSearchParams): SearchRequest {
