@@ -28,10 +28,17 @@ function principal(over: Partial<ApiPrincipal> = {}): ApiPrincipal {
 }
 
 describe("authzFrom and helpers", () => {
-	it.each(["", '"1', '1"', '"1""', "abc", "0", "9007199254740992"])(
+	it.each(["", '"1', '1"', '"1""', "abc", "-1", '"-1"', 'W/"0"', "0,1", "9007199254740992"])(
 		"rejects invalid If-Match %s even with a body version",
 		(header) => {
 			expect(() => expectedVersion(header, 1)).toThrow(ApiError);
+		},
+	);
+	it.each([undefined, "0", '"0"', " 0 "])(
+		"accepts zero expected_version from %s for OCC",
+		(header) => {
+			expect(expectedVersion(header, 0)).toBe(0);
+			if (header !== undefined) expect(expectedVersion(header)).toBe(0);
 		},
 	);
 	it("maps authorize denials and parses include/version headers", () => {

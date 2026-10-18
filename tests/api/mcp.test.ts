@@ -195,7 +195,7 @@ describe("stateless MCP Streamable HTTP", () => {
 							required: ["expected_version", "id"],
 							properties: {
 								importance: { minimum: 0, maximum: 1 },
-								expected_version: { type: "integer", exclusiveMinimum: 0 },
+								expected_version: { type: "integer", minimum: 0 },
 							},
 						},
 						{

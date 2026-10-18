@@ -17,11 +17,11 @@ import { memoryService } from "./memory-service";
 
 const rollbackSchema = z.strictObject({
 	to_version: z.number().int().positive(),
-	expected_version: z.number().int().positive().optional(),
+	expected_version: z.number().int().nonnegative().optional(),
 });
 
 const vectorPutSchema = memoryVectorSchema.extend({
-	expected_version: z.number().int().positive().optional(),
+	expected_version: z.number().int().nonnegative().optional(),
 });
 
 function csv(raw: string | null): string[] | undefined {

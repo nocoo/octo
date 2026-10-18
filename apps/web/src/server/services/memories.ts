@@ -50,7 +50,7 @@ export function expectedVersion(ifMatch: string | undefined, body?: number): num
 	if (trimmed !== undefined && !/^(?:\d+|"\d+")$/.test(trimmed))
 		throw new ApiError("validation_failed", "invalid If-Match version");
 	const headerVer = trimmed === undefined ? undefined : Number(trimmed.replaceAll('"', ""));
-	if (headerVer !== undefined && (!Number.isSafeInteger(headerVer) || headerVer < 1))
+	if (headerVer !== undefined && (!Number.isSafeInteger(headerVer) || headerVer < 0))
 		throw new ApiError("validation_failed", "invalid If-Match version");
 	if (headerVer != null && body != null && headerVer !== body) {
 		throw new ApiError("validation_failed", "If-Match does not match expected_version");

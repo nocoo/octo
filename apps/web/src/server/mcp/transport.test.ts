@@ -16,6 +16,7 @@ describe("stateless MCP transport", () => {
 		expect(schema).toBeDefined();
 		const validate = new AjvJsonSchemaValidator().getValidator(schema ?? {});
 		for (const input of [
+			{ id: "m", expected_version: 0, title: "conflict checked at execution" },
 			{ id: "m", expected_version: 1, title: "flat" },
 			{ id: "m", patch: { expected_version: 1, title: "nested" } },
 			{ id: "m", expected_version: 1, importance: 0 },
@@ -32,7 +33,7 @@ describe("stateless MCP transport", () => {
 			{ id: "m", title: "mixed", patch: { expected_version: 1, body: "other field" } },
 			{ id: "m", expected_version: 1, title: "flat", unknown: true },
 			{ id: "m", patch: { expected_version: 1, title: "nested", unknown: true } },
-			{ id: "m", expected_version: 0, title: "invalid version" },
+			{ id: "m", expected_version: -1, title: "invalid version" },
 			{ id: "m", expected_version: 1, importance: 1.1 },
 		]) {
 			expect(validate(input).valid, JSON.stringify(input)).toBe(false);
@@ -77,7 +78,7 @@ describe("stateless MCP transport", () => {
 								required: ["expected_version", "id"],
 								properties: {
 									importance: { minimum: 0, maximum: 1 },
-									expected_version: { type: "integer", exclusiveMinimum: 0 },
+									expected_version: { type: "integer", minimum: 0 },
 								},
 							},
 							{

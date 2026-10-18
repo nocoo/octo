@@ -54,7 +54,7 @@ export const memoryPatchSchema = z
 		importance: memoryImportanceSchema.optional(),
 		event_time: isoUtcDateTimeSchema.nullable().optional(),
 		vector: memoryVectorSchema.nullable().optional(),
-		expected_version: z.number().int().positive().optional(),
+		expected_version: z.number().int().nonnegative().optional(),
 	})
 	.refine(
 		(input) =>
@@ -70,7 +70,7 @@ export const memoryPatchSchema = z
 	);
 
 const versionedPatchSchema = memoryPatchSchema
-	.safeExtend({ expected_version: z.number().int().positive() })
+	.safeExtend({ expected_version: z.number().int().nonnegative() })
 	.meta({ minProperties: 2 });
 const memoryUpdateId = z.string().min(1).max(64);
 export const memoryUpdateSchema = z.union([
