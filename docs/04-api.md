@@ -35,6 +35,11 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 | 500 | `internal` | 未预期错误；不泄露内部细节 |
 | 503 | `unavailable` | D1 / R2 暂时不可用 |
 
+Unhandled errors emit one structured `console.error` JSON line with `event: "unhandled_error"`,
+`request_id`, `method`, `path` (without the query string), and the error's `name` and `message`.
+Request headers and bodies are not logged. Known `ApiError` responses do not emit this event;
+unknown errors still return the generic `internal error` envelope without internal details.
+
 ## 3. 幂等
 
 - 所有非 GET 的写请求都接受 `Idempotency-Key`（1–128 个可打印 ASCII 字符），作用域是 `(api_key, key)`。

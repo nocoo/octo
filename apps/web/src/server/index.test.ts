@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { sqliteD1 } from "../../../../tests/fixtures/sqlite-d1";
 import { APP_VERSION } from "../lib/version";
 import type { Env } from "./env";
@@ -9,6 +9,7 @@ function env(connected = true): Env {
 	const stmt = {
 		bind: () => stmt,
 		first: async () => (connected ? { n: 1, value: "test" } : { n: 0 }),
+		run: async () => ({ success: true }),
 	};
 	return {
 		DB: { prepare: () => stmt } as unknown as D1Database,
@@ -18,6 +19,8 @@ function env(connected = true): Env {
 }
 
 describe("createApp", () => {
+	afterEach(() => vi.restoreAllMocks());
+
 	it("serves live with version headers", async () => {
 		const res = await createApp().request("/api/live", {}, env());
 		expect(res.status).toBe(200);
@@ -57,6 +60,7 @@ describe("createApp", () => {
 	});
 
 	it("maps thrown ApiError through onError", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
 		const app = createApp();
 		app.get("/api/boom", () => {
 			throw new ApiError("unauthenticated", "no key");
@@ -66,6 +70,86 @@ describe("createApp", () => {
 		expect(await res.json()).toMatchObject({
 			error: { code: "unauthenticated", message: "no key" },
 		});
+		expect(log).not.toHaveBeenCalled();
+	});
+
+	it("does not log known internal ApiErrors as unhandled", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const app = createApp();
+		app.get("/api/boom", () => {
+			throw new ApiError("internal", "known failure");
+		});
+		const res = await app.request("/api/boom", {}, env());
+		expect(res.status).toBe(500);
+		expect(log).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		new Error("vector query failed"),
+		new TypeError("vector query failed\ninvalid options"),
+	])("logs one structured line for an unknown $name without request secrets", async (error) => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const app = createApp();
+		app.post("/api/boom", () => {
+			throw error;
+		});
+		const res = await app.request(
+			"/api/boom?api_key=query-secret&token=other-secret",
+			{
+				method: "POST",
+				headers: {
+					"X-Request-Id": "fixed",
+					Authorization: "Bearer header-secret",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ secret: "body-secret" }),
+			},
+			env(),
+		);
+		expect(res.status).toBe(500);
+		expect(res.headers.get("X-Request-Id")).toBe("fixed");
+		expect(res.headers.get("X-Octo-Version")).toBe(APP_VERSION);
+		expect(await res.json()).toEqual({
+			error: { code: "internal", message: "internal error", request_id: "fixed" },
+		});
+		expect(log.mock.calls).toEqual([
+			[
+				JSON.stringify({
+					event: "unhandled_error",
+					request_id: "fixed",
+					method: "POST",
+					path: "/api/boom",
+					name: error.name,
+					message: error.message,
+				}),
+			],
+		]);
+	});
+
+	it("correlates an unknown error with the generated request id", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const app = createApp();
+		app.get("/api/boom", () => {
+			throw new Error("unexpected");
+		});
+		const res = await app.request("/api/boom", {}, env());
+		const requestId = res.headers.get("X-Request-Id");
+		expect(requestId).toBeTruthy();
+		expect(await res.json()).toEqual({
+			error: { code: "internal", message: "internal error", request_id: requestId },
+		});
+		expect(log.mock.calls).toEqual([
+			[
+				JSON.stringify({
+					event: "unhandled_error",
+					request_id: requestId,
+					method: "GET",
+					path: "/api/boom",
+					name: "Error",
+					message: "unexpected",
+				}),
+			],
+		]);
 	});
 });
 

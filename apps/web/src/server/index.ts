@@ -6,7 +6,7 @@ import { adminWriteOriginMiddleware } from "./auth/origin";
 import type { AppVars, Env } from "./env";
 import { runScheduledTasks } from "./http/cron";
 import { idempotencyMiddleware } from "./http/idempotency";
-import { jsonError, toErrorResponse } from "./lib/errors";
+import { ApiError, jsonError, toErrorResponse } from "./lib/errors";
 import { newRequestId, withOctoHeaders } from "./lib/request";
 import { mcpRoutes } from "./mcp";
 import { accessMiddleware } from "./middleware/access";
@@ -52,6 +52,18 @@ export function createApp(): Hono<{
 	app.use("*", auditMiddleware);
 	app.onError((err, c) => {
 		const requestId = c.get("requestId");
+		if (!(err instanceof ApiError)) {
+			console.error(
+				JSON.stringify({
+					event: "unhandled_error",
+					request_id: requestId,
+					method: c.req.method,
+					path: c.req.path,
+					name: err.name,
+					message: err.message,
+				}),
+			);
+		}
 		return withOctoHeaders(toErrorResponse(err, requestId), requestId, APP_VERSION);
 	});
 	app.notFound((c) => {
