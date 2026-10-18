@@ -15,7 +15,10 @@ export const tagWriteAuthorization: MiddlewareHandler<{
 	Bindings: Env;
 	Variables: AppVars;
 }> = async (c, next) => {
-	if (c.req.method === "POST" && !authorize(c.get("apiKey"), "tag_global", {}).allow) {
+	if (
+		(c.req.method === "POST" || c.req.method === "DELETE") &&
+		!authorize(c.get("apiKey"), "tag_global", {}).allow
+	) {
 		throw new ApiError("forbidden", "forbidden");
 	}
 	await next();
@@ -26,6 +29,13 @@ export function tagsRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 
 	app.get("/", async (c) => {
 		return jsonOk(await listTags(c.env.DB, c.get("apiKey")));
+	});
+
+	app.delete("/:name", async (c) => {
+		const write = await new TagRepo(c.env.DB).remove(c.req.param("name"));
+		c.get("writeStatements").push(...write.statements);
+		c.set("writeError", write.mapError);
+		return jsonOk(write.value);
 	});
 
 	app.post("/:name/rename", async (c) => {

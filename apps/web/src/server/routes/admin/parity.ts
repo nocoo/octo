@@ -56,7 +56,7 @@ export function createAdminParityRoutes(): Hono<{ Bindings: Env; Variables: AppV
 			preparation.push(attachmentUploadPreparation);
 		if (route.method === "DELETE" && route.path === "/attachments/:id")
 			preparation.push(attachmentDeleteAuthorization);
-		if (route.method === "POST" && route.path.startsWith("/tags/"))
+		if ((route.method === "POST" || route.method === "DELETE") && route.path.startsWith("/tags/"))
 			preparation.push(tagWriteAuthorization);
 		app.on(route.method, route.path, adminPrincipal, ...preparation, transaction, route.handler);
 	}

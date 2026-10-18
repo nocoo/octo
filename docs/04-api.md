@@ -30,7 +30,7 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 | 401 | `unauthenticated` | 缺 key、格式错、已吊销或过期（不区分具体原因） |
 | 403 | `forbidden` | key 缺对应的操作权限，或者开启了「只改自己的」 |
 | 404 | `not_found` | 资源不存在，**或**所在 space 对该 key 不可见 |
-| 409 | `version_conflict` / `tag_conflict` / `idempotency_conflict` | 并发冲突、标签名冲突、同一个幂等键对应了不同请求 |
+| 409 | `version_conflict` / `tag_conflict` / `tag_in_use` / `idempotency_conflict` | 并发冲突、标签名冲突、标签仍有引用或删除准备后发生变化、同一个幂等键对应了不同请求 |
 | 413 | `payload_too_large` | 正文 > 1 MB、附件 > 50 MB、批量 > 100 条 |
 | 415 | `unsupported_media_type` | 附件类型不在白名单 |
 | 422 | `unprocessable` | 语义错误（例如回滚到不存在的版本） |
@@ -116,10 +116,13 @@ and supports idempotency through the same atomic write boundary. The body is
 | GET | `/tags` | read | 只返回可见 space 内未删除 memory 正在使用的标签；`use_count` 只统计这些引用，零引用标签不返回。Access 后台列表保持完整字典 |
 | POST | `/tags/:name/rename` | update + 全部 space 范围 | `{new_name}` |
 | POST | `/tags/:name/merge` | update + 全部 space 范围 | `{into}` |
+| DELETE | `/tags/:name` | update (`u`) + `scope=all` | 无请求体；成功 `{name,deleted:true}`，不存在 404，仍有引用 409 `tag_in_use`；支持幂等键 |
 | GET | `/spaces` | read | 只列出可见的 space |
 | GET | `/spaces/:slug` | read | 详情和计数 |
 
-标签是全局的，重命名 / 合并会影响所有 space，所以要求 key 的范围是「全部」（admin 角色）。创建 space 只能在 dashboard 做；不过开了 `auto_own_space` 的 key 第一次写入时，会自动创建自己的 space（slug = key 名）。
+标签是全局的，重命名 / 合并 / 删除要求 `scope=all` 和 `u`（不限定角色名称）。删除检查所有空间的 `memory_tags`，包括已删除 memory；因此 API 列表里不可见或 `use_count=0` 并不表示可删除。其他标签通过 `merged_into` 引用该标签也会阻止删除；先删除无引用的叶子别名，再删除目标，不级联删除、不改变历史版本中的名称。并发新增引用或修改目标使删除事务失败，不能绕过重验。所有请求记录审计，清理不用新增 MCP 工具；手动操作见 [清理手册](tag-cleanup.md)，本轮不执行生产清理。
+
+创建 space 只能在 dashboard 做；不过开了 `auto_own_space` 的 key 第一次写入时，会自动创建自己的 space（slug = key 名）。
 
 ### 附件
 
@@ -176,6 +179,7 @@ Multipart uploads accept exactly one `file` part (no extra fields), with at most
 | `GET /tags` | 200，仅可见空间内未删除 memory 使用的标签及其可见引用数 |
 | `POST /tags/:name/rename` | 全局操作；非 `scope=all` 或缺 `u` 返回 403，不通过名称探测其他空间 |
 | `POST /tags/:name/merge` | 同上 |
+| `DELETE /tags/:name` | 同上；仅全局 `u` 可检查所有空间与回收站引用，不允许 scoped key 推断标签是否存在或仍在使用 |
 | `GET /spaces` | 200，仅可见空间及其未删除 memory 计数 |
 | `GET /spaces/:slug` | 404，不返回详情或计数 |
 | `POST /memories/:id/attachments` | 404，在读取上传内容前拒绝 |

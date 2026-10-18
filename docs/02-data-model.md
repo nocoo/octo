@@ -218,6 +218,7 @@ process never reaches a catch handler.
 
 ## 4. 版本
 
+- 当前记录及版本快照的 `importance` 均由写入 schema 限定为 0–1（含端点）。
 - 每次 create / update / rollback / restore / move 都生成新版本。版本号从 1 开始，按 memory 自增。
 - 标签数组的顺序属于版本内容：仅重排标签也生成新版本，diff 返回 `tags` 字段的前后数组；未提交标签的更新保持当前顺序。
 - 只存完整快照，不存增量；diff 在读取时由服务端用 jsdiff 计算（行级 + 字段级）。
@@ -232,6 +233,7 @@ process never reaches a catch handler.
 - 重命名：只改 `display_name` / `name`；有冲突时返回 409 并建议改用合并。
 - 合并 A→B：在一个 batch 内把 `memory_tags` 从 A 改到 B（去重）、设置 `A.merged_into=B`、对受影响的 memory 各写一条 `changes(op=tag_merged)`。**不**生成新的 memory 版本（标签变化单独记在 change feed 里）；之后用 A 的名字写入会自动重定向到 B。
 - API key 的标签列表（REST / MCP）只返回至少被一个可见 space 内未删除 memory 使用的标签，`use_count` 也只统计这些引用；没有可见空间时返回空列表。Access 后台保留完整全局标签字典（包括零引用标签），计数仍只统计未删除 memory。
+- 零引用标签不自动删除。`DELETE /api/v1/tags/:name` 要求 `scope=all` 且有 `u`，只删除指定名称；全局仍有 memory 引用（包括回收站）或其他标签的合并别名指向它时返回 409 `tag_in_use`。必须先显式删除无引用的叶子别名，不能产生悬空重定向或隐式级联删除。检查与删除在同一 D1 写事务中重验，所有调用写入审计，不生成无所属空间的公共变更事件。清理步骤见 [标签清理手册](tag-cleanup.md)。
 
 ## 6. 回收站
 

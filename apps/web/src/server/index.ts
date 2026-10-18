@@ -82,6 +82,7 @@ export function createApp(): Hono<{
 	app.use("/api/v1/*", postCommitMiddleware(runDerivedTasks));
 	app.use("/api/admin/*", postCommitMiddleware(runDerivedTasks));
 	app.use("/api/v1/*", bearerMiddleware);
+	app.use("/api/v1/tags/:name", tagWriteAuthorization);
 	app.use("/api/v1/tags/:name/rename", tagWriteAuthorization);
 	app.use("/api/v1/tags/:name/merge", tagWriteAuthorization);
 	app.use("/api/v1/memories/:id/attachments", attachmentUploadPreparation);

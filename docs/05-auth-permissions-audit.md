@@ -59,7 +59,7 @@ CREATE TABLE api_keys (
 - **只改自己的：** 开启后，update / delete 只能作用于 `source_key_id = key.id` 的条目，否则返回 403。
 - **默认拒绝：** 没有显式允许的都拒绝。**范围外的 space 是不可见的**：返回 404，list 和搜索里不出现，计数里也不算。
 - **跨 space 搬移：** 源和目标 space 都需要 update 权限。
-- **全局标签操作**（rename / merge）：要求 `scope=all` 且有 update 权限。
+- **全局标签操作**（rename / merge / delete）：要求 `scope=all` 且有 update (`u`) 权限，角色名称不限；缺任一条件返回 403，幂等重放前也必须重验权限。显式删除仅允许全局没有 memory 引用（包括回收站）且没有合并别名指向的标签，否则 409 `tag_in_use`；不级联删除或泄露 scoped key 看不到的引用。
 
 角色模板（dashboard 创建 key 时选；本质上是预设的 ops / scope，可以改成 custom）：
 

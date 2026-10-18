@@ -175,6 +175,37 @@ export class TagRepo {
 		return tags.map((tag) => ({ ...tag, use_count: map.get(tag.id) ?? 0 }));
 	}
 
+	async remove(rawName: string): Promise<TagWrite<{ name: string; deleted: true }>> {
+		const name = normalizeTag(rawName);
+		const row = await this.getByName(name);
+		if (!row) throw new ApiError("not_found", "not found");
+		const inUse =
+			"EXISTS (SELECT 1 FROM memory_tags WHERE tag_id = ?) OR EXISTS (SELECT 1 FROM tags WHERE merged_into = ?)";
+		const conflict = () =>
+			new ApiError("tag_in_use", "tag is in use or changed; retry after checking references");
+		const usage = await this.db
+			.prepare(`SELECT ${inUse} AS in_use`)
+			.bind(row.id, row.id)
+			.first<{ in_use: number }>();
+		if (usage?.in_use) throw conflict();
+		return {
+			statements: [
+				this.guardTag(row),
+				this.db
+					.prepare(
+						`INSERT INTO tags (id, name, display_name, created_at, updated_at) SELECT ?, '', NULL, 0, 0 WHERE ${inUse}`,
+					)
+					.bind(row.id, row.id, row.id),
+				this.db.prepare("DELETE FROM tags WHERE id = ?").bind(row.id),
+			],
+			value: { name, deleted: true },
+			mapError: (error) =>
+				String(error).includes("NOT NULL constraint failed: tags.display_name")
+					? conflict()
+					: undefined,
+		};
+	}
+
 	async rename(fromRaw: string, toRaw: string, actor: string): Promise<TagWrite<TagRow>> {
 		const fromName = normalizeTag(fromRaw);
 		const toName = normalizeTag(toRaw);
