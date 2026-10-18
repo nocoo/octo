@@ -43,7 +43,10 @@ function tool<Input>(
 		definition: {
 			name,
 			description,
-			inputSchema: z.toJSONSchema(input, { io: "input" }) as Tool["inputSchema"],
+			inputSchema: {
+				...z.toJSONSchema(input, { io: "input" }),
+				type: "object",
+			} as Tool["inputSchema"],
 			outputSchema: {
 				...z.toJSONSchema(z.union([output, errorOutput])),
 				type: "object",
@@ -97,10 +100,10 @@ export function createTools(context: McpContext) {
 		),
 		tool(
 			"update_memory",
-			"Update a memory using the required expected_version.",
+			"Update a memory with flat fields or a nested patch, never both; expected_version is required.",
 			updateInput,
 			memoryOutput,
-			(input) => memoryService(context).patch(authz, input.id, input.patch, undefined),
+			({ id, ...patch }) => memoryService(context).patch(authz, id, patch, undefined),
 		),
 		tool(
 			"delete_memory",

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { errorCodeSchema } from "../../lib/schema/errors";
-import { memoryPatchSchema, memoryTypeSchema } from "../../lib/schema/memory";
+import {
+	memoryImportanceSchema,
+	memoryTypeSchema,
+	memoryUpdateSchema,
+} from "../../lib/schema/memory";
 
 const id = z.string().min(1);
 const timestamp = z.string();
@@ -20,7 +24,7 @@ const summaryFields = {
 	body: z.string(),
 	type: memoryTypeSchema,
 	tags: z.array(z.string()),
-	importance: z.number(),
+	importance: memoryImportanceSchema,
 	event_time: timestamp.nullable(),
 	created_at: timestamp,
 	updated_at: timestamp,
@@ -98,10 +102,7 @@ export const getInput = z.strictObject({
 		.array(z.enum(["trashed", "versions_count", "attachments", "vector_status"]))
 		.optional(),
 });
-export const updateInput = z.strictObject({
-	id,
-	patch: memoryPatchSchema.safeExtend({ expected_version: z.number().int().positive() }),
-});
+export const updateInput = memoryUpdateSchema;
 export const changesInput = z.strictObject({
 	cursor: z.string().min(1).optional(),
 	limit: z.number().int().min(1).max(200).optional(),

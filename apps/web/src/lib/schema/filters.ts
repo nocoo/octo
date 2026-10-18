@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { memoryImportanceSchema } from "./memory";
 import { isoUtcDateTimeSchema } from "./time";
 
 export const timeFilterSchema = z.strictObject({
@@ -8,8 +9,8 @@ export const timeFilterSchema = z.strictObject({
 });
 
 export const importanceFilterSchema = z.strictObject({
-	min: z.number().min(0).max(1).optional(),
-	max: z.number().min(0).max(1).optional(),
+	min: memoryImportanceSchema.optional(),
+	max: memoryImportanceSchema.optional(),
 });
 
 export const memoryFiltersSchema = z.strictObject({

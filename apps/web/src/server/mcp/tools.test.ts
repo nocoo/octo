@@ -8,6 +8,94 @@ vi.mock("../sync/tasks", () => ({ runDerivedTasks: vi.fn(async () => undefined) 
 afterEach(() => vi.restoreAllMocks());
 
 describe("MCP v1 service adapter", () => {
+	it("accepts flat updates alongside nested patches with the same concurrency contract", async () => {
+		const { call, flush } = await setup();
+		const { id } = (await call("create_memory", memoryInput)).result.structuredContent;
+		expect(
+			(await call("update_memory", { id, title: "flat", importance: 0, expected_version: 1 }))
+				.result.structuredContent,
+		).toMatchObject({ id, title: "flat", importance: 0, version: 2 });
+		expect(
+			(
+				await call("update_memory", {
+					id,
+					patch: { body: "nested", importance: 1, expected_version: 2 },
+				})
+			).result.structuredContent,
+		).toMatchObject({ id, title: "flat", body: "nested", importance: 1, version: 3 });
+		for (const args of [
+			{ id, title: "stale", expected_version: 1 },
+			{ id, patch: { title: "stale", expected_version: 2 } },
+		])
+			expect((await call("update_memory", args)).result.structuredContent).toMatchObject({
+				error: { code: "version_conflict", details: { current_version: 3 } },
+			});
+		await flush();
+	});
+
+	it.each(["all", "spaces", "own"] as const)(
+		"lists only tags with live uses in visible spaces for scope=%s",
+		async (scope) => {
+			const { call, sqlite, key, flush } = await setup();
+			await call("create_memory", { ...memoryInput, tags: ["shared", "kb-only"] });
+			await call("create_memory", { ...memoryInput, space: "dest", tags: ["shared", "dest-only"] });
+			const trashed = (await call("create_memory", { ...memoryInput, tags: ["trash-only"] })).result
+				.structuredContent;
+			await call("delete_memory", { id: trashed.id });
+			sqlite.exec(
+				"INSERT INTO tags (id, name, display_name, created_at, updated_at) VALUES ('unused', 'unused', 'Unused', 1, 1)",
+			);
+			sqlite.prepare("UPDATE spaces SET owner_key_id = ? WHERE slug = 'kb'").run(key.row.id);
+			sqlite
+				.prepare("UPDATE api_keys SET scope = ?, space_ids_json = '[\"space:kb\"]' WHERE id = ?")
+				.run(scope, key.row.id);
+			const listed = (await call("list_tags")).result.structuredContent;
+			expect(listed).toMatchObject({ next_cursor: null });
+			expect(listed.items).toEqual(
+				scope === "all"
+					? [
+							expect.objectContaining({ name: "dest-only", use_count: 1 }),
+							expect.objectContaining({ name: "kb-only", use_count: 1 }),
+							expect.objectContaining({ name: "shared", use_count: 2 }),
+						]
+					: [
+							expect.objectContaining({ name: "kb-only", use_count: 1 }),
+							expect.objectContaining({ name: "shared", use_count: 1 }),
+						],
+			);
+			await flush();
+		},
+	);
+
+	it.each([
+		{ title: "flat", expected_version: 1, patch: { body: "nested", expected_version: 1 } },
+		{ expected_version: 1, patch: { title: "nested" } },
+		{ title: "flat", patch: { expected_version: 1 } },
+		{ title: "flat", expected_version: 1, extra: true },
+		{ patch: { title: "nested", expected_version: 1, extra: true } },
+		{ patch: { title: "nested", expected_version: 1 }, extra: true },
+		{ expected_version: 1 },
+		{ title: "missing version" },
+		{ importance: -0.1, expected_version: 1 },
+		{ patch: { importance: 1.1, expected_version: 1 } },
+	])("rejects invalid or mixed update forms without writes %j", async (args) => {
+		const { call, db, sqlite, flush } = await setup();
+		const { id } = (await call("create_memory", memoryInput)).result.structuredContent;
+		const batch = vi.spyOn(db, "batch");
+		expect((await call("update_memory", { id, ...args })).result).toMatchObject({
+			isError: true,
+			structuredContent: { error: { code: "validation_failed" } },
+		});
+		expect(batch).not.toHaveBeenCalled();
+		expect(
+			sqlite.prepare("SELECT version, title FROM memories WHERE id = ?").get(String(id)),
+		).toEqual({
+			version: 1,
+			title: memoryInput.title,
+		});
+		await flush();
+	});
+
 	it("hides unexpected service failures and only logs fixed derived-task diagnostics", async () => {
 		const { call, flush } = await setup();
 		vi.spyOn(MemoryService.prototype, "get").mockRejectedValueOnce(new Error("private SQL"));

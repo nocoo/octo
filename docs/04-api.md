@@ -12,6 +12,7 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 - 单个资源直接返回对象；列表返回 `{ "items": [...], "next_cursor": "…" | null }`。
 - 每个响应都带 `X-Request-Id` 和 `X-Octo-Version`。
 - 乐观并发：PATCH / rollback 必须带 `If-Match: <version>`（或 body 里的 `expected_version`）；不匹配返回 409。
+- `importance` 在创建、更新、响应以及过滤器 `importance.min` / `importance.max` 中都是 0–1（含端点）的数值；创建时省略默认 0.5，过滤器另须 `min ≤ max`。
 - 未知字段 → 400 `validation_failed`（zod strict）。
 - 标签数组按提交顺序规范化、去重（保留第一次出现），响应不按字母排序；纯重排也是更新，产生新版本并出现在版本 diff 的 `tags` 字段中。重命名不重排，合并去重保留最靠前的位置。
 
@@ -61,14 +62,14 @@ unknown errors still return the generic `internal error` envelope without intern
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
-| POST | `/memories` | write | 创建。body：`space`、`title`、`body`、`type`、`tags[]`、`importance?`、`event_time?`、`vector?` |
+| POST | `/memories` | write | 创建。body：`space`、`title`、`body`、`type`、`tags[]`、`importance?`（0–1）、`event_time?`、`vector?` |
 | GET | `/memories/:id` | read | `?include=versions_count,attachments,vector_status` |
 | PATCH | `/memories/:id` | update | 部分更新 + `If-Match`；可以改 `space`（需要两边都有写权限，记为 `op=move`） |
 | DELETE | `/memories/:id` | delete | 移入回收站；返回 `{trashed_at}` |
-| GET | `/memories` | read | 过滤条件同搜索（spaces/tags/types/sources/time/importance）+ 游标 |
+| GET | `/memories` | read | 过滤条件同搜索（spaces/tags/types/sources/time/importance，重要度上下限均为 0–1）+ 游标 |
 | POST | `/memories:batchCreate` | write | ≤100 条；每条结果单独给出（`results[i] = {ok, item|error}`），整体 207 风格但返回 200 |
 | POST | `/memories:batchGet` | read | ≤100 个 id，带 `missing[]` |
-| POST | `/memories:batchUpdate` | update | ≤100 条，每条都要带 expected_version |
+| POST | `/memories:batchUpdate` | update | `{items:[…]}`，≤100 条，每条使用下述 flat / patch 二选一格式 |
 | POST | `/memories:batchDelete` | delete | ≤100 个 id |
 | PUT | `/memories/:id/vector` | update | 单独写或替换向量 `{profile, values}` |
 
@@ -77,6 +78,19 @@ Vector PUT uses the same versioned write contract as PATCH: supply
 `u` permission (not `r`), returns the updated memory, increments its version,
 and supports idempotency through the same atomic write boundary. The body is
 `{profile,values,expected_version?}`, not a nested `vector` object.
+
+`batchUpdate.items[]` 与 MCP `update_memory` 使用同一个严格输入规则，内部统一为 flat：
+
+```json
+{"items":[
+  {"id":"memory-a","expected_version":1,"title":"更新标题","importance":0.8},
+  {"id":"memory-b","patch":{"expected_version":2,"tags":["知识库","工作"]}}
+]}
+```
+
+每条的 `id` 长度 1–64，`expected_version` 为正整数，且至少有一个可更新字段：`space`、`title`、`body`、`type`、`tags`、`importance`（0–1）、`event_time`、`vector`。使用 `patch` 时外层只能有 `id` 和 `patch`；即使字段不重复，也拒绝外层更新字段或外层 `expected_version`。内外层未知字段同样拒绝。任何结构错误都在写入前拒绝整个批次，HTTP 400 `validation_failed`；合法结构的业务失败仍按条返回 `{ok:false,error}`，整体 HTTP 200。幂等键仍覆盖整个批次。
+
+单条 REST `PATCH /memories/:id` 仍使用 flat 更新字段（不接收 `patch` 包装），版本通过 `If-Match` 或 body 的 `expected_version` 提供；同时提供时必须一致。`POST /memories/:id/rollback` 是 `{"to_version":1}` + `If-Match: 3`，或 `{"to_version":1,"expected_version":3}`，不是 `version` 或 `patch`。`to_version` 为要恢复的历史版本，乐观锁版本为当前版本。
 
 ### 版本
 

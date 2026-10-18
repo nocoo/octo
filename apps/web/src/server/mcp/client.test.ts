@@ -35,6 +35,7 @@ describe("official MCP client interoperability", () => {
 				["list_spaces", {}],
 				["list_changes", {}],
 				["update_memory", { id, patch: { title: "updated", expected_version: 1 } }],
+				["update_memory", { id, title: "flat update", importance: 1, expected_version: 2 }],
 				["delete_memory", { id }],
 			] as const;
 			for (const [name, args] of calls) {

@@ -33,7 +33,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 - 非浏览器 bot 不需要 `Origin`；如有 `Origin`，必须精确匹配生产域名，开发环境匹配开发域名。不反射 Origin，不启用跨域 CORS。
 - 每次工具调用从本次已验证的 principal 构造 v1 authz，使用原有服务及 `authorize()`。不可见 space / memory 是 `not_found`；列表、搜索、计数、batchGet 和变更流不暴露不可见对象。`own_entries_only` 和移动的源/目标权限保持不变。
 - 不增加 key 管理、embedding 设置、硬删除、附件或恢复工具。`delete_memory` 只移入回收站。
-- 标签名称是 v1 的全局字典；`list_tags` 与同 key 的 REST 列表完全一致，不可见 space 的引用不计入 use_count（可以为 0），不把全局标签误当成按 space 私有的资源。
+- 标签名称是 v1 的全局字典；`list_tags` 与同 key 的 REST 列表完全一致，只返回至少被一条可见 space 中未删除 memory 使用的标签，`use_count > 0` 且仅统计这些可见引用。仅在不可见 space 使用、仅被回收站引用或完全未使用的标签不返回；`all`、`spaces`、`own` 范围均遵守此规则。标签本身仍不是按 space 私有的资源。
 - 写工具复用 v1 的 staged `memoryService()`，并在返回成功前执行一次 D1 batch（memory、版本、tags、FTS、change event 等同批提交）。失败不提交残留 statements；成功后按 v1 的机制调度派生索引任务。
 - 外层 audit middleware 对每个 HTTP 调用记录一次 `route=/mcp`、actor、HTTP status、request id、耗时和字节数。不记录工具 arguments、响应正文、key、原始 URL 或任意客户端提供的工具名。HTTP `200` 的工具失败仍记录 Octo `error_code`，不能误报为成功。
 - 审计用扩展表 `mcp_audit_writes(audit_id)` 标识已提交的 MCP 写操作（仅 memory D1 batch 成功后，在审计 batch 中同时写入 audit_log 和标记）。usage 汇总同时检查 error_code，MCP initialize、通知、读工具和失败写入均不计为 writes；REST 的现有方法分类保持不变。新增 migration `0005_mcp_audit.sql` 只创建幂等的审计扩展表，不存 session 或工具参数；本功能尚未部署，无历史 MCP 记录需要回填。
@@ -47,14 +47,26 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 | `search` | 原 `searchRequestSchema`：`query?: string`、`vector?: Vector`（至少一个），`filters?: Filters`、`mode?: hybrid\|fts\|vector`、`fusion?: Fusion`、`limit?: integer[1,200]`、`include?: [snippet]` | `searchMemories` + `requireSearchRead`；`r` |
 | `get_memory` | `{id: nonempty string, include?: (trashed\|versions_count\|attachments\|vector_status)[]}` | `MemoryService.get`；`r`，含 trashed 还需 `d` |
 | `batch_get` | 原 `batchGetRequestSchema`：`{ids: nonempty string[1..100]}` | `batchGetMemories` + `requireSearchRead`；`r`，不可见 ID 与不存在 ID 一同放入 missing |
-| `create_memory` | 原 `memoryCreateSchema`：`{space, title, body, type, tags, importance?, event_time?, vector?}` | staged `MemoryService.create`；目标 space 的 `w` |
-| `update_memory` | `{id: nonempty string, patch: memoryPatchSchema}`；patch 至少改一个字段，`expected_version` 必须提供 | staged `MemoryService.patch`；`u`，移动同时检查两端 |
+| `create_memory` | 原 `memoryCreateSchema`：`{space, title, body, type, tags, importance?: number[0,1], event_time?, vector?}` | staged `MemoryService.create`；目标 space 的 `w` |
+| `update_memory` | `{id, expected_version, ...fields}` 或 `{id, patch: {expected_version, ...fields}}`，严格二选一；fields 至少改一个字段，`importance?: number[0,1]` | staged `MemoryService.patch`；`u`，移动同时检查两端 |
 | `delete_memory` | `{id: nonempty string}` | staged `MemoryService.remove`；`d` |
 | `list_changes` | `{cursor?: nonempty string, limit?: integer[1,200], spaces?: nonempty string[]}`；默认 limit 50，cursor 是原 v1 不透明游标 | `MemoryService.listChanges`；`r` |
-| `list_tags` | `{}` | v1 标签列表服务；`r`，计数只统计可见 space |
+| `list_tags` | `{}` | v1 标签列表服务；`r`，只返回可见 space 中有未删除 memory 引用的标签及正数计数 |
 | `list_spaces` | `{}` | v1 space 列表服务；`r`，仅返回可见 space |
 
 `Vector`、`Filters`、`Fusion` 直接复用 `apps/web/src/lib/schema/{memory,filters,search}.ts`，不另设 MCP 方言。`space` 最长 64，`title` 1–500，tags 最多 100 个且各 1–64，importance 在 0–1；type 为 fact / preference / decision / procedure / event / log / note；event_time 是 UTC ISO 日期。更新允许清空 event_time / vector。向量维数由原有 profile 校验，最多 1536。
+
+`update_memory` 与 REST `POST /api/v1/memories:batchUpdate` 的每个 item 复用同一严格 schema：`id` 是 1–64 字符，`expected_version` 是正整数，位于所选形式的字段层；可更新字段为 `space,title,body,type,tags,importance,event_time,vector`。不得同时提供 `patch` 和任何 flat 更新字段或外层 `expected_version`，即使字段不重名也拒绝；外层及 patch 内的未知字段都拒绝。只传版本号不构成有效更新。两种形式在验证后进入相同服务路径，版本不匹配均返回 `version_conflict`，不合并、覆盖或猜测字段优先级。
+
+```json
+{"id":"01J…","expected_version":3,"title":"更新标题","importance":0.8}
+```
+
+```json
+{"id":"01J…","patch":{"expected_version":3,"title":"更新标题","importance":0.8}}
+```
+
+搜索 `filters.importance` 为 `{min?: number[0,1], max?: number[0,1]}`；创建、更新和过滤的 importance 都包含边界 0 和 1，不接受超出范围或非数字值。单条 REST PATCH 仍使用 flat body 的 `expected_version` 或 `If-Match`；REST rollback 仍为 `{to_version: positive integer}` 配合 `If-Match`，不是 update patch，也没有对应 MCP 工具。
 
 ## 4. 工具输出 schema
 
@@ -70,10 +82,10 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 | `list_tags` | `{items: Tag[], next_cursor: null}` |
 | `list_spaces` | `{items: Space[], next_cursor: null}` |
 
-- `Memory`：id、space、title、body、type、tags（string[]）、importance（number）、event_time（string|null）、version（integer）、content_hash、source_key_id、updated_by_key_id、created_at、updated_at。可选扩展为 versions_count、attachments、vector_status、deleted_at、deleted_by，按 v1 include 和序列化器决定。
-- `MemorySummary` 是 v1 搜索/batchGet 的既有投影：id、space、title、body、type、tags、importance、event_time、created_at、updated_at，不包含 CRUD 的版本与来源字段。`SearchMemory` 是 MemorySummary 加 scores 对象、可选 snippet；channels 和 scores 沿用 [03](03-search.md)。
+- `Memory`：id、space、title、body、type、tags（string[]）、importance（number，0–1）、event_time（string|null）、version（integer）、content_hash、source_key_id、updated_by_key_id、created_at、updated_at。可选扩展为 versions_count、attachments、vector_status、deleted_at、deleted_by，按 v1 include 和序列化器决定。
+- `MemorySummary` 是 v1 搜索/batchGet 的既有投影：id、space、title、body、type、tags、importance（number，0–1）、event_time、created_at、updated_at，不包含 CRUD 的版本与来源字段。`SearchMemory` 是 MemorySummary 加 scores 对象、可选 snippet；channels 和 scores 沿用 [03](03-search.md)。
 - `Change`：seq、entity、entity_id、op、at；非删除事件另有 space_id、version、actor。删除事件不返回这些扩展。
-- `Tag`：id、name、display_name、use_count，与 v1 标签列表的投影一致；列表不返回时间戳或 merged_into。
+- `Tag`：id、name、display_name、use_count（正整数，仅统计可见 space 的未删除 memory），与 v1 标签列表的投影一致；列表不返回时间戳或 merged_into。
 - `Space`：id、slug、name、description、owner_key_id（string|null）、memory_count、created_at、updated_at。
 
 ## 5. 错误映射

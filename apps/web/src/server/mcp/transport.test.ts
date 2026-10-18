@@ -33,7 +33,30 @@ describe("stateless MCP transport", () => {
 			};
 			expect(body.result.tools.map((tool) => tool.name)).toEqual(names);
 			for (const tool of body.result.tools) {
-				expect(tool.inputSchema).toMatchObject({ type: "object", additionalProperties: false });
+				expect(tool.inputSchema).toMatchObject({ type: "object" });
+				if (tool.name === "update_memory") {
+					expect(tool.inputSchema).toMatchObject({
+						anyOf: [
+							{
+								additionalProperties: false,
+								required: ["expected_version", "id"],
+								properties: {
+									importance: { minimum: 0, maximum: 1 },
+									expected_version: { type: "integer", exclusiveMinimum: 0 },
+								},
+							},
+							{
+								additionalProperties: false,
+								required: ["id", "patch"],
+								properties: {
+									patch: { additionalProperties: false, required: ["expected_version"] },
+								},
+							},
+						],
+					});
+				} else {
+					expect(tool.inputSchema).toMatchObject({ additionalProperties: false });
+				}
 				expect(tool.outputSchema).toMatchObject({ type: "object" });
 			}
 		}
