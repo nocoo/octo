@@ -14,9 +14,32 @@ export class ApiError extends Error {
 	constructor(
 		public readonly status: number,
 		public readonly code: string,
+		public readonly details: { issues: { path: string }[] } | null = null,
 	) {
 		super(code);
 	}
+}
+
+function validationDetails(details: unknown): ApiError["details"] {
+	if (
+		!details ||
+		typeof details !== "object" ||
+		!("issues" in details) ||
+		!Array.isArray(details.issues)
+	)
+		return null;
+	return {
+		issues: details.issues.flatMap((issue: unknown) => {
+			if (
+				!issue ||
+				typeof issue !== "object" ||
+				!("path" in issue) ||
+				typeof issue.path !== "string"
+			)
+				return [];
+			return [{ path: issue.path }];
+		}),
+	};
 }
 
 export const adminApi: AdminClient = {
@@ -47,13 +70,14 @@ export const adminApi: AdminClient = {
 		});
 		if (response.status === 204) return undefined as Result;
 		const payload = (await response.json().catch(() => null)) as {
-			error?: { code?: string };
+			error?: { code?: string; details?: unknown };
 		} | null;
 		if (!response.ok || payload === null) {
 			throw new ApiError(
 				response.status,
 				payload?.error?.code ??
 					(response.status === 401 || response.status === 403 ? "access_denied" : "request_failed"),
+				validationDetails(payload?.error?.details),
 			);
 		}
 		return payload as Result;

@@ -4,6 +4,54 @@ import { ApiError, adminApi } from "./api";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Access-only admin transport", () => {
+	it.each([
+		null,
+		"private",
+		{},
+		{ issues: "private" },
+		{ issues: [null, "private", {}, { path: 12 }] },
+	])("ignores malformed validation details: %j", async (details) => {
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValue(
+					Response.json({ error: { code: "validation_failed", details } }, { status: 400 }),
+				),
+		);
+		const error = await adminApi.request("/keys").catch((error: unknown) => error);
+		expect(error).toBeInstanceOf(ApiError);
+		expect((error as ApiError).details?.issues ?? []).toEqual([]);
+		expect(JSON.stringify(error)).not.toContain("private");
+	});
+	it("retains validation issue paths without retaining upstream messages or values", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				Response.json(
+					{
+						error: {
+							code: "validation_failed",
+							message: "private value",
+							details: {
+								issues: [{ path: "space_ids.0", message: "private value" }, { path: "name" }],
+								input: "private value",
+							},
+						},
+					},
+					{ status: 400 },
+				),
+			),
+		);
+		const error = await adminApi
+			.request("/keys", { method: "POST", json: {} })
+			.catch((error: unknown) => error);
+		expect(error).toMatchObject({
+			code: "validation_failed",
+			details: { issues: [{ path: "space_ids.0" }, { path: "name" }] },
+		});
+		expect(JSON.stringify(error)).not.toContain("private value");
+	});
 	it("uses one same-origin fetch and JSON bodies without persistence", async () => {
 		const fetcher = vi.fn().mockImplementation(async () => Response.json({ items: [] }));
 		vi.stubGlobal("fetch", fetcher);
