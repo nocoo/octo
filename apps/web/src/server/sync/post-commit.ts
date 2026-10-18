@@ -24,10 +24,7 @@ export function postCommitMiddleware(
 		const work = process(context.env).catch(() => {
 			console.error("derived_work_failed");
 		});
-		if (
-			context.env.RESOURCE_ENV === "test" &&
-			context.env.OCTO_VECTOR_SYNC_PARALLEL === "1"
-		) {
+		if (context.env.RESOURCE_ENV === "test" && context.env.OCTO_VECTOR_SYNC_PARALLEL === "1") {
 			await work;
 		} else {
 			execution.waitUntil(work);
