@@ -129,6 +129,13 @@ describe("library unknown, failed and empty states", () => {
 			expect(html).toContain(Page === SpacesPage ? "创建空间" : "浏览记忆");
 		},
 	);
+	it("keeps the spaces create action available while the initial read is pending", () => {
+		snapshot.state = { ...new LibraryModel("spaces").state, busy: true };
+		const html = render(SpacesPage, "/spaces");
+		const createStart = html.lastIndexOf("<button", html.indexOf("lucide-folder-plus"));
+		const createOpen = html.slice(createStart, html.indexOf(">", createStart) + 1);
+		expect(createOpen).not.toContain('disabled=""');
+	});
 	it.each(pages)("keeps cached %s content visible when a refresh fails", (url, Page) => {
 		snapshot.state = {
 			...new LibraryModel("graph").state,
