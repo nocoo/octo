@@ -160,11 +160,37 @@ describe("durable vector synchronization", () => {
 				memory_id: "memory",
 				name,
 				message: `Vector synchronization failed during ${stage}`,
+				error_message: "[redacted]",
+				code: null,
 			});
 			expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|private body/);
 			log.mockRestore();
 		},
 	);
+
+	it("retains safe Vectorize diagnostics without logging credentials or bodies", async () => {
+		const { env, store, sqlite } = fixture();
+		sqlite.exec("UPDATE memories SET deleted_at = 50 WHERE id = 'memory'");
+		store.delete.mockRejectedValue(
+			Object.assign(
+				new Error(
+					`VECTOR_DELETE_ERROR (code = 10000): internal server error; Bearer secret-token; body: ${"private body".repeat(100)}`,
+				),
+				{ code: 10000 },
+			),
+		);
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		await synchronizeVectors(env, { store, now: 100 });
+		expect(log).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: "Error",
+				code: 10000,
+				error_message: "VECTOR_DELETE_ERROR (code = 10000): internal server error [redacted]",
+			}),
+		);
+		expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|private body/);
+		log.mockRestore();
+	});
 
 	it("deletes on trash, reindexes restore and keeps purge tombstones", async () => {
 		const { env, store, sqlite, indexed } = fixture();

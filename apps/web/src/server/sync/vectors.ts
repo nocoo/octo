@@ -3,6 +3,7 @@ import { ApiError } from "../lib/errors";
 import type { VectorStore } from "../ports/vector/types";
 import { decodeFloat32Vector } from "../search/math";
 import { createSearchVectorStore } from "../search/vector-store-factory";
+import { vectorErrorDetails } from "./vector-errors";
 
 export const SYNC_LEASE_MS = 60_000;
 export const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
@@ -143,12 +144,7 @@ export async function synchronizeVectors(
 			console.error({
 				event: "vector_sync_failed",
 				memory_id: job.memory_id,
-				name:
-					error instanceof Error
-						? /^(Error|TypeError|RangeError|AbortError|TimeoutError)$/.test(error.name)
-							? error.name
-							: "Error"
-						: "UnknownError",
+				...vectorErrorDetails(error),
 				message: `Vector synchronization failed during ${stage}`,
 			});
 		}

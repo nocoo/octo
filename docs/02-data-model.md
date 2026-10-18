@@ -185,8 +185,12 @@ Concurrent drains skip live leases and leave this retry to the holder. Jobs
 still pending after the bound, and expired leases, remain retryable by subsequent
 writes or the hourly cron. HTTP writes, MCP writes and cron use this same path.
 Failures emit structured `vector_sync_failed` logs with the memory ID, an
-allowlisted error name and a fixed stage-specific message. Raw exception names,
-messages and stacks are not logged because providers or SQL may include secrets.
+allowlisted error name/code, a fixed stage-specific message, and `error_message`
+limited to 300 characters. Message redaction retains only known public Vectorize
+error prefixes, numeric provider codes, and standard transport/status phrases;
+all other text is replaced with `[redacted]`. Unknown codes/names, response bodies,
+credentials and stacks are never logged. This deliberately favors privacy over
+free-form provider detail.
 Completed jobs and purge tombstones remain available
 for periodic anti-entropy reconciliation: a lease alone cannot fence an old
 Vectorize call after a process pauses or crashes in the non-transactional gap.
