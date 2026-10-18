@@ -23,7 +23,7 @@ custom_domain = true
 [[d1_databases]]
 binding = "DB"
 database_name = "octo-db"
-database_id = "11111111-1111-1111-1111-111111111111"
+database_id = "ea0b54d7-4853-4a5b-9128-405d8aaf97da"
 
 [[r2_buckets]]
 binding = "FILES"

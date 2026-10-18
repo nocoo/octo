@@ -52,7 +52,7 @@ describe("direct Miniflare runtime", () => {
 		expect(options.workers).toHaveLength(2);
 		const worker = options.workers[0];
 		expect(worker?.config.env).toEqual({
-			DB: { type: "d1", id: "11111111-1111-1111-1111-111111111111" },
+			DB: { type: "d1", id: "ea0b54d7-4853-4a5b-9128-405d8aaf97da" },
 			FILES: { type: "r2", name: "octo-files" },
 			ASSETS: { type: "worker", worker: "octo-l2-assets" },
 			RESOURCE_ENV: { type: "text", value: "test" },
