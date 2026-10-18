@@ -22,6 +22,110 @@ function fixture() {
 }
 
 describe("durable vector synchronization", () => {
+	it("does not charge a failed stale generation to a concurrent mutation", async () => {
+		const { env, store, sqlite } = fixture();
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		store.upsert.mockImplementationOnce(async () => {
+			sqlite.exec("UPDATE memories SET importance = 0.1 WHERE id = 'memory'");
+			throw new Error("service unavailable");
+		});
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 1 });
+		expect(
+			sqlite.prepare("SELECT attempts, last_error, dead_at FROM vector_sync_jobs").get(),
+		).toEqual({ attempts: 0, last_error: null, dead_at: null });
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
+		log.mockRestore();
+	});
+
+	it.each([0, 7])(
+		"preserves a newer owner's backoff or dead state after a late success (prior failures %i)",
+		async (prior) => {
+			const { env, store, sqlite, indexed } = fixture();
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			store.upsert
+				.mockImplementationOnce(async () => {
+					sqlite.prepare("UPDATE vector_sync_jobs SET attempts = ?").run(prior);
+					expect(await synchronizeVectors(env, { store, now: 101 + SYNC_LEASE_MS })).toEqual({
+						synced: 0,
+						failed: 1,
+					});
+				})
+				.mockRejectedValueOnce(new Error("too many requests"));
+			expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 0 });
+			expect(store.upsert).toHaveBeenCalledTimes(2);
+			expect(indexed()).toBeNull();
+			expect(
+				sqlite.prepare("SELECT attempts, last_error, due_at, dead_at FROM vector_sync_jobs").get(),
+			).toEqual({
+				attempts: prior + 1,
+				last_error: "too many requests",
+				due_at: 101 + SYNC_LEASE_MS + Math.min(2 ** (prior + 1), 24) * RECONCILE_INTERVAL_MS,
+				dead_at: prior === 7 ? 101 + SYNC_LEASE_MS : null,
+			});
+			expect(await synchronizeVectors(env, { store, now: 102 + SYNC_LEASE_MS })).toEqual({
+				synced: 0,
+				failed: 0,
+			});
+			log.mockRestore();
+		},
+	);
+
+	it("repairs a concurrent restore without repeating other successful batched deletions", async () => {
+		const { env, store, sqlite, indexed } = fixture();
+		sqlite.exec(
+			"UPDATE memories SET deleted_at = 50; INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-missing')",
+		);
+		store.delete.mockImplementationOnce(async () => {
+			sqlite.exec("UPDATE memories SET deleted_at = NULL");
+		});
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 2, failed: 0 });
+		expect(store.delete).toHaveBeenCalledExactlyOnceWith(["memory", "z-missing"]);
+		expect(store.upsert).toHaveBeenCalledTimes(1);
+		expect(indexed()).toBe(100);
+	});
+
+	it("requeues only an unacknowledged row after a successful batch deletion", async () => {
+		const { env, db, store, sqlite } = fixture();
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		sqlite.exec(
+			"UPDATE memories SET deleted_at = 50; INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-missing')",
+		);
+		vi.spyOn(db, "batch").mockRejectedValueOnce(new Error("private SQL body"));
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 1, failed: 1 });
+		expect(store.delete).toHaveBeenCalledExactlyOnceWith(["memory", "z-missing"]);
+		expect(
+			sqlite
+				.prepare("SELECT attempts, last_error FROM vector_sync_jobs WHERE memory_id = 'memory'")
+				.get(),
+		).toEqual({ attempts: 1, last_error: "[redacted]" });
+		expect(
+			sqlite
+				.prepare(
+					"SELECT attempts, synced_generation = generation AS synced FROM vector_sync_jobs WHERE memory_id = 'z-missing'",
+				)
+				.get(),
+		).toEqual({ attempts: 0, synced: 1 });
+		expect(JSON.stringify(log.mock.calls)).not.toContain("private SQL body");
+		log.mockRestore();
+	});
+
+	it.each([
+		"UPDATE memories SET importance = 0.8",
+		"DELETE FROM memory_vectors; DELETE FROM memories",
+		"UPDATE memory_vectors SET updated_at = 30",
+		"DELETE FROM memory_vectors",
+		"UPDATE spaces SET slug = 'new' WHERE id = 'space:kb'",
+	])("revives dead work for authoritative changes: %s", (mutation) => {
+		const { sqlite } = fixture();
+		sqlite.exec(
+			"UPDATE vector_sync_jobs SET attempts = 8, last_error = 'service unavailable', dead_at = 100",
+		);
+		sqlite.exec(mutation);
+		expect(
+			sqlite.prepare("SELECT attempts, last_error, dead_at, due_at FROM vector_sync_jobs").get(),
+		).toEqual({ attempts: 0, last_error: null, dead_at: null, due_at: 0 });
+	});
+
 	it("backs off deletions exponentially, parks them after eight failures and revives on restore", async () => {
 		const { env, store, sqlite } = fixture();
 		sqlite.exec("UPDATE memories SET deleted_at = 50 WHERE id = 'memory'");
