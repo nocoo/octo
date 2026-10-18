@@ -1,3 +1,4 @@
+import { BUILD_INFO } from "../../lib/build-info";
 import { APP_VERSION } from "../../lib/version";
 import type { Env } from "../env";
 import { probeD1, readTestMarker } from "../lib/d1";
@@ -11,6 +12,7 @@ export async function liveResponse(env: Env): Promise<Response> {
 			status: connected ? "ok" : "error",
 			name: "octo",
 			version: APP_VERSION,
+			...BUILD_INFO,
 			database: { connected },
 			d1_marker: marker,
 		},

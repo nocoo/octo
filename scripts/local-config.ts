@@ -10,6 +10,8 @@ export function localWranglerConfig(toml: string): string {
 	// Production custom domains make wrangler rewrite Host to octo.hexly.ai locally,
 	// which blocks ACCESS_DEV_BYPASS_EMAIL (only allowed on octo.dev.hexly.ai / loopback).
 	delete config.routes;
+	delete config.build;
+	delete config.alias;
 	return stringify(config);
 }
 

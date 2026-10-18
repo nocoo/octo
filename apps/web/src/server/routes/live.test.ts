@@ -21,7 +21,7 @@ function envWith(first: unknown | (() => never)): Env {
 }
 
 describe("liveResponse", () => {
-	it("returns version and a D1 probe", async () => {
+	it("returns version, unknown local build identity and a D1 probe", async () => {
 		const res = await liveResponse(envWith({ n: 1, value: "test" }));
 		expect(res.status).toBe(200);
 		expect(res.headers.get("cache-control")).toBe("no-store");
@@ -29,6 +29,8 @@ describe("liveResponse", () => {
 			status: "ok",
 			name: "octo",
 			version: APP_VERSION,
+			git_sha: "unknown",
+			build_time: "unknown",
 			database: { connected: true },
 			d1_marker: "test",
 		});
@@ -44,6 +46,8 @@ describe("liveResponse", () => {
 		expect(res.headers.get("cache-control")).toBe("no-store");
 		expect(await res.json()).toMatchObject({
 			status: "error",
+			git_sha: "unknown",
+			build_time: "unknown",
 			database: { connected: false },
 			d1_marker: null,
 		});

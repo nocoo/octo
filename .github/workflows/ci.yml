@@ -22,6 +22,8 @@ jobs:
       test-command: "bun run test:coverage"
       lint-command: "bun run lint"
       typecheck-command: "bun run typecheck"
+      build: true
+      build-command: "bun run build && ./node_modules/.bin/wrangler deploy --dry-run --outdir dist/worker"
       l2: true
       l2-command: "bun run test:e2e:api"
       l3: true

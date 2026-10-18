@@ -32,9 +32,13 @@ describe("daily local config startup", () => {
 				const local = parse(await readFile(configPath, "utf8"));
 				expect(local.vectorize).toBeUndefined();
 				expect(local.routes).toBeUndefined();
+				expect(local.build).toBeUndefined();
+				expect(local.alias).toBeUndefined();
 				expect(local).toEqual(
 					Object.fromEntries(
-						Object.entries(production).filter(([key]) => !["vectorize", "routes"].includes(key)),
+						Object.entries(production).filter(
+							([key]) => !["vectorize", "routes", "build", "alias"].includes(key),
+						),
 					),
 				);
 				expect(dirname(configPath)).toBe(cwd);

@@ -65,9 +65,11 @@ test-only adapter.
 
 ## 5. CI / CD
 
-- `.github/workflows/ci.yml`：调用 `nocoo/base-ci/.github/workflows/quality.yml`，固定到与 giraffe 相同的 SHA（`ad43150…`），`l2: true`；阶段 2 起 `l3: true`。
-- `.github/workflows/release.yml`：只在 main CI 通过后、明确的版本 tag 或手动 dispatch 时运行：先跑 D1 迁移（只做加法）→ Vectorize metadata index 校验 → `vite build` → `wrangler deploy`。不从笔记本并发部署。
-- 部署后验证 `GET https://octo.hexly.ai/api/live`，确认版本号和 D1 `SELECT 1`。
+- `.github/workflows/ci.yml`：调用 `nocoo/base-ci/.github/workflows/quality.yml`，固定到与 giraffe 相同的 SHA（`ad43150…`），`l2: true`、`l3: true`；`build: true` 执行 `bun run build`（production gate → Vite SPA）再执行 `wrangler deploy --dry-run --outdir dist/worker`，只验证真实 Worker 打包，不部署。
+- 仓库目前没有 `.github/workflows/release.yml`；此前的迁移 / Vectorize 校验 / 发布流程描述是规划，不是现有 GitHub Actions 发布实现。不从笔记本并发部署。
+- 正式 Vite → Wrangler 路径中，`vite build` 只输出 SPA，Worker 仍由 `wrangler.toml` 的 `main` 单独编译。Wrangler `[build]` 调用 `scripts/build-info.ts`：在 `WRANGLER_COMMAND=deploy` 或 `versions upload` 时读取当前 checkout 的 `git rev-parse --short HEAD` 和构建时的 `new Date().toISOString()`，写入已忽略的 `.wrangler/build-info.ts`；`[alias]` 将路由导入的默认元数据模块替换为该文件，身份实际固化在 Worker bundle，不依赖 SPA 或运行时环境变量。缺少 Git checkout 的生产构建直接失败，不冒充 `unknown`。
+- `GET /api/live` 保留 `version`，增加顶层 `git_sha`（Git 短 SHA）和 `build_time`（ISO 8601 UTC，如 `2026-10-18T01:02:03.456Z`），D1 故障返回 503 时同样提供身份，继续 `Cache-Control: no-store`。时间是 Worker 构建时间，不是部署时间或请求时间；相同提交重建可以得到不同时间。日常开发及 L2/L3 的本地配置移除生产 build/alias，单测直接导入默认模块，两字段均为 `unknown`，不会读取上次生成的身份。直接 `wrangler dev` 的 hook 也生成 `unknown`。
+- 部署后验证 `GET https://octo.hexly.ai/api/live`，确认版本号、`git_sha`、`build_time` 和 D1 `SELECT 1`；dry-run 不证明远程部署身份。禁止跳过 Wrangler custom build 或手工注入陈旧生成文件。
 - 首次部署前的一次性资源准备（需要 Zheng 授权）：`wrangler d1 create octo-db`、`wrangler r2 bucket create octo-files`、`wrangler vectorize create octo-vec-<profile> --dimensions=<d> --metric=cosine`，以及 7 个 `create-metadata-index`，最后用 `wrangler secret put API_KEY_PEPPER` 写入 secret。
 
 ## 6. 多 agent 并行开发
