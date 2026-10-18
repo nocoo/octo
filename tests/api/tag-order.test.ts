@@ -17,12 +17,12 @@ it("round-trips caller tag order and versions a pure reorder over HTTP", async (
 			title: "Order",
 			body: "Tag order",
 			type: "note",
-			tags: ["Zulu", "alpha", "zulu", "中文"],
+			tags: ["Order-kbr1-Zulu", "order-kbr1-alpha", "order-kbr1-zulu", "order-kbr1-中文"],
 		}),
 	});
 	expect(created.status).toBe(201);
 	const memory = (await created.json()) as { id: string; tags: string[] };
-	const tags = ["zulu", "alpha", "中文"];
+	const tags = ["order-kbr1-zulu", "order-kbr1-alpha", "order-kbr1-中文"];
 	expect(memory.tags).toEqual(tags);
 	const path = `${base}/api/v1/memories/${memory.id}`;
 	expect(await (await fetch(path, { headers })).json()).toMatchObject({ tags });
@@ -35,7 +35,7 @@ it("round-trips caller tag order and versions a pure reorder over HTTP", async (
 		body: JSON.stringify({ ids: [memory.id] }),
 	});
 	expect(await batch.json()).toMatchObject({ items: [expect.objectContaining({ tags })] });
-	const reordered = ["中文", "alpha", "zulu"];
+	const reordered = ["order-kbr1-中文", "order-kbr1-alpha", "order-kbr1-zulu"];
 	const updated = await fetch(path, {
 		method: "PATCH",
 		headers: { ...headers, "If-Match": "1" },

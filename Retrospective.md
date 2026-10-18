@@ -1,5 +1,9 @@
 # Retrospective
 
+### 2026-10-18 — Validate published schemas and isolate shared dictionaries
+
+Round-one MAX review found that Zod's runtime nonempty-patch refinement disappeared from the published MCP JSON Schema. An SDK JSON Schema validator reproduced acceptance of a version-only update; explicit branch property minima now make discovery match runtime validation. Fragment assertions alone cannot prove a generated schema's behavior. The same review found that the new order test's generic `alpha` label could shadow another L2 file's fixed tag ID in the shared global dictionary. A subsequent full L2 run reproduced the foreign-key failure. The order test now namespaces every tag, preserving normalization, deduplication and reorder assertions without depending on file order. Use namespaced fixture identities across the shared L2 database and exercise generated public schemas with a real validator.
+
 ### 2026-10-18 — Verify pane mutation targets from returned metadata
 
 During round-one worker layout cleanup, `herdr pane resize --current --direction left --amount 0.34` unexpectedly returned a mutation of the focused pane in another tab instead of the calling pane. No repository files or processes there changed. The affected tab was restored to the prescribed one-third controller layout using an explicit pane ID; its exact previous ratio was not captured. The task tab was then resized with an explicit ID and verified against returned pane and tab IDs. Use explicit pane IDs for layout mutations, snapshot the original split ratios first, and inspect the returned target immediately rather than trusting caller-selection flags or option order.
