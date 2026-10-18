@@ -2,6 +2,7 @@ import type { VisibleSpaces } from "../auth/authorize";
 import { chunkBoundParams, isUniqueConstraint } from "../lib/d1";
 import { ApiError } from "../lib/errors";
 import { newUlid } from "../lib/ulid";
+import { tagTokenStatement, WORD_TAGS_SQL } from "../search/word-index";
 
 export const TAG_NAME_MAX = 64;
 
@@ -231,6 +232,7 @@ export class TagRepo {
 				this.db
 					.prepare("UPDATE tags SET name = ?, display_name = ?, updated_at = ? WHERE id = ?")
 					.bind(toName, toDisplay, ts, from.id),
+				tagTokenStatement(this.db, from.id, toName),
 				this.db
 					.prepare(
 						"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) VALUES ('tag', ?, NULL, 'tag_renamed', NULL, ?, ?)",
@@ -282,6 +284,7 @@ export class TagRepo {
 			statements: [
 				this.guardTag(from),
 				this.guardTag(into),
+				tagTokenStatement(this.db, into.id, into.name),
 				this.db
 					.prepare(
 						"INSERT INTO tags (id, name, display_name, merged_into, created_at, updated_at) SELECT id, name, display_name, merged_into, created_at, updated_at FROM tags WHERE id = ? AND ? != (SELECT COUNT(*) FROM memory_tags mt INNER JOIN memories m ON m.id = mt.memory_id WHERE mt.tag_id = ?)",
@@ -338,6 +341,11 @@ export class TagRepo {
 		const tagSql =
 			"IFNULL((SELECT GROUP_CONCAT(t.name, ' ') FROM memory_tags mt INNER JOIN tags t ON t.id = mt.tag_id WHERE mt.memory_id = m.id), '')";
 		return [
+			this.db
+				.prepare(
+					`UPDATE memories_words_fts SET tags = (SELECT ${WORD_TAGS_SQL} FROM memories m JOIN memories_fts_map map ON map.memory_id = m.id WHERE map.fts_rowid = memories_words_fts.rowid) WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${affected}))`,
+				)
+				.bind(...tagIds),
 			this.db
 				.prepare(
 					`DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${affected}))`,

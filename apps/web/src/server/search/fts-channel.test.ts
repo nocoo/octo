@@ -1,282 +1,72 @@
 import { describe, expect, it } from "vitest";
 import { runFtsChannel } from "./fts-channel";
 
-describe("runFtsChannel", () => {
-	it("uses a LIKE scan for all-short Chinese queries such as 部署", async () => {
-		let sawLike = false;
-		let sawMatch = false;
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("LIKE")) {
-							sawLike = true;
-							return { results: [{ id: "m2" }] };
-						}
-						if (sql.includes("MATCH")) {
-							sawMatch = true;
-						}
-						return { results: [] };
-					},
-				}),
+function database(
+	respond: (sql: string, binds: unknown[]) => Array<{ id: string; score: number }>,
+) {
+	return {
+		prepare: (sql: string) => ({
+			bind: (...binds: unknown[]) => ({
+				all: async () => ({ results: respond(sql, binds) }),
+				first: async () => null,
 			}),
-		} as never;
-		const result = await runFtsChannel(db, "部署", ["s1"], undefined, 5);
-		expect(sawLike).toBe(true);
-		expect(sawMatch).toBe(false);
-		expect(result.hits).toEqual([{ id: "m2", bm25: 1 }]);
-		expect(result.partial).toBe(true);
-	});
+		}),
+	} as unknown as D1Database;
+}
 
-	it("re-applies space visibility when filtering short terms on fts candidates", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("MATCH")) {
-							return { results: [{ id: "m1", score: -1 }] };
-						}
-						if (sql.includes("instr")) {
-							return { results: [] };
-						}
-						return { results: [] };
-					},
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare 部署", ["s1"], undefined, 5);
-		expect(result.hits).toEqual([]);
-	});
-
-	it("marks bounded short scans partial even when result count is capped", async () => {
-		const rows = Array.from({ length: 100 }, (_, i) => ({ id: `m${i}` }));
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("LIKE")) {
-							return { results: rows };
-						}
-						return { results: [] };
-					},
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "部署", ["s1"], undefined, 100);
-		expect(result.partial).toBe(true);
-		expect(result.hits.length).toBe(100);
-	});
-
-	it("returns empty for unknown tags_all names", async () => {
-		const db = {
-			prepare: () => ({
-				bind: () => ({
-					all: async () => ({ results: [] }),
-					first: async () => null,
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare", ["s1"], { tags_all: ["ghost"] }, 5);
-		expect(result.hits).toEqual([]);
-	});
-
-	it("filters 部署 with instr on fts candidates when mixed with long terms", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("MATCH")) {
-							return {
-								results: [
-									{ id: "m1", score: -1 },
-									{ id: "m2", score: -2 },
-								],
-							};
-						}
-						if (sql.includes("instr")) {
-							return { results: [{ id: "m1" }] };
-						}
-						return { results: [] };
-					},
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare 部署", ["s1"], undefined, 5);
-		expect(result.hits).toEqual([{ id: "m1", bm25: -1 }]);
-		expect(result.partial).toBe(false);
-	});
-
-	it("runs a short-query like scan", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("LIKE")) {
-							return { results: [{ id: "m1" }] };
-						}
-						return { results: [] };
-					},
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "部署", ["s1"], undefined, 10);
-		expect(result.hits).toEqual([{ id: "m1", bm25: 1 }]);
-	});
-
-	it("returns empty when tags_all names do not resolve", async () => {
-		const db = {
-			prepare: () => ({
-				bind: () => ({
-					all: async () => ({ results: [] }),
-					first: async () => null,
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare", ["s1"], { tags_all: ["ghost"] }, 5);
-		expect(result.hits).toEqual([]);
-	});
-
-	it("returns empty for blank queries", async () => {
-		const db = {
-			prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }) }) }),
-		} as never;
-		expect(await runFtsChannel(db, "   ", ["s1"], undefined, 5)).toEqual({
-			hits: [],
+describe("indexed FTS channel", () => {
+	it("uses word MATCH for short terms without scanning or recency ordering", async () => {
+		const db = database((sql, binds) => {
+			expect(sql).toContain("memories_words_fts MATCH");
+			expect(sql).not.toMatch(/LIKE|instr|updated_at DESC/);
+			expect(binds[0]).toBe('"部署"');
+			return [{ id: "old", score: -2 }];
+		});
+		expect(await runFtsChannel(db, "部署", ["s1"], undefined, 5)).toEqual({
+			hits: [{ id: "old", bm25: -2 }],
 			partial: false,
 		});
 	});
-
-	it("returns empty when tags_all cannot resolve", async () => {
-		const db = {
-			prepare: (_sql: string) => ({
-				bind: () => ({
-					all: async () => ({ results: [] }),
-					first: async () => null,
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare", ["s1"], { tags_all: ["missing"] }, 5);
-		expect(result.hits).toEqual([]);
-	});
-
-	it("runs fts match queries", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("MATCH")) {
-							return { results: [{ id: "m1", score: -1 }] };
-						}
-						return { results: [] };
-					},
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare", ["s1"], undefined, 5);
-		expect(result.hits[0]?.id).toBe("m1");
-	});
-
-	it("returns early when short-term filtering has no hits", async () => {
-		const db = {
-			prepare: () => ({
-				bind: () => ({ all: async () => ({ results: [] }) }),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "ab", ["s1"], undefined, 5);
-		expect(result.hits).toEqual([]);
-	});
-
-	it("filters short terms from fts candidates", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("MATCH")) {
-							return { results: [{ id: "m1", score: -1 }] };
-						}
-						if (sql.includes("SELECT id, body")) {
-							return { results: [{ id: "m1", body: "no match" }] };
-						}
-						return { results: [] };
-					},
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "ab cloudflare", ["s1"], undefined, 5);
-		expect(result.hits).toEqual([]);
-	});
-
-	it("applies tags_any filters when tags resolve", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("MATCH")) {
-							return { results: [{ id: "m1", score: -1 }] };
-						}
-						return { results: [] };
-					},
-					first: async () => ({ id: "t1", merged_into: null }),
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare", ["s1"], { tags_any: ["infra"] }, 5);
-		expect(result.hits[0]?.id).toBe("m1");
-	});
-
-	it("applies tags_all filters when tags resolve", async () => {
-		const db = {
-			prepare: (sql: string) => ({
-				bind: () => ({
-					all: async () => {
-						if (sql.includes("MATCH")) {
-							return { results: [{ id: "m1", score: -1 }] };
-						}
-						return { results: [] };
-					},
-					first: async () => ({ id: "t1", merged_into: null }),
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare", ["s1"], { tags_all: ["infra"] }, 5);
-		expect(result.hits[0]?.id).toBe("m1");
-	});
-
-	it("returns empty when tags_all names do not resolve", async () => {
-		const db = {
-			prepare: () => ({
-				bind: () => ({
-					all: async () => ({ results: [] }),
-					first: async () => null,
-				}),
-			}),
-		} as never;
-		expect(await runFtsChannel(db, "cloudflare", ["s1"], { tags_all: ["ghost"] }, 5)).toEqual({
-			hits: [],
-			partial: false,
+	it("tries AND then ranked OR only when AND has no authorized matches", async () => {
+		const matches: unknown[] = [];
+		const db = database((sql, binds) => {
+			expect(sql).toContain("m.space_id");
+			expect(sql).toContain("m.deleted_at IS NULL");
+			matches.push(binds[0]);
+			return String(binds[0]).includes(" OR ") ? [{ id: "m1", score: -1 }] : [];
 		});
+		expect((await runFtsChannel(db, "密钥 轮换", ["s1"], undefined, 5)).hits).toHaveLength(1);
+		expect(matches).toEqual([
+			'"密钥" AND "轮换"',
+			'("密" AND "钥") AND ("轮" AND "换")',
+			'"密钥" OR "轮换"',
+		]);
 	});
-
-	it("returns empty for whitespace-only queries", async () => {
-		const db = {
-			prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }) }) }),
-		} as never;
-		expect(await runFtsChannel(db, "   ", ["s1"], undefined, 5)).toEqual({
-			hits: [],
-			partial: false,
-		});
+	it("keeps trigram substring fallback when every term supports it", async () => {
+		const db = database((sql) =>
+			sql.includes("FROM memories_fts\n") ? [{ id: "substring", score: -1 }] : [],
+		);
+		expect((await runFtsChannel(db, "oudf", ["s1"], undefined, 5)).hits[0]?.id).toBe("substring");
 	});
-
-	it("returns empty when tags_any cannot resolve", async () => {
-		const db = {
-			prepare: () => ({
-				bind: () => ({
-					all: async () => ({ results: [] }),
-					first: async () => null,
-				}),
-			}),
-		} as never;
-		const result = await runFtsChannel(db, "cloudflare", ["s1"], { tags_any: ["nope"] }, 5);
-		expect(result.hits).toEqual([]);
+	it.each(["   ", "absent", "missing 部署"])(
+		"returns complete empty results for %s",
+		async (query) => {
+			expect(
+				await runFtsChannel(
+					database(() => []),
+					query,
+					["s1"],
+					undefined,
+					5,
+				),
+			).toEqual({ hits: [], partial: false });
+		},
+	);
+	it("returns empty for inaccessible spaces and unresolved tags", async () => {
+		const db = database(() => []);
+		expect((await runFtsChannel(db, "cloudflare", [], undefined, 5)).hits).toEqual([]);
+		expect(
+			(await runFtsChannel(db, "cloudflare", ["s1"], { tags_all: ["ghost"] }, 5)).hits,
+		).toEqual([]);
 	});
 });

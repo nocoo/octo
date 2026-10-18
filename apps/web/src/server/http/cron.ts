@@ -1,6 +1,7 @@
 import { rollupUsage } from "../audit/usage";
 import type { Env } from "../env";
 import { cleanupExternalFiles } from "../purge/service";
+import { backfillWordIndex } from "../search/word-backfill";
 import { runDerivedTasks } from "../sync/tasks";
 import { purgeIdempotencyOlderThan } from "./idempotency-repo";
 
@@ -12,6 +13,7 @@ export async function runScheduledTasks(env: Env, now?: number): Promise<{ purge
 		rollupUsage(env.DB),
 		runDerivedTasks(env, now),
 		cleanupExternalFiles(env),
+		backfillWordIndex(env.DB),
 	]);
 	return { purged };
 }

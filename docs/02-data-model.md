@@ -161,7 +161,7 @@ CREATE TABLE idempotency_records (
 1. 更新 `memories` 行（乐观并发：`WHERE id=? AND version=?`；不匹配返回 409 `version_conflict`）。
 2. 插入新的 `memory_versions` 行（完整快照）。
 3. 更新 `memory_tags`。
-4. 更新 FTS 行（由触发器或在 batch 内显式写）。
+4. 显式更新 trigram 与预分词 FTS 行、标签分词数据；与 memory、版本、change event 同批提交。
 5. 追加一条 `changes`。
 6. 若带了 `vector`，upsert `memory_vectors`，并把 `indexed_at` 置为 NULL。
 
@@ -252,6 +252,7 @@ process never reaches a catch handler.
 
 ## 4. 版本
 
+- `If-Match` / `expected_version` 接受非负整数；0 是有效但必不匹配的版本前提，返回 409 `version_conflict`，不是 400。存储版本仍从 1 开始。
 - 当前记录及版本快照的 `importance` 均由写入 schema 限定为 0–1（含端点）。
 - 每次 create / update / rollback / restore / move 都生成新版本。版本号从 1 开始，按 memory 自增。
 - 标签数组的顺序属于版本内容：仅重排标签也生成新版本，diff 返回 `tags` 字段的前后数组；未提交标签的更新保持当前顺序。

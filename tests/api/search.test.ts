@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { APP_VERSION } from "../../apps/web/src/lib/version";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import { encodeFloat32Vector, l2Normalize } from "../../apps/web/src/server/search/math";
+import { indexText } from "../../apps/web/src/server/search/tokenizer";
 import { assertAsyncTestMarker } from "../../scripts/local-d1";
 import { e2eD1, query, sqlText } from "../fixtures/l2-batch";
 
@@ -25,6 +26,7 @@ async function cleanup() {
 		"--command",
 		`
 DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${quotedIds}));
+DELETE FROM memories_words_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${quotedIds}));
 DELETE FROM memory_vectors WHERE memory_id IN (${quotedIds});
 DELETE FROM memory_tags WHERE memory_id IN (${quotedIds});
 DELETE FROM memories_fts_map WHERE memory_id IN (${quotedIds});
@@ -74,6 +76,7 @@ INSERT INTO tags VALUES ('tag_srch_infra','search-infra','Search infra',NULL,${n
 VALUES ('${id}','${space}','部署 cloudflare worker','正文包含部署与 cloudflare worker 配置 𠮷野','procedure',0.8,'${source}',${now},'hash',${now},${now},${id === TRASHED ? now : "NULL"});
 INSERT INTO memories_fts(title,body,tags) VALUES ('部署 cloudflare worker','正文包含部署与 cloudflare worker 配置 𠮷野','search-infra');
 INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;
+INSERT INTO memories_words_fts(rowid,title,body,tags) SELECT fts_rowid,${sqlText(indexText("部署 cloudflare worker"))},${sqlText(indexText("正文包含部署与 cloudflare worker 配置 𠮷野"))},'search infra' FROM memories_fts_map WHERE memory_id='${id}';
 INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
 VALUES ('${id}','te3-small-1536','text-embedding-3-small',1536,X'${blob}','hash',${now});
 INSERT INTO memory_tags (memory_id, tag_id) VALUES ('${id}','tag_srch_infra');`);
@@ -85,7 +88,8 @@ INSERT INTO memory_tags (memory_id, tag_id) VALUES ('${id}','tag_srch_infra');`)
 		commands.push(`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
 VALUES ('${id}','sp_srch_l2_vis','Accent fixture','${body}','note','${source}','hash',${now},${now});
 INSERT INTO memories_fts(title,body,tags) VALUES ('Accent fixture','${body}','');
-INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;`);
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;
+INSERT INTO memories_words_fts(rowid,title,body,tags) SELECT fts_rowid,'Accent fixture',${sqlText(indexText(body))},'' FROM memories_fts_map WHERE memory_id='${id}';`);
 	}
 	await d1(["--command", commands.join("\n")]);
 });
@@ -113,7 +117,7 @@ type SearchBody = {
 		scores: { fts: { bm25: number } | null; vector: { similarity: number } | null };
 	}>;
 	channels: {
-		fts: { candidates: number; partial: boolean; partial_reason: "short_term_scan_limit" | null };
+		fts: { candidates: number; partial: boolean; partial_reason: null };
 		vector: { candidates: number; profile: string | null; truncated: boolean };
 	};
 };
@@ -142,45 +146,44 @@ describe("POST /api/v1/search", () => {
 		},
 	);
 
-	it("marks the bounded all-short fallback partial", async () => {
+	it("answers short queries from the complete word index", async () => {
 		const res = await post("search", { query: "部署", mode: "fts" });
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as SearchBody;
 		expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
-		expect(body.channels.fts.partial).toBe(true);
-		expect(body.channels.fts.partial_reason).toBe("short_term_scan_limit");
+		expect(body.channels.fts.partial).toBe(false);
+		expect(body.channels.fts.partial_reason).toBeNull();
 	});
 
-	it("finds a two-code-point supplementary CJK term through the bounded fallback", async () => {
+	it("indexes two-code-point supplementary CJK terms", async () => {
 		const res = await post("search", { query: "𠮷野", mode: "fts" });
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as SearchBody;
 		expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
 		expect(body.channels.fts).toEqual({
 			candidates: 1,
-			partial: true,
-			partial_reason: "short_term_scan_limit",
+			partial: false,
+			partial_reason: null,
 		});
 	});
 
-	it.each([
-		{ query: "e\u0301t", id: ACCENT, partial: true },
-		{ query: "fixture e\u0301t", id: ACCENT, partial: false },
-		{ query: "fixture et", id: PLAIN, partial: false },
-	])("preserves original short terms in $query", async ({ query, id, partial }) => {
-		const batch = await post("memories:batchGet", { ids: [ACCENT] });
-		expect(batch.status).toBe(200);
-		expect(await batch.json()).toMatchObject({ items: [{ id: ACCENT, body: "e\u0301t" }] });
-		const res = await post("search", { query, mode: "fts" });
-		expect(res.status).toBe(200);
-		const body = (await res.json()) as SearchBody;
-		expect(body.items.map((item) => item.id)).toEqual([id]);
-		expect(body.channels.fts).toEqual({
-			candidates: 1,
-			partial,
-			partial_reason: partial ? "short_term_scan_limit" : null,
-		});
-	});
+	it.each(["e\u0301t", "fixture e\u0301t", "fixture et"])(
+		"normalizes short accents in %s without changing stored text",
+		async (query) => {
+			const batch = await post("memories:batchGet", { ids: [ACCENT] });
+			expect(batch.status).toBe(200);
+			expect(await batch.json()).toMatchObject({ items: [{ id: ACCENT, body: "e\u0301t" }] });
+			const res = await post("search", { query, mode: "fts" });
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as SearchBody;
+			expect(body.items.map((item) => item.id).sort()).toEqual([ACCENT, PLAIN].sort());
+			expect(body.channels.fts).toEqual({
+				candidates: 2,
+				partial: false,
+				partial_reason: null,
+			});
+		},
+	);
 
 	it.each(["fts", "vector", "hybrid"])(
 		"honors tags and visibility filters in %s mode",

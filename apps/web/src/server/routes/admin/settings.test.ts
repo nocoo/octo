@@ -35,6 +35,18 @@ function setup() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("admin embedding settings routes", () => {
+	it("runs bounded word backfill and reports a missing migration checkpoint as failure", async () => {
+		const { app, env, raw } = setup();
+		const request = () =>
+			app.request(
+				"http://localhost/api/admin/settings/search/backfill",
+				{ method: "POST", headers: { Origin: ADMIN_ORIGIN_DEV } },
+				env,
+			);
+		expect(await (await request()).json()).toEqual({ tags: 0, memories: 0, complete: true });
+		raw.exec("DELETE FROM search_backfill_state");
+		expect((await request()).status).toBe(500);
+	});
 	it("returns raw JSON, saves with admin actor and never exposes credentials", async () => {
 		const { raw, request } = setup();
 		const initial = await request("GET");

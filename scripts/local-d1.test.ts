@@ -76,6 +76,7 @@ describe("local-d1", () => {
 				)
 				.all(),
 		).toHaveLength(3);
+		db.exec("UPDATE search_backfill_state SET memory_cursor='kept', complete=1 WHERE id=1");
 		db.exec(`INSERT INTO spaces (id,slug,name,created_at,updated_at) VALUES ('order','order','Order',1,1);
 			INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at) VALUES ('order','order','','','note','key','hash',1,1);
 			INSERT INTO tags (id,name,display_name,created_at,updated_at) VALUES ('order','order','Order',1,1);
@@ -88,6 +89,10 @@ describe("local-d1", () => {
 				)
 				.get(),
 		).toEqual({ attempts: 0, last_error: null, dead_at: null });
+		expect(db.prepare("SELECT memory_cursor, complete FROM search_backfill_state").get()).toEqual({
+			memory_cursor: "kept",
+			complete: 1,
+		});
 		expect(db.prepare("SELECT position FROM memory_tags WHERE memory_id = 'order'").get()).toEqual({
 			position: 7,
 		});

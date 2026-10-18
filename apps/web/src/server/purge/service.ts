@@ -58,6 +58,11 @@ export async function purgeMemory(
 					"DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?)",
 				)
 				.bind(id),
+			db
+				.prepare(
+					"DELETE FROM memories_words_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id = ?)",
+				)
+				.bind(id),
 			...[
 				"memories_fts_map",
 				"memory_versions",

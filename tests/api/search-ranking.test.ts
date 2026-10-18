@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { encodeFloat32Vector, l2Normalize } from "../../apps/web/src/server/search/math";
+import { indexText } from "../../apps/web/src/server/search/tokenizer";
 import { assertAsyncTestMarker } from "../../scripts/local-d1";
 import { base, e2eD1, seedKey, sqlText } from "../fixtures/l2-batch";
 
@@ -129,6 +130,7 @@ async function cleanup() {
 	await d1([
 		"--command",
 		`DELETE FROM memories_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${idsSql}));
+DELETE FROM memories_words_fts WHERE rowid IN (SELECT fts_rowid FROM memories_fts_map WHERE memory_id IN (${idsSql}));
 DELETE FROM memory_vectors WHERE memory_id IN (${idsSql});
 DELETE FROM memories_fts_map WHERE memory_id IN (${idsSql});
 DELETE FROM memories WHERE id IN (${idsSql});
@@ -155,6 +157,7 @@ beforeAll(async () => {
 VALUES (${id},${sqlText(spaceId)},${title},${body},'note',${sqlText(key.id)},'ranking-hash',${index + 1},${index + 1});
 INSERT INTO memories_fts(title,body,tags) VALUES (${title},${body},'');
 INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT ${id},rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;
+INSERT INTO memories_words_fts(rowid,title,body,tags) SELECT fts_rowid,${sqlText(indexText(memory.title))},${sqlText(indexText(memory.body))},'' FROM memories_fts_map WHERE memory_id=${id};
 INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
 VALUES (${id},${sqlText(profile)},'text-embedding-3-small',1536,X'${blob}','ranking-hash',1);`);
 	}
@@ -197,7 +200,7 @@ describe.each(["fts", "hybrid"])("representative search ranking in %s mode", (mo
 		expect(result.channels.fts.candidates).toBeGreaterThan(0);
 		if (mode === "hybrid") expect(result.channels.vector.candidates).toBe(memories.length);
 		if (query === "what does he drink in the morning") {
-			expect(result.channels.fts.candidates).toBe(4);
+			expect(result.channels.fts.candidates).toBe(1);
 		}
 	});
 });

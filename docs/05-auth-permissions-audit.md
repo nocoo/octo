@@ -111,6 +111,8 @@ CREATE TABLE mcp_audit_writes (
 
 ## 6. 用量统计（替代速率限制）
 
-- cron 每小时把 `audit_log` 汇总到 `usage_daily(day, key_id, calls, errors, writes, bytes_in, bytes_out)`；用 upsert，重复跑结果不变。
+- 每次已认证调用的审计行、MCP 写标记（若有）和 `usage_daily(day, key_id, calls, errors, writes, bytes_in, bytes_out)` 增量在同一个 D1 batch 提交。某一阶段失败整批回滚，不产生只有计数或只有审计的半次调用。每个 key、UTC 日期独立计数；writes 沿用成功写请求与已提交 MCP 写操作的判定。
+- cron 每小时从审计全量重算并覆盖汇总，作为修复路径，重复执行不会重复计数。单条汇总 SQL 与审计增量 batch 在 D1 串行提交，不会把并发增量丢掉。
 - `/api/v1/usage` 只返回调用者自己的数据；dashboard 能看所有 key。
-- 汇总只包含已经写入的审计行；流结束后迟到的行会在下一次 cron 纳入。修复前，普通 JSON 响应未提供 `Content-Length`，审计写入 `bytes_out=NULL`，汇总按 `0` 处理；旧响应正文从未保存，无法据此回填真实字节数。
+- `/usage` 在审计 batch 提交后可见，不再等待下一次小时 cron。`waitUntil` 仍异步持久化；未知长度流需先结束，因此正在传输或尚未提交的请求可能暂未出现，查询自身也不包含在其返回快照内。迟到的流按请求开始的 UTC 日期累计。这里没有「50 次」阈值：旧实现只读上次小时快照，恰在 50 次时汇总过便会持续显示 50 次，旧的 0 字节和低字节快照也不会跟随新审计更新。
+- 修复前审计中为 NULL 的历史输出字节仍按 0 处理；旧正文没有保存，不能恢复真实历史字节。已有正确审计但陈旧的汇总由下一次 cron 修复。L1 在 50 次快照之后运行至 64 次并跨过 61 秒，L2 用真实 workerd 连续请求验证 key 与 dashboard 的准确增长；没有降低测试断言或修改 waitUntil/响应 framing 来伪造新鲜度。

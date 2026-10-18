@@ -1,0 +1,123 @@
+{
+  "status": "complete",
+  "final_run": {
+    "run_id": "2026-10-18T14-47-31-635Z-CxvmqE",
+    "artifact": "2026-10-18T14-47-31-635Z-CxvmqE.json",
+    "started_at": "2026-10-18T14:47:31.635Z",
+    "phase": "complete",
+    "finished_at": "2026-10-18T14:53:50.789Z",
+    "artifact_sha256": "0b17e141e47e2573be67e5c215e0ca0e155e33a0d4b99bdcd4fd2048dbabe680",
+    "original_capture_path": "/Users/nocoo/workspace/personal/octo-wt/kb-round3/.wrangler/bench-word/2026-10-18T14-47-31-635Z-CxvmqE/raw-capture-before-labeling.json",
+    "original_capture_sha256": "346787c3639bd715c6f165dbe878cca522ef3bd96f18b619865240e4b4eea6e0",
+    "protected_measurements_and_sources_sha256": "43e456359defe7bd7b61bd4906b4a371139f5508b85949c0b6c489c4940323b2",
+    "source_head": "d6306840c551096abb7b32d994f3b878f3807dcf",
+    "source_bundle_sha256": "5253fd2e7798e000dff3a6b9b71d0048206f48fa50c1d96927b0ac8eee8ca939",
+    "fts_channel_sha256": "959a39b8a0ce62aeebfe08e746208120854fac94ccc8bc530f0a1291a9b83604",
+    "segmentation_source_digest": "2ce534d035c919d2eb72a577a82628aab7b5fe213ea63f297a871598c1ae1ff3",
+    "runtime_disposal_verified": true,
+    "disposal_evidence": "Existing session 14914 exited 0; JSON complete is assigned after awaited Miniflare disposal; recorded listener independently refused connection (ECONNREFUSED 61).",
+    "measurement_counts": {
+      "query_cases": 3,
+      "measured_per_query": 30,
+      "warmup_per_query": 5,
+      "paired_writes": 30,
+      "warmup_per_write_lane": 5
+    },
+    "synthetic_fixture_interpretation": "Intentionally synthetic path-selection fixture: the standalone 云桥 token is deliberately omitted from one target seed word index while original fields and unigram tokens are retained. That target does NOT have a complete product word index. This is NOT a naturally occurring ICU index and does NOT prove native contextual-boundary behavior.",
+    "current_product_and_benchmark_sources_match_frozen_snapshot": false,
+    "current_product_sources_match_frozen_snapshot": true,
+    "post_run_driver_change": "Source-manifest JSON serialization only; measured product sources and timing workloads are unchanged."
+  },
+  "superseded_runs": [
+    {
+      "run_id": "2026-10-18T13-51-30-681Z-REiIBH",
+      "artifact": "2026-10-18T13-51-30-681Z-REiIBH.json",
+      "reason": "Superseded by reviewed size-safe tokenizer: retain complete segmented words and deduplicated Han unigrams only; remove overlapping bigram extras and NFKC normalization without changing input limits or truncating content.",
+      "artifact_sha256": "e09c62cae13bfb8aa108fb512f9b9c600f3a4c69426397fb7f7a0371ae5bcc7d"
+    },
+    {
+      "run_id": "2026-10-18T14-11-25-199Z-ldo8ND",
+      "artifact": "2026-10-18T14-11-25-199Z-ldo8ND.json",
+      "started_at": "2026-10-18T14:11:25.199Z",
+      "finished_at": "2026-10-18T14:21:58.365Z",
+      "artifact_sha256": "7b9c5a6b6c60ffda9585f01a55e353d1139a32cf16aed31b52f97023ab21c72d",
+      "source_head": "d6306840c551096abb7b32d994f3b878f3807dcf",
+      "source_bundle_sha256": "fd2779728bbcfc5c5eac46f0d06a4d5d9fcd5aa1220b127fdcf866bf205d5e15",
+      "segmentation_source_digest": "2ce534d035c919d2eb72a577a82628aab7b5fe213ea63f297a871598c1ae1ff3",
+      "runtime_disposal_verified": true,
+      "disposal_evidence": "Existing benchmark session exited 0; artifact status complete is set after awaited Miniflare disposal; recorded listener independently refused connection.",
+      "measured_query_samples_per_case": 30,
+      "measured_write_samples_per_lane": 30,
+      "warmup_samples_per_query_and_write_lane": 5,
+      "paired_write_samples_retained": 30,
+      "unchanged_benchmark_driver_corpus_and_entrypoint": true,
+      "current_product_sources_match_frozen_snapshot": true,
+      "helper_test_archive": "/Users/nocoo/workspace/personal/octo-wt/kb-round3/.wrangler/bench-word/2026-10-18T14-11-25-199Z-ldo8ND/source/benchmarks/word-search-lib.test.ts",
+      "helper_test_sha256": "016c58dac426b7e8ecb441b9867f34d330f408f44d5175a4b2ee25ef06a9e488",
+      "reason": "Superseded because fts-channel.ts now adds indexed short-compound fallback with contiguous original-field verification before LIMIT. This artifact has no forced cross-ICU fallback measurement."
+    }
+  ],
+  "run_authorized": true,
+  "archived_failed_and_smoke_runs": [
+    {
+      "run_id": "2026-10-18T13-42-07-405Z-cdw4HX",
+      "status": "failed",
+      "rows": 1000,
+      "archive_path": "/Users/nocoo/workspace/personal/.octo-ctl/r3-benchmark-archive/2026-10-18T13-42-07-405Z-cdw4HX.json",
+      "sha256": "526bfb6901300feb2f2b7abbc5e1db19a03cac181b1ccc2f5bd265e0be02a9b7"
+    },
+    {
+      "run_id": "2026-10-18T13-42-29-657Z-U9UDTb",
+      "status": "failed",
+      "rows": 1000,
+      "archive_path": "/Users/nocoo/workspace/personal/.octo-ctl/r3-benchmark-archive/2026-10-18T13-42-29-657Z-U9UDTb.json",
+      "sha256": "3ccbce55d3fbec48b7cd1e47176684a574a7ea9d5c985a4ce15284d0f4840fcf"
+    },
+    {
+      "run_id": "2026-10-18T13-43-12-865Z-WIwgK2",
+      "status": "failed",
+      "rows": 1000,
+      "archive_path": "/Users/nocoo/workspace/personal/.octo-ctl/r3-benchmark-archive/2026-10-18T13-43-12-865Z-WIwgK2.json",
+      "sha256": "4845d585efd0451bf58111e9535de1cfa1aa7e513a154182fa6fad8ef1df7f75"
+    },
+    {
+      "run_id": "2026-10-18T13-44-30-920Z-b9GWAr",
+      "status": "complete",
+      "rows": 1000,
+      "archive_path": "/Users/nocoo/workspace/personal/.octo-ctl/r3-benchmark-archive/2026-10-18T13-44-30-920Z-b9GWAr.json",
+      "sha256": "8c06e8569fe198105aa761f13104b1c065997147e08aa3bb7bb4f23762d19b8f"
+    }
+  ],
+  "measured_query_cases": [
+    "two_character",
+    "multi_term",
+    "cross_icu_fallback"
+  ],
+  "source_manifest_publication": {
+    "encoding": "path/sha256 records, not filenames used as credential-like JSON property labels",
+    "reason": "Avoid generic credential false positives without a scanner exclusion. Original bytes archived; roundtrip preserves every source digest, measurement and other value.",
+    "records": [
+      {
+        "artifact": "2026-10-18T13-51-30-681Z-REiIBH.json",
+        "original_capture": "/Users/nocoo/workspace/personal/.octo-ctl/r3-benchmark-archive/2026-10-18T13-51-30-681Z-REiIBH.json.before-manifest.json",
+        "original_sha256": "73f88b42b4c38aeb8c123e6030269e79715be90f979bac7a04dd7b2e1fef3df2",
+        "published_sha256": "e09c62cae13bfb8aa108fb512f9b9c600f3a4c69426397fb7f7a0371ae5bcc7d",
+        "semantic_roundtrip_verified": true
+      },
+      {
+        "artifact": "2026-10-18T14-11-25-199Z-ldo8ND.json",
+        "original_capture": "/Users/nocoo/workspace/personal/.octo-ctl/r3-benchmark-archive/2026-10-18T14-11-25-199Z-ldo8ND.json.before-manifest.json",
+        "original_sha256": "e29017f5eb7d641f999105c8d3c26453779cbb86d8110d112a0fa063884c5e1e",
+        "published_sha256": "7b9c5a6b6c60ffda9585f01a55e353d1139a32cf16aed31b52f97023ab21c72d",
+        "semantic_roundtrip_verified": true
+      },
+      {
+        "artifact": "2026-10-18T14-47-31-635Z-CxvmqE.json",
+        "original_capture": "/Users/nocoo/workspace/personal/.octo-ctl/r3-benchmark-archive/2026-10-18T14-47-31-635Z-CxvmqE.json.before-manifest.json",
+        "original_sha256": "0d34005a60c175d9551ab19cad32fb32246e37c2541e029314f12b31b398e2d7",
+        "published_sha256": "0b17e141e47e2573be67e5c215e0ca0e155e33a0d4b99bdcd4fd2048dbabe680",
+        "semantic_roundtrip_verified": true
+      }
+    ]
+  }
+}

@@ -89,11 +89,9 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 		.filter((slug): slug is string => slug !== undefined);
 
 	let ftsHits: Array<{ id: string; bm25: number }> = [];
-	let ftsPartial = false;
 	if (mode !== "vector" && req.query) {
 		const fts = await runFtsChannel(deps.db, req.query, spaceIds, req.filters, candidateK);
 		ftsHits = fts.hits;
-		ftsPartial = fts.partial;
 	}
 
 	const contentFilter = await resolveMemoryFilterSql(deps.db, req.filters, spaceIds);
@@ -160,9 +158,7 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 		.slice(0, limit);
 	const ftsNorm = bm25ToNormalized(ftsHits);
 	const vecNorm = minMaxNormalize(new Map(vectorHits.map((h) => [h.id, h.score])));
-	const terms = req.query
-		? [...tokenizeQuery(req.query).longTerms, ...tokenizeQuery(req.query).shortTerms]
-		: [];
+	const terms = req.query ? tokenizeQuery(req.query) : [];
 
 	const items = ordered.map((id) => {
 		const row = memories.get(id) as MemoryRow;
@@ -196,8 +192,8 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 		channels: {
 			fts: {
 				candidates: ftsHits.length,
-				partial: ftsPartial,
-				partial_reason: ftsPartial ? ("short_term_scan_limit" as const) : null,
+				partial: false,
+				partial_reason: null,
 			},
 			vector: {
 				candidates: vectorHits.length,

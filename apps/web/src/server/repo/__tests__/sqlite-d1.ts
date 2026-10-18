@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { fileURLToPath } from "node:url";
-import { CORE_MIGRATION } from "../../../../../../scripts/schema";
 import { D1_MAX_BOUND_PARAMS } from "../../lib/d1";
 
 type Bound = {
@@ -63,21 +62,12 @@ export function sqliteD1(db: DatabaseSync): D1Database {
 
 export function migratedSqlite(): { raw: DatabaseSync; d1: D1Database } {
 	const raw = new DatabaseSync(":memory:");
-	raw.exec(
-		readFileSync(
-			join(dirname(fileURLToPath(import.meta.url)), "../../../../../../", CORE_MIGRATION),
-			"utf8",
-		),
-	);
-	raw.exec(
-		readFileSync(
-			join(
-				dirname(fileURLToPath(import.meta.url)),
-				"../../../../../../migrations/0006_tag_positions.sql",
-			),
-			"utf8",
-		),
-	);
+	const directory = join(dirname(fileURLToPath(import.meta.url)), "../../../../../../migrations");
+	for (const file of readdirSync(directory)
+		.filter((file) => file.endsWith(".sql"))
+		.sort()) {
+		raw.exec(readFileSync(join(directory, file), "utf8"));
+	}
 	return { raw, d1: sqliteD1(raw) };
 }
 
