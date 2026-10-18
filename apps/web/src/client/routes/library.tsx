@@ -604,7 +604,7 @@ export function SpacesPage() {
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
-						<Button disabled={state.busy} onClick={(event) => openCreate(event.currentTarget)}>
+						<Button onClick={(event) => openCreate(event.currentTarget)}>
 							<FolderPlus size={16} aria-hidden="true" />
 							创建空间
 						</Button>
@@ -642,7 +642,8 @@ export function SpacesPage() {
 			<Dialog
 				open={creating}
 				onOpenChange={(open) => {
-					if (!state.busy) setCreating(open);
+					if (!open && state.busy) return;
+					setCreating(open);
 				}}
 			>
 				<DialogContent
