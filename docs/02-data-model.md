@@ -178,8 +178,12 @@ After a successful HTTP commit, `waitUntil` runs bounded reconciliation through
 the `VectorStore` port. A D1 lease serializes work for each memory; the worker
 reads the current active-profile vector and metadata, upserts live vectors, and
 deletes missing/trashed vectors. Only the claimed generation may acknowledge
-`indexed_at`; concurrent mutations remain pending. Failed or expired leases are
-retried by the hourly cron. Completed jobs and purge tombstones remain available
+`indexed_at`. If a concurrent mutation or transient failure requeues a job,
+the same drain reclaims it, with at most three attempts per selected job.
+Concurrent drains skip live leases and leave this retry to the holder. Jobs
+still pending after the bound, and expired leases, remain retryable by subsequent
+writes or the hourly cron. HTTP writes, MCP writes and cron use this same path.
+Completed jobs and purge tombstones remain available
 for periodic anti-entropy reconciliation: a lease alone cannot fence an old
 Vectorize call after a process pauses or crashes in the non-transactional gap.
 Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.

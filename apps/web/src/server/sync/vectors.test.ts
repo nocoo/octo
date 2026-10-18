@@ -100,14 +100,29 @@ describe("durable vector synchronization", () => {
 		]);
 	});
 
-	it("retains failed jobs and retries without changing authoritative vectors", async () => {
+	it("retries transient failures in the same drain without changing authoritative vectors", async () => {
 		const { env, store, indexed } = fixture();
 		store.upsert.mockRejectedValueOnce(new Error("private provider details"));
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
-		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 1 });
-		expect(indexed()).toBeNull();
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 1, failed: 1 });
+		expect(store.upsert).toHaveBeenCalledTimes(2);
+		expect(indexed()).toBe(100);
 		expect(log.mock.calls.flat().join(" ")).not.toContain("private provider");
-		await synchronizeVectors(env, { store, now: 101 });
+		log.mockRestore();
+	});
+
+	it("bounds persistent failures and leaves the job available to a later drain", async () => {
+		const { env, store, indexed, sqlite } = fixture();
+		store.upsert.mockRejectedValue(new Error("provider failure"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 3 });
+		expect(store.upsert).toHaveBeenCalledTimes(3);
+		expect(indexed()).toBeNull();
+		expect(
+			sqlite.prepare("SELECT due_at, lease_until, lease_token FROM vector_sync_jobs").get(),
+		).toEqual({ due_at: 100, lease_until: 0, lease_token: null });
+		store.upsert.mockResolvedValue(undefined);
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
 		expect(indexed()).toBe(101);
 		log.mockRestore();
 	});
@@ -128,25 +143,53 @@ describe("durable vector synchronization", () => {
 		expect(store.delete).toHaveBeenCalledTimes(3);
 	});
 
-	it("does not acknowledge an obsolete operation and serializes concurrent drains", async () => {
+	it.each([undefined, "1"])(
+		"drains overlapping writes to the latest generation (mode %s)",
+		async (mode) => {
+			const { env, store, sqlite, indexed } = fixture();
+			if (mode) env.OCTO_VECTOR_SYNC_PARALLEL = mode;
+			store.upsert.mockImplementationOnce(async () => {
+				sqlite.exec(
+					"UPDATE memories SET space_id = 'space:dest', updated_at = 40 WHERE id = 'memory'",
+				);
+				sqlite
+					.prepare("UPDATE memory_vectors SET vector = ? WHERE memory_id = 'memory'")
+					.run(encodeFloat32Vector([0, 1]));
+				expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({
+					synced: 0,
+					failed: 0,
+				});
+				expect(indexed()).toBeNull();
+			});
+			expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 1, failed: 0 });
+			expect(indexed()).toBe(100);
+			expect(store.upsert).toHaveBeenCalledTimes(2);
+			const job = sqlite.prepare("SELECT * FROM vector_sync_jobs").get();
+			expect(job?.synced_generation).toBe(job?.generation);
+			expect(store.upsert.mock.lastCall).toEqual([
+				[
+					expect.objectContaining({
+						values: [0, 1],
+						metadata: expect.objectContaining({ space: "dest", updated: 40 }),
+					}),
+				],
+			]);
+		},
+	);
+
+	it("bounds repeated generation changes without acknowledging stale writes", async () => {
 		const { env, store, sqlite, indexed } = fixture();
-		store.upsert.mockImplementationOnce(async () => {
-			sqlite.exec(
-				"UPDATE memories SET space_id = 'space:dest', updated_at = 40 WHERE id = 'memory'",
-			);
-			expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 0, failed: 0 });
+		store.upsert.mockImplementation(async () => {
+			sqlite.exec("UPDATE memories SET updated_at = updated_at + 1 WHERE id = 'memory'");
 		});
 		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 0 });
+		expect(store.upsert).toHaveBeenCalledTimes(3);
 		expect(indexed()).toBeNull();
-		await synchronizeVectors(env, { store, now: 102 });
-		expect(indexed()).toBe(102);
-		expect(store.upsert.mock.lastCall).toEqual([
-			[
-				expect.objectContaining({
-					metadata: expect.objectContaining({ space: "dest", updated: 40 }),
-				}),
-			],
-		]);
+		const job = sqlite.prepare("SELECT * FROM vector_sync_jobs").get();
+		expect(job?.synced_generation).not.toBe(job?.generation);
+		expect(job).toMatchObject({ due_at: 100, lease_until: 0, lease_token: null });
+		store.upsert.mockResolvedValue(undefined);
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
 	});
 
 	it("recovers abandoned leases and reconciles late stale completions", async () => {
@@ -156,9 +199,10 @@ describe("durable vector synchronization", () => {
 			await synchronizeVectors(env, { store, now: 101 + SYNC_LEASE_MS });
 		});
 		await synchronizeVectors(env, { store, now: 100 });
-		expect(indexed()).toBeNull();
+		expect(indexed()).toBe(100);
+		expect(store.upsert).toHaveBeenCalledTimes(3);
 		await synchronizeVectors(env, { store, now: 102 + SYNC_LEASE_MS });
-		expect(indexed()).toBe(102 + SYNC_LEASE_MS);
+		expect(indexed()).toBe(100);
 	});
 
 	it("invalidates slug changes and vector removal, but rolls back failed writes", async () => {

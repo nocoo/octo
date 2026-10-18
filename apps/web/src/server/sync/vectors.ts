@@ -67,7 +67,7 @@ export async function synchronizeVectors(
 		WHERE due_at <= ? AND lease_until <= ? ORDER BY due_at, memory_id LIMIT ?`)
 		.bind(now, now, limit)
 		.all<{ memory_id: string }>();
-	const syncJob = async (job: { memory_id: string }) => {
+	const syncAttempt = async (job: { memory_id: string }) => {
 		const token = crypto.randomUUID();
 		const claim =
 			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?
@@ -129,12 +129,20 @@ export async function synchronizeVectors(
 					token,
 				),
 			]);
-			if (results[1]?.meta.changes === 1) totals.synced++;
-			else await invalidate(env.DB, job.memory_id, token, now);
+			if (results[1]?.meta.changes === 1) {
+				totals.synced++;
+				return;
+			}
 		} catch {
 			totals.failed++;
 			console.error("vector_sync_failed");
-			await invalidate(env.DB, job.memory_id, token, now);
+		}
+		await invalidate(env.DB, job.memory_id, token, now);
+		return true;
+	};
+	const syncJob = async (job: { memory_id: string }) => {
+		for (let attempt = 0; attempt < 3; attempt++) {
+			if (!(await syncAttempt(job))) break;
 		}
 	};
 	if (env.OCTO_VECTOR_SYNC_PARALLEL === "1") {

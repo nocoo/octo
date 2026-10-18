@@ -632,3 +632,8 @@ Validation also ran while system daemons sustained a high host load. Overlapping
 On resuming against newer main, the first UI commit hook caught a lost permission-grid layout marker. The extracted form had also omitted main's responsive grid sizing. Both were restored in the extracted form and the existing source-composition assertion now reads that file; focus restoration remains in the page. Resolve merges against surrounding layout as well as conflict markers, and rerun the full integration gate before committing.
 
 A Herdr resize issued with `--current` unexpectedly targeted the focused pane in another tab rather than the caller pane. The returned pane IDs exposed the mistake immediately; explicit pane IDs restored both controller layouts to the prescribed left third. Use explicit verified pane IDs for layout mutations and verify the returned target before continuing.
+
+# 2026-10-18 — Preserve exact optional types in race fixtures
+
+The vector requeue race passed its runtime regression after the fix, but the commit hook rejected assigning `undefined` to an optional string binding under `exactOptionalPropertyTypes`. The fixture now omits the binding for the default mode rather than assigning `undefined`. Runtime test success does not replace strict fixture typechecking; the hook remained enabled and blocked the invalid snapshot.
+
