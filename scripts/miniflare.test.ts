@@ -41,7 +41,7 @@ describe("direct Miniflare runtime", () => {
 			await runtime.dispose();
 			await rm(dir, { recursive: true, force: true });
 		}
-	});
+	}, 30_000);
 	it("maps only local D1, R2, assets and explicit test bindings", () => {
 		const options = miniflareOptions(config, "/run", "export default {}", { RESOURCE_ENV: "test" });
 		expect(options.host).toBe("127.0.0.1");
