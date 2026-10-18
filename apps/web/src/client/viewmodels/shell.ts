@@ -17,12 +17,38 @@ export const navigation = [
 	{ href: "/settings", label: "设置", icon: "settings", group: "系统" },
 ] as const;
 
+export function headerCrumbs(path: string): { href?: string; label: string }[] {
+	const memory = path.match(/^\/memories\/([^/]+)(?:\/(edit|history))?\/?$/);
+	if (memory) {
+		return [
+			{ href: "/memories", label: "记忆库" },
+			...(memory[2] ? [{ href: `/memories/${memory[1]}`, label: "记忆详情" }] : []),
+			{
+				label:
+					memory[2] === "edit" ? "编辑记忆" : memory[2] === "history" ? "版本历史" : "记忆详情",
+			},
+		];
+	}
+	return [
+		...(path === "/" ? [] : [{ href: "/", label: "工作台" }]),
+		{ label: navigation.find((item) => path === item.href)?.label ?? "页面不存在" },
+	];
+}
+
 export function pageTitle(path: string): string {
+	return headerCrumbs(path).at(-1)?.label ?? "页面不存在";
+}
+
+export function initials(name: string): string {
+	const words = name.trim().split(/\s+/);
 	return (
-		navigation.find(
-			(item) => path === item.href || (item.href !== "/" && path.startsWith(`${item.href}/`)),
-		)?.label ?? "页面不存在"
-	);
+		words.length > 1
+			? words
+					.slice(0, 2)
+					.map((word) => word[0])
+					.join("")
+			: name.trim().slice(0, 2)
+	).toUpperCase();
 }
 
 export function shortcut(
@@ -35,16 +61,37 @@ export function shortcut(
 	return null;
 }
 
-export class ShellModel extends Store<{ email: string | null; error: string | null }> {
+type ShellState = {
+	email: string | null;
+	name: string | null;
+	avatar: string | null;
+	error: string | null;
+};
+
+export class ShellModel extends Store<ShellState> {
 	constructor(private readonly api: AdminClient = adminApi) {
-		super({ email: null, error: null });
+		super({ email: null, name: null, avatar: null, error: null });
 	}
 	async load(): Promise<void> {
 		try {
-			const identity = await this.api.request<{ email: string }>("/whoami");
-			this.set({ email: identity.email, error: null });
+			const identity = await this.api.request<{
+				email: string;
+				name: string | null;
+				avatar: string | null;
+			}>("/whoami");
+			this.set({
+				email: identity.email,
+				name: identity.name,
+				avatar: identity.avatar,
+				error: null,
+			});
 		} catch {
-			this.set({ email: null, error: "无法验证 Access 身份，请刷新后重试。" });
+			this.set({
+				email: null,
+				name: null,
+				avatar: null,
+				error: "无法验证 Access 身份，请刷新后重试。",
+			});
 		}
 	}
 }

@@ -22,6 +22,59 @@ test("mobile navigation restores focus to its opener", async ({ page }) => {
 	await expect(opener).toBeFocused();
 });
 
+test("shell keeps brand and identity aligned through rail and theme changes", async ({ page }) => {
+	await page.goto("/settings");
+	await expect(page.getByText("l3@local", { exact: true })).toBeVisible();
+	const rail = page.locator("[data-basalt-sidebar]");
+	const center = async (selector: string) => {
+		const box = await rail.locator(selector).boundingBox();
+		expect(box).not.toBeNull();
+		return (box?.x ?? 0) + (box?.width ?? 0) / 2;
+	};
+	for (const colorScheme of ["light", "dark"] as const) {
+		await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+		for (const width of [1440, 768]) {
+			await page.setViewportSize({ width, height: 900 });
+			const expanded = await center('img[alt="Octo"]');
+			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(expanded, 0);
+			await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
+			await expect(page.getByRole("button", { name: "展开侧栏", exact: true })).toBeVisible();
+			expect(await center('img[alt="Octo"]')).toBeCloseTo(expanded, 0);
+			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(expanded, 0);
+			await expect(page.getByRole("link", { name: "Octo 首页", exact: true })).toHaveAttribute(
+				"href",
+				"/",
+			);
+			await page.getByRole("button", { name: "展开侧栏", exact: true }).click();
+		}
+	}
+});
+
+test("memory breadcrumbs link ancestors and retain the current page on mobile", async ({
+	page,
+	admin,
+}) => {
+	const memory = await admin.memory();
+	await page.goto(`/memories/${memory.id}/history`);
+	const header = page.locator("[data-basalt-header]");
+	await expect(header.getByRole("link", { name: "记忆库", exact: true })).toHaveAttribute(
+		"href",
+		"/memories",
+	);
+	await expect(header.getByRole("link", { name: "记忆详情", exact: true })).toHaveAttribute(
+		"href",
+		`/memories/${memory.id}`,
+	);
+	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
+	await page.setViewportSize({ width: 390, height: 844 });
+	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
+	for (const action of ["搜索与命令", "GitHub 仓库", "Octo on Hexly", "切换深色或浅色主题"])
+		await expect(header.getByLabel(action, { exact: true })).toBeInViewport({ ratio: 1 });
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await header.getByRole("link", { name: "记忆详情", exact: true }).click();
+	await expect(page).toHaveURL(new RegExp(`/memories/${memory.id}$`));
+});
+
 const pages = [
 	["/", "总览", ["/spaces", "/usage", "/memories"]],
 	["/memories", "记忆库", ["/memories"]],
