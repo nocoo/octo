@@ -321,6 +321,13 @@ describe("stateless MCP Streamable HTTP", () => {
 		expect(searchData.items.map((item) => item.id)).toContain(existing.id);
 		expect(searchData.channels.fts.candidates).toBeGreaterThan(0);
 		expect(searchData.channels.vector).toBeDefined();
+		expect(searchData.channels.fts).toMatchObject({ partial: false, partial_reason: null });
+		const shortSearch = await toolSuccess(
+			await callTool(key.token, "search", { query: "团子", mode: "fts" }),
+		);
+		expect(shortSearch.structuredContent).toMatchObject({
+			channels: { fts: { partial: true, partial_reason: "short_term_scan_limit" } },
+		});
 
 		const gotten = await toolSuccess(await callTool(key.token, "get_memory", { id: existing.id }));
 		expect(gotten.structuredContent).toMatchObject({

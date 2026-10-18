@@ -22,7 +22,7 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
 - **自然语言已知限制：** 这不是语义理解或通用中文分词搜索。完整词边界能保护「再怎么说」里的「怎么说」，但也意味着部分问法不会被识别；未列出的疑问词、繁体变体、汉字和拉丁字母连写不自动处理。「多久以后」会被简化为「以后」，有歧义的字面疑问词不能保证不被改写。单独空格分开的「没有」属于停用词，但连续文本「没有权限」保留否定。时间、频率和内容词（「每天、一次、不、无」等）不删除，不做同义词或语序转换。长词仍 OR 召回，短词仍全部必含（AND），不会因为无空格问句改为全局 AND；两个长残余片段可能只命中其中一个。自然问题需更强语义匹配时使用向量通道。
 - **已知限制：** 少于 3 个字符的词没法单独靠 trigram 命中，而中文常见的二字词（如「部署」）正好在这个范围里。处理方式：
   1. 查询经过上述切词和停用词处理，≥3 字符的走 `MATCH`；
-  2. <3 字符的词在 FTS 候选集上加 `instr(body, ?) > 0` 过滤；如果整个查询都是短词，就在调用方可见的 space 内做有上限的 `LIKE` 扫描（最多扫 N 行并标记 `partial=true`）；
+  2. <3 字符的词在 FTS 候选集上加 `instr` 过滤（title 或 body 包含）；如果整个查询都是短词，就在调用方可见且满足过滤条件的 memory 中按 `updated_at DESC, id DESC` 取最新 500 行，再做 `LIKE` 匹配，标记 `partial=true`、`partial_reason="short_term_scan_limit"`；
   3. 实现前先做 spike，在本地 D1 上确认 trigram 分词器可用并测一下 bm25 表现（见 08 M0）。
 
 **Spike 结论（M0，L2 隔离本地 D1，复用 `migrations/0001_core.sql`）：** wrangler `--local` 的 FTS5 `tokenize='trigram remove_diacritics 1'` 与 `contentless_delete=1` 可用。英文子串（如 `cdef`）和 ≥3 字中文（如「三个字」）都能 `MATCH`；2 字中文（如「部署」）单独 `MATCH` 为空，必须走 `instr` / 有上限 `LIKE`。contentless 表不回填 title/body 列，读结果要靠 `memories_fts_map` 的 `rowid`。`DELETE WHERE rowid=?` 在 contentless_delete 下有效。`bm25(memories_fts, 5.0, 1.0, 2.0)` 返回数值并可排序（越小越相关）。
@@ -127,7 +127,9 @@ POST /api/v1/search
 }
 ```
 
-只被一个通道命中的结果，另一个通道的值为 `null`。响应还会附带 `channels: {fts: {candidates, partial}, vector: {candidates, truncated, profile}}`。
+只被一个通道命中的结果，另一个通道的值为 `null`。响应还会附带 `channels: {fts: {candidates, partial, partial_reason}, vector: {candidates, truncated, profile}}`。
+
+`channels.fts.partial_reason` 在 REST 和 MCP 中都是必返字段，枚举为 `"short_term_scan_limit" | null`。仅启用全短词有界扫描时返回前者（例如「团子」或「早上 喝」）；这是保守的召回完整性提示，不代表已证实超过 500 行或本次一定漏项。即使实际只有少量记录、无命中，也仍报告这个原因。普通 trigram MATCH、长短词混合以及未运行 FTS 的 vector 模式返回 `partial=false, partial_reason=null`；这个 `false` 不承诺候选 top-K 或最终返回 limit 之外没有匹配项。权限或过滤条件已判定无可见候选、直接返回而未扫描时同样为 `false/null`，不会为解释原因额外查询不可见数据。
 
 ## 5. 一致性和权限
 

@@ -113,7 +113,7 @@ type SearchBody = {
 		scores: { fts: { bm25: number } | null; vector: { similarity: number } | null };
 	}>;
 	channels: {
-		fts: { candidates: number; partial: boolean };
+		fts: { candidates: number; partial: boolean; partial_reason: "short_term_scan_limit" | null };
 		vector: { candidates: number; profile: string | null; truncated: boolean };
 	};
 };
@@ -127,6 +127,7 @@ describe("POST /api/v1/search", () => {
 			expect(res.headers.get("X-Request-Id")).toBeTruthy();
 			expect(res.headers.get("X-Octo-Version")).toBe(APP_VERSION);
 			const body = (await res.json()) as SearchBody;
+			expect(body.channels.fts.partial_reason).toBeNull();
 			expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
 			expect(body.items[0]?.tags).toEqual(["search-infra"]);
 			if (mode !== "vector") {
@@ -147,6 +148,7 @@ describe("POST /api/v1/search", () => {
 		const body = (await res.json()) as SearchBody;
 		expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
 		expect(body.channels.fts.partial).toBe(true);
+		expect(body.channels.fts.partial_reason).toBe("short_term_scan_limit");
 	});
 
 	it("finds a two-code-point supplementary CJK term through the bounded fallback", async () => {
@@ -154,7 +156,11 @@ describe("POST /api/v1/search", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as SearchBody;
 		expect(body.items.map((item) => item.id)).toEqual([VISIBLE]);
-		expect(body.channels.fts).toEqual({ candidates: 1, partial: true });
+		expect(body.channels.fts).toEqual({
+			candidates: 1,
+			partial: true,
+			partial_reason: "short_term_scan_limit",
+		});
 	});
 
 	it.each([
@@ -169,7 +175,11 @@ describe("POST /api/v1/search", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as SearchBody;
 		expect(body.items.map((item) => item.id)).toEqual([id]);
-		expect(body.channels.fts).toEqual({ candidates: 1, partial });
+		expect(body.channels.fts).toEqual({
+			candidates: 1,
+			partial,
+			partial_reason: partial ? "short_term_scan_limit" : null,
+		});
 	});
 
 	it.each(["fts", "vector", "hybrid"])(

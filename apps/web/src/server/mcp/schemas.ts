@@ -42,7 +42,11 @@ export const memoryOutput = z.looseObject({
 export const searchOutput = z.object({
 	items: z.array(z.object({ ...summaryFields, scores: record, snippet: z.string().optional() })),
 	channels: z.object({
-		fts: z.object({ candidates: z.number().int(), partial: z.boolean() }),
+		fts: z.object({
+			candidates: z.number().int(),
+			partial: z.boolean(),
+			partial_reason: z.enum(["short_term_scan_limit"]).nullable(),
+		}),
 		vector: z.object({
 			candidates: z.number().int(),
 			truncated: z.boolean(),

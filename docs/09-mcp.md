@@ -74,7 +74,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 | 工具 | Result 对象 schema |
 |---|---|
-| `search` | `{items: SearchMemory[], channels: {fts: {candidates: integer, partial: boolean}, vector: {candidates: integer, truncated: boolean, profile: string\|null}}}` |
+| `search` | `{items: SearchMemory[], channels: {fts: {candidates: integer, partial: boolean, partial_reason: "short_term_scan_limit"\|null}, vector: {candidates: integer, truncated: boolean, profile: string\|null}}}` |
 | `get_memory` / `create_memory` / `update_memory` | `Memory` |
 | `batch_get` | `{items: MemorySummary[], missing: string[]}` |
 | `delete_memory` | `{trashed_at: string}`（UTC ISO） |
@@ -84,6 +84,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 - `Memory`：id、space、title、body、type、tags（string[]）、importance（number，0–1）、event_time（string|null）、version（integer）、content_hash、source_key_id、updated_by_key_id、created_at、updated_at。可选扩展为 versions_count、attachments、vector_status、deleted_at、deleted_by，按 v1 include 和序列化器决定。
 - `MemorySummary` 是 v1 搜索/batchGet 的既有投影：id、space、title、body、type、tags、importance（number，0–1）、event_time、created_at、updated_at，不包含 CRUD 的版本与来源字段。`SearchMemory` 是 MemorySummary 加 scores 对象、可选 snippet；channels 和 scores 沿用 [03](03-search.md)。
+- `channels.fts.partial_reason` 与 REST 相同且总是返回：全短词查询（如「团子」）进入最新 500 行有界扫描时为 `"short_term_scan_limit"`，同时 `partial=true`；其他路径为 `null`。这是扫描策略的保守提示，不意味着本次已达到上限或必然漏项；不会放宽可见性，也不代表最终 top-K 返回了所有匹配。中文停用词和无空格问句边界处理同 [03](03-search.md)，不另设 MCP 查询方言。
 - `Change`：seq、entity、entity_id、op、at；非删除事件另有 space_id、version、actor。删除事件不返回这些扩展。
 - `Tag`：id、name、display_name、use_count（正整数，仅统计可见 space 的未删除 memory），与 v1 标签列表的投影一致；列表不返回时间戳或 merged_into。
 - `Space`：id、slug、name、description、owner_key_id（string|null）、memory_count、created_at、updated_at。

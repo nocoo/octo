@@ -194,7 +194,11 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 	return {
 		items,
 		channels: {
-			fts: { candidates: ftsHits.length, partial: ftsPartial },
+			fts: {
+				candidates: ftsHits.length,
+				partial: ftsPartial,
+				partial_reason: ftsPartial ? ("short_term_scan_limit" as const) : null,
+			},
 			vector: {
 				candidates: vectorHits.length,
 				truncated: vectorTruncated,
