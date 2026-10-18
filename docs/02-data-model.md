@@ -227,7 +227,7 @@ process never reaches a catch handler.
 - 标签是全局的，不分 space。写入时规范化：trim、NFKC、拉丁字母小写，长度 1–64。
 - 重命名：只改 `display_name` / `name`；有冲突时返回 409 并建议改用合并。
 - 合并 A→B：在一个 batch 内把 `memory_tags` 从 A 改到 B（去重）、设置 `A.merged_into=B`、对受影响的 memory 各写一条 `changes(op=tag_merged)`。**不**生成新的 memory 版本（标签变化单独记在 change feed 里）；之后用 A 的名字写入会自动重定向到 B。
-- 标签列表附带使用次数，并按调用方可见的 space 过滤计数。
+- API key 的标签列表（REST / MCP）只返回至少被一个可见 space 内未删除 memory 使用的标签，`use_count` 也只统计这些引用；没有可见空间时返回空列表。Access 后台保留完整全局标签字典（包括零引用标签），计数仍只统计未删除 memory。
 
 ## 6. 回收站
 

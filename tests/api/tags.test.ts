@@ -61,6 +61,13 @@ describe("tags api", () => {
 		await d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg1')`);
 		await d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm2', 'tg1')`);
 		await d1(`INSERT OR IGNORE INTO memory_tags (memory_id, tag_id) VALUES ('mm1', 'tg2')`);
+		await d1(`INSERT INTO tags (id,name,display_name,created_at,updated_at) VALUES
+			('unused-kbr1','unused-kbr1','unused-kbr1',1,1),
+			('hidden-kbr1','hidden-kbr1','hidden-kbr1',1,1),
+			('trashed-kbr1','trashed-kbr1','trashed-kbr1',1,1);
+			INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at,deleted_at)
+			VALUES ('trash-kbr1','sp1','','','note','k','h',1,1,2);
+			INSERT INTO memory_tags (memory_id,tag_id) VALUES ('mm2','hidden-kbr1'), ('trash-kbr1','trashed-kbr1');`);
 		const drop = await mint({ ops: "w" });
 		const reader = await mint({
 			ops: "r",
@@ -93,6 +100,16 @@ describe("tags api", () => {
 		expect(listBody.next_cursor).toBeNull();
 		const alpha = listBody.items.find((t) => t.name === "alpha");
 		expect(alpha?.use_count).toBe(1);
+		for (const name of ["unused-kbr1", "hidden-kbr1", "trashed-kbr1"]) {
+			expect(listBody.items.some((tag) => tag.name === name)).toBe(false);
+		}
+		const allTags = await fetch(`${base}/api/v1/tags`, { headers: readerAll.headers });
+		expect(await allTags.json()).toMatchObject({
+			items: expect.arrayContaining([
+				expect.objectContaining({ name: "alpha", use_count: 2 }),
+				expect.objectContaining({ name: "hidden-kbr1", use_count: 1 }),
+			]),
+		});
 
 		const readerRename = await fetch(`${base}/api/v1/tags/alpha/rename`, {
 			method: "POST",
@@ -158,6 +175,7 @@ describe("tags api", () => {
 		);
 		expect(links).toEqual([
 			{ memory_id: "mm1", tag_id: "tg2" },
+			{ memory_id: "mm2", tag_id: "hidden-kbr1" },
 			{ memory_id: "mm2", tag_id: "tg2" },
 		]);
 		const versions = rows<{ version: number }>(

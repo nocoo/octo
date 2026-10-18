@@ -98,7 +98,7 @@ and supports idempotency through the same atomic write boundary. The body is
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
-| GET | `/tags` | read | 带使用次数（只按可见 space 计数） |
+| GET | `/tags` | read | 只返回可见 space 内未删除 memory 正在使用的标签；`use_count` 只统计这些引用，零引用标签不返回。Access 后台列表保持完整字典 |
 | POST | `/tags/:name/rename` | update + 全部 space 范围 | `{new_name}` |
 | POST | `/tags/:name/merge` | update + 全部 space 范围 | `{into}` |
 | GET | `/spaces` | read | 只列出可见的 space |

@@ -11,7 +11,7 @@ function requireRead(principal: ApiPrincipal): void {
 export async function listTags(db: D1Database, principal: ApiPrincipal) {
 	requireRead(principal);
 	const tags = await new TagRepo(db).listWithCounts(visibleSpaceIds(principal));
-	return listEnvelope(tags.map(serializeTag));
+	return listEnvelope(tags.filter((tag) => principal.actor || tag.use_count > 0).map(serializeTag));
 }
 
 export async function listSpaces(db: D1Database, principal: ApiPrincipal) {

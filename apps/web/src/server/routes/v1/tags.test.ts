@@ -66,7 +66,7 @@ describe("tags routes", () => {
 		);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({
-			items: [{ id: "t1", name: "infra", display_name: "infra", use_count: 0 }],
+			items: [],
 			next_cursor: null,
 		});
 	});
@@ -101,7 +101,7 @@ describe("tags routes", () => {
 		);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toMatchObject({
-			items: [{ id: "t1", name: "infra", display_name: "infra", use_count: 0 }],
+			items: [],
 		});
 	});
 
