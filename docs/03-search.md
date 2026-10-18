@@ -16,6 +16,7 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
 ```
 
 - **为什么用 trigram：** `unicode61` / `porter` 按空格分词，中文整句会变成一个 token。trigram 用重叠的 3 字符窗口，中英文都能做子串匹配；Cloudflare D1 最佳实践文档也推荐用 FTS5 trigram 做任意子串搜索。
+- **英文查询停用词：** 按空白和标点切词后，查询侧移除固定英文虚词表中的完整词（不区分大小写，如 `what`、`does`、`he`、`in`、`the`、`how`、`are`）；不改写存储正文或索引，不做词干化。`what does he drink in the morning` 因而以 `drink OR morning` 召回，不让虚词参与长词 OR 或短词强制过滤。`often` 等内容词保留；中文及中英混写的完整词不受影响。若所有词都是停用词，则保留原查询词，继续走原有 MATCH / 有界短词扫描，而不是返回所有条目或让 FTS 通道恒为空。此规则也适用于混合搜索的 FTS 通道，默认 RRF 权重不变。
 - **已知限制：** 少于 3 个字符的词没法单独靠 trigram 命中，而中文常见的二字词（如「部署」）正好在这个范围里。处理方式：
   1. 查询被切成若干词（按空白和标点分），≥3 字符的走 `MATCH`；
   2. <3 字符的词在 FTS 候选集上加 `instr(body, ?) > 0` 过滤；如果整个查询都是短词，就在调用方可见的 space 内做有上限的 `LIKE` 扫描（最多扫 N 行并标记 `partial=true`）；
@@ -32,7 +33,7 @@ CREATE VIRTUAL TABLE memories_fts USING fts5(
 - 写入 memory 时可以带 `vector: { profile, values: number[] }`。服务端校验 `values.length === profile.dims`、数值有限、非零向量，**做 L2 归一化**，然后存进 D1 `memory_vectors`（归一化后的值，连同 `embedding_model`、`dim`，便于重建）并 upsert 到 Vectorize。
 - **Embedding profile** = `(model, dims, metric)`。Vectorize 索引的维度在创建时就固定了，所以每个 profile 对应一个独立的索引 `octo-vec-<profile_id>`。v1 的活跃 profile 是 `te3-small-1536`（索引 `octo-vec-te3-small-1536`），绑定为 `VEC`；切换模型 = 新建索引和绑定，调用方补写向量（或由知识库 bot 重新计算），从 D1 回填，完成后切换 `active`。
 - **限制（文档核实）：** ≤1536 维、float32；id ≤64 字节（ULID 26 字节）；每个索引最多 10 个 metadata index；string 只有前 64 字节可以过滤；**string 数组不能被索引或过滤**；topK 带 metadata 时 ≤50，不带时 ≤100；每个索引最多 2000 万向量。
-- **Metadata（被索引的）：** `space`（string）、`type`（string）、`source`（string，key id）、`importance`（number）、`created`（number）、`updated`（number）、`event`（number）。共 7 个，在 10 个的上限内。metadata index 必须在插入向量**之前**建好，写进部署脚本。
+- **Metadata（被索引的）：** `space`（string）、`type`（string）、`source`（string，key id）、`importance`（number，0–1）、`created`（number）、`updated`（number）、`event`（number）。共 7 个，在 10 个的上限内。metadata index 必须在插入向量**之前**建好，写进部署脚本。
 - **tags 过滤：** Vectorize 过滤不了数组，所以先在 Vectorize 用其他条件取 topK=100（不返回 metadata），再在 D1 用 `memory_tags` 做后过滤和可见性校验。命中太少时在响应里标记 `vector_truncated=true`。
 - **本地开发和测试：** Vectorize **没有本地模拟**，而 6DQ 禁止远程 `-test` 资源。所以向量访问走 `VectorStore` 端口：
   - `CloudflareVectorStore`（生产，包装 `env.VEC`），L1 用一个假 binding 测它的请求映射；
@@ -82,7 +83,7 @@ random key. Malformed keys fail closed; there is no password derivation fallback
 | `types[]` | in |
 | `sources[]` | key id in |
 | `time` | `{field: created|updated|event, from?, to?}` |
-| `importance` | `{min?, max?}` |
+| `importance` | `{min?, max?}`，上下限均为 0–1（含端点）的数值 |
 
 FTS 通道把过滤条件转成 SQL `WHERE`；向量通道把能下推的转成 Vectorize filter（`$in/$gte/$lte/$eq`），剩下的在 D1 后过滤。
 
@@ -128,6 +129,7 @@ POST /api/v1/search
 ## 5. 一致性和权限
 
 - 向量命中的 id 一律回 D1 校验：存在、未删除、space 可见、过滤条件全部满足。这能挡住 D1 / Vectorize 不同步造成的幽灵结果。
+- **已知限制：Vectorize 最终一致。** D1 写入成功、同步任务已提交，甚至 Vectorize upsert 成功，都不保证新向量立即可被查询。在写入后的传播窗口内，相同查询的向量候选数可能不同（例如先返回 5 条、稍后返回 11 条），混合搜索的结果及排序也可能随之变化；`channels.vector.candidates` 是本次经 D1 重新校验后的候选数，不是符合条件的记忆总数。D1 校验能排除已删除、已移出可见空间或不再满足过滤条件的旧命中，但不能找回尚未被 Vectorize 召回的新向量；需要立即读取刚写入的数据时使用 GET / batchGet，不能把即时搜索漏项当作写入失败后重建。传播收敛前不承诺重复查询的候选数或排序稳定，本地 D1 暴力向量适配器也不模拟此延迟。
 - 无权访问的 space：在两个通道里都以 SQL / filter 条件排除，计数里也不出现（「不可见」而不是「禁止访问」）。
 - 搜索不写审计以外的任何数据。
 

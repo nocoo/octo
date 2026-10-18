@@ -2,6 +2,40 @@ import { describe, expect, it } from "vitest";
 import { buildFtsMatchQuery, tokenizeQuery } from "./tokenizer";
 
 describe("tokenizeQuery", () => {
+	it.each([
+		{ query: "what does he drink in the morning", longTerms: ["drink", "morning"] },
+		{ query: "how often are keys rotated", longTerms: ["often", "keys", "rotated"] },
+		{ query: "WHAT Does HE drink IN THE morning", longTerms: ["drink", "morning"] },
+	])("removes English function words from $query", ({ query, longTerms }) => {
+		expect(tokenizeQuery(query)).toEqual({ longTerms, shortTerms: [], allShort: false });
+	});
+
+	it("keeps the original terms when every term is an English stopword", () => {
+		expect(tokenizeQuery("what is it")).toEqual({
+			longTerms: ["what"],
+			shortTerms: ["is", "it"],
+			allShort: false,
+		});
+		expect(tokenizeQuery("he in")).toEqual({
+			longTerms: [],
+			shortTerms: ["he", "in"],
+			allShort: true,
+		});
+	});
+
+	it("preserves CJK, mixed-script tokens and meaningful short English terms", () => {
+		expect(tokenizeQuery("what 早上 喝 什么 the密钥 cf")).toEqual({
+			longTerms: ["the密钥"],
+			shortTerms: ["早上", "喝", "什么", "cf"],
+			allShort: false,
+		});
+		expect(tokenizeQuery("密钥 多久 轮换")).toEqual({
+			longTerms: [],
+			shortTerms: ["密钥", "多久", "轮换"],
+			allShort: true,
+		});
+	});
+
 	it("counts only marks removed by FTS without normalizing the original terms", () => {
 		expect(tokenizeQuery("e\u0301t")).toEqual({
 			longTerms: [],
