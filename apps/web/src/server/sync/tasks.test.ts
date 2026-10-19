@@ -25,6 +25,24 @@ afterEach(() => {
 });
 
 describe("derived work coordination", () => {
+	it("combines a targeted write drain with the bulk work budget", async () => {
+		const { env, raw } = await setup(8);
+		const fetcher = vi.fn(async () =>
+			Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] }),
+		);
+		vi.stubGlobal("fetch", fetcher);
+		try {
+			const ids = Array.from({ length: 6 }, (_, index) => `memory-0${index + 2}`);
+			expect(await runDerivedTasks(env, 100, ids, 5)).toEqual({ synced: 5, failed: 0 });
+			expect(raw.prepare("SELECT memory_id FROM memory_vectors ORDER BY memory_id").all()).toEqual(
+				ids.slice(0, 5).map((memory_id) => ({ memory_id })),
+			);
+			expect(fetcher).toHaveBeenCalledTimes(1);
+		} finally {
+			raw.close();
+		}
+	});
+
 	it("honors the small bulk budget without freezing the live synchronization clock", async () => {
 		const { env, raw } = await setup(6);
 		let now = 100;

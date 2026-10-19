@@ -9,6 +9,9 @@
 - Successful REST, admin and MCP memory writes pass their committed IDs into
   `ctx.waitUntil`. They do not compete with the first 50 global cron jobs. Cron
   remains crash recovery, visibility verification and hourly anti-entropy.
+  Bulk trash actions retain the separate five-job post-commit work budget from
+  migration 0009's release; the budget and committed-ID filter compose without
+  freezing the live synchronization clock.
 - The healthy-service target is **at most 10 seconds** from create-with-vector
   to `indexed=true` and vector-search discovery, and from body PATCH plus vector
   PUT to the new self-vector ranking first and the obsolete vector no longer
@@ -42,6 +45,10 @@ profile attempt counters. The text is `title + "\n\n" + body`, truncated to
 16,000 characters, matching the outbound input. Model and dimension changes
 produce separate cache entries. No plaintext gateway keys or input copies are
 stored in the cache or logs.
+
+Memory provenance hashes the JSON `[title, body]` tuple so field boundaries
+cannot collide. Metadata-only writes preserve matching current stored vectors
+when canonicalizing an older stored hash; mismatched stale vectors stay stale.
 
 No-op updates, tag-only changes, same-generation retries, requeues, and a return
 to previously embedded text reuse stored vectors/cache. Current client vectors
