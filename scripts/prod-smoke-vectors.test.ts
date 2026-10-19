@@ -165,11 +165,11 @@ describe("repeated vector smoke reports", () => {
 		const medianRtt = runs === 2 ? 450 : 300;
 		const maxRtt = 800;
 		expect(report.latencies_ms).toEqual({
-			create_indexed: { samples: runs, p50: medianRtt * 2, max: maxRtt * 2 },
-			create_vector_hit: { samples: runs, p50: medianRtt * 3 + 250, max: maxRtt * 3 + 250 },
-			update_indexed: { samples: runs, p50: medianRtt, max: maxRtt },
-			update_new_rank1: { samples: runs, p50: medianRtt * 2 + 250, max: maxRtt * 2 + 250 },
-			update_old_gone: { samples: runs, p50: medianRtt * 4 + 750, max: maxRtt * 4 + 750 },
+			create_indexed: { samples: runs, p50: medianRtt * 3 + 250, max: maxRtt * 3 + 250 },
+			create_vector_hit: { samples: runs, p50: medianRtt * 4 + 500, max: maxRtt * 4 + 500 },
+			update_indexed: { samples: runs, p50: medianRtt * 3 + 500, max: maxRtt * 3 + 500 },
+			update_new_rank1: { samples: runs, p50: medianRtt * 4 + 750, max: maxRtt * 4 + 750 },
+			update_old_gone: { samples: runs, p50: medianRtt * 5 + 1_000, max: maxRtt * 5 + 1_000 },
 		});
 		for (const run of report.runs) {
 			expect(run.cleanup).toEqual({ attempted: 2, deleted: 2, errors: [] });
@@ -195,7 +195,7 @@ describe("repeated vector smoke reports", () => {
 		expect(report.runs.map((run) => run.ok)).toEqual([false, true]);
 		expect(report.runs.map((run) => run.cleanup.deleted)).toEqual([2, 2]);
 		expect(report.runs[0]?.failures).toContainEqual({ phase: "create", code: "deadline_exceeded" });
-		expect(report.latencies_ms.create_vector_hit).toEqual({ samples: 1, p50: 253, max: 253 });
+		expect(report.latencies_ms.create_vector_hit).toEqual({ samples: 1, p50: 504, max: 504 });
 		expect(report.latencies_ms.create_indexed.samples).toBe(2);
 	});
 
@@ -298,7 +298,7 @@ describe("production vector smoke with fake transport only", () => {
 		const transport = fixture(1_300.4);
 		const fetch = transport.dependencies.fetch;
 		transport.dependencies.fetch = vi.fn(async (url, init) => {
-			if (url.includes("include=vector_status")) return new Promise<Response>(() => {});
+			if (url.endsWith("/search")) return new Promise<Response>(() => {});
 			return fetch(url, init);
 		});
 		const promise = runVectorSmoke(environment, transport.dependencies);
@@ -347,11 +347,11 @@ describe("production vector smoke with fake transport only", () => {
 		const report = await runVectorSmoke(environment, transport.dependencies);
 		expect(report.ok).toBe(true);
 		expect(report.latencies_ms).toEqual({
-			create_indexed: rtt * 2,
-			create_vector_hit: rtt * 3 + 250,
-			update_indexed: rtt,
-			update_new_rank1: rtt * 2 + 250,
-			update_old_gone: rtt * 4 + 750,
+			create_indexed: rtt * 3 + 250,
+			create_vector_hit: rtt * 4 + 500,
+			update_indexed: rtt * 3 + 500,
+			update_new_rank1: rtt * 4 + 750,
+			update_old_gone: rtt * 5 + 1_000,
 		});
 		expect(report.embedding_calls.put).toBe(0);
 		expect(report.embedding_calls.final).toBe(0);
@@ -360,6 +360,8 @@ describe("production vector smoke with fake transport only", () => {
 
 	it.each([
 		{ indexedAt: 5_000, vectorAt: 2_700 },
+		{ indexedAt: 5_000, vectorAt: 3_000 },
+		{ indexedAt: 5_000, vectorAt: 5_000 },
 		{ indexedAt: 0, vectorAt: 5_000 },
 	])("observes delayed update metrics at 1300ms RTT (%j)", async ({ indexedAt, vectorAt }) => {
 		const transport = fixture(1_300);
@@ -393,9 +395,9 @@ describe("production vector smoke with fake transport only", () => {
 			expect(report.latencies_ms[metric].p50).toBeLessThan(10_000);
 			expect(report.latencies_ms[metric].max).toBe(report.latencies_ms[metric].p50);
 		}
-		expect(report.latencies_ms.update_new_rank1.p50).toBe(indexedAt === 0 ? 9_050 : 2_850);
-		expect(report.latencies_ms.update_indexed.p50).toBe(indexedAt === 0 ? 1_300 : 9_050);
-		expect(report.latencies_ms.update_old_gone.p50).toBe(5_950);
+		expect(report.latencies_ms.update_new_rank1.p50).toBe(5_950);
+		expect(report.latencies_ms.update_indexed.p50).toBe(indexedAt === 0 ? 4_400 : 9_050);
+		expect(report.latencies_ms.update_old_gone.p50).toBe(7_500);
 		expect(report.runs[0]?.cleanup.deleted).toBe(2);
 	});
 
@@ -426,7 +428,7 @@ describe("production vector smoke with fake transport only", () => {
 			});
 			const report = await runVectorSmoke(environment, transport.dependencies);
 			expect(report.ok).toBe(true);
-			expect(report.latencies_ms.update_new_rank1).toBe(252);
+			expect(report.latencies_ms.update_new_rank1).toBe(754);
 			expect(hybridPolls).toBeGreaterThan(1);
 			expect(report.cleanup.deleted).toBe(2);
 		},
@@ -479,11 +481,11 @@ describe("production vector smoke with fake transport only", () => {
 			const report = await runVectorSmoke(environment, transport.dependencies);
 			expect(report.ok).toBe(false);
 			if (kind === "stale" || kind === "unindexed") {
-				expect(report.latencies_ms.update_new_rank1).toBe(252);
+				expect(report.latencies_ms.update_new_rank1).toBe(754);
 				expect(report.latencies_ms.update_indexed).toBeNull();
 			} else {
 				expect(report.latencies_ms.update_new_rank1).toBeNull();
-				expect(report.latencies_ms.update_indexed).toBe(1);
+				expect(report.latencies_ms.update_indexed).toBe(503);
 			}
 			expect(report.failures).toEqual([{ phase: "update", code: "deadline_exceeded" }]);
 			expect(report.cleanup.deleted).toBe(2);
@@ -502,7 +504,7 @@ describe("production vector smoke with fake transport only", () => {
 			});
 		});
 		const report = await runVectorSmoke(environment, transport.dependencies);
-		expect(report.latencies_ms.update_new_rank1).toBe(252);
+		expect(report.latencies_ms.update_new_rank1).toBe(754);
 		expect(vectorPolls).toBe(1);
 		expect(report.failures).toEqual([]);
 		expect(report.cleanup.deleted).toBe(2);
@@ -522,7 +524,7 @@ describe("production vector smoke with fake transport only", () => {
 		});
 		const report = await runVectorSmoke(environment, transport.dependencies);
 		expect(report.ok).toBe(false);
-		expect(report.latencies_ms.update_new_rank1).toBe(252);
+		expect(report.latencies_ms.update_new_rank1).toBe(754);
 		expect(report.failures).toEqual([{ phase: "update", code: "duplicate_memory_ids" }]);
 		expect(report.cleanup.deleted).toBe(2);
 	});
@@ -530,12 +532,12 @@ describe("production vector smoke with fake transport only", () => {
 	it("makes exactly one request per observation tick", async () => {
 		const transport = fixture();
 		const report = await runVectorSmoke(environment, transport.dependencies);
-		const firstRead = transport.calls.findIndex((call) => call.url.searchParams.has("include"));
+		const firstPoll = transport.calls.findIndex((call) => call.body.mode === "hybrid");
 		const firstPatch = transport.calls.findIndex((call) => call.init.method === "PATCH");
 		const firstPut = transport.calls.findIndex((call) => call.init.method === "PUT");
 		const lastPut = transport.calls.map((call) => call.init.method).lastIndexOf("PUT");
 		const createPolls = transport.calls
-			.slice(firstRead, firstPatch)
+			.slice(firstPoll, firstPatch)
 			.filter((call) => !call.url.pathname.includes(String(ids[1])));
 		const updatePolls = transport.calls.slice(firstPut + 1, lastPut);
 		for (const [stage, polls] of [
@@ -551,6 +553,26 @@ describe("production vector smoke with fake transport only", () => {
 			expect(polls.filter((call) => call.body.mode === "hybrid").length).toBeGreaterThan(0);
 		}
 	});
+
+	it.each(["create", "update"] as const)(
+		"checks each hybrid vector once while %s metrics remain pending",
+		async (stage) => {
+			const transport = fixture();
+			const hybridVectors: number[] = [];
+			transport.setOverride((call) => {
+				const updating = transport.memories[0]?.values[1] === 1;
+				if ((stage === "update") !== updating) return;
+				if (call.body.mode === "hybrid") {
+					hybridVectors.push((call.body.vector as { values: number[] }).values[0] ?? -1);
+				}
+				if (call.body.mode === "vector") return transport.json({ items: [] });
+			});
+			const report = await runVectorSmoke(environment, transport.dependencies);
+			expect(report.failures).toEqual([{ phase: stage, code: "deadline_exceeded" }]);
+			expect(hybridVectors).toEqual(stage === "create" ? [1] : [0, 1]);
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
 
 	it("measures both full observation windows, client-vector economy and scoped repeated searches", async () => {
 		const f = fixture();
@@ -657,7 +679,7 @@ describe("production vector smoke with fake transport only", () => {
 		const report = await runVectorSmoke(environment, f.dependencies);
 		expect(count).toBe(1);
 		expect(report.ok).toBe(true);
-		expect(report.latencies_ms.create_vector_hit).toBe(253);
+		expect(report.latencies_ms.create_vector_hit).toBe(504);
 	});
 
 	it.each([undefined, -1, "0", 1])(
@@ -866,7 +888,7 @@ describe("production vector smoke with fake transport only", () => {
 		const fetch = transport.dependencies.fetch;
 		let signal: AbortSignal | null | undefined;
 		transport.dependencies.fetch = vi.fn(async (url, init) => {
-			if (!signal && url.includes("include=vector_status")) {
+			if (!signal && url.endsWith("/search")) {
 				signal = init.signal;
 				return new Promise<Response>(() => {});
 			}

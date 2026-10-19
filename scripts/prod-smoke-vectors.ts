@@ -340,12 +340,17 @@ export async function runVectorSmoke(
 			const indexedMetric = stage === "create" ? "create_indexed" : "update_indexed";
 			const vectorMetric = stage === "create" ? "create_vector_hit" : "update_new_rank1";
 			const steps: { metric?: Latency; poll: (budget: number) => Promise<void> }[] = [
+				...(stage === "create" ? [supplied] : [supplied, oldVector]).map((queryVector) => ({
+					poll: async (budget: number) => {
+						await search(queryVector, "hybrid", budget);
+					},
+				})),
 				{
 					metric: indexedMetric,
 					poll: async (budget) => {
 						const current = await read(
 							target.id,
-							stage === "create" ? "create" : report.polls.update === 0 ? "put" : "final",
+							stage === "create" ? "create" : report.embedding_calls.put === null ? "put" : "final",
 							budget,
 						);
 						mark(indexedMetric, current.status.indexed && !current.status.stale);
@@ -363,27 +368,15 @@ export async function runVectorSmoke(
 						);
 					},
 				},
-				{
-					poll: async (budget) => {
-						await search(supplied, "hybrid", budget);
-					},
-				},
 			];
 			if (stage === "update") {
-				steps.push(
-					{
-						metric: "update_old_gone",
-						poll: async (budget) => {
-							const hits = await search(oldVector, "vector", budget);
-							mark("update_old_gone", !hits.some((item) => item.id === target.id));
-						},
+				steps.push({
+					metric: "update_old_gone",
+					poll: async (budget) => {
+						const hits = await search(oldVector, "vector", budget);
+						mark("update_old_gone", !hits.some((item) => item.id === target.id));
 					},
-					{
-						poll: async (budget) => {
-							await search(oldVector, "hybrid", budget);
-						},
-					},
-				);
+				});
 			}
 			let stepIndex = 0;
 			while (true) {
@@ -392,6 +385,12 @@ export async function runVectorSmoke(
 				const step = steps[stepIndex % steps.length];
 				stepIndex += 1;
 				if (!step || (step.metric && report.latencies_ms[step.metric] !== null)) continue;
+				if (
+					!step.metric &&
+					stepIndex > steps.length &&
+					fields.some((field) => report.latencies_ms[field] === null)
+				)
+					continue;
 				try {
 					await step.poll(budget);
 					report.polls[stage] += 1;

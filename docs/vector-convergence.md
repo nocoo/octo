@@ -113,8 +113,10 @@ embedding counters and cleanup outcomes. It checks vector and hybrid results,
 uses exact old-ID absence in the vector channel, enforces a 10-second observation
 deadline and exits nonzero on failure. Each window starts after the target POST
 or vector PUT response, excluding write RTT and the preceding body-only PATCH.
-Each polling tick sends just one status GET or search, rotating through status,
-vector and hybrid checks with a 250 ms pause between requests. Satisfied metric
+Each polling tick sends just one status GET or search with a 250 ms pause between
+requests. Each stage first checks hybrid results once per query vector, then
+rotates through pending status and vector metrics. Further hybrid checks wait
+until all metrics have converged, then continue until the deadline. Satisfied metric
 steps are skipped without requests or pauses so pending metrics are polled more
 often. Metrics are recorded when their own evidence arrives, not after the full
 rotation. Update rank-1 (`update_new_rank1`) requires only the target as the
