@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { encodeFloat32Vector, l2Normalize } from "../../apps/web/src/server/search/math";
 import { indexText } from "../../apps/web/src/server/search/tokenizer";
 import { assertAsyncTestMarker } from "../../scripts/local-d1";
-import { base, e2eD1, seedKey, sqlText } from "../fixtures/l2-batch";
+import { base, e2eD1, query, seedKey, sqlText } from "../fixtures/l2-batch";
 
 const spaceId = "sp_search_ranking";
 const profile = "te3-small-1536";
@@ -150,7 +150,8 @@ beforeAll(async () => {
 		`INSERT INTO spaces (id,slug,name,created_at,updated_at) VALUES (${sqlText(spaceId)},'search-ranking','Search ranking',1,1);`,
 		`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at,deleted_at)
 VALUES (${sqlText(reservedMemoryId)},${sqlText(spaceId)},'Reserved trash','','note',${sqlText(key.id)},'reserved-hash',1,1,1);
-INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT ${sqlText(reservedMemoryId)},COALESCE(MAX(fts_rowid),0)+1 FROM memories_fts_map;`,
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT ${sqlText(reservedMemoryId)},
+max(COALESCE((SELECT MAX(fts_rowid) FROM memories_fts_map),0),COALESCE((SELECT MAX(rowid) FROM memories_fts),0))+1;`,
 	];
 	for (const [index, memory] of memories.entries()) {
 		const id = sqlText(memoryId(memory.id));
@@ -169,6 +170,17 @@ VALUES (${id},${sqlText(profile)},'text-embedding-3-small',1536,X'${blob}','rank
 });
 
 afterAll(cleanup);
+
+it("preserves the unindexed trashed mapping while allocating live search fixtures", async () => {
+	expect(
+		await query(
+			await e2eD1(),
+			`SELECT m.deleted_at IS NOT NULL AS trashed,
+(SELECT COUNT(*) FROM memories_fts WHERE rowid=map.fts_rowid) AS indexed
+FROM memories m JOIN memories_fts_map map ON map.memory_id=m.id WHERE m.id=${sqlText(reservedMemoryId)}`,
+		),
+	).toEqual([{ trashed: 1, indexed: 0 }]);
+});
 
 type SearchBody = {
 	items: Array<{ id: string; scores: { fts: { rank: number } | null } }>;

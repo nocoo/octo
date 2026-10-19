@@ -13,8 +13,9 @@ const HIDDEN = "mem_srch_l2_hid";
 const TRASHED = "mem_srch_l2_trash";
 const ACCENT = "mem_srch_l2_accent";
 const PLAIN = "mem_srch_l2_plain";
+const RETAINED = "mem_srch_l2_retained";
 const memoryIds = [VISIBLE, HIDDEN, TRASHED];
-const quotedIds = [...memoryIds, ACCENT, PLAIN].map((id) => `'${id}'`).join(",");
+const quotedIds = [...memoryIds, ACCENT, PLAIN, RETAINED].map((id) => `'${id}'`).join(",");
 const vector = { profile: "te3-small-1536", values: [3, 4, ...Array<number>(1534).fill(0)] };
 const tokens: Record<string, string> = {};
 const keyIds: Record<string, string> = {};
@@ -67,7 +68,11 @@ VALUES ('${material.keyid}','search-l2-${spec.name}','${hash}','project','${spec
 	}
 	commands.push(`INSERT INTO spaces (id,slug,name,created_at,updated_at) VALUES
 ('sp_srch_l2_vis','search-l2-vis','Visible',${now},${now}), ('sp_srch_l2_hid','search-l2-hid','Hidden',${now},${now});
-INSERT INTO tags VALUES ('tag_srch_infra','search-infra','Search infra',NULL,${now},${now}), ('tag_srch_alias','search-old-infra','Search old infra','tag_srch_infra',${now},${now});`);
+INSERT INTO tags VALUES ('tag_srch_infra','search-infra','Search infra',NULL,${now},${now}), ('tag_srch_alias','search-old-infra','Search old infra','tag_srch_infra',${now},${now});
+INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at,deleted_at)
+VALUES ('${RETAINED}','sp_srch_l2_vis','Retained mapping','','note','${source}','hash',${now},${now},${now});
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${RETAINED}',
+max(COALESCE((SELECT MAX(fts_rowid) FROM memories_fts_map),0),COALESCE((SELECT MAX(rowid) FROM memories_fts),0))+1;`);
 	const bytes = encodeFloat32Vector(l2Normalize(vector.values));
 	const blob = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 	for (const id of memoryIds) {
@@ -123,6 +128,17 @@ type SearchBody = {
 };
 
 describe("POST /api/v1/search", () => {
+	it("preserves the unindexed trashed mapping while allocating live search fixtures", async () => {
+		expect(
+			await query(
+				await e2eD1(),
+				`SELECT m.deleted_at IS NOT NULL AS trashed,
+(SELECT COUNT(*) FROM memories_fts WHERE rowid=map.fts_rowid) AS indexed
+FROM memories m JOIN memories_fts_map map ON map.memory_id=m.id WHERE m.id='${RETAINED}'`,
+			),
+		).toEqual([{ trashed: 1, indexed: 0 }]);
+	});
+
 	it.each(["fts", "vector", "hybrid"])(
 		"returns visible results and real channel scores in %s mode",
 		async (mode) => {
