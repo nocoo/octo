@@ -135,7 +135,7 @@ export function Markdown({
 		return result;
 	}, [entries, urls, onAttachment]);
 	return (
-		<Grid columns={1} gap="sm" className="octo-markdown">
+		<Grid columns={1} gap="md" className="octo-markdown">
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm]}
 				rehypePlugins={[rehypeHighlight]}

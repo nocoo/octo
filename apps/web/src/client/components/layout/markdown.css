@@ -1,25 +1,46 @@
 .octo-markdown {
+	width: 100%;
 	max-width: 72ch;
 	min-width: 0;
-	font-size: var(--basalt-text-base);
-	line-height: var(--basalt-leading-relaxed);
+	margin-inline: auto;
+	font-family:
+		Charter, Georgia, "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", SimSun, serif;
+	font-size: var(--basalt-text-xl);
+	line-height: 1.65;
 	overflow-wrap: anywhere;
 }
-.octo-markdown > * {
+.octo-markdown > *,
+.octo-markdown :is(p, ul, ol, blockquote, pre, table, hr) {
 	margin-block: unset;
 }
 .octo-markdown :is(h1, h2, h3, h4, h5, h6) {
 	scroll-margin-block-start: var(--basalt-space-layout-xl);
 	line-height: var(--basalt-leading-tight);
+	font-weight: 600;
+}
+.octo-markdown > :is(h1, h2, h3, h4, h5, h6):not(:first-child) {
+	margin-block-start: var(--basalt-space-layout-sm);
 }
 .octo-markdown h1 {
-	font-size: var(--basalt-text-2xl);
+	font-size: var(--basalt-text-4xl);
 }
 .octo-markdown h2 {
-	font-size: var(--basalt-text-xl);
+	font-size: var(--basalt-text-3xl);
 }
 .octo-markdown h3 {
-	font-size: var(--basalt-text-lg);
+	font-size: var(--basalt-text-2xl);
+}
+.octo-markdown :is(h4, h5, h6) {
+	font-size: inherit;
+}
+.octo-markdown a {
+	color: hsl(var(--basalt-primary));
+	text-decoration: underline;
+}
+.octo-markdown hr {
+	width: 100%;
+	border: 0;
+	border-block-start: var(--basalt-border-width) solid hsl(var(--basalt-border));
 }
 .octo-markdown :is(img, video) {
 	display: block;
@@ -28,23 +49,33 @@
 	border-radius: var(--basalt-radius-md);
 }
 .octo-markdown pre {
+	min-width: 0;
 	max-width: 100%;
 	overflow-x: auto;
 	overscroll-behavior-x: contain;
 	padding: var(--basalt-space-card);
 	border-radius: var(--basalt-radius-md);
 	background: hsl(var(--basalt-bright));
-	font-size: var(--basalt-text-sm);
+	font-size: var(--basalt-text-base);
+	line-height: var(--basalt-leading-relaxed);
+	white-space: pre;
 }
 .octo-markdown code {
-	font-family: var(--font-mono);
+	font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+	font-size: var(--basalt-text-lg);
 }
 .octo-memory-diff code {
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
+.octo-markdown pre code {
+	font-size: inherit;
+}
 .octo-markdown :not(pre) > code {
+	padding: var(--basalt-space-xs) var(--basalt-space-sm);
+	border-radius: var(--basalt-radius-sm);
 	color: hsl(var(--basalt-primary));
+	background: hsl(var(--basalt-bright));
 }
 .octo-markdown blockquote {
 	margin-inline: unset;
@@ -57,6 +88,12 @@
 	max-width: 100%;
 	overflow-x: auto;
 	border-collapse: collapse;
+	font-size: var(--basalt-text-lg);
+	overscroll-behavior-x: contain;
+}
+.octo-markdown th {
+	background: hsl(var(--basalt-bright));
+	font-weight: 600;
 }
 .octo-markdown :is(th, td) {
 	text-align: start;
@@ -71,6 +108,13 @@
 }
 .octo-markdown ol {
 	list-style-type: decimal;
+}
+.octo-markdown :is(blockquote, li) > * + *,
+.octo-markdown li > :is(ul, ol) {
+	margin-block-start: var(--basalt-space-layout-sm);
+}
+.octo-markdown li + li {
+	margin-block-start: var(--basalt-space-sm);
 }
 .octo-markdown .task-list-item {
 	list-style-type: none;
