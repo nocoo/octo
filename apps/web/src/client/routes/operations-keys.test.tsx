@@ -1,6 +1,10 @@
+import type { Button, ConfirmDialog } from "@nocoo/basalt";
 import type { DataTableProps, DataTableSort } from "@nocoo/basalt/components/data-table";
+import { tagColorFor } from "@nocoo/basalt/components/tag-badge";
+import { Children, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError, adminApi } from "../lib/api";
 import type { KeyUsageModel } from "../viewmodels/operations-key-usage";
 import type { KeyMetadata, KeysModel } from "../viewmodels/operations-keys";
 import { KeysPage } from "./operations-keys";
@@ -10,7 +14,31 @@ const fixture = vi.hoisted(() => ({
 	usage: {} as Partial<KeyUsageModel["state"]>,
 	sort: null as DataTableSort | null,
 	open: false,
+	model: null as KeysModel | null,
+	deleteDialog: null as ComponentProps<typeof ConfirmDialog> | null,
+	buttons: new Map<string, ComponentProps<typeof Button>>(),
+	table: null as DataTableProps<KeyMetadata> | null,
 }));
+vi.mock("@nocoo/basalt", async (original) => {
+	const module = await original<typeof import("@nocoo/basalt")>();
+	return {
+		...module,
+		Button: (props: ComponentProps<typeof Button>) => {
+			const label = props["aria-label"] ?? Children.toArray(props.children).join("");
+			fixture.buttons.set(label, props);
+			return <module.Button {...props} />;
+		},
+		ConfirmDialog: (props: ComponentProps<typeof ConfirmDialog>) => {
+			if (props.confirmLabel === "永久删除") fixture.deleteDialog = props;
+			return props.open ? (
+				<>
+					{props.title}
+					{props.description}
+				</>
+			) : null;
+		},
+	};
+});
 vi.mock("../viewmodels/operations-key-usage", async (original) => {
 	const module = await original<typeof import("../viewmodels/operations-key-usage")>();
 	return {
@@ -31,6 +59,7 @@ vi.mock("../viewmodels/operations-keys", async (original) => {
 			constructor() {
 				super();
 				this.state = { ...this.state, ...fixture.state };
+				fixture.model = this;
 			}
 		},
 	};
@@ -39,9 +68,10 @@ vi.mock("@nocoo/basalt/components/data-table", async (original) => {
 	const module = await original<typeof import("@nocoo/basalt/components/data-table")>();
 	return {
 		...module,
-		DataTable: (props: DataTableProps<KeyMetadata>) => (
-			<module.DataTable {...props} defaultSort={fixture.sort} />
-		),
+		DataTable: (props: DataTableProps<KeyMetadata>) => {
+			fixture.table = props;
+			return <module.DataTable {...props} defaultSort={fixture.sort} />;
+		},
 	};
 });
 
@@ -88,6 +118,86 @@ beforeEach(() => {
 	fixture.usage = {};
 	fixture.sort = null;
 	fixture.open = false;
+	fixture.model = null;
+	fixture.deleteDialog = null;
+	fixture.buttons.clear();
+	fixture.table = null;
+});
+afterEach(() => vi.restoreAllMocks());
+
+describe("revoked key deletion", () => {
+	it("only offers delete on revoked rows, never active or expired unrevoked rows", () => {
+		const html = render();
+		expect(html).toContain('aria-label="永久删除 Beta"');
+		for (const name of ["Zulu", "Alpha"]) {
+			expect(html).not.toContain(`aria-label="永久删除 ${name}"`);
+			expect(html).toContain(`aria-label="编辑 ${name}"`);
+			expect(html).toContain(`aria-label="撤销 ${name}"`);
+		}
+		for (const action of ["编辑", "轮换", "撤销"])
+			expect(html).not.toContain(`aria-label="${action} Beta"`);
+	});
+
+	it("uses native tag colors, semantic statuses, decorated title and aligned table actions", () => {
+		const html = render();
+		expect(html).toContain(`data-tag-color="${tagColorFor("管理员")}"`);
+		expect(html).toContain(`data-tag-color="${tagColorFor("全部空间")}"`);
+		expect(html).toContain("text-basalt-warning");
+		expect(html).toContain("text-basalt-danger");
+		expect(html).toContain("octo-page-title");
+		expect(html).toContain("octo-title-icon");
+		expect(html).toContain("octo-table");
+		expect(fixture.table?.columns.find((column) => column.id === "actions")).toMatchObject({
+			textAlign: "end",
+		});
+	});
+
+	it("opens a destructive irreversible confirmation and cancels without sending DELETE", () => {
+		const request = vi.spyOn(adminApi, "request");
+		render();
+		fixture.buttons.get("永久删除 Beta")?.onClick?.({ currentTarget: {} } as never);
+		expect(fixture.model?.state.deleting?.id).toBe("key-b");
+		fixture.state = fixture.model?.state ?? {};
+		const html = render();
+		expect(fixture.deleteDialog).toMatchObject({
+			open: true,
+			variant: "destructive",
+			cancelLabel: "取消",
+			confirmLabel: "永久删除",
+		});
+		expect(html).toContain("永久删除 Beta？");
+		expect(html).toContain("无法恢复");
+		expect(html).toContain("审计记录将保留");
+		fixture.deleteDialog?.onOpenChange(false);
+		expect(fixture.model?.state).toMatchObject({ deleting: null, items: keys });
+		expect(request).not.toHaveBeenCalled();
+	});
+
+	it("keeps a server error inside the open confirmation and retries to disappearance", async () => {
+		fixture.state = { ...fixture.state, deleting: keys[2] ?? null };
+		const request = vi
+			.spyOn(adminApi, "request")
+			.mockRejectedValueOnce(new ApiError(503, "unavailable"));
+		render();
+		await fixture.deleteDialog?.onConfirm();
+		fixture.state = fixture.model?.state ?? {};
+		const html = render();
+		expect(fixture.deleteDialog?.open).toBe(true);
+		expect(html).toContain("服务暂时不可用，请稍后重试。");
+		expect(html.match(/role="alert"/g)).toHaveLength(1);
+		request
+			.mockResolvedValueOnce({ id: "key-b", deleted: true })
+			.mockResolvedValueOnce({ items: keys.slice(0, 2) });
+		await fixture.deleteDialog?.onConfirm();
+		expect(fixture.model?.state).toMatchObject({
+			deleting: null,
+			items: keys.slice(0, 2),
+			error: null,
+		});
+		expect(request).toHaveBeenCalledWith("/keys/key-b", { method: "DELETE" });
+		fixture.state = fixture.model?.state ?? {};
+		expect(names(render())).toEqual(["Zulu", "Alpha"]);
+	});
 });
 
 describe("key table sorting", () => {

@@ -18,6 +18,7 @@ import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-t
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
 	Ban,
 	Check,
@@ -29,6 +30,7 @@ import {
 	Plus,
 	RefreshCw,
 	RotateCw,
+	Trash2,
 	X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -59,6 +61,7 @@ export function KeysPage() {
 	const createTrigger = useRef<HTMLButtonElement>(null);
 	const editorTrigger = useRef<HTMLButtonElement | null>(null);
 	const rotateTrigger = useRef<HTMLButtonElement | null>(null);
+	const deleteTrigger = useRef<HTMLButtonElement | null>(null);
 	useEffect(() => {
 		active.current = true;
 		void model.load();
@@ -109,10 +112,11 @@ export function KeysPage() {
 			sortValue: (key) => roleLabels[key.role],
 			accessor: (key) => (
 				<span>
-					{roleLabels[key.role]}
+					<TagBadge name={roleLabels[key.role]} size="sm" />{" "}
+					<TagBadge name={scopeLabels[key.scope]} size="sm" />
 					<br />
 					<span className="text-basalt-sm text-basalt-muted-foreground">
-						{scopeLabels[key.scope]} / {operationText(key.ops)}
+						{operationText(key.ops)}
 					</span>
 				</span>
 			),
@@ -122,7 +126,15 @@ export function KeysPage() {
 			header: "状态",
 			sortValue: (key) => statusLabels[keyStatus(key)],
 			accessor: (key) => (
-				<Badge variant={keyStatus(key) === "active" ? "success" : "secondary"}>
+				<Badge
+					variant={
+						keyStatus(key) === "active"
+							? "success"
+							: keyStatus(key) === "expired"
+								? "warning"
+								: "error"
+					}
+				>
 					{keyStatus(key) === "active" ? (
 						<Check className="size-basalt-icon" aria-hidden="true" />
 					) : keyStatus(key) === "expired" ? (
@@ -180,60 +192,84 @@ export function KeysPage() {
 			id: "actions",
 			header: "操作",
 			sortable: false,
-			accessor: (key) => (
-				<Grid
-					columns={3}
-					gap="sm"
-					style={{
-						gridTemplateColumns: "repeat(3, max-content)",
-						alignItems: "center",
-					}}
-				>
+			textAlign: "end",
+			accessor: (key) =>
+				key.revoked_at !== null ? (
 					<Button
-						icon={<Pencil aria-hidden="true" />}
+						icon={<Trash2 aria-hidden="true" />}
 						size="sm"
-						variant="outline"
-						disabled={state.pending || key.revoked_at !== null}
+						variant="destructive"
+						disabled={state.pending}
 						onClick={(event) => {
-							editorTrigger.current = event.currentTarget;
-							openEditor(key);
+							deleteTrigger.current = event.currentTarget;
+							model.openDelete(key.id);
 						}}
-						aria-label={`编辑 ${key.name}`}
+						aria-label={`永久删除 ${key.name}`}
 					>
-						编辑
+						删除
 					</Button>
-					<Button
-						icon={<RotateCw aria-hidden="true" />}
-						size="sm"
-						variant="outline"
-						disabled={state.pending || keyStatus(key) !== "active"}
-						onClick={(event) => {
-							rotateTrigger.current = event.currentTarget;
-							setRotating(key);
-							setGrace("0");
+				) : (
+					<Grid
+						columns={3}
+						gap="sm"
+						style={{
+							gridTemplateColumns: "repeat(3, max-content)",
+							alignItems: "center",
+							justifyContent: "end",
 						}}
-						aria-label={`轮换 ${key.name}`}
 					>
-						轮换
-					</Button>
-					<Button
-						icon={<Ban aria-hidden="true" />}
-						size="sm"
-						variant="ghost"
-						disabled={state.pending || key.revoked_at !== null}
-						onClick={() => setRevoking(key)}
-						aria-label={`撤销 ${key.name}`}
-					>
-						撤销
-					</Button>
-				</Grid>
-			),
+						<Button
+							icon={<Pencil aria-hidden="true" />}
+							size="sm"
+							variant="outline"
+							disabled={state.pending}
+							onClick={(event) => {
+								editorTrigger.current = event.currentTarget;
+								openEditor(key);
+							}}
+							aria-label={`编辑 ${key.name}`}
+						>
+							编辑
+						</Button>
+						<Button
+							icon={<RotateCw aria-hidden="true" />}
+							size="sm"
+							variant="outline"
+							disabled={state.pending || keyStatus(key) !== "active"}
+							onClick={(event) => {
+								rotateTrigger.current = event.currentTarget;
+								setRotating(key);
+								setGrace("0");
+							}}
+							aria-label={`轮换 ${key.name}`}
+						>
+							轮换
+						</Button>
+						<Button
+							icon={<Ban aria-hidden="true" />}
+							size="sm"
+							variant="ghost"
+							disabled={state.pending}
+							onClick={() => setRevoking(key)}
+							aria-label={`撤销 ${key.name}`}
+						>
+							撤销
+						</Button>
+					</Grid>
+				),
 		},
 	];
 	return (
 		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="接口密钥"
+				title={
+					<span className="octo-page-title">
+						<span className="octo-title-icon">
+							<KeyRound aria-hidden="true" />
+						</span>
+						接口密钥
+					</span>
+				}
 				description="明文仅展示一次，绝不持久化。"
 				actions={
 					<>
@@ -262,7 +298,7 @@ export function KeysPage() {
 					</>
 				}
 			/>
-			{state.error && editor === null && (
+			{state.error && editor === null && state.deleting === null && (
 				<p role="alert">
 					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}{" "}
 					<Button variant="ghost" size="sm" onClick={() => void model.load()}>
@@ -291,6 +327,7 @@ export function KeysPage() {
 					) : (
 						<DataTable
 							aria-label="接口密钥"
+							className="octo-table"
 							data={state.items}
 							columns={columns}
 							getRowId={(key) => key.id}
@@ -424,6 +461,39 @@ export function KeysPage() {
 					</form>
 				</DialogContent>
 			</Dialog>
+			<ConfirmDialog
+				open={state.deleting !== null}
+				onOpenChange={(open) => {
+					if (!open) model.cancelDelete();
+				}}
+				onCloseAutoFocus={(event) => {
+					if (!deleteTrigger.current?.isConnected) {
+						event.preventDefault();
+						createTrigger.current?.focus();
+					}
+				}}
+				title={`永久删除 ${state.deleting?.name ?? "密钥"}？`}
+				description={
+					<>
+						此操作无法恢复，密钥将从列表中永久移除。已有审计记录将保留，空间和记忆不受影响。
+						{state.error && (
+							<span
+								className="mt-basalt-space-sm block font-medium text-basalt-danger"
+								role="alert"
+							>
+								{state.error}
+							</span>
+						)}
+					</>
+				}
+				variant="destructive"
+				cancelLabel="取消"
+				confirmLabel="永久删除"
+				loading={state.pending}
+				onConfirm={async () => {
+					await model.deleteRevoked();
+				}}
+			/>
 			<ConfirmDialog
 				open={revoking !== null}
 				onOpenChange={(open) => {

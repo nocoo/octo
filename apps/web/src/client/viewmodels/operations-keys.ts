@@ -47,6 +47,7 @@ interface KeysState {
 	loading: boolean;
 	loaded: boolean;
 	pending: boolean;
+	deleting: KeyMetadata | null;
 	error: string | null;
 	fieldErrors: KeyFieldErrors;
 	spaces: KeySpace[];
@@ -151,6 +152,7 @@ export class KeysModel extends Store<KeysState> {
 			loading: false,
 			loaded: false,
 			pending: false,
+			deleting: null,
 			error: null,
 			fieldErrors: {},
 			spaces: [],
@@ -197,8 +199,17 @@ export class KeysModel extends Store<KeysState> {
 		this.set({ loading: true, error: null });
 		try {
 			const result = await this.api.request<{ items: KeyMetadata[] }>("/keys");
-			if (this.alive && revision === this.revision)
-				this.set({ items: result.items.map(metadata), loading: false, loaded: true });
+			if (this.alive && revision === this.revision) {
+				const items = result.items.map(metadata);
+				this.set({
+					items,
+					loading: false,
+					loaded: true,
+					deleting:
+						items.find((item) => item.id === this.state.deleting?.id && item.revoked_at !== null) ??
+						null,
+				});
+			}
 		} catch (error) {
 			if (this.alive && revision === this.revision)
 				this.set({ loading: false, error: operationsError(error, "无法加载接口密钥。") });
@@ -276,11 +287,31 @@ export class KeysModel extends Store<KeysState> {
 		return (await this.change(`/keys/${encodeURIComponent(id)}/revoke`, "POST")) !== null;
 	}
 
+	openDelete(id: string): void {
+		if (!this.alive || this.state.pending) return;
+		const key = this.state.items.find((item) => item.id === id);
+		if (!key || key.revoked_at === null) return;
+		this.set({ deleting: key, error: null, fieldErrors: {} });
+	}
+
+	cancelDelete(): void {
+		if (this.state.pending) return;
+		this.set({ deleting: null, error: null, fieldErrors: {} });
+	}
+
+	async deleteRevoked(): Promise<boolean> {
+		const key = this.state.deleting;
+		if (!key) return false;
+		if ((await this.change(`/keys/${encodeURIComponent(key.id)}`, "DELETE")) === null) return false;
+		this.set({ deleting: null, items: this.state.items.filter((item) => item.id !== key.id) });
+		return true;
+	}
+
 	dispose(): void {
 		this.alive = false;
 		this.revision++;
 		this.spacesRevision++;
-		this.set({ pending: false, loading: false, spacesLoading: false });
+		this.set({ pending: false, loading: false, spacesLoading: false, deleting: null });
 	}
 
 	private validate(

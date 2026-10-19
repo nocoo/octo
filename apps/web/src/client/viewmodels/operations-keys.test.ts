@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ApiError } from "../lib/api";
 import { KeysModel, keyStatus, rolePermissions } from "./operations-keys";
 
 const key = {
@@ -18,6 +19,125 @@ const key = {
 };
 
 describe("key permissions and lifecycle", () => {
+	it("only opens deletion for revoked keys and cancels without changing the list", async () => {
+		const revoked = { ...key, id: "revoked", revoked_at: "2026-10-18T00:00:00.000Z" };
+		const expired = { ...key, id: "expired", expires_at: "2000-01-01T00:00:00.000Z" };
+		const request = vi.fn().mockResolvedValue({ items: [key, expired, revoked] });
+		const model = new KeysModel({ request });
+		await model.load();
+		for (const id of [key.id, expired.id, "missing"]) {
+			model.openDelete(id);
+			expect(model.state.deleting).toBeNull();
+		}
+		expect(await model.deleteRevoked()).toBe(false);
+		model.openDelete(revoked.id);
+		expect(model.state.deleting).toEqual(revoked);
+		model.cancelDelete();
+		expect(model.state).toMatchObject({
+			deleting: null,
+			items: [key, expired, revoked],
+			error: null,
+		});
+		expect(request).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps failed deletion open for retry and refreshes after the encoded DELETE", async () => {
+		const revoked = { ...key, revoked_at: "2026-10-18T00:00:00.000Z" };
+		const request = vi.fn().mockResolvedValueOnce({ items: [revoked] });
+		const model = new KeysModel({ request });
+		await model.load();
+		model.openDelete(key.id);
+		request.mockRejectedValueOnce(new ApiError(503, "unavailable"));
+		expect(await model.deleteRevoked()).toBe(false);
+		expect(model.state).toMatchObject({
+			deleting: revoked,
+			items: [revoked],
+			pending: false,
+			error: "服务暂时不可用，请稍后重试。",
+		});
+		request
+			.mockResolvedValueOnce({ id: key.id, deleted: true })
+			.mockResolvedValueOnce({ items: [] });
+		expect(await model.deleteRevoked()).toBe(true);
+		expect(request).toHaveBeenNthCalledWith(3, "/keys/key%2F1", { method: "DELETE" });
+		expect(request).toHaveBeenNthCalledWith(4, "/keys");
+		expect(model.state).toMatchObject({ deleting: null, items: [], pending: false, error: null });
+	});
+
+	it("blocks duplicate deletion and cancellation while the write is pending", async () => {
+		const revoked = { ...key, revoked_at: "2026-10-18T00:00:00.000Z" };
+		let finish: (value: unknown) => void = () => {};
+		const request = vi.fn().mockResolvedValueOnce({ items: [revoked] });
+		const model = new KeysModel({ request });
+		await model.load();
+		model.openDelete(key.id);
+		request.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+		);
+		const deleting = model.deleteRevoked();
+		model.cancelDelete();
+		model.openDelete("missing");
+		expect(model.state).toMatchObject({ deleting: revoked, pending: true });
+		expect(await model.deleteRevoked()).toBe(false);
+		request.mockResolvedValueOnce({ items: [] });
+		finish({ id: key.id, deleted: true });
+		expect(await deleting).toBe(true);
+		expect(request).toHaveBeenCalledTimes(3);
+	});
+
+	it("removes a successfully deleted row even when the following refresh fails", async () => {
+		const revoked = { ...key, revoked_at: "2026-10-18T00:00:00.000Z" };
+		const request = vi.fn().mockResolvedValueOnce({ items: [revoked] });
+		const model = new KeysModel({ request });
+		await model.load();
+		model.openDelete(key.id);
+		request
+			.mockResolvedValueOnce({ id: key.id, deleted: true })
+			.mockRejectedValueOnce(new Error("private"));
+		expect(await model.deleteRevoked()).toBe(true);
+		expect(model.state).toMatchObject({ deleting: null, items: [], error: "无法加载接口密钥。" });
+	});
+
+	it("invalidates an open delete selection if an external refresh returns an unrevoked key", async () => {
+		const revoked = { ...key, revoked_at: "2026-10-18T00:00:00.000Z" };
+		const request = vi.fn().mockResolvedValueOnce({ items: [revoked] });
+		const model = new KeysModel({ request });
+		await model.load();
+		model.openDelete(key.id);
+		request.mockResolvedValueOnce({ items: [key] });
+		await model.load();
+		expect(model.state).toMatchObject({ items: [key], deleting: null });
+		model.openDelete(key.id);
+		expect(await model.deleteRevoked()).toBe(false);
+		expect(request).toHaveBeenCalledTimes(2);
+		expect(request.mock.calls.every(([, options]) => options?.method !== "DELETE")).toBe(true);
+	});
+
+	it("does not delete or update selection after disposal", async () => {
+		const revoked = { ...key, revoked_at: "2026-10-18T00:00:00.000Z" };
+		let finish: (value: unknown) => void = () => {};
+		const request = vi.fn().mockResolvedValueOnce({ items: [revoked] });
+		const model = new KeysModel({ request });
+		await model.load();
+		model.openDelete(key.id);
+		request.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+		);
+		const deleting = model.deleteRevoked();
+		model.dispose();
+		model.openDelete(key.id);
+		finish({ id: key.id, deleted: true });
+		expect(await deleting).toBe(false);
+		expect(await model.deleteRevoked()).toBe(false);
+		expect(model.state).toMatchObject({ deleting: null, pending: false });
+		expect(request).toHaveBeenCalledTimes(2);
+	});
 	it("only certifies a successfully read list and preserves cached rows on refresh failure", async () => {
 		const request = vi
 			.fn()
