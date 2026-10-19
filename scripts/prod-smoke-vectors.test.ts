@@ -231,6 +231,83 @@ describe("repeated vector smoke reports", () => {
 });
 
 describe("production vector smoke with fake transport only", () => {
+	it.each([
+		["create", true],
+		["update", true],
+		["create", false],
+		["update", false],
+	] as const)(
+		"ends the %s fractional window without a spurious timeout (converged=%s)",
+		async (stage, converged) => {
+			vi.useFakeTimers();
+			const transport = fixture(1_300.4);
+			transport.setOverride((call) =>
+				!converged && call.url.pathname.endsWith("/search")
+					? transport.json({ items: [] })
+					: undefined,
+			);
+			const fetch = transport.dependencies.fetch;
+			let start: number | undefined;
+			let interrupted = false;
+			let signal: AbortSignal | null | undefined;
+			transport.dependencies.fetch = vi.fn(async (url, init) => {
+				const remaining =
+					start === undefined ? Infinity : start + 10_000 - transport.dependencies.now();
+				if (
+					!interrupted &&
+					remaining > 0 &&
+					remaining < 2_000 &&
+					(url.endsWith("/search") || url.includes("include=vector_status"))
+				) {
+					interrupted = true;
+					signal = init.signal;
+					transport.advance(Math.floor(remaining));
+					return new Promise<Response>(() => {});
+				}
+				const response = await fetch(url, init);
+				if (
+					start === undefined &&
+					(stage === "create"
+						? init.method === "POST" && url.endsWith("/memories")
+						: init.method === "PUT")
+				) {
+					start = transport.dependencies.now();
+				}
+				return response;
+			});
+			const promise = runVectorSmoke(environment, transport.dependencies);
+			await vi.runAllTimersAsync();
+			const report = await promise;
+			expect(interrupted).toBe(true);
+			expect(signal?.aborted).toBe(true);
+			expect(report.ok).toBe(converged);
+			if (converged) {
+				expect(report.failures).toEqual([]);
+				expect(Object.values(report.latencies_ms).every((latency) => latency !== null)).toBe(true);
+			} else {
+				expect(report.failures).toContainEqual({ phase: stage, code: "deadline_exceeded" });
+				expect(report.failures.some((failure) => failure.code === "request_timeout")).toBe(false);
+			}
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it("still fails an ordinary request timeout with observation time remaining", async () => {
+		vi.useFakeTimers();
+		const transport = fixture(1_300.4);
+		const fetch = transport.dependencies.fetch;
+		transport.dependencies.fetch = vi.fn(async (url, init) => {
+			if (url.includes("include=vector_status")) return new Promise<Response>(() => {});
+			return fetch(url, init);
+		});
+		const promise = runVectorSmoke(environment, transport.dependencies);
+		await vi.runAllTimersAsync();
+		const report = await promise;
+		expect(report.ok).toBe(false);
+		expect(report.failures).toEqual([{ phase: "create", code: "request_timeout" }]);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
 	it.each([1, 1_300])("measures convergence after write responses with %i ms RTT", async (rtt) => {
 		const transport = fixture(rtt);
 		const report = await runVectorSmoke(environment, transport.dependencies);

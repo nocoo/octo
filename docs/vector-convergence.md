@@ -112,7 +112,9 @@ vector and hybrid checks with a 250 ms pause between requests. Metrics are
 recorded when their own evidence arrives, not after the full rotation. Update
 rank-1 requires indexed/non-stale status and both new-vector search channels;
 observed regressions still fail the run. Control counters are checked outside
-the polling windows. Only tracked IDs created by this run are
+the polling windows. A deadline-limited request timeout closes observation and
+still fails missing metrics; an ordinary two-second request timeout remains a
+transport failure. Only tracked IDs created by this run are
 soft-deleted in cleanup; it never purges, empties trash, creates spaces or changes
 embedding settings. Transport failures with unknown create outcomes may leave a
 run-tagged memory for manual investigation; never broaden cleanup to existing

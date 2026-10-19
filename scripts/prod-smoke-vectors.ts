@@ -169,7 +169,7 @@ export async function runVectorSmoke(
 					controller.abort();
 					reject(new SmokeError("request_timeout"));
 				},
-				Math.max(1, Math.min(REQUEST_TIMEOUT_MS, budget)),
+				Math.max(1, Math.ceil(Math.min(REQUEST_TIMEOUT_MS, budget))),
 			);
 		});
 		try {
@@ -317,11 +317,6 @@ export async function runVectorSmoke(
 				stage === "create"
 					? ["create_indexed", "create_vector_hit"]
 					: ["update_new_rank1", "update_old_gone"];
-			const budget = () => {
-				const left = deadline - deps.now();
-				if (left <= 0) throw new SmokeError("observation_ended");
-				return left;
-			};
 			const mark = (field: Latency, ready: boolean) => {
 				const elapsed = deps.now() - start;
 				if (elapsed >= DEADLINE_MS) return;
@@ -335,17 +330,17 @@ export async function runVectorSmoke(
 				(item.scores.vector?.similarity ?? -1) >= MATCH_SIMILARITY;
 			const supplied = stage === "create" ? oldVector : newVector;
 			const steps = [
-				async () => {
+				async (budget: number) => {
 					const current = await read(
 						target.id,
 						stage === "create" ? "create" : report.polls.update === 0 ? "put" : "final",
-						budget(),
+						budget,
 					);
 					indexed = current.status.indexed && !current.status.stale;
 					if (stage === "create") mark("create_indexed", indexed);
 				},
-				async () => {
-					const hits = await search(supplied, "vector", budget());
+				async (budget: number) => {
+					const hits = await search(supplied, "vector", budget);
 					if (stage === "create") {
 						mark(
 							"create_vector_hit",
@@ -355,32 +350,34 @@ export async function runVectorSmoke(
 						vectorRank1 = hits[0]?.id === target.id && near(hits[0]);
 					}
 				},
-				async () => {
-					const hits = await search(supplied, "hybrid", budget());
+				async (budget: number) => {
+					const hits = await search(supplied, "hybrid", budget);
 					hybridRank1 = hits[0]?.id === target.id && near(hits[0]);
 				},
 			];
 			if (stage === "update") {
 				steps.push(
-					async () => {
-						const hits = await search(oldVector, "vector", budget());
+					async (budget: number) => {
+						const hits = await search(oldVector, "vector", budget);
 						mark("update_old_gone", !hits.some((item) => item.id === target.id));
 					},
-					async () => {
-						await search(oldVector, "hybrid", budget());
+					async (budget: number) => {
+						await search(oldVector, "hybrid", budget);
 					},
 				);
 			}
-			while (deps.now() < deadline) {
+			while (true) {
+				const budget = deadline - deps.now();
+				if (budget <= 0) break;
 				try {
-					await steps[report.polls[stage] % steps.length]?.();
+					await steps[report.polls[stage] % steps.length]?.(budget);
 					if (stage === "update") mark("update_new_rank1", indexed && vectorRank1 && hybridRank1);
 					report.polls[stage] += 1;
 				} catch (error) {
 					if (
 						error instanceof SmokeError &&
-						(error.code === "observation_ended" ||
-							(error.code === "request_timeout" && deps.now() >= deadline))
+						error.code === "request_timeout" &&
+						(budget <= REQUEST_TIMEOUT_MS || deps.now() >= deadline)
 					)
 						break;
 					throw error;
