@@ -12,6 +12,11 @@
   Bulk trash actions retain the separate five-job post-commit work budget from
   migration 0009's release; the budget and committed-ID filter compose without
   freezing the live synchronization clock.
+- Ready vectors and deletions are selected ahead of embedding work within the
+  chosen due cohort. Each claimed concurrency-sized group finishes its bounded
+  generation-repair loop before the next group starts; a cron-owned client PUT
+  must not wait behind unrelated successful embedding batches. Readiness is
+  rechecked after claims because content can change during a drain.
 - The healthy-service target is **at most 10 seconds** from create-with-vector
   to `indexed=true` and vector-search discovery, and from body PATCH plus vector
   PUT to the new self-vector ranking first and the obsolete vector no longer

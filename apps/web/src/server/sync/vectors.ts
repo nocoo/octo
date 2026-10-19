@@ -232,8 +232,33 @@ export async function synchronizeVectors(
 			await fail(claimed, stage, error, retry);
 		}
 	};
-	for (let offset = 0; offset < jobs.results.length; offset += DELETE_BATCH_SIZE) {
-		let pending = jobs.results.slice(offset, offset + DELETE_BATCH_SIZE);
+	const embeddingIds = async (candidates: Job[]) => {
+		const needs = await env.DB.prepare(`SELECT memory.id FROM memories memory
+			LEFT JOIN memory_vectors vector ON vector.memory_id = memory.id AND vector.profile_id = ?
+			JOIN embedding_profiles profile ON profile.id = ?
+			WHERE memory.id IN (SELECT value FROM json_each(?)) AND memory.deleted_at IS NULL
+			AND (vector.memory_id IS NULL OR vector.content_hash != memory.content_hash
+			OR vector.embedding_model != profile.model OR vector.dim != profile.dims)`)
+			.bind(profileId, profileId, JSON.stringify(candidates.map((job) => job.memory_id)))
+			.all<{ id: string }>();
+		return new Set(needs.results.map((memory) => memory.id));
+	};
+	const needsEmbedding = options.beforeSyncBatch ? await embeddingIds(jobs.results) : new Set();
+	const groups = options.beforeSyncBatch
+		? [
+				jobs.results.filter((job) => !needsEmbedding.has(job.memory_id)),
+				jobs.results.filter((job) => needsEmbedding.has(job.memory_id)),
+			]
+		: [jobs.results];
+	const batchSize = options.beforeSyncBatch ? concurrency : DELETE_BATCH_SIZE;
+	const batches: Job[][] = [];
+	for (const group of groups) {
+		for (let offset = 0; offset < group.length; offset += batchSize) {
+			batches.push(group.slice(offset, offset + batchSize));
+		}
+	}
+	for (const batch of batches) {
+		let pending = batch;
 		for (let round = 0; round < 3 && pending.length > 0; round++) {
 			const deletes: Claim[] = [];
 			const retry: Job[] = [];
@@ -245,15 +270,7 @@ export async function synchronizeVectors(
 					if (claims.length === 0) continue;
 					let embeddingClaims: Claim[];
 					try {
-						const needs = await env.DB.prepare(`SELECT memory.id FROM memories memory
-							LEFT JOIN memory_vectors vector ON vector.memory_id = memory.id AND vector.profile_id = ?
-							JOIN embedding_profiles profile ON profile.id = ?
-							WHERE memory.id IN (SELECT value FROM json_each(?)) AND memory.deleted_at IS NULL
-							AND (vector.memory_id IS NULL OR vector.content_hash != memory.content_hash
-							OR vector.embedding_model != profile.model OR vector.dim != profile.dims)`)
-							.bind(profileId, profileId, JSON.stringify(claims.map((claim) => claim.memory_id)))
-							.all<{ id: string }>();
-						const needsEmbedding = new Set(needs.results.map((memory) => memory.id));
+						const needsEmbedding = await embeddingIds(claims);
 						embeddingClaims = claims.filter((claim) => needsEmbedding.has(claim.memory_id));
 					} catch (error) {
 						await concurrent(claims, concurrency, (claim) => fail(claim, "read", error, retry));
