@@ -68,7 +68,7 @@ export async function updateSpace(
 		owner_key_id: patch.owner_key_id === undefined ? row.owner_key_id : patch.owner_key_id,
 		updated_at: now,
 	};
-	await validateOwner(db, updated.owner_key_id);
+	if (updated.owner_key_id !== row.owner_key_id) await validateOwner(db, updated.owner_key_id);
 	await commitAdminMutation(
 		db,
 		db

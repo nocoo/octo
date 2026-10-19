@@ -305,6 +305,8 @@ return `404 not_found`. The deleted key disappears from metadata reads and
 lists. Existing audit records, usage rows, owned spaces and memory attribution
 retain their original key IDs. Successful, conflicting and missing delete
 requests are audited through the standard request audit middleware.
+Spaces remain editable after their owner key is deleted. Space updates retain
+an unchanged historical owner ID and validate only a newly assigned owner.
 Space slugs are 1–64 lowercase alphanumeric characters with single interior
 hyphens. Keys with `auto_own_space` enabled, including `project`, require a name
 meeting the same slug contract so their space can be used by memory writes.

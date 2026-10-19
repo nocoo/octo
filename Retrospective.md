@@ -774,3 +774,7 @@ The first smoke-polling fix decoupled rank-one evidence from indexing and skippe
 ### 2026-10-19 — Avoid reserved zsh variable names in inspection commands
 
 An instruction-discovery loop used `path` as its iteration variable in zsh, replacing the shell's executable-search array and preventing subsequent inspection commands from resolving. The process exited without changing repository files or persistent shell configuration. Repeating the inspection with `instruction_file` restored normal command lookup. Use descriptive, non-reserved shell variables; in zsh, `path` is linked to `PATH` rather than being an ordinary local name.
+
+### 2026-10-19 — Preserve operations on historical key references
+
+MAX review found that retaining a deleted key's space-owner ID was insufficient: ordinary space edits still validated that unchanged owner against live keys and failed with HTTP 400. A cross-route revoke/delete/edit regression now verifies both retained attribution and continued editing; only assigning a different owner requires live-key validation. The first test draft assumed the SQLite adapter returned null for a missing row, so its initial failure was not valid regression evidence. Checking an empty result set exposed the actual 400-versus-200 failure before the fix. Audit downstream operations as well as surviving rows, and confirm a red test fails for the intended behavior rather than an adapter assumption.

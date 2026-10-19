@@ -6,6 +6,7 @@ import type { AppVars, Env } from "../../env";
 import { toErrorResponse } from "../../lib/errors";
 import { migratedSqlite } from "../../repo/__tests__/sqlite-d1";
 import { SpaceRepo } from "../../repo/spaces";
+import { keysRoutes } from "./keys";
 import { adminSpacesRoutes } from "./spaces";
 
 describe("admin spaces", () => {
@@ -22,6 +23,7 @@ describe("admin spaces", () => {
 		});
 		app.onError((err, context) => toErrorResponse(err, context.get("requestId")));
 		app.route("/api/admin/spaces", adminSpacesRoutes());
+		app.route("/api/admin/keys", keysRoutes());
 	});
 	afterEach(() => {
 		store.raw.close();
@@ -89,6 +91,51 @@ describe("admin spaces", () => {
 				{ op: "deleted", actor: "admin:owner@local", space_id: space.id },
 			],
 		);
+	});
+
+	it("keeps spaces editable after deleting their revoked owner key", async () => {
+		const owner = await mintApiKey(store.d1, "local-pepper", {
+			name: "historical-owner",
+			role: "project",
+			ops: "r,w,u,d",
+			scope: "own",
+		});
+		const space = await create({ owner_key_id: owner.row.id });
+		for (const [path, method] of [
+			[`/api/admin/keys/${owner.row.id}/revoke`, "POST"],
+			[`/api/admin/keys/${owner.row.id}`, "DELETE"],
+		] as const) {
+			const response = await app.request(path, { method }, { DB: store.d1 } as Env);
+			expect(response.status).toBe(200);
+		}
+		expect(store.raw.prepare("SELECT id FROM api_keys WHERE id = ?").all(owner.row.id)).toEqual([]);
+		for (const patch of [
+			{ name: "Renamed" },
+			{ description: "Retained history", owner_key_id: owner.row.id },
+			{ slug: "renamed" },
+		]) {
+			const response = await request("/workspace", "PATCH", patch);
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({ id: space.id, owner_key_id: owner.row.id });
+		}
+		expect((await request("/renamed", "PATCH", { owner_key_id: "missing" })).status).toBe(400);
+		expect(await (await request("/renamed")).json()).toMatchObject({
+			name: "Renamed",
+			description: "Retained history",
+			owner_key_id: owner.row.id,
+		});
+		const replacement = await mintApiKey(store.d1, "local-pepper", {
+			name: "replacement-owner",
+			role: "project",
+			ops: "r,w,u,d",
+			scope: "own",
+		});
+		const reassigned = await request("/renamed", "PATCH", { owner_key_id: replacement.row.id });
+		expect(reassigned.status).toBe(200);
+		expect(await reassigned.json()).toMatchObject({ owner_key_id: replacement.row.id });
+		const cleared = await request("/renamed", "PATCH", { owner_key_id: null });
+		expect(cleared.status).toBe(200);
+		expect(await cleared.json()).toMatchObject({ owner_key_id: null });
 	});
 
 	it("keeps created and renamed slugs within the memory write contract", async () => {

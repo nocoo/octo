@@ -163,6 +163,13 @@ describe("admin keys real HTTP", () => {
 
 	it("deletes only revoked keys and retains usage and audit history", async () => {
 		const { key, plaintext } = await mint();
+		const slug = `retained-owner-${crypto.randomUUID()}`;
+		const createdSpace = await admin("spaces", "POST", {
+			slug,
+			name: "Owned space",
+			owner_key_id: key.id,
+		});
+		expect(createdSpace.status).toBe(201);
 		const path = `keys/${key.id}`;
 		const activeRequest = crypto.randomUUID();
 		const active = await admin(path, "DELETE", undefined, { "X-Request-Id": activeRequest });
@@ -188,6 +195,17 @@ describe("admin keys real HTTP", () => {
 		expect(deleted.headers.get("Cache-Control")).toBe("no-store");
 		expect(await deleted.json()).toEqual({ id: key.id, deleted: true });
 		expect((await admin(path)).status).toBe(404);
+		for (const patch of [
+			{ name: "Renamed after owner deletion" },
+			{ description: "Historical owner retained", owner_key_id: key.id },
+		]) {
+			const updated = await admin(`spaces/${slug}`, "PATCH", patch);
+			expect(updated.status).toBe(200);
+			expect(await updated.json()).toMatchObject({ owner_key_id: key.id, ...patch });
+		}
+		expect((await admin(`spaces/${slug}`, "PATCH", { owner_key_id: "missing-owner" })).status).toBe(
+			400,
+		);
 		const missingRequest = crypto.randomUUID();
 		const missing = await admin(path, "DELETE", undefined, { "X-Request-Id": missingRequest });
 		expect(missing.status).toBe(404);
