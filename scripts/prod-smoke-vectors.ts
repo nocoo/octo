@@ -300,8 +300,8 @@ export async function runVectorSmoke(
 			return updated;
 		}
 		phase = "create";
-		const createStart = deps.now();
 		let target = await create("target", oldVector);
+		const createStart = deps.now();
 		const control = await create("control", vector(0.6, 0.8));
 		async function observe(stage: "create" | "update", start: number) {
 			phase = stage;
@@ -321,35 +321,53 @@ export async function runVectorSmoke(
 				if (ready && report.latencies_ms[field] === null) report.latencies_ms[field] = elapsed;
 				if (!ready && report.latencies_ms[field] !== null) record("convergence_regressed");
 			};
-			while (deps.now() < deadline) {
-				try {
-					const current = await read(target.id, stage === "create" ? "create" : "final", budget());
-					await read(control.id, stage === "create" ? "create" : "final", budget(), true);
-					if (stage === "create")
-						mark("create_indexed", current.status.indexed && !current.status.stale);
-					const supplied = stage === "create" ? oldVector : newVector;
-					const vectorHits = await search(supplied, "vector", budget());
-					const hybridHits = await search(supplied, "hybrid", budget());
-					const near = (item: (typeof vectorHits)[number]) =>
-						(item.scores.vector?.similarity ?? -1) >= MATCH_SIMILARITY;
+			let indexed = false;
+			let vectorRank1 = false;
+			let hybridRank1 = false;
+			const near = (item: z.infer<typeof searchSchema>["items"][number]) =>
+				(item.scores.vector?.similarity ?? -1) >= MATCH_SIMILARITY;
+			const supplied = stage === "create" ? oldVector : newVector;
+			const steps = [
+				async () => {
+					const current = await read(
+						target.id,
+						stage === "create" ? "create" : report.polls.update === 0 ? "put" : "final",
+						budget(),
+					);
+					indexed = current.status.indexed && !current.status.stale;
+					if (stage === "create") mark("create_indexed", indexed);
+				},
+				async () => {
+					const hits = await search(supplied, "vector", budget());
 					if (stage === "create") {
 						mark(
 							"create_vector_hit",
-							vectorHits.some((item) => item.id === target.id && near(item)),
+							hits.some((item) => item.id === target.id && near(item)),
 						);
 					} else {
-						mark(
-							"update_new_rank1",
-							[vectorHits, hybridHits].every(
-								(items) => items[0]?.id === target.id && near(items[0]),
-							) &&
-								current.status.indexed &&
-								!current.status.stale,
-						);
-						const oldHits = await search(oldVector, "vector", budget());
-						await search(oldVector, "hybrid", budget());
-						mark("update_old_gone", !oldHits.some((item) => item.id === target.id));
+						vectorRank1 = hits[0]?.id === target.id && near(hits[0]);
 					}
+				},
+				async () => {
+					const hits = await search(supplied, "hybrid", budget());
+					hybridRank1 = hits[0]?.id === target.id && near(hits[0]);
+				},
+			];
+			if (stage === "update") {
+				steps.push(
+					async () => {
+						const hits = await search(oldVector, "vector", budget());
+						mark("update_old_gone", !hits.some((item) => item.id === target.id));
+					},
+					async () => {
+						await search(oldVector, "hybrid", budget());
+					},
+				);
+			}
+			while (deps.now() < deadline) {
+				try {
+					await steps[report.polls[stage] % steps.length]?.();
+					if (stage === "update") mark("update_new_rank1", indexed && vectorRank1 && hybridRank1);
 					report.polls[stage] += 1;
 				} catch (error) {
 					if (
@@ -365,6 +383,7 @@ export async function runVectorSmoke(
 			if (fields.some((field) => report.latencies_ms[field] === null)) record("deadline_exceeded");
 		}
 		await observe("create", createStart);
+		await read(control.id, "create");
 		phase = "noop";
 		const noop = await mutate(target, { body: initialBody });
 		if (noop.version !== target.version) record("noop_changed_version");
@@ -374,11 +393,10 @@ export async function runVectorSmoke(
 		target = await mutate(target, { tags: [report.run, `${report.run}-tags`] });
 		await read(target.id, "tags");
 		phase = "update";
-		const updateStart = deps.now();
 		target = await mutate(target, { body: `${report.run} updated body` });
 		await read(target.id, "patch");
 		target = await mutate(target, newVector, "PUT");
-		await read(target.id, "put");
+		const updateStart = deps.now();
 		await observe("update", updateStart);
 		phase = "put_noop";
 		const sameVector = await mutate(target, newVector, "PUT");

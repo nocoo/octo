@@ -9,10 +9,17 @@ const environment = {
 };
 const ids = ["01JAAAAAAAAAAAAAAAAAAAAAAA", "01JBBBBBBBBBBBBBBBBBBBBBBB"];
 type Stored = { id: string; version: number; body: string; tags: string[]; values: number[] };
-type Call = { url: URL; init: RequestInit; body: Record<string, unknown> };
+type Call = {
+	url: URL;
+	init: RequestInit;
+	body: Record<string, unknown>;
+	time: number;
+	tick: number;
+};
 
-function fixture() {
+function fixture(rtt = 1) {
 	let time = 0;
+	let tick = 0;
 	const calls: Call[] = [];
 	const memories: Stored[] = [];
 	let override: ((call: Call) => Response | undefined) | undefined;
@@ -21,10 +28,17 @@ function fixture() {
 		now: () => time,
 		sleep: async (ms: number) => {
 			time += ms;
+			tick += 1;
 		},
 		fetch: vi.fn(async (url: string, init: RequestInit) => {
-			time += 1;
-			const call: Call = { url: new URL(url), init, body: JSON.parse(String(init.body ?? "{}")) };
+			time += rtt;
+			const call: Call = {
+				url: new URL(url),
+				init,
+				body: JSON.parse(String(init.body ?? "{}")),
+				time,
+				tick,
+			};
 			calls.push(call);
 			const response = override?.(call);
 			if (response) return response;
@@ -108,6 +122,41 @@ afterEach(() => {
 });
 
 describe("production vector smoke with fake transport only", () => {
+	it.each([1, 1_300])("measures convergence after write responses with %i ms RTT", async (rtt) => {
+		const transport = fixture(rtt);
+		const report = await runVectorSmoke(environment, transport.dependencies);
+		expect(report.ok).toBe(true);
+		expect(report.latencies_ms).toEqual({
+			create_indexed: rtt * 2,
+			create_vector_hit: rtt * 3 + 250,
+			update_new_rank1: rtt * 3 + 500,
+			update_old_gone: rtt * 4 + 750,
+		});
+		expect(report.embedding_calls.put).toBe(0);
+		expect(report.embedding_calls.final).toBe(0);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
+	it("makes exactly one request per observation tick", async () => {
+		const transport = fixture();
+		const report = await runVectorSmoke(environment, transport.dependencies);
+		const firstRead = transport.calls.findIndex((call) => call.url.searchParams.has("include"));
+		const firstPatch = transport.calls.findIndex((call) => call.init.method === "PATCH");
+		const firstPut = transport.calls.findIndex((call) => call.init.method === "PUT");
+		const lastPut = transport.calls.map((call) => call.init.method).lastIndexOf("PUT");
+		const createPolls = transport.calls
+			.slice(firstRead, firstPatch)
+			.filter((call) => !call.url.pathname.includes(String(ids[1])));
+		const updatePolls = transport.calls.slice(firstPut + 1, lastPut);
+		for (const [stage, polls] of [
+			["create", createPolls],
+			["update", updatePolls],
+		] as const) {
+			expect(polls.length).toBe(report.polls[stage]);
+			expect(new Set(polls.map((call) => call.tick)).size).toBe(polls.length);
+		}
+	});
+
 	it("measures both full observation windows, client-vector economy and scoped repeated searches", async () => {
 		const f = fixture();
 		const report = await runVectorSmoke(environment, f.dependencies);
@@ -383,7 +432,7 @@ describe("production vector smoke with fake transport only", () => {
 		f.setOverride((call) => {
 			if (!delayed && call.url.searchParams.has("include")) {
 				delayed = true;
-				f.advance(9_997);
+				f.advance(9_998);
 			}
 		});
 		const report = await runVectorSmoke(environment, f.dependencies);

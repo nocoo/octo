@@ -91,10 +91,17 @@ bun run scripts/prod-smoke-vectors.ts
 
 The script discovers the active cosine profile, creates its own run-tagged
 memories, and reports JSON: create-to-indexed and create-to-vector-hit latency,
-PATCH/PUT-to-new-rank-1 and old-vector-gone latency, repeated duplicate-ID checks,
+PUT-to-new-rank-1 and old-vector-gone latency, repeated duplicate-ID checks,
 embedding counters and cleanup outcomes. It checks vector and hybrid results,
 uses exact old-ID absence in the vector channel, enforces a 10-second observation
-deadline and exits nonzero on failure. Only tracked IDs created by this run are
+deadline and exits nonzero on failure. Each window starts after the target POST
+or vector PUT response, excluding write RTT and the preceding body-only PATCH.
+Each polling tick sends just one status GET or search, rotating through status,
+vector and hybrid checks with a 250 ms pause between requests. Metrics are
+recorded when their own evidence arrives, not after the full rotation. Update
+rank-1 requires indexed/non-stale status and both new-vector search channels;
+observed regressions still fail the run. Control counters are checked outside
+the polling windows. Only tracked IDs created by this run are
 soft-deleted in cleanup; it never purges, empties trash, creates spaces or changes
 embedding settings. Transport failures with unknown create outcomes may leave a
 run-tagged memory for manual investigation; never broaden cleanup to existing
