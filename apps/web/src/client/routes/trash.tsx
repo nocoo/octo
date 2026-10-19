@@ -381,30 +381,31 @@ export function TrashPage() {
 			)}
 			{state.ready && (
 				<LayerCard>
-					<DataTable
-						aria-label="回收站中的记忆"
-						data={state.memories}
-						columns={columns}
-						getRowId={(item) => item.id}
-						manualFiltering
-						manualPagination
-						manualSorting
-						edge="attached"
-						empty={
-							<LayerCard.Empty
-								icon={<Trash2 aria-hidden="true" />}
-								title="当前筛选条件下，回收站为空。"
-								action={
-									<Button asChild>
-										<Link href="/memories">
-											<ArrowUpRight size={16} aria-hidden="true" />
-											浏览记忆
-										</Link>
-									</Button>
-								}
-							/>
-						}
-					/>
+					{state.memories.length > 0 ? (
+						<DataTable
+							aria-label="回收站中的记忆"
+							data={state.memories}
+							columns={columns}
+							getRowId={(item) => item.id}
+							manualFiltering
+							manualPagination
+							manualSorting
+							edge="attached"
+						/>
+					) : (
+						<LayerCard.Empty
+							icon={<Trash2 aria-hidden="true" />}
+							title="当前筛选条件下，回收站为空。"
+							action={
+								<Button asChild>
+									<Link href="/memories">
+										<ArrowUpRight size={16} aria-hidden="true" />
+										浏览记忆
+									</Link>
+								</Button>
+							}
+						/>
+					)}
 					<LayerCard.Footer>
 						<Grid
 							columns={1}

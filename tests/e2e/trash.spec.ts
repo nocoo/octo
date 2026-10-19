@@ -124,5 +124,11 @@ test("selects across pages, restores, bulk purges and confirms filtered empty co
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.reload();
 	await expect(page.getByRole("heading", { name: "回收站", exact: true })).toBeVisible();
+	await expect(page.getByText("当前筛选条件下，回收站为空。", { exact: true })).toBeInViewport({
+		ratio: 1,
+	});
+	await expect(page.getByRole("link", { name: "浏览记忆", exact: true })).toBeInViewport({
+		ratio: 1,
+	});
 	await capture(page, info, "trash-mobile-empty");
 });

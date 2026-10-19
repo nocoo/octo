@@ -396,4 +396,16 @@ describe("trash view", () => {
 		expect(html).toContain("刷新失败");
 		expect(html).toContain("空间加载失败");
 	});
+	it("keeps the empty title and action outside the minimum-width table while preserving the footer", () => {
+		snapshot.state = { ...new TrashModel().state, ready: true };
+		const html = render();
+		expect(html).toContain("当前筛选条件下，回收站为空。");
+		expect(html).toContain('href="/memories"');
+		expect(html).toContain("浏览记忆");
+		expect(html).toContain("共 0 条记忆 · 第 1 页 · 每页 25 条");
+		expect(html).toContain("上一页");
+		expect(html).toContain("下一页");
+		expect(html).not.toContain("<table");
+		expect(html).not.toContain('aria-label="回收站中的记忆 scroll area"');
+	});
 });
