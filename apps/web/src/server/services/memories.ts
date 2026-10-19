@@ -93,7 +93,7 @@ function iso(ms: number | null): string | null {
 }
 
 export function publicMemory(
-	row: MemoryRecord,
+	row: Omit<MemoryRecord, "body"> & { body?: string },
 	tags: string[],
 	extra: Record<string, unknown> = {},
 ): Record<string, unknown> {
@@ -567,8 +567,10 @@ export class MemoryService {
 			string,
 			{ id: string; name: string; display_name: string; merged_into: string | null }
 		>();
-		for (const id of await this.memories.tagIdsByMemory(memoryId)) {
-			const row = await this.tags.getById(id);
+		const ids = await this.memories.tagIdsByMemory(memoryId);
+		const rows = await this.tags.getManyByIds(ids);
+		for (const id of ids) {
+			const row = rows.get(id);
 			if (!row) throw new ApiError("tag_conflict", "memory tags changed");
 			const canonical = await this.tags.follow(row);
 			resolved.set(canonical.id, canonical);

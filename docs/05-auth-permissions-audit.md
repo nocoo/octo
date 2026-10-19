@@ -111,6 +111,8 @@ CREATE TABLE mcp_audit_writes (
 
 ## 6. 用量统计（替代速率限制）
 
+回收站的三个批量写接口还在 `audit_bulk_counts` 中保存 `requested_count`、`succeeded_count`、`failed_count`，通过 `audit_id` 关联 `audit_log`，在同一个 D1 batch 中写入。计数以已验证并实际处理的条目为准；校验或鉴权失败、清空确认数量冲突等尚未开始处理的调用记录零项。审计中不写记忆 ID 列表、筛选正文、请求体或异常原文；已有的异步审计投递边界不变。
+
 - 每次已认证调用的审计行、MCP 写标记（若有）和 `usage_daily(day, key_id, calls, errors, writes, bytes_in, bytes_out)` 增量在同一个 D1 batch 提交。某一阶段失败整批回滚，不产生只有计数或只有审计的半次调用。每个 key、UTC 日期独立计数；writes 沿用成功写请求与已提交 MCP 写操作的判定。
 - cron 每小时从审计全量重算并覆盖汇总，作为修复路径，重复执行不会重复计数。单条汇总 SQL 与审计增量 batch 在 D1 串行提交，不会把并发增量丢掉。
 - `/api/v1/usage` 只返回调用者自己的数据；dashboard 能看所有 key。

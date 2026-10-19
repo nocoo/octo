@@ -68,6 +68,18 @@ export class TagRepo {
 		return this.db.prepare("SELECT * FROM tags WHERE id = ?").bind(id).first<TagRow>();
 	}
 
+	async getManyByIds(ids: string[]): Promise<Map<string, TagRow>> {
+		const { results } = await this.db
+			.prepare("SELECT * FROM tags WHERE id IN (SELECT value FROM json_each(?))")
+			.bind(JSON.stringify(ids))
+			.all<TagRow>();
+		const rows = new Map(results.map((row) => [row.id, row]));
+		for (const { row, statement } of this.pending.values()) {
+			if (this.statements?.includes(statement)) rows.set(row.id, row);
+		}
+		return rows;
+	}
+
 	async follow(row: TagRow): Promise<TagRow> {
 		const seen = new Set<string>();
 		let current = row;

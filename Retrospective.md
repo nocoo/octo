@@ -1,5 +1,9 @@
 # Retrospective
 
+### 2026-10-19 — Preserve staged writes when batching tag reads
+
+The new 100-memory restore test exposed 10,300 tag-related reads for 100 tags per memory. A first joined-read optimization bypassed the existing staged memory overlay: repeated IDs in one HTTP batch lost pending tags, and the rename regression rejected a previously valid identity-preserving read. The full suite caught both before any commit. The correction keeps association IDs owned by MemoryRepo and hydrates tag rows in one query through TagRepo, including its pending-tag overlay. Optimize the shared read boundary, not only persisted SQL; rerun staged transactions and concurrency regressions whenever replacing an N+1 path.
+
 ### 2026-10-18 — Validate published schemas and isolate shared dictionaries
 
 Round-one MAX review found that Zod's runtime nonempty-patch refinement disappeared from the published MCP JSON Schema. An SDK JSON Schema validator reproduced acceptance of a version-only update; explicit branch property minima now make discovery match runtime validation. Fragment assertions alone cannot prove a generated schema's behavior. The same review found that the new order test's generic `alpha` label could shadow another L2 file's fixed tag ID in the shared global dictionary. A subsequent full L2 run reproduced the foreign-key failure. The order test now namespaces every tag, preserving normalization, deduplication and reorder assertions without depending on file order. Use namespaced fixture identities across the shared L2 database and exercise generated public schemas with a real validator.

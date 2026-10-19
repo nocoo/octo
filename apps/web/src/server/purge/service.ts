@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { ApiError } from "../lib/errors";
+import { unchangedTrashSql } from "./trash";
 
 type PurgeSnapshot = {
 	version: number;
@@ -19,14 +20,18 @@ export async function purgeMemory(
 	db: D1Database,
 	id: string,
 	actor: `admin:${string}`,
-): Promise<{ id: string; purged: true }> {
+	options: { head?: number; missingOk?: boolean } = {},
+): Promise<{ id: string; purged: boolean }> {
 	let current: PurgeSnapshot | null;
 	try {
 		current = await snapshot(db, id);
 	} catch {
 		throw new ApiError("unavailable", "purge transaction unavailable");
 	}
-	if (!current) throw new ApiError("not_found", "not found");
+	if (!current) {
+		if (options.missingOk) return { id, purged: false };
+		throw new ApiError("not_found", "not found");
+	}
 	if (current.deleted_at === null) throw new ApiError("version_conflict", "memory is not trashed");
 	const now = Date.now();
 	try {
@@ -34,7 +39,8 @@ export async function purgeMemory(
 			db
 				.prepare(`INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at)
 			VALUES ('memory', CASE WHEN EXISTS (
-				SELECT 1 FROM memories WHERE id = ? AND version = ? AND space_id = ? AND deleted_at = ? AND updated_at = ?
+				SELECT 1 FROM memories m WHERE id = ? AND version = ? AND space_id = ? AND deleted_at = ? AND updated_at = ?
+				${options.head === undefined ? "" : `AND ${unchangedTrashSql()}`}
 			) THEN ? ELSE NULL END, ?, 'purged', ?, ?, ?)`)
 				.bind(
 					id,
@@ -42,6 +48,7 @@ export async function purgeMemory(
 					current.space_id,
 					current.deleted_at,
 					current.updated_at,
+					...(options.head === undefined ? [] : [options.head]),
 					id,
 					current.space_id,
 					current.version,
@@ -80,7 +87,10 @@ export async function purgeMemory(
 		} catch {
 			throw new ApiError("unavailable", "purge transaction unavailable");
 		}
-		if (!latest) throw new ApiError("not_found", "not found");
+		if (!latest) {
+			if (options.missingOk) return { id, purged: false };
+			throw new ApiError("not_found", "not found");
+		}
 		if (
 			latest.version !== current.version ||
 			latest.space_id !== current.space_id ||
@@ -88,14 +98,24 @@ export async function purgeMemory(
 			latest.updated_at !== current.updated_at
 		)
 			throw new ApiError("version_conflict", "memory changed before purge");
+		if (options.head !== undefined) {
+			const unchanged = await db
+				.prepare(`SELECT id FROM memories m WHERE id = ? AND ${unchangedTrashSql()}`)
+				.bind(id, options.head)
+				.first();
+			if (!unchanged) throw new ApiError("version_conflict", "trash snapshot changed");
+		}
 		throw new ApiError("unavailable", "purge transaction unavailable");
 	}
 	return { id, purged: true };
 }
 
-export async function cleanupExternalFiles(env: Pick<Env, "DB" | "FILES">): Promise<void> {
+export async function cleanupExternalFiles(
+	env: Pick<Env, "DB" | "FILES">,
+	limit = 100,
+): Promise<void> {
 	const { results } = await env.DB.prepare(
-		"SELECT r2_key FROM external_file_cleanup_jobs ORDER BY last_attempt_at, created_at, r2_key LIMIT 100",
+		`SELECT r2_key FROM external_file_cleanup_jobs ORDER BY last_attempt_at, created_at, r2_key LIMIT ${limit}`,
 	).all<{ r2_key: string }>();
 	for (const job of results) {
 		try {

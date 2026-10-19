@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from "hono";
 import type { AppVars, Env } from "../env";
 
 export function postCommitMiddleware(
-	process: (env: Env) => Promise<unknown>,
+	process: (env: Env, now?: number, limit?: number) => Promise<unknown>,
 ): MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> {
 	return async (context, next) => {
 		await next();
@@ -23,7 +23,11 @@ export function postCommitMiddleware(
 		} catch {
 			return;
 		}
-		const work = process(context.env).catch(() => {
+		const work = (
+			/^\/api\/admin\/trash:(batchRestore|batchPurge|empty)$/.test(context.req.path)
+				? process(context.env, undefined, 5)
+				: process(context.env)
+		).catch(() => {
 			console.error("derived_work_failed");
 		});
 		if (context.env.RESOURCE_ENV === "test" && context.env.OCTO_VECTOR_SYNC_CONCURRENCY === "1") {
