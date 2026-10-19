@@ -199,8 +199,10 @@ describe("admin spaces", () => {
 			"CREATE TRIGGER reject_changes BEFORE INSERT ON changes BEGIN SELECT RAISE(ABORT, 'change unavailable'); END",
 		);
 		const response = await request("", "POST", { slug: "rollback", name: "Rollback" });
-		expect(response.status).toBe(500);
-		expect(await response.json()).toMatchObject({ error: { code: "internal" } });
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			error: { code: "unavailable", message: "write transaction failed" },
+		});
 		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM spaces").get()).toMatchObject({ n: 0 });
 	});
 

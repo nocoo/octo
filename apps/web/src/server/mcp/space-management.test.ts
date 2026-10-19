@@ -131,28 +131,41 @@ describe("MCP space management and moves", () => {
 		).toEqual({ calls: 3, errors: 0, writes: 3 });
 	});
 
-	it("does not mark failed direct space transactions as writes or expose database details", async () => {
-		const { call, sqlite, key, flush } = await setup();
-		sqlite.prepare("UPDATE api_keys SET role = 'admin' WHERE id = ?").run(key.row.id);
-		sqlite.exec(
-			"CREATE TRIGGER fail_space_change BEFORE INSERT ON changes WHEN NEW.entity = 'space' BEGIN SELECT RAISE(ABORT, 'private space failure'); END",
-		);
-		const result = (await call("create_space", { slug: "failed", name: "Failed" })).result;
-		expect(result).toMatchObject({
-			isError: true,
-			structuredContent: { error: { code: "internal", message: "internal error" } },
-		});
-		expect(JSON.stringify(result)).not.toContain("private space failure");
-		expect(sqlite.prepare("SELECT count(*) AS n FROM spaces WHERE slug = 'failed'").get()).toEqual({
-			n: 0,
-		});
-		await flush();
-		expect(
-			sqlite
-				.prepare("SELECT calls, errors, writes FROM usage_daily WHERE key_id = ?")
-				.get(key.row.id),
-		).toEqual({ calls: 1, errors: 1, writes: 0 });
-	});
+	it.each([
+		["create_space", { slug: "failed", name: "Failed" }],
+		["update_space", { slug: "kb", name: "Failed" }],
+		["delete_space", { slug: "kb" }],
+	] as const)(
+		"rolls back failed %s transactions with a redacted unavailable error",
+		async (name, input) => {
+			const { call, sqlite, key, flush } = await setup();
+			sqlite.prepare("UPDATE api_keys SET role = 'admin' WHERE id = ?").run(key.row.id);
+			const spaces = sqlite.prepare("SELECT * FROM spaces ORDER BY id").all();
+			sqlite.exec(
+				"CREATE TRIGGER fail_space_change BEFORE INSERT ON changes WHEN NEW.entity = 'space' BEGIN SELECT RAISE(ABORT, 'private space failure'); END",
+			);
+			const result = (await call(name, input)).result;
+			expect(result).toMatchObject({
+				isError: true,
+				structuredContent: { error: { code: "unavailable", message: "write transaction failed" } },
+			});
+			expect(JSON.stringify(result)).not.toContain("private space failure");
+			expect(sqlite.prepare("SELECT * FROM spaces ORDER BY id").all()).toEqual(spaces);
+			expect(
+				sqlite.prepare("SELECT count(*) AS n FROM changes WHERE entity = 'space'").get(),
+			).toEqual({ n: 0 });
+			await flush();
+			expect(sqlite.prepare("SELECT error_code FROM audit_log").get()).toEqual({
+				error_code: "unavailable",
+			});
+			expect(sqlite.prepare("SELECT count(*) AS n FROM mcp_audit_writes").get()).toEqual({ n: 0 });
+			expect(
+				sqlite
+					.prepare("SELECT calls, errors, writes FROM usage_daily WHERE key_id = ?")
+					.get(key.row.id),
+			).toEqual({ calls: 1, errors: 1, writes: 0 });
+		},
+	);
 
 	it("moves through the staged memory transaction and derives stored vectors without embedding", async () => {
 		const { call, sqlite, db, key, flush } = await setup();

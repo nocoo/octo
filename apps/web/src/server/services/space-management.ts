@@ -52,7 +52,7 @@ async function commitSpaceMutation(
 	try {
 		await db.batch(statements);
 	} catch (error) {
-		throw mapSpaceWriteError(error) ?? error;
+		throw mapSpaceWriteError(error) ?? new ApiError("unavailable", "write transaction failed");
 	}
 }
 

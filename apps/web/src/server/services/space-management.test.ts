@@ -222,7 +222,10 @@ describe("space management service", () => {
 		store.raw.exec(
 			"CREATE TRIGGER reject_changes BEFORE INSERT ON changes BEGIN SELECT RAISE(ABORT, 'change unavailable'); END",
 		);
-		await expect(create()).rejects.toThrow("change unavailable");
+		await expect(create()).rejects.toMatchObject({
+			code: "unavailable",
+			message: "write transaction failed",
+		});
 		expect(store.raw.prepare("SELECT * FROM spaces").all()).toEqual([]);
 	});
 });

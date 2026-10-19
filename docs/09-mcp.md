@@ -33,7 +33,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 - 非浏览器 bot 不需要 `Origin`；如有 `Origin`，必须精确匹配生产域名，开发环境匹配开发域名。不反射 Origin，不启用跨域 CORS。
 - 每次工具调用从本次已验证的 principal 构造 v1 authz，使用原有服务及 `authorize()`。不可见 space / memory 是 `not_found`；列表、搜索、计数、batchGet 和变更流不暴露不可见对象。`own_entries_only` 和移动的源/目标权限保持不变。
 - 不增加 key 管理、embedding 设置、硬删除、附件或恢复工具。`delete_memory` 只移入回收站。
-- `create_space`、`update_space`、`delete_space` 仅允许 role 为 `admin` 的 API key；即使 custom key 具备全部操作权限也返回 `forbidden`。空间管理不提供 owner 字段，更新只允许 name / description，slug 不可变。重复 slug 为 `version_conflict`；不存在为 `not_found`；包含任何 memory（包括回收站）的空间不能删除，返回 `space_not_empty`。
+- `create_space`、`update_space`、`delete_space` 仅允许 role 为 `admin` 的 API key；先解析 JSON-RPC 并校验工具参数，再检查角色。非法工具参数返回 `validation_failed`；参数合法时，即使 custom key 具备全部操作权限也返回 `forbidden`。这些工具错误均使用 HTTP 200 的 `result.isError=true` 信封，不等同于 REST 的角色前置检查。空间管理不提供 owner 字段，更新只允许 name / description，slug 不可变。重复 slug 为 `version_conflict`；不存在为 `not_found`；包含任何 memory（包括回收站）的空间不能删除，返回 `space_not_empty`。
 - 标签名称是 v1 的全局字典；`list_tags` 与同 key 的 REST 列表完全一致，只返回至少被一条可见 space 中未删除 memory 使用的标签，`use_count > 0` 且仅统计这些可见引用。仅在不可见 space 使用、仅被回收站引用或完全未使用的标签不返回；`all`、`spaces`、`own` 范围均遵守此规则。标签本身仍不是按 space 私有的资源。
 - 写工具复用 v1 的 staged `memoryService()`，并在返回成功前执行一次 D1 batch（memory、版本、tags、FTS、change event 等同批提交）。失败不提交残留 statements；成功后按 v1 的机制调度派生索引任务。
 - 空间写工具复用 v1 与 dashboard 共用的空间管理服务，由服务直接提交资源与 change event 的 D1 batch，不再经过 memory staged batch。空间创建、更新、删除成功后才标记为 MCP write；当前空间更新即使传入相同字段值也会提交更新并计为 write。空间调用失败不计 write。

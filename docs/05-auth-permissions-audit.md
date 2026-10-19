@@ -59,7 +59,7 @@ CREATE TABLE api_keys (
 - **只改自己的：** 开启后，update / delete 只能作用于 `source_key_id = key.id` 的条目，否则返回 403。
 - **默认拒绝：** 没有显式允许的都拒绝。**范围外的 space 是不可见的**：返回 404，list 和搜索里不出现，计数里也不算。
 - **跨 space 搬移：** 源和目标 space 都需要 update（`u`）权限，且保留 `own_entries_only` 限制。`w` 仅代表创建，不授予搬移。此规则同样适用于单条/批量 move API 及 MCP `move_memory`；非 admin key 可以在两侧授权范围内搬移，无须额外 read 权限。任一空间不可见为 404，缺操作权限为 403；先检查权限再检查版本，回收站条目为 404。
-- **空间管理：** v1/MCP 的创建、编辑、删除空间只允许 `role=admin`，其他角色即使 `scope=all` 且有全部操作也返回 403；在正文读取和幂等重放之前检查。只能改 name/description，不能改 slug、owner 或 key 权限。删除必须没有任何记忆（包括回收站），否则 409 `space_not_empty`。
+- **空间管理：** v1/MCP 的创建、编辑、删除空间只允许 `role=admin`，其他角色即使 `scope=all` 且有全部操作也不允许。REST 在正文读取和幂等重放之前检查角色，失败返回 403；MCP 先解析 JSON-RPC、校验工具参数，再检查角色，非法参数为 `validation_failed`，合法参数但角色不足为 `forbidden`，均使用 HTTP 200 的 `result.isError=true` 工具错误信封。只能改 name/description，不能改 slug、owner 或 key 权限。删除必须没有任何记忆（包括回收站），否则 REST 返回 409、MCP 返回工具错误 `space_not_empty`。
 - **全局标签操作**（rename / merge / delete）：要求 `scope=all` 且有 update (`u`) 权限，角色名称不限；缺任一条件返回 403，幂等重放前也必须重验权限。显式删除仅允许全局没有 memory 引用（包括回收站）且没有合并别名指向的标签，否则 409 `tag_in_use`；不级联删除或泄露 scoped key 看不到的引用。
 
 角色模板（dashboard 创建 key 时选；本质上是预设的 ops / scope，可以改成 custom）：
