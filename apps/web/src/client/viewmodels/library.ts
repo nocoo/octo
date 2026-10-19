@@ -33,7 +33,7 @@ export interface ListPage<T> {
 	items: T[];
 	next_cursor: string | null;
 }
-export type LibraryKind = "tags" | "spaces" | "trash" | "graph" | "timeline";
+export type LibraryKind = "tags" | "spaces" | "graph" | "timeline";
 export interface LibraryState {
 	busy: boolean;
 	ready: boolean;
@@ -44,9 +44,6 @@ export interface LibraryState {
 	spaces: LibrarySpace[];
 	keys: LibraryKey[];
 	truncated: boolean;
-	nextCursor: string | null;
-	failures: { id: string; message: string }[];
-	purge: { id: string; title: string; stage: "title" | "confirm" } | null;
 }
 
 export function selectedIds(params: URLSearchParams): string[] {
@@ -96,8 +93,6 @@ export function libraryError(error: unknown): string {
 }
 
 export class LibraryModel extends Store<LibraryState> {
-	private trashCursors = new Set<string>();
-
 	constructor(
 		readonly kind: LibraryKind,
 		private readonly api: AdminClient = adminApi,
@@ -112,9 +107,6 @@ export class LibraryModel extends Store<LibraryState> {
 			spaces: [],
 			keys: [],
 			truncated: false,
-			nextCursor: null,
-			failures: [],
-			purge: null,
 		});
 	}
 
@@ -133,10 +125,6 @@ export class LibraryModel extends Store<LibraryState> {
 	}
 
 	private async read(): Promise<void> {
-		if (this.kind === "trash") {
-			await this.readTrash(null);
-			return;
-		}
 		if (this.kind === "spaces") {
 			const spaces = await this.api.request<ListPage<LibrarySpace>>("/spaces");
 			const keys = await this.api.request<ListPage<LibraryKey>>("/keys");
@@ -164,26 +152,6 @@ export class LibraryModel extends Store<LibraryState> {
 
 	load(): Promise<boolean> {
 		return this.run(() => this.read());
-	}
-
-	private async readTrash(cursor: string | null): Promise<void> {
-		const query = new URLSearchParams({ limit: "200" });
-		if (cursor) query.set("cursor", cursor);
-		const page = await this.api.request<ListPage<LibraryMemory>>(`/trash?${query}`);
-		const seen = cursor ? new Set(this.trashCursors) : new Set<string>();
-		if (page.next_cursor && seen.has(page.next_cursor))
-			throw new Error("分页游标重复，已停止加载。");
-		if (page.next_cursor) seen.add(page.next_cursor);
-		const memories = new Map((cursor ? this.state.memories : []).map((item) => [item.id, item]));
-		for (const item of page.items) memories.set(item.id, item);
-		this.trashCursors = seen;
-		this.set({ memories: [...memories.values()], nextCursor: page.next_cursor, ready: true });
-	}
-
-	loadMore(): Promise<boolean> {
-		const cursor = this.state.nextCursor;
-		if (this.kind !== "trash" || !cursor) return Promise.resolve(false);
-		return this.run(() => this.readTrash(cursor));
 	}
 
 	private async refreshCommitted(): Promise<void> {
@@ -232,59 +200,6 @@ export class LibraryModel extends Store<LibraryState> {
 			});
 			this.set({ notice: "空间已创建" });
 			await this.refreshCommitted();
-		});
-	}
-
-	restore(ids: string[]): Promise<boolean> {
-		return this.run(async () => {
-			const unique = [...new Set(ids)];
-			if (
-				!unique.length ||
-				unique.length > 100 ||
-				unique.some((id) => !this.state.memories.some((item) => item.id === id))
-			)
-				throw new Error("请选择 1 至 100 条可用的记忆。");
-			const restored = new Set<string>();
-			const failures: LibraryState["failures"] = [];
-			for (const id of unique) {
-				try {
-					await this.api.request(`/trash/${encodeURIComponent(id)}/restore`, { method: "POST" });
-					restored.add(id);
-				} catch (error) {
-					failures.push({ id, message: libraryError(error) });
-				}
-			}
-			this.set({
-				memories: this.state.memories.filter((item) => !restored.has(item.id)),
-				failures,
-				notice: `已恢复 ${restored.size} / ${unique.length} 条记忆`,
-			});
-		});
-	}
-
-	beginPurge(id: string): void {
-		const item = this.state.memories.find((memory) => memory.id === id);
-		if (item && !this.state.busy) this.set({ purge: { id, title: item.title, stage: "title" } });
-	}
-	confirmPurgeTitle(title: string): boolean {
-		const target = this.state.purge;
-		if (!target || target.title !== title || this.state.busy) return false;
-		this.set({ purge: { ...target, stage: "confirm" } });
-		return true;
-	}
-	cancelPurge(): void {
-		if (!this.state.busy) this.set({ purge: null });
-	}
-	purge(): Promise<boolean> {
-		return this.run(async () => {
-			const target = this.state.purge;
-			if (target?.stage !== "confirm") throw new Error("请先输入标题并确认永久删除。");
-			await this.api.request(`/trash/${encodeURIComponent(target.id)}`, { method: "DELETE" });
-			this.set({
-				memories: this.state.memories.filter((item) => item.id !== target.id),
-				purge: null,
-				notice: "记忆已永久删除",
-			});
 		});
 	}
 }

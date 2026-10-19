@@ -37,11 +37,15 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 | `/keys` | API Key | 按角色模板创建；明文只显示一次（可复制，关闭后不可再看）；轮换（宽限期）、吊销、过期；每个 key 的用量 sparkline |
 | `/usage` | 用量与健康 | 按 key / 日的调用数、错误率、延迟 P50 / P95；D1 体积、向量同步积压、cron 最近运行时间 |
 | `/audit` | 审计 | 按 actor、路由、状态码、时间筛选；大表虚拟滚动；导出 CSV |
-| `/trash` | 回收站 | 批量恢复；硬删除（二次确认，输入标题确认） |
+| `/trash` | 回收站 | 分页选择、全部匹配项选择、批量恢复/彻底删除；按当前筛选清空并危险确认数量；单条永久删除保留标题核验 |
 | `/settings` | 设置 | embedding profile、版本信息 |
 | `/settings/embedding` | 向量模型 | base URL、API key（只能写，显示「已设置 ••••abcd」，可以替换或清除）、model（默认 text-embedding-3-small）、dims（默认 1536）、「测试连接」按钮、服务端补向量开关（默认关）；只通过 Access 保护的 admin API 访问 |
 
 ## 4. 可视化
+
+回收站使用独立 `TrashModel` / `TrashPage`，复用统一 admin API client。标题/标签关键词和空间筛选在服务端执行，总数来自服务端；筛选和选择保存在 URL。表头勾选仅当前页，避免把一次点击解释为跨页破坏操作；选择后显式提供「选择全部 N 条」，完整枚举带签名游标的分页并冻结 ID 后才确认/执行。切换筛选会清空旧选择，过时的异步响应不能改写新范围。
+
+「彻底删除所选」显示冻结的精确数量并使用危险确认；「清空回收站（N）」只清空当前关键词/空间范围，确认框同时展示范围和数量，通过原始 `expected_count` 和服务端游标分批推进。处理中禁用选择和操作，显示进度、实际删除数及逐项失败；失败不清除未完成选择，也不自动放宽范围重试。单行永久删除继续采用输入标题、再危险确认的两步流程。选择框、分页按钮、筛选器、提示和对话框均使用 Basalt 3.1.0，图标使用 lucide，应用标签为中文。
 
 - 统一用 Basalt charts（recharts）和 `chart-theme` 风格的色板（参照 giraffe：类别到颜色的映射稳定，排序变化不换色）。
 - 标签和关系图是 Basalt 没有覆盖的领域：用成熟库（例如 `react-force-graph` 或 `sigma.js` + graphology）放在 Basalt `LayerCard` 里，配色读 Basalt token。选库前先确认 Basalt 3.1.0 没有对应组件。

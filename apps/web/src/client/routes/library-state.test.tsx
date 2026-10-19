@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LibraryModel, type LibraryState } from "../viewmodels/library";
-import { GraphPage, SpacesPage, TagsPage, TimelinePage, TrashPage } from "./library";
+import { GraphPage, SpacesPage, TagsPage, TimelinePage } from "./library";
 
 const snapshot = vi.hoisted(() => ({ state: null as LibraryState | null }));
 vi.mock("../components/layout/use-model", () => ({
@@ -23,7 +23,6 @@ function render(Page: () => React.JSX.Element, url: string) {
 const pages = [
 	["/tags", TagsPage, "没有符合搜索条件的标签。"],
 	["/spaces", SpacesPage, "还没有空间。"],
-	["/trash", TrashPage, "当前筛选条件下，回收站为空。"],
 	["/graph", GraphPage, "暂无关系数据"],
 	["/timeline", TimelinePage, "没有带有效时间的记忆"],
 ] as const;
@@ -35,7 +34,6 @@ afterEach(() => {
 it.each([
 	[TagsPage, "/tags", "标签", ["24ch", "10ch", "24ch"]],
 	[SpacesPage, "/spaces", "空间", ["24ch", "36ch", "32ch", "24ch", "10ch"]],
-	[TrashPage, "/trash", "回收站中的记忆", ["24ch", "24ch", "24ch", "16ch"]],
 	[GraphPage, "/graph", "图谱节点", ["24ch", "12ch", "10ch"]],
 	[GraphPage, "/graph", "图谱关系", ["24ch", "24ch", "12ch"]],
 	[TimelinePage, "/timeline", "2026-10-17 的时间线数据", ["28ch", "24ch", "24ch"]],
@@ -216,14 +214,4 @@ describe("library unknown, failed and empty states", () => {
 		expect(monthlyStream).toContain("10-18 03:15 UTC");
 		expect(monthlyStream).toContain("10-18 03:45 UTC");
 	});
-});
-
-it("does not duplicate a purge confirmation error in the background live region", () => {
-	snapshot.state = {
-		...new LibraryModel("trash").state,
-		ready: true,
-		error: "模拟永久删除失败",
-		purge: { id: "m1", title: "记忆", stage: "confirm" },
-	};
-	expect(render(TrashPage, "/trash")).not.toContain("模拟永久删除失败");
 });

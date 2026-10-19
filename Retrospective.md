@@ -1,5 +1,9 @@
 # Retrospective
 
+### 2026-10-19 — 回收站拆分必须保留失败后的用户意图
+
+独立回收站页面初版把所有操作结束后的全选状态都收敛为失败 ID，导致预检失败、单条删除和清空中途停止时丢失尚未处理的跨页选择及排除项。复审触发交互回归，先得到确定失败，再按整批是否完整解析区分选择收敛；部分操作保留原始全选意图，仅移除已删除的排除项。单条删除失败还错误关闭了已经完成标题核验的确认框，被既有真实浏览器测试捕获。修复保留确认阶段、框内错误、直接重试和取消后的原按钮焦点。拆分 ViewModel 时不仅迁移成功路径，也必须逐项保留失败状态、确认阶段和焦点约定；全量 L3 不能由新功能单测替代。
+
 ### 2026-10-19 — Preserve staged writes when batching tag reads
 
 The new 100-memory restore test exposed 10,300 tag-related reads for 100 tags per memory. A first joined-read optimization bypassed the existing staged memory overlay: repeated IDs in one HTTP batch lost pending tags, and the rename regression rejected a previously valid identity-preserving read. The full suite caught both before any commit. The correction keeps association IDs owned by MemoryRepo and hydrates tag rows in one query through TagRepo, including its pending-tag overlay. Optimize the shared read boundary, not only persisted SQL; rerun staged transactions and concurrency regressions whenever replacing an N+1 path.
