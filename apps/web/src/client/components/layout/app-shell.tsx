@@ -105,6 +105,7 @@ export function AppShell() {
 	const [palette, setPalette] = useState(false);
 	const [query, setQuery] = useState("");
 	const menuButton = useRef<HTMLButtonElement>(null);
+	const railToggle = useRef<HTMLButtonElement>(null);
 	useEffect(() => {
 		void model.load();
 	}, [model]);
@@ -157,6 +158,10 @@ export function AppShell() {
 			? location.pathname === "/"
 			: location.pathname === href ||
 				(href === "/memories" && location.pathname.startsWith("/memories/"));
+	function toggleRail() {
+		flushSync(() => setCollapsed((current) => !current));
+		railToggle.current?.focus();
+	}
 	function rail(isCollapsed: boolean) {
 		const avatar = (
 			<Avatar
@@ -197,12 +202,13 @@ export function AppShell() {
 						</Link>
 						{!isCollapsed && (
 							<Button
+								ref={railToggle}
 								variant="ghost"
 								size="icon"
 								className="octo-collapse"
 								aria-label="收起侧栏"
-								aria-expanded={!collapsed}
-								onClick={() => (mobile ? setDrawer(false) : setCollapsed(true))}
+								aria-expanded={!isCollapsed}
+								onClick={() => (mobile ? setDrawer(false) : toggleRail())}
 							>
 								<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
 							</Button>
@@ -211,12 +217,13 @@ export function AppShell() {
 				</SidebarHeader>
 				{isCollapsed ? (
 					<Button
+						ref={railToggle}
 						variant="ghost"
 						size="icon"
 						className="octo-expand"
 						aria-label="展开侧栏"
 						aria-expanded={false}
-						onClick={() => setCollapsed(false)}
+						onClick={toggleRail}
 					>
 						<PanelLeftOpen strokeWidth={1.5} aria-hidden="true" />
 					</Button>

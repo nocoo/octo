@@ -137,6 +137,12 @@ a {
 	height: var(--basalt-text-xl);
 	stroke-width: 1.5;
 }
+@media (pointer: coarse) {
+	.octo-header :is(button, a):has(svg) {
+		min-inline-size: var(--basalt-size-touch);
+		min-block-size: var(--basalt-size-touch);
+	}
+}
 .octo-table {
 	font-variant-numeric: tabular-nums;
 }

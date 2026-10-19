@@ -90,6 +90,47 @@ test("mobile navigation restores focus to its opener", async ({ page }) => {
 	await expect(opener).toBeFocused();
 });
 
+test("sidebar toggles preserve keyboard focus and report the active rail state", async ({
+	page,
+}) => {
+	await page.goto("/settings");
+	const close = page.getByRole("button", { name: "收起侧栏", exact: true });
+	const open = page.getByRole("button", { name: "展开侧栏", exact: true });
+	await close.focus();
+	await page.keyboard.press("Enter");
+	await expect(open).toBeFocused();
+	await page.keyboard.press("Space");
+	await expect(close).toBeFocused();
+	await page.keyboard.press("Enter");
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.getByRole("button", { name: "打开导航", exact: true }).click();
+	await expect(close).toHaveAttribute("aria-expanded", "true");
+	await close.click();
+	await expect(page.getByRole("button", { name: "打开导航", exact: true })).toBeFocused();
+});
+
+test.describe("touch shell", () => {
+	test.use({ hasTouch: true });
+	test("preserves full touch targets without clipping header actions", async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto("/settings/embedding");
+		expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
+		for (const name of [
+			"打开导航",
+			"搜索与命令",
+			"GitHub 仓库",
+			"Octo 项目主页",
+			"切换深色或浅色主题",
+		]) {
+			const action = page.getByLabel(name, { exact: true });
+			await expect(action).toBeInViewport({ ratio: 1 });
+			const box = await action.boundingBox();
+			expect(box?.width).toBeGreaterThanOrEqual(44);
+			expect(box?.height).toBeGreaterThanOrEqual(44);
+		}
+	});
+});
+
 test("shell keeps brand and identity aligned through rail and theme changes", async ({ page }) => {
 	await page.goto("/settings");
 	await expect(page.getByText("l3@local", { exact: true })).toBeVisible();

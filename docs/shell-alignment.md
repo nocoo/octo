@@ -23,6 +23,11 @@ Chrome computed-style comparison at 1440px established these shared dimensions:
 | Body text | 14px / 20px |
 | Island outer inset | 12px desktop; 8px mobile |
 
+Coarse-pointer header controls retain the 44px touch-target minimum, including
+the mobile menu. Rail toggles transfer keyboard focus to their replacement
+button; the mobile drawer reports its own expanded state independently of the
+desktop rail.
+
 Collapse lives in the sidebar header; the collapsed rail has expand and search
 controls. Basalt SidebarGroup owns group disclosure. Expanded identity uses
 SidebarUser's native avatar placement rather than a custom rail-slot wrapper.
