@@ -308,6 +308,36 @@ describe("production vector smoke with fake transport only", () => {
 		expect(report.cleanup.deleted).toBe(2);
 	});
 
+	it.each([0, 1])("rejects ordinary timeouts delayed by %i ms", async (delay) => {
+		vi.useFakeTimers();
+		const transport = fixture(1_349.9);
+		const fetch = transport.dependencies.fetch;
+		let updateStart: number | undefined;
+		let interrupted = false;
+		transport.dependencies.fetch = vi.fn(async (url, init) => {
+			const remaining =
+				updateStart === undefined ? Infinity : updateStart + 10_000 - transport.dependencies.now();
+			if (!interrupted && remaining > 2_000 && remaining < 2_001) {
+				interrupted = true;
+				transport.advance(2_000 + delay);
+				return new Promise<Response>(() => {});
+			}
+			const response = await fetch(url, init);
+			if (init.method === "PUT" && updateStart === undefined) {
+				updateStart = transport.dependencies.now();
+			}
+			return response;
+		});
+		const promise = runVectorSmoke(environment, transport.dependencies);
+		await vi.runAllTimersAsync();
+		const report = await promise;
+		expect(interrupted).toBe(true);
+		expect(report.ok).toBe(false);
+		expect(report.failures).toEqual([{ phase: "update", code: "request_timeout" }]);
+		expect(Object.values(report.latencies_ms).every((latency) => latency !== null)).toBe(true);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
 	it.each([1, 1_300])("measures convergence after write responses with %i ms RTT", async (rtt) => {
 		const transport = fixture(rtt);
 		const report = await runVectorSmoke(environment, transport.dependencies);

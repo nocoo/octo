@@ -377,7 +377,7 @@ export async function runVectorSmoke(
 					if (
 						error instanceof SmokeError &&
 						error.code === "request_timeout" &&
-						(budget <= REQUEST_TIMEOUT_MS || deps.now() >= deadline)
+						budget <= REQUEST_TIMEOUT_MS
 					)
 						break;
 					throw error;
