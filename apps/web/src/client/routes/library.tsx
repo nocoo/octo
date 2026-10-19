@@ -617,7 +617,7 @@ export function SpacesPage() {
 				actions={
 					<>
 						<Input
-							className="w-basalt-40 max-w-full"
+							className="w-basalt-28 max-w-full"
 							aria-label="筛选空间"
 							value={params.get("q") ?? ""}
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
