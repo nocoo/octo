@@ -98,7 +98,7 @@ export async function synchronizeVectors(
 		ORDER BY due_at, memory_id LIMIT ?`)
 		.bind(now, now, target, target, limit)
 		.all<Job>();
-	const fail = async (job: Claim, stage: string, error: unknown) => {
+	const fail = async (job: Claim, stage: string, error: unknown, retry: Job[]) => {
 		const failedAt = timestamp();
 		totals.failed++;
 		const details = vectorErrorDetails(error);
@@ -127,6 +127,7 @@ export async function synchronizeVectors(
 			.first<{ attempts: number; dead_at: number | null }>();
 		if (!failed) {
 			await invalidate(env.DB, job.memory_id, job.token, failedAt);
+			retry.push(job);
 			return;
 		}
 		await env.DB.prepare(`UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ?
@@ -228,7 +229,7 @@ export async function synchronizeVectors(
 			stage = "acknowledge";
 			await acknowledge(claimed, retry);
 		} catch (error) {
-			await fail(claimed, stage, error);
+			await fail(claimed, stage, error, retry);
 		}
 	};
 	for (let offset = 0; offset < jobs.results.length; offset += DELETE_BATCH_SIZE) {
@@ -245,7 +246,7 @@ export async function synchronizeVectors(
 					try {
 						await options.beforeSyncBatch(claims.map((claim) => claim.memory_id));
 					} catch (error) {
-						await concurrent(claims, concurrency, (claim) => fail(claim, "backfill", error));
+						await concurrent(claims, concurrency, (claim) => fail(claim, "backfill", error, retry));
 						continue;
 					}
 					await concurrent(claims, concurrency, (claim) =>
@@ -276,7 +277,7 @@ export async function synchronizeVectors(
 				try {
 					await store.delete(ready.map((job) => job.memory_id));
 				} catch (error) {
-					await concurrent(ready, concurrency, (job) => fail(job, "delete", error));
+					await concurrent(ready, concurrency, (job) => fail(job, "delete", error, retry));
 					pending = retry;
 					continue;
 				}
@@ -284,7 +285,7 @@ export async function synchronizeVectors(
 					try {
 						await acknowledge(job, retry);
 					} catch (error) {
-						await fail(job, "acknowledge", error);
+						await fail(job, "acknowledge", error, retry);
 					}
 				});
 			}

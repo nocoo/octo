@@ -260,11 +260,12 @@ describe("durable vector synchronization", () => {
 			sqlite.exec("UPDATE memories SET importance = 0.1 WHERE id = 'memory'");
 			throw new Error("service unavailable");
 		});
-		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 1 });
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 1, failed: 1 });
 		expect(
 			sqlite.prepare("SELECT attempts, last_error, dead_at FROM vector_sync_jobs").get(),
 		).toEqual({ attempts: 0, last_error: null, dead_at: null });
-		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 0, failed: 0 });
+		expect(store.upsert).toHaveBeenCalledTimes(2);
 		log.mockRestore();
 	});
 

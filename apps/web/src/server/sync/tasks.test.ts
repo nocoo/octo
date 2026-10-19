@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import { encodeFloat32Vector } from "../search/math";
 import { fixture, SETTINGS } from "../settings/__tests__/fixture";
 import { saveEmbeddingSettings } from "../settings/config";
@@ -47,6 +48,40 @@ describe("derived work coordination", () => {
 			).toBe(1);
 		} finally {
 			raw.close();
+		}
+	});
+
+	it("repairs a newer client PUT when the old embedding holder fails", async () => {
+		const { env, raw } = await setup(1);
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const upsert = vi.spyOn(D1BruteForceVectorStore.prototype, "upsert");
+		const fetcher = vi.fn(async () => {
+			raw.exec("UPDATE memories SET body = 'New body', content_hash = 'new-hash', version = 2");
+			raw
+				.prepare(`INSERT INTO memory_vectors
+				(memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
+				VALUES ('memory-00','tiny','tiny',3,?,'new-hash',2)`)
+				.run(encodeFloat32Vector([0, 1, 0]));
+			expect(await runDerivedTasks(env, 101, ["memory-00"])).toEqual({ synced: 0, failed: 0 });
+			return new Response(null, { status: 429 });
+		});
+		vi.stubGlobal("fetch", fetcher);
+		try {
+			expect(await runDerivedTasks(env, 100, ["memory-00"])).toEqual({ synced: 1, failed: 1 });
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			expect(upsert).toHaveBeenCalledTimes(1);
+			expect(upsert).toHaveBeenCalledWith([expect.objectContaining({ values: [0, 1, 0] })]);
+			expect(raw.prepare("SELECT indexed_at FROM memory_vectors").get()?.indexed_at).toBe(100);
+			expect(
+				raw
+					.prepare(
+						"SELECT generation = synced_generation AS synced, attempts, dead_at FROM vector_sync_jobs",
+					)
+					.get(),
+			).toEqual({ synced: 1, attempts: 0, dead_at: null });
+		} finally {
+			raw.close();
+			log.mockRestore();
 		}
 	});
 
