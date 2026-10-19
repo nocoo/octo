@@ -307,7 +307,8 @@ process never reaches a catch handler.
 
 - `GET /api/v1/changes?cursor=…&limit=…` 按 `seq` 升序返回，只包含调用方可见 space 的事件。
 - 游标是不透明的 base64url（`{"s":<seq>}`）。客户端只能把它原样传回。
-- 删除类事件（trashed / purged）只带 id，不带正文。
+- 删除类事件（trashed / purged / moved_out）只带 `seq,entity,entity_id,op,at`，不带正文、空间、版本或 actor。
+- 跨空间写入在同一 D1 batch 内先写原空间 `moved_out` 墓碑，再写目标空间 `moved`（或跨空间 rollback 的 `rolled_back`）。旧空间消费者据此移除本地副本，不获知目标空间；两侧可见的消费者按序处理。既有 `changes.space_id` 足以表达两侧事件，无需新增迁移。
 - 新客户端的初始同步：先 `GET /api/v1/changes/head` 拿当前游标，再分页 list 全量，最后从 head 开始拉增量。
 
 ## 8. R2 键

@@ -1,6 +1,6 @@
 # 04 — REST API
 
-MCP 客户端使用独立的 `/mcp` 无状态 Streamable HTTP 端点，工具直接调用本章 API 的同一服务层而非 HTTP 自转发；九个工具的输入/输出 schema、错误语义及知识库 bot 配置见 [09](09-mcp.md)。REST 路由与信封保持不变。
+MCP 客户端使用独立的 `/mcp` 无状态 Streamable HTTP 端点，工具直接调用本章 API 的同一服务层而非 HTTP 自转发；十三个工具的输入/输出 schema、错误语义及知识库 bot 配置见 [09](09-mcp.md)。REST 路由与信封保持不变。
 
 > 返回 [文档目录](README.md)
 
@@ -30,7 +30,7 @@ Base URL：`https://octo.hexly.ai/api/v1`（本地：`https://octo.dev.hexly.ai/
 | 401 | `unauthenticated` | 缺 key、格式错、已吊销或过期（不区分具体原因） |
 | 403 | `forbidden` | key 缺对应的操作权限，或者开启了「只改自己的」 |
 | 404 | `not_found` | 资源不存在，**或**所在 space 对该 key 不可见 |
-| 409 | `version_conflict` / `tag_conflict` / `tag_in_use` / `idempotency_conflict` | 并发冲突、标签名冲突、标签仍有引用或删除准备后发生变化、同一个幂等键对应了不同请求 |
+| 409 | `version_conflict` / `space_not_empty` / `tag_conflict` / `tag_in_use` / `idempotency_conflict` | 并发或 space slug 冲突、space 仍有记忆（包括回收站）、标签名冲突、标签仍有引用或删除准备后发生变化、同一个幂等键对应了不同请求 |
 | 413 | `payload_too_large` | 正文 > 1 MB、附件 > 50 MB、批量 > 100 条 |
 | 415 | `unsupported_media_type` | 附件类型不在白名单 |
 | 422 | `unprocessable` | 语义错误（例如回滚到不存在的版本） |
@@ -73,6 +73,8 @@ unknown errors still return the generic `internal error` envelope without intern
 | POST | `/memories:batchGet` | read | ≤100 个 id，带 `missing[]` |
 | POST | `/memories:batchUpdate` | update | `{items:[…]}`，≤100 条，每条使用下述 flat / patch 二选一格式 |
 | POST | `/memories:batchDelete` | delete | ≤100 个 id |
+| POST | `/memories/:id/move` | 两侧 update | `{space,expected_version?}`；可选 `If-Match`，返回搬移后的 Memory |
+| POST | `/memories:batchMove` | 两侧 update | `{items:[{id,expected_version?}],space}`；1–100 项，按请求顺序返回 `{results:[{id,ok,error?}]}` |
 | PUT | `/memories/:id/vector` | update | 单独写或替换向量 `{profile, values}` |
 
 Vector PUT uses the same versioned write contract as PATCH: supply
@@ -126,6 +128,23 @@ See [vector convergence and smoke usage](vector-convergence.md).
 | GET | `/changes` | read | `?cursor&limit&spaces=slug-a,slug-b`，按 seq 升序 |
 | GET | `/changes/head` | read | 返回当前最新游标 |
 
+### 跨空间搬移
+
+单条 `POST /memories/:id/move` 和批量 `POST /memories:batchMove` 都复用既有记忆写入服务；不复制记忆，也不生成新的 ID。
+
+```json
+{"items":[{"id":"01J…","expected_version":3},{"id":"01K…"}],"space":"knowledge"}
+```
+
+- 权限按 [05](05-auth-permissions-audit.md)：`write`（`w`）仅表示创建，不足以搬移。调用方必须在源和目标空间都有 `update`（`u`），继续检查 `own_entries_only`。标准 admin key 满足条件；非 admin 的 custom/project key 也可在授权范围内搬移，不要求额外 read 权限。任一空间不可见为 404 `not_found`，空间可见但缺 `u` 或不是自己的记忆为 403 `forbidden`；权限先于版本检查。
+- 已在回收站的记忆返回 404 `not_found`，须先恢复。目标不存在或不可见也为 404。相同空间为 no-op，权限和可选版本仍须通过，但不新增版本、事件或同步任务。
+- 单条可以省略 `If-Match` / `expected_version`；省略时仍以本次读取的版本进行事务内 CAS，不是无条件覆盖。指定旧版本（包括 0）或并发变更返回 409 `version_conflict`，沿用现有约定，不返回 412。非法 header、负数/小数、header 与 body 不一致为 400 `validation_failed`。批量仅使用各项的 `expected_version`，不使用批次级 `If-Match`。
+- 保留 ID、正文、来源、标签顺序、历史版本、附件及 D1 向量；实际搬移增加版本并写 `op=move` 快照。当前行、版本、标签关联、两种全文索引、变更事件及向量同步队列在同一个 D1 batch 内提交。标签和计数由当前空间关联计算，不存在独立的空间标签计数副本。
+- 原空间产生 `moved_out` 墓碑（仅 `seq,entity,entity_id,op,at`，不泄露目标、版本或 actor）；目标空间产生 `moved` 事件。两侧都可见的消费者依次处理两个事件。原空间 key 立即无法 GET、列出、搜索或新签发附件下载 URL；向量候选仍回 D1 检查当前空间。既有签名 URL 是独立的短期下载凭证，在原到期时间前仍有效。
+- 搬移后的派生同步只重新投递已存向量及其最新空间元数据，绝不调用 embedding 模型，包括缺失/过期向量的情况。R2 键为 `att/<memory_id>/<attachment_id>`，不含空间，因此无需重命名或复制对象。独立 cron 的既有回填策略不变。
+- 批量结构错误拒绝整个请求；空批次为 400，超过 100 项为 413。业务错误逐项返回（HTTP 200），顺序及重复 ID 均保留，后项看到前项的暂存结果。成功项同批提交；最终数据库提交失败则全部成功项回滚，返回 409/503，不伪报部分成功。
+- 幂等键覆盖单条或整个批次，成功写入和重放结果原子提交；重放前重验当前权限和目标可见性。所有请求（含逐项业务失败的 HTTP 200）均由既有 key actor 审计，不记录正文或 key。
+
 ### 标签与 space
 
 | 方法 | 路径 | 权限 | 说明 |
@@ -136,10 +155,15 @@ See [vector convergence and smoke usage](vector-convergence.md).
 | DELETE | `/tags/:name` | update (`u`) + `scope=all` | 无请求体；成功 `{name,deleted:true}`，不存在 404，仍有引用 409 `tag_in_use`；支持幂等键 |
 | GET | `/spaces` | read | 只列出可见的 space |
 | GET | `/spaces/:slug` | read | 详情和计数 |
+| POST | `/spaces` | admin 角色 | `{slug,name,description?}`，201；不接受 owner 或权限字段 |
+| PATCH | `/spaces/:slug` | admin 角色 | `{name?,description?}` 至少一项，200；slug 不可变 |
+| DELETE | `/spaces/:slug` | admin 角色 | 仅完全为空时删除，200 `{id,slug,deleted:true}` |
 
 标签是全局的，重命名 / 合并 / 删除要求 `scope=all` 和 `u`（不限定角色名称）。删除检查所有空间的 `memory_tags`，包括已删除 memory；因此 API 列表里不可见或 `use_count=0` 并不表示可删除。其他标签通过 `merged_into` 引用该标签也会阻止删除；先删除无引用的叶子别名，再删除目标，不级联删除、不改变历史版本中的名称。并发新增引用或修改目标使删除事务失败，不能绕过重验。所有请求记录审计，清理不用新增 MCP 工具；手动操作见 [清理手册](tag-cleanup.md)，本轮不执行生产清理。
 
-创建 space 只能在 dashboard 做；不过开了 `auto_own_space` 的 key 第一次写入时，会自动创建自己的 space（slug = key 名）。
+空间写接口只接受 `role=admin` 的 API key，而不是任意 `scope=all` 或全操作 key。无 key 为 401，其他角色一律为 403，且在读取正文和幂等重放之前检查。`slug` 为 1–64 字符的小写字母/数字及单个连字符分隔，`name` 去除首尾空白后为 1–256 字符，`description` 最长 10000，创建时默认空字符串。未知字段为 400。PATCH 只改显示名称/描述，不接受 slug 或 owner；重复 slug 为 409 `version_conflict`，删除含任何记忆（包括回收站）的空间为 409 `space_not_empty`。删除检查和写入原子执行，复用 dashboard 的服务与冲突处理。全部调用以 key 身份审计。
+
+开了 `auto_own_space` 的 key 第一次写入时，仍可自动创建自己的 space（slug = key 名）。key 创建、轮换、授权与 owner 管理保持 dashboard-only，不新增对应 v1/MCP API。
 
 ### 附件
 

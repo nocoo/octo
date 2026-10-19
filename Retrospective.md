@@ -21,6 +21,14 @@ the theme. Inspect the installed token declaration, not just its name, before
 composing CSS color functions; unit-rendered class names alone do not validate
 the resulting browser color.
 
+### 2026-10-19 — Space management validation assumptions
+
+The first space PATCH schema derived optional fields from the create schema. Zod 4 retained the create-time description default inside the optional field, turning an empty patch into a description-clearing write. MCP regression tests caught this before commit. The shared PATCH schema now removes create defaults explicitly; tests reject empty updates and verify that name-only updates preserve descriptions. Optionality is not the same as removing a default.
+
+The first move implementation correctly added a source-space tombstone, but two existing tests still assumed that one write always produced one change event. The normal pre-commit hook rejected that snapshot; assertions now require both source and destination events. A separate workerd test queried a two-character token that was only a substring of its fixture word, despite the documented whole-token short-query behavior. The fixture now contains the actual short token and failures identify the search channel. Validate test inputs against the real contract instead of weakening assertions or changing unrelated search semantics.
+
+An offline, lockfile-only Bun synchronization still expanded the temporary registry into package URLs. Inspection caught the mirror-only diff before staging; removing those generated URLs left the lockfile byte-identical because the private root package version is not recorded there. Offline mode prevents network access, not registry-dependent serialization. Inspect the lockfile diff and mirror-URL guard even when no dependencies change.
+
 ### 2026-10-19 — 搜索夹具必须尊重回收站保留的 FTS 映射
 
 回收站分支 rebase 后的全量 L2 在搜索排名夹具初始化时触发 fts_rowid 唯一约束，导致整组测试未执行。两份搜索夹具让 FTS 自动分配 rowid，再以 FTS 最大值写映射；但移入回收站只移除 FTS 内容，映射仍占用该 ID。先在两份夹具中加入保留映射且没有 FTS 内容的回收站记录，在全新隔离 D1 稳定复现两组初始化失败，再按生产仓储规则从映射表分配新 ID。原搜索、排名、权限和候选数量断言保持不变，增加哨兵仍在回收站且未被重新索引的断言，清理只涉及本组记录。夹具直接写数据库时必须遵循正式写入路径的标识分配规则，不能通过重复运行掩盖共享数据顺序问题。
