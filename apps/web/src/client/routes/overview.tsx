@@ -218,6 +218,7 @@ export function OverviewPage() {
 					<Grid columns={1}>
 						{state.usage && !activity.heatmap.length ? (
 							<LayerCard.Empty
+								className="octo-empty"
 								icon={<Activity aria-hidden="true" />}
 								title="暂无调用记录"
 								description="智能体开始使用后，这里会显示每日活动。"
@@ -266,7 +267,11 @@ export function OverviewPage() {
 								summary="每日接口调用次数，纵轴从零开始。"
 							/>
 						) : state.usage ? (
-							<LayerCard.Empty icon={<Activity aria-hidden="true" />} title="暂无调用趋势" />
+							<LayerCard.Empty
+								className="octo-empty"
+								icon={<Activity aria-hidden="true" />}
+								title="暂无调用趋势"
+							/>
 						) : (
 							<p className="text-basalt-sm text-basalt-muted-foreground">
 								{state.loading ? "正在读取调用记录…" : "调用数据尚未加载"}
@@ -376,6 +381,7 @@ export function OverviewPage() {
 					{!state.recent.length &&
 						(state.memoryCount !== null ? (
 							<LayerCard.Empty
+								className="octo-empty"
 								icon={<BookOpen aria-hidden="true" />}
 								title="还没有记忆"
 								description="从第一条记忆开始整理知识。"

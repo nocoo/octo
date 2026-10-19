@@ -273,6 +273,7 @@ export function UsagePage() {
 						empty={
 							state.loaded ? (
 								<LayerCard.Empty
+									className="octo-empty octo-empty--page"
 									icon={<ChartNoAxesCombined aria-hidden="true" />}
 									title="此范围内暂无用量"
 									description="暂无每日用量记录。请调整筛选或发起接口请求。"
@@ -590,6 +591,7 @@ export function AuditPage() {
 												"审计记录暂不可用，请重试查询。"
 											) : state.loaded ? (
 												<LayerCard.Empty
+													className="octo-empty octo-empty--page"
 													icon={<ScrollText aria-hidden="true" />}
 													title="没有符合筛选条件的审计记录"
 													description="调整筛选后再次查询。"

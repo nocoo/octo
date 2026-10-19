@@ -260,6 +260,7 @@ export function MemoriesPage() {
 			{state.loaded && !state.loading && !state.error && !state.items.length && (
 				<LayerCard>
 					<LayerCard.Empty
+						className="octo-empty octo-empty--page"
 						icon={<SearchX aria-hidden="true" />}
 						title="没有找到记忆"
 						description="清除筛选或刷新列表后再试。"
@@ -613,6 +614,7 @@ export function MemoryPage() {
 								</LayerCard.Body>
 							) : (
 								<LayerCard.Empty
+									className="octo-empty"
 									icon={<Paperclip aria-hidden="true" />}
 									title="暂无附件"
 									description="添加图片或 PDF，补充这条记忆。"

@@ -388,6 +388,7 @@ export function SearchPage() {
 			{!params.get("q") && (
 				<LayerCard>
 					<LayerCard.Empty
+						className="octo-empty octo-empty--page"
 						icon={<Search aria-hidden="true" />}
 						title="搜索你的知识库"
 						action={
@@ -426,6 +427,7 @@ export function SearchPage() {
 					{!result.items.length && !state.loading && !state.error && (
 						<LayerCard>
 							<LayerCard.Empty
+								className="octo-empty octo-empty--page"
 								icon={<Search aria-hidden="true" />}
 								title="没有匹配结果"
 								action={

@@ -338,6 +338,7 @@ export function KeysPage() {
 							empty={
 								state.loaded ? (
 									<LayerCard.Empty
+										className="octo-empty octo-empty--page"
 										icon={<KeyRound aria-hidden="true" />}
 										title="暂无接口密钥。"
 										description="为代理创建第一把密钥。"

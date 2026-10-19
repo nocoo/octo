@@ -445,6 +445,7 @@ export function SettingsPage() {
 							empty={
 								state.loaded ? (
 									<LayerCard.Empty
+										className="octo-empty octo-empty--page"
 										icon={<Settings2 aria-hidden="true" />}
 										title="尚未配置嵌入配置。"
 										description="先设置网关与模型。"

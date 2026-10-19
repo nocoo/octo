@@ -110,6 +110,56 @@ a {
 .octo-table tbody tr:last-child td {
 	border-bottom: 0;
 }
+.octo-empty {
+	flex: 1;
+	justify-content: center;
+	min-block-size: var(--basalt-space-64);
+	gap: var(--basalt-space-layout-sm);
+	padding: var(--basalt-space-layout-xl);
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.octo-empty > :first-child:has(svg) svg {
+	inline-size: var(--basalt-space-12);
+	block-size: var(--basalt-space-12);
+	stroke-width: 1.5;
+}
+.octo-empty > p:first-of-type {
+	font-size: var(--basalt-text-xl);
+}
+.octo-empty > p {
+	max-inline-size: 42ch;
+}
+.octo-empty :is(button, a) {
+	scroll-margin-block: var(--basalt-space-layout);
+}
+.octo-empty--page {
+	min-block-size: var(--basalt-space-80);
+}
+/* Only the ancestor chain of a page empty state participates in vertical fill. */
+.octo-island:has(.octo-empty--page),
+.octo-island :is(div, section):has(.octo-empty--page) {
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
+}
+.octo-island :is(div, section):has(.octo-empty--page) {
+	flex-shrink: 0;
+}
+.octo-island table:has(.octo-empty--page) {
+	flex-grow: 1;
+}
+.octo-island td:has(.octo-empty--page) {
+	height: 100%;
+}
+.octo-island table:has(.octo-empty--page) thead {
+	height: var(--basalt-size-table-row);
+}
+@media (width < 768px) {
+	.octo-island table:has(.octo-empty--page) thead {
+		display: none;
+	}
+}
 ::view-transition-old(root),
 ::view-transition-new(root) {
 	animation-duration: var(--basalt-motion-normal);

@@ -409,6 +409,7 @@ export function TrashPage() {
 						/>
 					) : (
 						<LayerCard.Empty
+							className="octo-empty octo-empty--page"
 							icon={<Trash2 aria-hidden="true" />}
 							title="当前筛选条件下，回收站为空。"
 							action={

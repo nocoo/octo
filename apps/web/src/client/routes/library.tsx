@@ -215,6 +215,7 @@ function GraphTables({
 				pageSize={20}
 				empty={
 					<LayerCard.Empty
+						className="octo-empty"
 						icon={<Network aria-hidden="true" />}
 						title="没有符合筛选条件的节点。"
 						action={
@@ -262,6 +263,7 @@ function GraphTables({
 				pageSize={20}
 				empty={
 					<LayerCard.Empty
+						className="octo-empty"
 						icon={<Network aria-hidden="true" />}
 						title="当前样本中没有关联。"
 						action={
@@ -400,6 +402,7 @@ export function TagsPage() {
 							loading={state.busy && !state.ready}
 							empty={
 								<LayerCard.Empty
+									className="octo-empty octo-empty--page"
 									icon={<Tags aria-hidden="true" />}
 									title="没有符合搜索条件的标签。"
 									action={
@@ -690,6 +693,7 @@ export function SpacesPage() {
 						loading={state.busy && !state.ready}
 						empty={
 							<LayerCard.Empty
+								className="octo-empty octo-empty--page"
 								icon={<FolderPlus aria-hidden="true" />}
 								title={params.get("q") ? "没有符合筛选条件的空间" : "还没有空间。"}
 								description="创建空间，整理你的记忆。"
@@ -887,6 +891,7 @@ export function GraphPage() {
 			{state.ready && graph.nodes.length === 0 && (
 				<LayerCard>
 					<LayerCard.Empty
+						className="octo-empty octo-empty--page"
 						icon={<Network aria-hidden="true" />}
 						title="暂无关系数据"
 						description="添加记忆和标签后，可在这里查看关联。"
@@ -1070,6 +1075,7 @@ export function TimelinePage() {
 			{state.ready && timeline.groups.length === 0 && (
 				<LayerCard>
 					<LayerCard.Empty
+						className="octo-empty octo-empty--page"
 						icon={<CalendarDays aria-hidden="true" />}
 						title="没有带有效时间的记忆"
 						description="试试其他时间依据、范围或空间。"
