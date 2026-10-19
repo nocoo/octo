@@ -243,13 +243,36 @@ export async function synchronizeVectors(
 						await Promise.all(pending.slice(offset, offset + concurrency).map(claimJob))
 					).filter((claim): claim is Claim => claim !== null);
 					if (claims.length === 0) continue;
+					let embeddingClaims: Claim[];
 					try {
-						await options.beforeSyncBatch(claims.map((claim) => claim.memory_id));
+						const needs = await env.DB.prepare(`SELECT memory.id FROM memories memory
+							LEFT JOIN memory_vectors vector ON vector.memory_id = memory.id AND vector.profile_id = ?
+							JOIN embedding_profiles profile ON profile.id = ?
+							WHERE memory.id IN (SELECT value FROM json_each(?)) AND memory.deleted_at IS NULL
+							AND (vector.memory_id IS NULL OR vector.content_hash != memory.content_hash
+							OR vector.embedding_model != profile.model OR vector.dim != profile.dims)`)
+							.bind(profileId, profileId, JSON.stringify(claims.map((claim) => claim.memory_id)))
+							.all<{ id: string }>();
+						const needsEmbedding = new Set(needs.results.map((memory) => memory.id));
+						embeddingClaims = claims.filter((claim) => needsEmbedding.has(claim.memory_id));
 					} catch (error) {
-						await concurrent(claims, concurrency, (claim) => fail(claim, "backfill", error, retry));
+						await concurrent(claims, concurrency, (claim) => fail(claim, "read", error, retry));
 						continue;
 					}
-					await concurrent(claims, concurrency, (claim) =>
+					const ready = claims.filter((claim) => !embeddingClaims.includes(claim));
+					await concurrent(ready, concurrency, (claim) =>
+						syncAttempt(claim, deletes, retry, claim),
+					);
+					if (embeddingClaims.length === 0) continue;
+					try {
+						await options.beforeSyncBatch(embeddingClaims.map((claim) => claim.memory_id));
+					} catch (error) {
+						await concurrent(embeddingClaims, concurrency, (claim) =>
+							fail(claim, "backfill", error, retry),
+						);
+						continue;
+					}
+					await concurrent(embeddingClaims, concurrency, (claim) =>
 						syncAttempt(claim, deletes, retry, claim),
 					);
 				}

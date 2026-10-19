@@ -51,6 +51,46 @@ describe("derived work coordination", () => {
 		}
 	});
 
+	it("does not put ready client vectors into a contended embedding batch", async () => {
+		const { env, raw } = await setup(3);
+		raw
+			.prepare(`INSERT INTO memory_vectors
+			(memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
+			VALUES ('memory-02','tiny','tiny',3,?,'hash',1)`)
+			.run(encodeFloat32Vector([0, 1, 0]));
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const fetcher = vi.fn(async () => {
+			entered.resolve();
+			await release.promise;
+			return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
+		});
+		vi.stubGlobal("fetch", fetcher);
+		const holder = runDerivedTasks(env, 100, ["memory-00"]);
+		await entered.promise;
+		try {
+			expect(await runDerivedTasks(env, 101, ["memory-01", "memory-02"])).toEqual({
+				synced: 1,
+				failed: 1,
+			});
+			expect(
+				raw.prepare("SELECT indexed_at FROM memory_vectors WHERE memory_id = 'memory-02'").get()
+					?.indexed_at,
+			).toBe(101);
+			expect(
+				raw.prepare("SELECT attempts FROM vector_sync_jobs WHERE memory_id = 'memory-02'").get()
+					?.attempts,
+			).toBe(0);
+			expect(fetcher).toHaveBeenCalledTimes(1);
+		} finally {
+			release.resolve();
+			await holder;
+			raw.close();
+			log.mockRestore();
+		}
+	});
+
 	it("repairs a newer client PUT when the old embedding holder fails", async () => {
 		const { env, raw } = await setup(1);
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -110,7 +150,7 @@ describe("derived work coordination", () => {
 				WHERE lease_token IS NOT NULL AND lease_until = ? AND due_at = 100`)
 					.get(100 + SYNC_LEASE_MS)?.count,
 			).toBe(4);
-			expect(await runDerivedTasks(env, 101)).toEqual({ synced: 0, failed: 47 });
+			expect(await runDerivedTasks(env, 101)).toEqual({ synced: 1, failed: 46 });
 			expect(calls).toBe(1);
 			expect(
 				raw
@@ -118,7 +158,7 @@ describe("derived work coordination", () => {
 						"SELECT synced_generation FROM vector_sync_jobs WHERE memory_id = 'z-purge-tombstone'",
 					)
 					.get()?.synced_generation,
-			).toBeNull();
+			).toBe(1);
 			release.resolve();
 			expect(await abandoned).toEqual({ synced: 4, failed: 0 });
 			const recoveredAt = 101 + 2 * 60 * 60 * 1000;

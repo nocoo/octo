@@ -216,10 +216,12 @@ persistently failing prefix cannot starve later updates or purge tombstones.
 Claiming a lease also advances its queue position before the external call;
 an abandoned or hung call therefore cannot reclaim the queue head forever.
 The same claim covers embedding backfill before any gateway call. At most four
-jobs form one embedding batch; distinct missing content hashes share one gateway
-request and identical hashes share one input. Another drain skips their live leases.
-If preparation rejects, every claim in that batch takes the durable failure path,
-including any deletion tombstone in that batch. After backfill, synchronization rechecks
+jobs are claimed together; current client vectors and deletion tombstones bypass
+embedding preparation. Only missing/stale live vectors form an embedding batch;
+distinct missing content hashes share one gateway request and identical hashes
+share one input. Another drain skips their live leases. If preparation rejects,
+every claim in that embedding batch takes the durable failure path, without
+charging already-ready vector writes or deletions. After backfill, synchronization rechecks
 lease ownership and reads the current generation before reading the vector;
 an expired owner's completion cannot acknowledge a newer owner's work.
 Each actual claim and post-backfill refresh reads the current clock, rather than

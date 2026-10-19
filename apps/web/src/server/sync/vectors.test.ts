@@ -83,7 +83,9 @@ describe("durable vector synchronization", () => {
 
 	it("fails all claimed batch members when embedding preparation rejects", async () => {
 		const { env, sqlite, store } = fixture();
-		sqlite.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('other')");
+		sqlite.exec(`UPDATE memories SET content_hash = 'changed';
+			INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
+			VALUES ('other','space:kb','other','body','note','source','hash',1,1)`);
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
 		const beforeSyncBatch = vi.fn(async () => {
 			throw new Error("gateway failed");
