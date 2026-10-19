@@ -39,7 +39,7 @@
 - **Embedding profile** = `(model, dims, metric)`。Vectorize 索引的维度在创建时就固定了，所以每个 profile 对应一个独立的索引 `octo-vec-<profile_id>`。v1 的活跃 profile 是 `te3-small-1536`（索引 `octo-vec-te3-small-1536`），绑定为 `VEC`；切换模型 = 新建索引和绑定，调用方补写向量（或由知识库 bot 重新计算），从 D1 回填，完成后切换 `active`。
 - **限制（文档核实）：** ≤1536 维、float32；id ≤64 字节（ULID 26 字节）；每个索引最多 10 个 metadata index；string 只有前 64 字节可以过滤；**string 数组不能被索引或过滤**；topK 带 metadata 时 ≤50，不带时 ≤100；每个索引最多 2000 万向量。
 - **Metadata（被索引的）：** `space`（string）、`type`（string）、`source`（string，key id）、`importance`（number，0–1）、`created`（number）、`updated`（number）、`event`（number）。共 7 个，在 10 个的上限内。metadata index 必须在插入向量**之前**建好，写进部署脚本。
-- **tags 过滤：** Vectorize 过滤不了数组，所以先在 Vectorize 用其他条件取 topK=100（不返回 metadata），再在 D1 用 `memory_tags` 做后过滤和可见性校验。命中太少时在响应里标记 `vector_truncated=true`。
+- **Tag filtering:** Production Vectorize queries request metadata with topK capped at 50. D1 verifies current generation/content/profile, re-scores current vectors, and applies `memory_tags` plus visibility filters. Pending current D1 vectors participate until visibility is confirmed. `vector_truncated=true` requires actual tag-filter removal from a full verified candidate set with insufficient results; the local adapter can request up to 100 without remote metadata.
 - **本地开发和测试：** Vectorize **没有本地模拟**，而 6DQ 禁止远程 `-test` 资源。所以向量访问走 `VectorStore` 端口：
   - `CloudflareVectorStore`（生产，包装 `env.VEC`），L1 用一个假 binding 测它的请求映射；
   - `D1BruteForceVectorStore`（本地 dev / L2 / L3）：从 `memory_vectors` 读取，在 Worker 内算 cosine，并实现同一套过滤语义。

@@ -81,7 +81,10 @@ const SELECT_MEMORY = `SELECT m.id, m.space_id, s.slug AS space_slug, m.title, m
 FROM memories m INNER JOIN spaces s ON s.id = m.space_id`;
 
 export async function contentHash(title: string, body: string): Promise<string> {
-	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(title + body));
+	const digest = await crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(JSON.stringify([title, body])),
+	);
 	const bytes = new Uint8Array(digest);
 	let out = "";
 	for (const byte of bytes) {
@@ -616,6 +619,20 @@ export class MemoryRepo {
 						.bind(input.id, input.id, version, input.now),
 				]
 			: [];
+		if (
+			input.previous &&
+			input.previous.title === input.title &&
+			input.previous.body === input.body &&
+			input.previous.content_hash !== hash
+		) {
+			pending.push(
+				this.db
+					.prepare(
+						"UPDATE memory_vectors SET content_hash = ?, indexed_at = NULL WHERE memory_id = ? AND content_hash = ? AND EXISTS (SELECT 1 FROM memories WHERE id = ? AND version = ? AND updated_at = ?)",
+					)
+					.bind(hash, input.id, input.previous.content_hash, input.id, version, input.now),
+			);
+		}
 		if (input.vector === undefined) {
 			return pending;
 		}

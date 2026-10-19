@@ -41,7 +41,7 @@ CREATE TABLE memories (
   updated_by_key_id TEXT,
   event_time INTEGER,               -- 可选：事件发生时间
   version INTEGER NOT NULL DEFAULT 1,
-  content_hash TEXT NOT NULL,       -- sha256(title+body)，用于去重提示和向量陈旧判断
+  content_hash TEXT NOT NULL,       -- sha256(JSON.stringify([title, body])); deduplication hint and vector provenance
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   deleted_at INTEGER,               -- 非空 = 在回收站
