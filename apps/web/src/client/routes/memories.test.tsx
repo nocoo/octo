@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { ThemeProvider } from "@nocoo/basalt";
+import { tagColorFor } from "@nocoo/basalt/components/tag-badge";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -54,6 +55,21 @@ function render(Page: () => React.JSX.Element, path: string) {
 }
 
 describe("memory pages use installed Basalt layouts and Chinese copy", () => {
+	it("uses the shared compact table treatment, title icon and stable metadata colors", () => {
+		overrides.list = { items: [{ ...memory, space: "notes", tags: ["work"] }] };
+		const html = render(MemoriesPage, "/memories?selected=m1");
+		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
+		expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+		expect(html).toContain("lucide-book-open");
+		for (const label of ["notes", "work"])
+			expect(html).toMatch(
+				new RegExp(`<span[^>]*data-tag-color="${tagColorFor(label)}"[^>]*>${label}</span>`),
+			);
+		expect(html).toMatch(/<th[^>]*class="[^"]*text-end[^>]*>更新时间<\/th>/);
+		expect(html).toMatch(/<td[^>]*class="[^"]*text-end[^>]*><time/);
+		expect(html).toContain('aria-selected="true"');
+		expect(html).toContain('data-memory-link="m1"');
+	});
 	it("reveals one full-width filter form below the header for active URL filters", () => {
 		const html = render(MemoriesPage, "/memories?spaces=notes&selected=m1&view=cards");
 		const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
@@ -189,7 +205,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		for (const label of labels) expect(html).toContain(label);
 		expect(html).toContain("grid gap-basalt-layout");
 		expect(html).toContain("Title");
-		expect(html).not.toContain("octo-page");
+		expect(html).not.toMatch(/class="octo-page(?:\s|")/);
 		expect(html).not.toContain("octo-actions");
 	});
 	it("shows an icon and primary action only for confirmed empty lists", () => {

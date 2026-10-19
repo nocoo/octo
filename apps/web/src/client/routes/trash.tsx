@@ -25,6 +25,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import { Text } from "@nocoo/basalt/components/text";
 import {
 	AlertCircle,
@@ -172,11 +173,18 @@ export function TrashPage() {
 			wrap: true,
 			sortable: false,
 		},
-		{ id: "space", header: "空间", width: "24ch", accessor: (item) => item.space, sortable: false },
+		{
+			id: "space",
+			header: "空间",
+			width: "24ch",
+			accessor: (item) => <TagBadge name={item.space} size="sm" />,
+			sortable: false,
+		},
 		{
 			id: "deleted",
 			header: "移入时间",
 			width: "24ch",
+			textAlign: "end",
 			accessor: (item) =>
 				item.deleted_at ? new Date(item.deleted_at).toLocaleString("zh-CN") : "未知",
 			sortable: false,
@@ -185,6 +193,7 @@ export function TrashPage() {
 			id: "purge",
 			header: "永久删除",
 			width: "16ch",
+			textAlign: "end",
 			sortable: false,
 			accessor: (item) => (
 				<Button
@@ -207,7 +216,12 @@ export function TrashPage() {
 	return (
 		<Grid columns={1} gap="sm" {...{ ref: region }} tabIndex={-1}>
 			<PageHeader
-				title="回收站"
+				title={
+					<span className="octo-page-title">
+						<Trash2 className="octo-title-icon" aria-hidden="true" />
+						回收站
+					</span>
+				}
 				description="不会自动清空。表头仅选择当前页，全部匹配项需单独选择。"
 				actions={
 					<>
@@ -380,9 +394,10 @@ export function TrashPage() {
 				/>
 			)}
 			{state.ready && (
-				<LayerCard>
+				<LayerCard padding="none">
 					{state.memories.length > 0 ? (
 						<DataTable
+							className="octo-table"
 							aria-label="回收站中的记忆"
 							data={state.memories}
 							columns={columns}

@@ -33,12 +33,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import { Text } from "@nocoo/basalt/components/text";
 import {
 	AlertCircle,
 	ArrowUpRight,
 	CalendarDays,
 	Check,
+	FolderOpen,
 	FolderPlus,
 	Network,
 	Pencil,
@@ -167,7 +169,14 @@ function GraphTables({
 			id: "label",
 			header: "节点",
 			width: "24ch",
-			accessor: (node) => (node.href ? <Link href={node.href}>{node.label}</Link> : node.label),
+			accessor: (node) =>
+				node.href ? (
+					<Link href={node.href}>
+						{node.kind === "tag" ? <TagBadge name={node.label} size="sm" /> : node.label}
+					</Link>
+				) : (
+					node.label
+				),
 			sortValue: (node) => node.label,
 			wrap: true,
 		},
@@ -195,6 +204,7 @@ function GraphTables({
 	return (
 		<Grid columns={1}>
 			<DataTable
+				className="octo-table"
 				aria-label="图谱节点"
 				data={graph.nodes}
 				columns={columns}
@@ -218,6 +228,7 @@ function GraphTables({
 				}
 			/>
 			<DataTable
+				className="octo-table"
 				aria-label="图谱关系"
 				data={graph.links}
 				columns={[
@@ -293,7 +304,7 @@ export function TagsPage() {
 			width: "24ch",
 			accessor: (tag) => (
 				<Link href={`/memories?${new URLSearchParams({ tags_all: tag.name })}`}>
-					{tag.display_name}
+					<TagBadge name={tag.display_name} colorKey={tag.name} size="sm" />
 				</Link>
 			),
 			sortValue: (tag) => tag.name,
@@ -311,9 +322,10 @@ export function TagsPage() {
 			id: "actions",
 			header: "操作",
 			width: "24ch",
+			textAlign: "end",
 			sortable: false,
 			accessor: (tag) => (
-				<Grid columns={2} gap="sm">
+				<Grid columns={2} gap="sm" style={{ display: "flex", justifyContent: "flex-end" }}>
 					{(["rename", "merge"] as const).map((action) => (
 						<Button
 							key={action}
@@ -348,7 +360,12 @@ export function TagsPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title="标签"
+				title={
+					<span className="octo-page-title">
+						<Tags className="octo-title-icon" aria-hidden="true" />
+						标签
+					</span>
+				}
 				actions={
 					<>
 						<Input
@@ -371,6 +388,7 @@ export function TagsPage() {
 				<>
 					<LayerCard padding="none">
 						<DataTable
+							className="octo-table"
 							aria-label="标签"
 							data={state.tags}
 							columns={columns}
@@ -549,7 +567,9 @@ export function SpacesPage() {
 			header: "空间",
 			width: "24ch",
 			accessor: (space) => (
-				<Link href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}>{space.name}</Link>
+				<Link href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}>
+					<TagBadge name={space.name} colorKey={space.slug} size="sm" />
+				</Link>
 			),
 			sortValue: (space) => space.name,
 		},
@@ -588,7 +608,12 @@ export function SpacesPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title="空间"
+				title={
+					<span className="octo-page-title">
+						<FolderOpen className="octo-title-icon" aria-hidden="true" />
+						空间
+					</span>
+				}
 				actions={
 					<>
 						<Input
@@ -613,6 +638,7 @@ export function SpacesPage() {
 			{state.ready && (
 				<LayerCard padding="none">
 					<DataTable
+						className="octo-table"
 						aria-label="空间"
 						data={state.spaces}
 						columns={columns}
@@ -724,7 +750,12 @@ export function GraphPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title="关系图"
+				title={
+					<span className="octo-page-title">
+						<Network className="octo-title-icon" aria-hidden="true" />
+						关系图
+					</span>
+				}
 				actions={
 					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 						<RefreshCw size={16} aria-hidden="true" />
@@ -847,7 +878,13 @@ export function TimelinePage() {
 			sortValue: (item) => item.title,
 			wrap: true,
 		},
-		{ id: "space", header: "空间", width: "24ch", accessor: (item) => item.space },
+		{
+			id: "space",
+			header: "空间",
+			width: "24ch",
+			accessor: (item) => <TagBadge name={item.space} size="sm" />,
+			sortValue: (item) => item.space,
+		},
 	];
 	const rangeField = (name: "from" | "to", label: string): ReactNode => (
 		<Field label={label} htmlFor={`timeline-${name}`} hint="包含边界时刻的 UTC 时间。">
@@ -868,7 +905,12 @@ export function TimelinePage() {
 			>
 				<Grid columns={1} gap="sm">
 					<PageHeader
-						title="时间线"
+						title={
+							<span className="octo-page-title">
+								<CalendarDays className="octo-title-icon" aria-hidden="true" />
+								时间线
+							</span>
+						}
 						actions={
 							<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 								<RefreshCw size={16} aria-hidden="true" />
@@ -981,6 +1023,7 @@ export function TimelinePage() {
 									})}
 								/>
 								<DataTable
+									className="octo-table"
 									aria-label={`${group.label} 的时间线数据`}
 									data={group.items}
 									columns={columns}

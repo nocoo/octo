@@ -45,6 +45,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@nocoo/basalt/components/table";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
 	BookOpen,
 	ChevronRight,
@@ -140,12 +141,10 @@ function MemoryTags({ memory }: { memory: Pick<Memory, "tags" | "space" | "type"
 				overflowWrap: "anywhere",
 			}}
 		>
-			<Badge variant="outline">{memory.space}</Badge>
+			<TagBadge name={memory.space} size="sm" />
 			<Badge variant="secondary">{memoryTypeLabels[memory.type] ?? "未知类型"}</Badge>
 			{memory.tags.map((tag) => (
-				<Badge key={tag} variant="outline">
-					{tag}
-				</Badge>
+				<TagBadge key={tag} name={tag} size="sm" />
 			))}
 		</Grid>
 	);
@@ -213,7 +212,12 @@ export function MemoriesPage() {
 			<MemoryFilters params={params} onChange={setParams}>
 				{(filterTrigger) => (
 					<PageHeader
-						title="记忆库"
+						title={
+							<span className="octo-page-title">
+								<BookOpen className="octo-title-icon" aria-hidden="true" />
+								记忆库
+							</span>
+						}
 						actions={
 							<>
 								{filterTrigger}
@@ -299,7 +303,7 @@ export function MemoriesPage() {
 				state.items.length > 0 && (
 					<LayerCard padding="none">
 						<Grid columns={1} className="octo-memory-overflow">
-							<Table aria-label="记忆">
+							<Table className="octo-table" aria-label="记忆">
 								<TableHeader>
 									<TableRow>
 										<TableHead className="ps-basalt-table-edge">
@@ -322,7 +326,11 @@ export function MemoriesPage() {
 										</TableHead>
 										<TableHead style={{ minWidth: "28ch" }}>标题</TableHead>
 										<TableHead style={{ minWidth: "28ch" }}>空间 / 标签</TableHead>
-										<TableHead className="pe-basalt-table-edge" style={{ minWidth: "24ch" }}>
+										<TableHead
+											textAlign="end"
+											className="pe-basalt-table-edge"
+											style={{ minWidth: "24ch" }}
+										>
 											更新时间
 										</TableHead>
 									</TableRow>
@@ -352,7 +360,11 @@ export function MemoriesPage() {
 											<TableCell style={{ minWidth: "28ch" }}>
 												<MemoryTags memory={memory} />
 											</TableCell>
-											<TableCell className="pe-basalt-table-edge" style={{ minWidth: "24ch" }}>
+											<TableCell
+												textAlign="end"
+												className="pe-basalt-table-edge"
+												style={{ minWidth: "24ch" }}
+											>
 												<time dateTime={memory.updated_at}>
 													{new Date(memory.updated_at).toLocaleString("zh-CN")}
 												</time>

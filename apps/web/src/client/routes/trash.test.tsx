@@ -1,4 +1,5 @@
 import { type Button, type ConfirmDialog, ThemeProvider } from "@nocoo/basalt";
+import { tagColorFor } from "@nocoo/basalt/components/tag-badge";
 import { Children, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
@@ -79,6 +80,23 @@ afterEach(() => {
 	snapshot.purge = null;
 	snapshot.setParams.mockReset();
 	vi.restoreAllMocks();
+});
+
+it("uses a colored space badge, decorated title and aligned compact trash actions", () => {
+	snapshot.state = { ...new TrashModel().state, ready: true, memories: items, total: 2 };
+	const html = render();
+	expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
+	expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+	expect(html).toMatch(
+		new RegExp(`<span[^>]*data-tag-color="${tagColorFor("work")}"[^>]*>work</span>`),
+	);
+	const headers = [...html.matchAll(/<th\b[^>]*>/g)].map((match) => match[0]);
+	const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
+	for (const index of [3, 4]) {
+		expect(headers[index]).toContain("text-end");
+		expect(cells[index]).toContain("text-end");
+	}
+	expect(html).toContain('aria-label="永久删除 记忆 a"');
 });
 
 describe("trash post-action selection", () => {

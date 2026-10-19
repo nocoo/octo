@@ -5,14 +5,17 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@nocoo/basalt/components/collapsible";
+import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
-import { CircleAlert, FilterX, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
+import { CircleAlert, FilterX, Pencil, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
 import { memoryTypeLabels } from "../viewmodels/memories";
 import {
+	type SearchItem,
 	SearchModel,
 	type SearchOptionField,
 	scoreBars,
@@ -56,12 +59,148 @@ export function SearchPage() {
 	}, [model, query]);
 	const result = state.result;
 	const maximum = Math.max(0, ...(result?.items.map((item) => item.scores.fused) ?? []));
+	const columns: DataTableColumn<SearchItem>[] = [
+		{
+			id: "title",
+			header: "记忆 / 摘要",
+			width: "36ch",
+			wrap: true,
+			sortable: false,
+			accessor: (item) => (
+				<Grid columns={1} style={{ gap: "var(--basalt-space-control-gap)" }}>
+					<MemoryLink memoryId={item.id} memoryTitle={item.title}>
+						<strong>{item.title}</strong>
+					</MemoryLink>
+					{item.snippet !== undefined && (
+						<p className="text-basalt-muted-foreground">
+							{snippetParts(item.snippet).map((part) =>
+								part.marked ? <mark key={part.offset}>{part.text}</mark> : part.text,
+							)}
+						</p>
+					)}
+				</Grid>
+			),
+		},
+		{
+			id: "metadata",
+			header: "空间 / 标签",
+			width: "24ch",
+			wrap: true,
+			sortable: false,
+			accessor: (item) => (
+				<Grid
+					columns={1}
+					gap="sm"
+					style={{
+						display: "flex",
+						flexWrap: "wrap",
+						gap: "var(--basalt-space-content-gap)",
+						alignItems: "center",
+						overflowWrap: "anywhere",
+					}}
+				>
+					<TagBadge name={item.space} size="sm" />
+					<Badge variant="secondary">{memoryTypeLabels[item.type] ?? "未知类型"}</Badge>
+					{item.tags.map((tag) => (
+						<TagBadge key={tag} name={tag} size="sm" />
+					))}
+				</Grid>
+			),
+		},
+		{
+			id: "score",
+			header: "综合得分",
+			width: "20ch",
+			wrap: true,
+			textAlign: "end",
+			sortable: false,
+			accessor: (item) => {
+				const bars = scoreBars(item.scores, maximum);
+				return (
+					<Grid columns={1} style={{ gap: "var(--basalt-space-control-gap)" }}>
+						<span className="font-medium tabular-nums">{item.scores.fused.toPrecision(4)}</span>
+						<Collapsible>
+							<CollapsibleTrigger>得分详情</CollapsibleTrigger>
+							<CollapsibleContent unstyled>
+								<Grid columns={1} gap="sm" className="text-start">
+									<Meter
+										label="综合得分"
+										value={bars.fused}
+										customValue={item.scores.fused.toPrecision(4)}
+									/>
+									{item.scores.fts && bars.fts !== null ? (
+										<Grid columns={1} gap="sm">
+											<Meter
+												label="全文"
+												value={bars.fts}
+												customValue={`第 ${item.scores.fts.rank} 名`}
+											/>
+											<span className="octo-muted">BM25 {item.scores.fts.bm25.toPrecision(4)}</span>
+										</Grid>
+									) : (
+										<span className="octo-muted">全文：无匹配</span>
+									)}
+									{item.scores.vector && bars.vector !== null ? (
+										<Grid columns={1} gap="sm">
+											<Meter
+												label="向量"
+												value={bars.vector}
+												customValue={`第 ${item.scores.vector.rank} 名`}
+											/>
+											<span className="octo-muted">
+												余弦相似度 {item.scores.vector.similarity.toPrecision(4)}
+											</span>
+										</Grid>
+									) : (
+										<span className="octo-muted">向量：无匹配</span>
+									)}
+								</Grid>
+							</CollapsibleContent>
+						</Collapsible>
+					</Grid>
+				);
+			},
+		},
+		{
+			id: "updated",
+			header: "更新时间",
+			width: "24ch",
+			textAlign: "end",
+			sortable: false,
+			accessor: (item) => (
+				<time dateTime={item.updated_at}>{new Date(item.updated_at).toLocaleString("zh-CN")}</time>
+			),
+		},
+		{
+			id: "actions",
+			header: "操作",
+			width: "12ch",
+			textAlign: "end",
+			sortable: false,
+			accessor: (item) => (
+				<Button asChild size="sm" variant="ghost">
+					<Link
+						to={`/memories/${encodeURIComponent(item.id)}/edit`}
+						aria-label={`编辑 ${item.title}`}
+					>
+						<Pencil aria-hidden="true" />
+						编辑
+					</Link>
+				</Button>
+			),
+		},
+	];
 	return (
 		<Grid columns={1}>
 			<MemoryFilters params={params} onChange={setParams}>
 				{(filterTrigger) => (
 					<PageHeader
-						title="搜索"
+						title={
+							<span className="octo-page-title">
+								<Search className="octo-title-icon" aria-hidden="true" />
+								搜索
+							</span>
+						}
 						actions={
 							<>
 								{filterTrigger}
@@ -305,94 +444,21 @@ export function SearchPage() {
 							/>
 						</LayerCard>
 					)}
-					{result.items.map((item) => {
-						const bars = scoreBars(item.scores, maximum);
-						return (
-							<LayerCard key={item.id}>
-								<LayerCard.Header>
-									<MemoryLink memoryId={item.id} memoryTitle={item.title}>
-										<strong>{item.title}</strong>
-									</MemoryLink>
-								</LayerCard.Header>
-								<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
-									{item.snippet !== undefined && (
-										<p>
-											{snippetParts(item.snippet).map((part) =>
-												part.marked ? <mark key={part.offset}>{part.text}</mark> : part.text,
-											)}
-										</p>
-									)}
-									<Grid
-										columns={1}
-										gap="sm"
-										style={{
-											display: "flex",
-											flexWrap: "wrap",
-											gap: "var(--basalt-space-content-gap)",
-											alignItems: "center",
-											overflowWrap: "anywhere",
-										}}
-									>
-										<Badge variant="outline">{item.space}</Badge>
-										<Badge variant="secondary">{memoryTypeLabels[item.type] ?? "未知类型"}</Badge>
-										{item.tags.map((tag) => (
-											<Badge key={tag} variant="outline">
-												{tag}
-											</Badge>
-										))}
-										<time dateTime={item.updated_at} className="octo-muted">
-											{new Date(item.updated_at).toLocaleString("zh-CN")}
-										</time>
-									</Grid>
-									<Collapsible>
-										<CollapsibleTrigger>得分详情</CollapsibleTrigger>
-										<CollapsibleContent unstyled>
-											<Grid
-												columns={1}
-												style={{
-													gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
-												}}
-											>
-												<Meter
-													label="综合得分"
-													value={bars.fused}
-													customValue={item.scores.fused.toPrecision(4)}
-												/>
-												{item.scores.fts && bars.fts !== null ? (
-													<Grid columns={1}>
-														<Meter
-															label="全文"
-															value={bars.fts}
-															customValue={`第 ${item.scores.fts.rank} 名`}
-														/>
-														<span className="octo-muted">
-															BM25 {item.scores.fts.bm25.toPrecision(4)}
-														</span>
-													</Grid>
-												) : (
-													<span className="octo-muted">全文：无匹配</span>
-												)}
-												{item.scores.vector && bars.vector !== null ? (
-													<Grid columns={1}>
-														<Meter
-															label="向量"
-															value={bars.vector}
-															customValue={`第 ${item.scores.vector.rank} 名`}
-														/>
-														<span className="octo-muted">
-															余弦相似度 {item.scores.vector.similarity.toPrecision(4)}
-														</span>
-													</Grid>
-												) : (
-													<span className="octo-muted">向量：无匹配</span>
-												)}
-											</Grid>
-										</CollapsibleContent>
-									</Collapsible>
-								</LayerCard.Body>
-							</LayerCard>
-						);
-					})}
+					{result.items.length > 0 && (
+						<LayerCard padding="none">
+							<DataTable
+								className="octo-table"
+								aria-label="搜索结果"
+								data={result.items}
+								columns={columns}
+								getRowId={(item) => item.id}
+								manualSorting
+								manualFiltering
+								manualPagination
+								edge="attached"
+							/>
+						</LayerCard>
+					)}
 				</>
 			)}
 		</Grid>

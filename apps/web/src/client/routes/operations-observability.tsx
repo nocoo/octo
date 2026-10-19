@@ -1,4 +1,4 @@
-import { Badge, Button, Field, Input, LayerCard, ScrollArea, toast } from "@nocoo/basalt";
+import { Button, Field, Input, LayerCard, ScrollArea, toast } from "@nocoo/basalt";
 import { LineChart } from "@nocoo/basalt/charts/line";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
@@ -13,6 +13,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@nocoo/basalt/components/table";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
 	ArrowDown,
 	ChartNoAxesCombined,
@@ -115,7 +116,12 @@ export function UsagePage() {
 	return (
 		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="每日用量"
+				title={
+					<span className="octo-page-title">
+						<ChartNoAxesCombined className="octo-title-icon" aria-hidden="true" />
+						每日用量
+					</span>
+				}
 				description="按 UTC 日期与密钥展示已汇总数据；不是实时请求统计。"
 				actions={
 					<Button
@@ -249,12 +255,13 @@ export function UsagePage() {
 					</LayerCard>
 				</Grid>
 			) : null}
-			<LayerCard id="usage-daily-table">
+			<LayerCard id="usage-daily-table" padding="none">
 				<LayerCard.Header>每日用量与图表数据</LayerCard.Header>
 				{state.loading && state.items.length === 0 ? (
 					<LayerCard.Loading label="正在加载每日用量" />
 				) : (
 					<DataTable
+						className="octo-table"
 						aria-label="每日用量表"
 						data={model.rows}
 						columns={columns}
@@ -342,7 +349,12 @@ export function AuditPage() {
 	return (
 		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
-				title="审计日志"
+				title={
+					<span className="octo-page-title">
+						<ScrollText className="octo-title-icon" aria-hidden="true" />
+						审计日志
+					</span>
+				}
 				description="包含被拒绝的请求；不记录请求正文和凭据。"
 				actions={
 					<>
@@ -497,7 +509,7 @@ export function AuditPage() {
 					>
 						<Table
 							ref={table}
-							className="ops-audit-table"
+							className="octo-table ops-audit-table"
 							aria-label="审计记录"
 							aria-rowcount={state.items.length + 1}
 						>
@@ -510,7 +522,7 @@ export function AuditPage() {
 										(label) => (
 											<TableHead
 												key={label}
-												textAlign={label === "耗时" ? "end" : "start"}
+												textAlign={label === "耗时" || label === "状态码" ? "end" : "start"}
 												className={
 													label === "时间"
 														? "ps-basalt-table-edge"
@@ -543,10 +555,14 @@ export function AuditPage() {
 										<TableCell>{row.actor}</TableCell>
 										<TableCell>{row.method}</TableCell>
 										<TableCell>{row.route}</TableCell>
-										<TableCell>
-											<Badge variant={row.status >= 400 ? "secondary" : "success"}>
-												{row.status}
-											</Badge>
+										<TableCell textAlign="end">
+											<TagBadge
+												name={String(row.status)}
+												color={
+													row.status >= 500 ? "danger" : row.status >= 400 ? "warning" : "success"
+												}
+												size="sm"
+											/>
 											{row.error_code && (
 												<span className="text-basalt-sm text-basalt-muted-foreground">
 													{" "}

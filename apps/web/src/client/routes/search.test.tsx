@@ -1,17 +1,28 @@
 import { readFileSync } from "node:fs";
 import { ThemeProvider } from "@nocoo/basalt";
+import { tagColorFor } from "@nocoo/basalt/components/tag-badge";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import type { SearchResult } from "../viewmodels/search";
 import { SearchPage } from "./search";
 
-const overrides = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
+const overrides = vi.hoisted(() => ({ state: {} as Record<string, unknown>, details: false }));
 vi.mock("../components/layout/use-model", () => ({
 	useModel: (model: { state: object }) => ({ ...model.state, ...overrides.state }),
 }));
+vi.mock("@nocoo/basalt/components/collapsible", async (original) => {
+	const module = await original<typeof import("@nocoo/basalt/components/collapsible")>();
+	return {
+		...module,
+		Collapsible: (props: Parameters<typeof module.Collapsible>[0]) => (
+			<module.Collapsible {...props} defaultOpen={overrides.details} />
+		),
+	};
+});
 afterEach(() => {
 	overrides.state = {};
+	overrides.details = false;
 });
 
 function renderResult() {
@@ -130,7 +141,29 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 		"<mark>worker</mark>",
 	])
 		expect(html).toContain(text);
+	expect(html).toMatch(/<table[^>]*class="[^"]*octo-table[^>]*aria-label="搜索结果"/);
+	expect(html).toContain('data-basalt-data-table=""');
+	expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+	expect(html).toContain('href="/memories/m1"');
+	expect(html).toContain('href="/memories/m1/edit"');
+	expect(html).toContain('aria-label="编辑 User title"');
+	for (const label of ["notes", "work"])
+		expect(html).toMatch(
+			new RegExp(`<span[^>]*data-tag-color="${tagColorFor(label)}"[^>]*>${label}</span>`),
+		);
+	const headers = [...html.matchAll(/<th\b[^>]*>[\s\S]*?<\/th>/g)].map((match) => match[0]);
+	for (const label of ["综合得分", "更新时间", "操作"])
+		expect(headers.find((header) => header.includes(label))).toMatch(
+			/<th[^>]*class="[^"]*text-end/,
+		);
+	expect(html).not.toContain('aria-sort="none"');
+	expect(html).not.toContain('data-slot="card-header"');
 	expect(html).not.toContain("Rank");
+	overrides.details = true;
+	const expanded = renderResult();
+	for (const evidence of ["BM25", "-3.000", "余弦相似度", "0.8000", "第 1 名", "第 2 名"])
+		expect(expanded).toContain(evidence);
+	overrides.details = false;
 	overrides.state = {
 		result: {
 			...result,
@@ -140,10 +173,13 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 	expect(renderResult()).toContain("得分详情");
 	expect(renderResult()).not.toContain("全文：无匹配");
 	expect(renderResult()).not.toContain("向量：无匹配");
+	overrides.details = true;
+	expect(renderResult()).toContain("全文：无匹配");
+	expect(renderResult()).toContain("向量：无匹配");
 });
 
 it("keeps long space metadata out of the result title row", () => {
-	const title = "知识工作台：检索与协作";
+	const title = `知识工作台：${"unbroken".repeat(24)}`;
 	const space = "l3-b6f3628a23074d3d9304fad55d45f36b";
 	overrides.state = {
 		result: {
@@ -153,7 +189,7 @@ it("keeps long space metadata out of the result title row", () => {
 					title,
 					space,
 					type: "note",
-					tags: ["field-notes"],
+					tags: ["field-notes", "t".repeat(64)],
 					updated_at: "2026-10-18T00:00:00Z",
 					scores: { fused: 1, fts: null, vector: null },
 				},
@@ -162,16 +198,46 @@ it("keeps long space metadata out of the result title row", () => {
 		} satisfies SearchResult,
 	};
 	const html = renderResult();
-	const header = html.match(/<div\b[^>]*data-slot="card-header"[^>]*>([\s\S]*?)<\/div>/)?.[1];
-	expect(header).toContain(`<strong>${title}</strong>`);
-	expect(header).not.toContain(space);
-	expect(header).not.toContain("笔记");
-	const body = html.slice(html.indexOf('data-slot="card-body"'));
-	expect(body).toContain(space);
-	expect(body).toContain("笔记");
-	expect(body).toContain("field-notes");
-	expect(body).toContain("flex-wrap:wrap");
-	expect(body).toContain("overflow-wrap:anywhere");
+	const cells = [...html.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((match) => match[1]);
+	expect(cells[0]).toContain(`<strong>${title}</strong>`);
+	expect(cells[0]).not.toContain(space);
+	expect(cells[0]).not.toContain("笔记");
+	expect(cells[1]).toContain(space);
+	expect(cells[1]).toContain("笔记");
+	expect(cells[1]).toContain("field-notes");
+	expect(cells[1]).toContain("flex-wrap:wrap");
+	expect(cells[1]).toContain("overflow-wrap:anywhere");
+	expect(cells[1]).toContain("t".repeat(64));
+	const cellTags = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
+	for (const cell of cellTags.slice(0, 2)) expect(cell).toContain("whitespace-normal break-words");
+	expect(html.match(/aria-label="搜索结果 scroll area"/g)).toHaveLength(1);
+	expect(html).toMatch(/class="relative min-w-0 overflow-auto[^>]*>/);
+	expect(html).toContain("min-width:36ch");
+	expect(html).toContain("min-width:24ch");
+});
+
+it("preserves ranked results without local pagination and safely renders snippets and encoded links", () => {
+	const items = Array.from({ length: 30 }, (_, index) => ({
+		id: `memory/${index}`,
+		title: `Result ${index}`,
+		space: "notes",
+		type: "note",
+		tags: [],
+		updated_at: "2026-10-17T00:00:00Z",
+		snippet: "<script>alert(1)</script><mark>worker</mark>",
+		scores: { fused: index === 0 ? 0.01 : 0.9, fts: null, vector: null },
+	}));
+	overrides.state = {
+		result: { items, channels: { fts: { candidates: 30, partial: false }, vector: {} } },
+	};
+	const html = renderResult();
+	expect(html.indexOf("Result 0")).toBeLessThan(html.indexOf("Result 1"));
+	expect(html).toContain('href="/memories/memory%2F0"');
+	expect(html).toContain('href="/memories/memory%2F0/edit"');
+	expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;<mark>worker</mark>");
+	expect(html).not.toContain("<script>");
+	expect(html).not.toContain('aria-label="Pagination"');
+	expect(html.match(/<tbody>[\s\S]*?<\/tbody>/)?.[0].match(/<tr\b/g)).toHaveLength(30);
 });
 
 it("distinguishes successful zero matches from unavailable results", () => {

@@ -70,6 +70,17 @@ beforeEach(() => {
 });
 
 describe("usage table sorting", () => {
+	it("decorates the usage heading and keeps all numeric columns tabular and end-aligned", () => {
+		fixture.usage = { loaded: true, items: [base] };
+		const html = render("usage");
+		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
+		expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+		const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
+		for (const cell of cells.slice(2)) {
+			expect(cell).toContain("text-end");
+			expect(cell).toContain("tabular-nums");
+		}
+	});
 	it("keeps readable minimum column widths inside the installed Basalt scroll region", () => {
 		fixture.usage = { loaded: true, items: [base] };
 		const html = render("usage");
@@ -130,6 +141,40 @@ describe("usage table sorting", () => {
 });
 
 describe("observability read states", () => {
+	it("uses the shared audit table, title icon and semantic status colors with numeric alignment", () => {
+		fixture.audit = {
+			loaded: true,
+			items: [200, 403, 503].map((status) => ({
+				id: `a${status}`,
+				at: "2026-10-01T00:00:00Z",
+				actor: "admin",
+				method: "GET",
+				route: "/api/v1/memories",
+				status,
+				error_code: null,
+				request_id: "r",
+				duration_ms: 2,
+				bytes_in: null,
+				bytes_out: null,
+				ip_hash: null,
+			})),
+		};
+		const html = render("audit");
+		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
+		expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+		for (const [status, color] of [
+			[200, "success"],
+			[403, "warning"],
+			[503, "danger"],
+		])
+			expect(html).toMatch(new RegExp(`<span[^>]*data-tag-color="${color}"[^>]*>${status}</span>`));
+		const headers = [...html.matchAll(/<th\b[^>]*>/g)].map((match) => match[0]);
+		const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
+		for (const index of [4, 5]) {
+			expect(headers[index]).toContain("text-end");
+			expect(cells[index]).toContain("text-end");
+		}
+	});
 	it.each([null, "无法加载审计日志。"])(
 		"keeps an unknown audit query distinct from empty: %s",
 		(error) => {
