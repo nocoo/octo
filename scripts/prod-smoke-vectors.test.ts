@@ -168,8 +168,8 @@ describe("repeated vector smoke reports", () => {
 			create_indexed: { samples: runs, p50: medianRtt * 3 + 250, max: maxRtt * 3 + 250 },
 			create_vector_hit: { samples: runs, p50: medianRtt * 4 + 500, max: maxRtt * 4 + 500 },
 			update_indexed: { samples: runs, p50: medianRtt * 3 + 500, max: maxRtt * 3 + 500 },
-			update_new_rank1: { samples: runs, p50: medianRtt * 4 + 750, max: maxRtt * 4 + 750 },
-			update_old_gone: { samples: runs, p50: medianRtt * 5 + 1_000, max: maxRtt * 5 + 1_000 },
+			update_new_rank1: { samples: runs, p50: medianRtt * 2 + 250, max: maxRtt * 2 + 250 },
+			update_old_gone: { samples: runs, p50: medianRtt, max: maxRtt },
 		});
 		for (const run of report.runs) {
 			expect(run.cleanup).toEqual({ attempted: 2, deleted: 2, errors: [] });
@@ -232,6 +232,166 @@ describe("repeated vector smoke reports", () => {
 });
 
 describe("production vector smoke with fake transport only", () => {
+	it("polls old/new update vectors on the first two ticks at 1300ms RTT", async () => {
+		const transport = fixture(1_300);
+		const report = await runVectorSmoke(environment, transport.dependencies);
+		const firstPut = transport.calls.findIndex((call) => call.init.method === "PUT");
+		const write = transport.calls[firstPut];
+		const firstPolls = transport.calls.slice(firstPut + 1, firstPut + 3);
+		expect(firstPolls.map((call) => call.body.mode)).toEqual(["vector", "vector"]);
+		expect(firstPolls.map((call) => call.body.vector)).toEqual([
+			{ profile: "tiny", values: [1, 0, 0] },
+			{ profile: "tiny", values: [0, 1, 0] },
+		]);
+		expect(firstPolls.map((call) => call.tick - (write?.tick ?? -1))).toEqual([0, 1]);
+		expect(firstPolls.map((call) => call.time - (write?.time ?? -1))).toEqual([1_300, 2_850]);
+		expect(report.latencies_ms.update_old_gone).toBe(1_300);
+		expect(report.latencies_ms.update_new_rank1).toBe(2_850);
+		expect(report.ok).toBe(true);
+	});
+
+	it("interleaves pending vectors and completes deferred hybrid checks after the window", async () => {
+		const transport = fixture(1_300);
+		let updateStart: number | undefined;
+		transport.setOverride((call) => {
+			if (call.init.method === "PUT" && updateStart === undefined) updateStart = call.time;
+			if (updateStart === undefined || call.body.mode !== "vector") return;
+			if (call.time - updateStart >= 5_000) return;
+			const values = (call.body.vector as { values: number[] }).values;
+			return transport.json({
+				items: values[0] === 1 ? [{ id: ids[0], scores: { vector: { similarity: 1 } } }] : [],
+			});
+		});
+		const report = await runVectorSmoke(environment, transport.dependencies);
+		const firstPut = transport.calls.findIndex((call) => call.init.method === "PUT");
+		const lastPut = transport.calls.map((call) => call.init.method).lastIndexOf("PUT");
+		const polls = transport.calls.slice(firstPut + 1, lastPut);
+		expect(polls.slice(0, 5).map((call) => [call.body.mode, call.body.vector])).toEqual(
+			[1, 0, 1, 0, 1].map((first) => [
+				"vector",
+				{ profile: "tiny", values: [first, 1 - first, 0] },
+			]),
+		);
+		expect(report.latencies_ms.update_old_gone).toBe(7_500);
+		expect(report.latencies_ms.update_new_rank1).toBe(5_950);
+		expect(report.latencies_ms.update_indexed).toBe(9_050);
+		const hybrids = polls.filter((call) => call.body.mode === "hybrid");
+		expect(hybrids.map((call) => (call.body.vector as { values: number[] }).values[0])).toEqual([
+			0, 1,
+		]);
+		expect(hybrids.every((call) => call.time > (updateStart ?? Infinity) + 10_000)).toBe(true);
+		expect(report.ok).toBe(true);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
+	it.each(["success", "duplicate", "http", "status"])(
+		"completes all deferred checks without accepting late metrics (%s)",
+		async (kind) => {
+			const transport = fixture(1_300);
+			let updateStart: number | undefined;
+			transport.setOverride((call) => {
+				if (call.init.method === "PUT" && updateStart === undefined) updateStart = call.time;
+				if (updateStart === undefined) return;
+				if (call.body.mode === "vector") return transport.json({ items: [] });
+				if (call.body.mode === "hybrid") {
+					if (kind === "http") return transport.json({ error: KEY }, 503);
+					if (kind === "duplicate") {
+						const item = { id: ids[0], scores: { vector: null } };
+						return transport.json({ items: [item, item] });
+					}
+				}
+				if (kind === "status" && call.init.method === "GET")
+					return transport.json({ error: KEY }, 503);
+			});
+			const report = await runVectorSmoke(environment, transport.dependencies);
+			const firstPut = transport.calls.findIndex((call) => call.init.method === "PUT");
+			const checks = transport.calls.slice(firstPut + 1);
+			const status = checks.find((call) => call.init.method === "GET");
+			const hybrids = checks.filter((call) => call.body.mode === "hybrid");
+			expect(status?.time).toBeGreaterThan((updateStart ?? Infinity) + 10_000);
+			expect(hybrids).toHaveLength(2);
+			expect(hybrids.every((call) => call.time > (updateStart ?? Infinity) + 10_000)).toBe(true);
+			expect(report.latencies_ms.update_new_rank1).toBeNull();
+			expect(report.latencies_ms.update_indexed).toBeNull();
+			expect(report.failures).toContainEqual({ phase: "update", code: "deadline_exceeded" });
+			if (kind === "duplicate") {
+				expect(report.failures).toContainEqual({ phase: "update", code: "duplicate_memory_ids" });
+			}
+			if (kind === "http" || kind === "status")
+				expect(report.failures).toContainEqual({
+					phase: "update",
+					code: "http_error",
+					status: 503,
+				});
+			expect(report.ok).toBe(false);
+			expect(report.cleanup.deleted).toBe(2);
+			expect(JSON.stringify(report)).not.toContain(KEY);
+		},
+	);
+
+	it.each(["update_old_gone", "update_new_rank1", "update_indexed"] as const)(
+		"does not accept %s first observed exactly at the update deadline",
+		async (metric) => {
+			const transport = fixture();
+			let updateStart: number | undefined;
+			let delayed = false;
+			transport.setOverride((call) => {
+				if (call.init.method === "PUT" && updateStart === undefined) updateStart = call.time;
+				if (updateStart === undefined || delayed) return;
+				const firstValue = (call.body.vector as { values: number[] } | undefined)?.values[0];
+				if (
+					(metric === "update_indexed" && call.init.method === "GET") ||
+					(metric !== "update_indexed" &&
+						call.body.mode === "vector" &&
+						firstValue === (metric === "update_old_gone" ? 1 : 0))
+				) {
+					delayed = true;
+					transport.advance(updateStart + 10_000 - call.time);
+				}
+			});
+			const report = await runVectorSmoke(environment, transport.dependencies);
+			expect(delayed).toBe(true);
+			expect(report.latencies_ms[metric]).toBeNull();
+			expect(report.failures).toEqual([{ phase: "update", code: "deadline_exceeded" }]);
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it("records deferred hybrid timeouts and still checks the other vector", async () => {
+		vi.useFakeTimers();
+		const transport = fixture(1_300);
+		transport.setOverride((call) =>
+			transport.memories[0]?.values[1] === 1 && call.body.mode === "vector"
+				? transport.json({ items: [] })
+				: undefined,
+		);
+		const fetch = transport.dependencies.fetch;
+		let hybridCalls = 0;
+		let signal: AbortSignal | null | undefined;
+		transport.dependencies.fetch = vi.fn(async (url, init) => {
+			const body = JSON.parse(String(init.body ?? "{}"));
+			if (transport.memories[0]?.values[1] === 1 && body.mode === "hybrid") {
+				hybridCalls += 1;
+				if (hybridCalls === 1) {
+					signal = init.signal;
+					return new Promise<Response>(() => {});
+				}
+			}
+			return fetch(url, init);
+		});
+		const promise = runVectorSmoke(environment, transport.dependencies);
+		await vi.runAllTimersAsync();
+		const report = await promise;
+		expect(hybridCalls).toBe(2);
+		expect(signal?.aborted).toBe(true);
+		expect(report.failures).toEqual([
+			{ phase: "update", code: "deadline_exceeded" },
+			{ phase: "update", code: "request_timeout" },
+		]);
+		expect(report.ok).toBe(false);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
 	it.each([
 		["create", true],
 		["update", true],
@@ -350,8 +510,8 @@ describe("production vector smoke with fake transport only", () => {
 			create_indexed: rtt * 3 + 250,
 			create_vector_hit: rtt * 4 + 500,
 			update_indexed: rtt * 3 + 500,
-			update_new_rank1: rtt * 4 + 750,
-			update_old_gone: rtt * 5 + 1_000,
+			update_new_rank1: rtt * 2 + 250,
+			update_old_gone: rtt,
 		});
 		expect(report.embedding_calls.put).toBe(0);
 		expect(report.embedding_calls.final).toBe(0);
@@ -395,9 +555,9 @@ describe("production vector smoke with fake transport only", () => {
 			expect(report.latencies_ms[metric].p50).toBeLessThan(10_000);
 			expect(report.latencies_ms[metric].max).toBe(report.latencies_ms[metric].p50);
 		}
-		expect(report.latencies_ms.update_new_rank1.p50).toBe(5_950);
-		expect(report.latencies_ms.update_indexed.p50).toBe(indexedAt === 0 ? 4_400 : 9_050);
-		expect(report.latencies_ms.update_old_gone.p50).toBe(7_500);
+		expect(report.latencies_ms.update_new_rank1.p50).toBe(vectorAt === 2_700 ? 2_850 : 5_950);
+		expect(report.latencies_ms.update_indexed.p50).toBe(vectorAt === 2_700 ? 7_500 : 9_050);
+		expect(report.latencies_ms.update_old_gone.p50).toBe(vectorAt === 2_700 ? 5_950 : 7_500);
 		expect(report.runs[0]?.cleanup.deleted).toBe(2);
 	});
 
@@ -428,7 +588,7 @@ describe("production vector smoke with fake transport only", () => {
 			});
 			const report = await runVectorSmoke(environment, transport.dependencies);
 			expect(report.ok).toBe(true);
-			expect(report.latencies_ms.update_new_rank1).toBe(754);
+			expect(report.latencies_ms.update_new_rank1).toBe(252);
 			expect(hybridPolls).toBeGreaterThan(1);
 			expect(report.cleanup.deleted).toBe(2);
 		},
@@ -481,11 +641,11 @@ describe("production vector smoke with fake transport only", () => {
 			const report = await runVectorSmoke(environment, transport.dependencies);
 			expect(report.ok).toBe(false);
 			if (kind === "stale" || kind === "unindexed") {
-				expect(report.latencies_ms.update_new_rank1).toBe(754);
+				expect(report.latencies_ms.update_new_rank1).toBe(252);
 				expect(report.latencies_ms.update_indexed).toBeNull();
 			} else {
 				expect(report.latencies_ms.update_new_rank1).toBeNull();
-				expect(report.latencies_ms.update_indexed).toBe(503);
+				expect(report.latencies_ms.update_indexed).toBeNull();
 			}
 			expect(report.failures).toEqual([{ phase: "update", code: "deadline_exceeded" }]);
 			expect(report.cleanup.deleted).toBe(2);
@@ -504,7 +664,7 @@ describe("production vector smoke with fake transport only", () => {
 			});
 		});
 		const report = await runVectorSmoke(environment, transport.dependencies);
-		expect(report.latencies_ms.update_new_rank1).toBe(754);
+		expect(report.latencies_ms.update_new_rank1).toBe(252);
 		expect(vectorPolls).toBe(1);
 		expect(report.failures).toEqual([]);
 		expect(report.cleanup.deleted).toBe(2);
@@ -524,7 +684,7 @@ describe("production vector smoke with fake transport only", () => {
 		});
 		const report = await runVectorSmoke(environment, transport.dependencies);
 		expect(report.ok).toBe(false);
-		expect(report.latencies_ms.update_new_rank1).toBe(754);
+		expect(report.latencies_ms.update_new_rank1).toBe(252);
 		expect(report.failures).toEqual([{ phase: "update", code: "duplicate_memory_ids" }]);
 		expect(report.cleanup.deleted).toBe(2);
 	});

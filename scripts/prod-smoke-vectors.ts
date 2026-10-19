@@ -339,38 +339,41 @@ export async function runVectorSmoke(
 			const supplied = stage === "create" ? oldVector : newVector;
 			const indexedMetric = stage === "create" ? "create_indexed" : "update_indexed";
 			const vectorMetric = stage === "create" ? "create_vector_hit" : "update_new_rank1";
-			const steps: { metric?: Latency; poll: (budget: number) => Promise<void> }[] = [
-				...(stage === "create" ? [supplied] : [supplied, oldVector]).map((queryVector) => ({
-					poll: async (budget: number) => {
+			type Step = { metric?: Latency; poll: (budget: number) => Promise<void> };
+			const hybrids: Step[] = (stage === "create" ? [supplied] : [supplied, oldVector]).map(
+				(queryVector) => ({
+					poll: async (budget) => {
 						await search(queryVector, "hybrid", budget);
 					},
-				})),
-				{
-					metric: indexedMetric,
-					poll: async (budget) => {
-						const current = await read(
-							target.id,
-							stage === "create" ? "create" : report.embedding_calls.put === null ? "put" : "final",
-							budget,
-						);
-						mark(indexedMetric, current.status.indexed && !current.status.stale);
-					},
+				}),
+			);
+			const indexed: Step = {
+				metric: indexedMetric,
+				poll: async (budget) => {
+					const current = await read(
+						target.id,
+						stage === "create" ? "create" : report.embedding_calls.put === null ? "put" : "final",
+						budget,
+					);
+					mark(indexedMetric, current.status.indexed && !current.status.stale);
 				},
-				{
-					metric: vectorMetric,
-					poll: async (budget) => {
-						const hits = await search(supplied, "vector", budget);
-						mark(
-							vectorMetric,
-							stage === "create"
-								? hits.some((item) => item.id === target.id && near(item))
-								: hits[0]?.id === target.id && near(hits[0]),
-						);
-					},
+			};
+			const vectorHit: Step = {
+				metric: vectorMetric,
+				poll: async (budget) => {
+					const hits = await search(supplied, "vector", budget);
+					mark(
+						vectorMetric,
+						stage === "create"
+							? hits.some((item) => item.id === target.id && near(item))
+							: hits[0]?.id === target.id && near(hits[0]),
+					);
 				},
-			];
+			};
+			const steps =
+				stage === "create" ? [...hybrids, indexed, vectorHit] : [vectorHit, indexed, ...hybrids];
 			if (stage === "update") {
-				steps.push({
+				steps.unshift({
 					metric: "update_old_gone",
 					poll: async (budget) => {
 						const hits = await search(oldVector, "vector", budget);
@@ -378,34 +381,64 @@ export async function runVectorSmoke(
 					},
 				});
 			}
+			const completed = new Set<Step>();
 			let stepIndex = 0;
-			while (true) {
-				const budget = deadline - deps.now();
-				if (budget <= 0) break;
-				const step = steps[stepIndex % steps.length];
-				stepIndex += 1;
-				if (!step || (step.metric && report.latencies_ms[step.metric] !== null)) continue;
-				if (
-					!step.metric &&
-					stepIndex > steps.length &&
-					fields.some((field) => report.latencies_ms[field] === null)
-				)
-					continue;
-				try {
-					await step.poll(budget);
-					report.polls[stage] += 1;
-				} catch (error) {
+			try {
+				while (true) {
+					const budget = deadline - deps.now();
+					if (budget <= 0) break;
+					const step = steps[stepIndex % steps.length];
+					stepIndex += 1;
+					if (!step || (step.metric && report.latencies_ms[step.metric] !== null)) continue;
 					if (
-						error instanceof SmokeError &&
-						error.code === "request_timeout" &&
-						budget <= settings.requestTimeoutMs
+						stage === "update" &&
+						step === indexed &&
+						(report.latencies_ms.update_old_gone === null ||
+							report.latencies_ms.update_new_rank1 === null)
 					)
-						break;
-					throw error;
+						continue;
+					if (
+						!step.metric &&
+						(stage === "update" || stepIndex > steps.length) &&
+						fields.some((field) => report.latencies_ms[field] === null)
+					)
+						continue;
+					try {
+						await step.poll(budget);
+						completed.add(step);
+						report.polls[stage] += 1;
+					} catch (error) {
+						if (
+							error instanceof SmokeError &&
+							error.code === "request_timeout" &&
+							budget <= settings.requestTimeoutMs
+						)
+							break;
+						throw error;
+					}
+					await deps.sleep(Math.min(250, Math.max(0, deadline - deps.now())));
 				}
-				await deps.sleep(Math.min(250, Math.max(0, deadline - deps.now())));
+				if (fields.some((field) => report.latencies_ms[field] === null))
+					record("deadline_exceeded");
+			} finally {
+				if (stage === "update") {
+					if (!completed.has(indexed)) {
+						try {
+							await read(target.id, "put");
+						} catch (error) {
+							report.failures.push(failure(stage, error));
+						}
+					}
+					for (const step of hybrids) {
+						if (completed.has(step)) continue;
+						try {
+							await step.poll(settings.requestTimeoutMs);
+						} catch (error) {
+							report.failures.push(failure(stage, error));
+						}
+					}
+				}
 			}
-			if (fields.some((field) => report.latencies_ms[field] === null)) record("deadline_exceeded");
 		}
 		await observe("create", createStart);
 		await read(control.id, "create");
