@@ -121,6 +121,22 @@ class BatchMemoryRepo extends MemoryRepo {
 			row.id,
 			input.tags.map((tag) => tag.id),
 		);
+		if (
+			input.vector !== null &&
+			input.previous &&
+			input.previous.title === input.title &&
+			input.previous.body === input.body &&
+			input.previous.content_hash !== row.content_hash
+		) {
+			this.vectors.set(
+				row.id,
+				(await this.vectorsByMemory(row.id)).map((stored) =>
+					stored.content_hash === input.previous?.content_hash
+						? { ...stored, content_hash: row.content_hash }
+						: stored,
+				),
+			);
+		}
 		if (input.vector === null) {
 			this.vectors.set(row.id, []);
 		} else if (input.vector) {

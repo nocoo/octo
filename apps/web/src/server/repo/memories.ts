@@ -483,9 +483,16 @@ export class MemoryRepo {
 			return [
 				this.db
 					.prepare(
-						"UPDATE memories SET deleted_at = NULL, deleted_by = NULL, version = ?, updated_at = ?, updated_by_key_id = ? WHERE id = ? AND version = ? AND deleted_at IS NOT NULL",
+						"UPDATE memories SET deleted_at = NULL, deleted_by = NULL, version = ?, content_hash = ?, updated_at = ?, updated_by_key_id = ? WHERE id = ? AND version = ? AND deleted_at IS NOT NULL",
 					)
-					.bind(version, input.now, input.updatedByKeyId, input.id, input.expectedVersion ?? 0),
+					.bind(
+						version,
+						hash,
+						input.now,
+						input.updatedByKeyId,
+						input.id,
+						input.expectedVersion ?? 0,
+					),
 			];
 		}
 		return [
