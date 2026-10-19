@@ -72,12 +72,14 @@ The application tests repeatability, order independence and palette distribution
 The logo's blue artwork includes a prominent RGB `(64, 144, 224)` cluster.
 `AccentProvider` overrides the supported `sky` swatch with the rounded
 `210 72% 56%` light value and a `210 72% 68%` dark value, preserving the hue
-while adjusting dark-theme luminance. Basalt chooses the contrasting foreground;
+while adjusting dark-theme luminance. These are raw palette values; Basalt
+derives the contrast-safe primary (`210 72% 41%` in light mode) and its foreground;
 chart and status palettes remain independent. The original logo assets are unchanged.
 
 Header actions retain the Basalt template gap and use the Giraffe reference's
 32px-wide controls, 34px control height and 18px icons, expressed through existing
-Basalt tokens. Tables retain native cell-painted hover/selection states and
+Basalt tokens. Coarse pointers retain the native 44px touch minimum. Tables retain
+native cell-painted hover/selection states and
 add token-colored headers, compact row separators and logical numeric/action
 alignment. No replacement controls or surface system are introduced.
 

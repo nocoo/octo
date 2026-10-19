@@ -75,11 +75,20 @@ a {
 .octo-header [data-basalt-header-actions] > a {
 	inline-size: var(--basalt-space-8);
 	block-size: var(--basalt-size-control);
+	min-inline-size: var(--basalt-space-8);
+	min-block-size: var(--basalt-size-control);
 	border-radius: var(--basalt-radius-md);
 	color: hsl(var(--basalt-muted-foreground));
 }
 .octo-header [data-basalt-header-actions] > :hover {
 	color: hsl(var(--basalt-foreground));
+}
+@media (pointer: coarse) {
+	.octo-header [data-basalt-header-actions] > button,
+	.octo-header [data-basalt-header-actions] > a {
+		min-inline-size: var(--basalt-size-touch);
+		min-block-size: var(--basalt-size-touch);
+	}
 }
 .octo-header [data-basalt-header-actions] svg {
 	width: var(--basalt-text-xl);

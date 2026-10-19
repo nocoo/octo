@@ -21,11 +21,15 @@ test("header actions match the compact template and logo accent in both themes",
 			Array.from({ length: 4 }, () => ({ width: 32, height: 34, icon: 18 })),
 		);
 		await expect(page.locator("html")).toHaveAttribute("data-accent", "sky");
-		expect(
-			await page.evaluate(() =>
-				getComputedStyle(document.documentElement).getPropertyValue("--basalt-primary").trim(),
-			),
-		).toBe(colorScheme === "light" ? "210 72% 56%" : "210 72% 68%");
+		const colors = await page.evaluate(() => {
+			const style = getComputedStyle(document.documentElement);
+			return {
+				swatch: style.getPropertyValue("--basalt-accent-2").trim(),
+				primary: style.getPropertyValue("--basalt-primary").trim(),
+			};
+		});
+		expect(colors.swatch).toBe(colorScheme === "light" ? "210 72% 56%" : "210 72% 68%");
+		expect(colors.primary).toBe(colorScheme === "light" ? "210 72% 41%" : "210 72% 68%");
 	}
 });
 
