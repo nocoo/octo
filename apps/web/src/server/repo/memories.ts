@@ -286,6 +286,7 @@ export class MemoryRepo {
 			...input.tags.map((tag) => tagTokenStatement(this.db, tag.id, tag.name)),
 			...this.ftsStmts(input.id, nextVersion, input.now),
 			...wordIndexStatements(this.db, { ...input, version: nextVersion, updated_at: input.now }),
+			...this.moveOutStmts(input, nextVersion),
 			this.changeStmt(input, nextVersion),
 			...this.vectorStmts(input, nextVersion, hash),
 		];
@@ -595,6 +596,27 @@ export class MemoryRepo {
 					`INSERT INTO memories_fts_map (memory_id, fts_rowid) SELECT m.id, (SELECT COALESCE(MAX(fts_rowid), 0) FROM memories_fts_map) + 1 FROM memories m WHERE ${wrote} AND NOT EXISTS (SELECT 1 FROM memories_fts_map WHERE memory_id = m.id)`,
 				)
 				.bind(id, version, now),
+		];
+	}
+
+	private moveOutStmts(input: MemoryWrite, version: number): D1PreparedStatement[] {
+		if (!input.previous || input.previous.space_id === input.spaceId) return [];
+		return [
+			this.db
+				.prepare(
+					"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT 'memory', ?, ?, 'moved_out', ?, ?, ? WHERE EXISTS (SELECT 1 FROM memories WHERE id = ? AND space_id = ? AND version = ? AND updated_at = ?)",
+				)
+				.bind(
+					input.id,
+					input.previous.space_id,
+					version,
+					input.actor,
+					input.now,
+					input.id,
+					input.spaceId,
+					version,
+					input.now,
+				),
 		];
 	}
 

@@ -135,7 +135,7 @@ describe("memory no-op updates", () => {
 		expect(sqlite.prepare("SELECT count(*) AS n FROM memory_versions").get()).toEqual({ n: 2 });
 		expect(
 			sqlite.prepare("SELECT count(*) AS n FROM changes WHERE entity = 'memory'").get(),
-		).toEqual({ n: 2 });
+		).toEqual({ n: patch.space ? 3 : 2 });
 	});
 
 	it("does not treat vector removal or a stale stored embedding as unchanged", async () => {

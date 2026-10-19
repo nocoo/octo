@@ -467,7 +467,7 @@ describe("production batch HTTP transactions", () => {
 			{ version: 4, tags_json: '["new"]' },
 		]);
 		expect(scenario.sqlite.prepare("SELECT op FROM changes ORDER BY seq").all()).toEqual(
-			["created", "moved", "updated", "updated"].map((op) => ({ op })),
+			["created", "moved_out", "moved", "updated", "updated"].map((op) => ({ op })),
 		);
 		expect(
 			scenario.sqlite

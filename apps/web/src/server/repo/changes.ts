@@ -12,7 +12,7 @@ export type ChangeRow = {
 	at: number;
 };
 
-const DELETE_OPS = new Set(["trashed", "purged"]);
+const DELETE_OPS = new Set(["trashed", "purged", "moved_out"]);
 
 export class ChangeRepo {
 	constructor(private readonly db: D1Database) {}

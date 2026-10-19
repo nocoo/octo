@@ -1,5 +1,6 @@
 import type { MemoryFilters } from "../../lib/schema/filters";
 import type { MemoryCreate, MemoryPatch } from "../../lib/schema/memory";
+import type { MemoryMove } from "../../lib/schema/memory-move";
 import {
 	type ApiPrincipal,
 	type AuthzOp,
@@ -405,6 +406,26 @@ export class MemoryService {
 			row,
 			tags.map((tag) => tag.name),
 		);
+	}
+
+	async move(
+		authz: Authz,
+		id: string,
+		input: MemoryMove,
+		ifMatch?: string,
+	): Promise<Record<string, unknown>> {
+		const current = await this.loadVisible(authz, id, "update", false);
+		const destination = await this.requireSpace(input.space);
+		authz.denyUnless("move", {
+			spaceId: current.space_id,
+			destSpaceId: destination.id,
+			sourceKeyId: current.source_key_id,
+		});
+		const version =
+			ifMatch === undefined && input.expected_version === undefined
+				? current.version
+				: expectedVersion(ifMatch, input.expected_version);
+		return this.patch(authz, id, { space: input.space, expected_version: version }, undefined);
 	}
 
 	async remove(authz: Authz, id: string): Promise<{ trashed_at: string }> {
