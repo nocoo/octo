@@ -12,6 +12,7 @@ export type AppVars = {
 	adminEmail: string;
 	responseErrorCode: ErrorCode;
 	mcpWrite: boolean;
+	bulkCounts: { requested: number; succeeded: number; failed: number };
 };
 
 export interface Env extends CloudflareBindings {

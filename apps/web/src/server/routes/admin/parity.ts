@@ -15,7 +15,7 @@ import { mountV1SearchRoutes } from "../v1/search";
 import { tagsRoutes, tagWriteAuthorization } from "../v1/tags";
 import { trashRoutes } from "../v1/trash";
 
-const adminPrincipal: MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> = async (
+export const adminPrincipal: MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> = async (
 	context,
 	next,
 ) => {

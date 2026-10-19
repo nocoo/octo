@@ -111,6 +111,8 @@ CREATE TABLE mcp_audit_writes (
 
 ## 6. 用量统计（替代速率限制）
 
+回收站的三个批量写接口还在 `audit_bulk_counts` 中保存 `requested_count`、`succeeded_count`、`failed_count`，通过 `audit_id` 关联 `audit_log`，在同一个 D1 batch 中写入。计数以已验证并实际处理的条目为准；校验或鉴权失败、清空确认数量冲突等尚未开始处理的调用记录零项。审计中不写记忆 ID 列表、筛选正文、请求体或异常原文；已有的异步审计投递边界不变。
+
 - cron 每小时把 `audit_log` 汇总到 `usage_daily(day, key_id, calls, errors, writes, bytes_in, bytes_out)`；用 upsert，重复跑结果不变。
 - `/api/v1/usage` 只返回调用者自己的数据；dashboard 能看所有 key。
 - 汇总只包含已经写入的审计行；流结束后迟到的行会在下一次 cron 纳入。修复前，普通 JSON 响应未提供 `Content-Length`，审计写入 `bytes_out=NULL`，汇总按 `0` 处理；旧响应正文从未保存，无法据此回填真实字节数。

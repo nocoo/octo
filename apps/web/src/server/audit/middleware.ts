@@ -84,6 +84,12 @@ async function writeAudit(
 	const bytes = await output;
 	const ipHash = ip && pepper ? await hashSecret(pepper, ip) : null;
 	const auditId = newUlid(started);
+	const counts =
+		context.get("bulkCounts") ??
+		(context.req.method === "POST" &&
+		/^\/api\/admin\/trash:(batchRestore|batchPurge|empty)$/.test(context.req.path)
+			? { requested: 0, succeeded: 0, failed: 0 }
+			: undefined);
 	const statement = context.env.DB.prepare(
 		`INSERT INTO audit_log
 		(id, at, actor, method, route, status, error_code, request_id, duration_ms, bytes_in, bytes_out, ip_hash)
@@ -102,7 +108,14 @@ async function writeAudit(
 		bytes,
 		ipHash,
 	);
-	if (context.get("mcpWrite")) {
+	if (counts) {
+		await context.env.DB.batch([
+			statement,
+			context.env.DB.prepare(
+				"INSERT INTO audit_bulk_counts (audit_id, requested_count, succeeded_count, failed_count) VALUES (?, ?, ?, ?)",
+			).bind(auditId, counts.requested, counts.succeeded, counts.failed),
+		]);
+	} else if (context.get("mcpWrite")) {
 		await context.env.DB.batch([
 			statement,
 			context.env.DB.prepare("INSERT INTO mcp_audit_writes (audit_id) VALUES (?)").bind(auditId),

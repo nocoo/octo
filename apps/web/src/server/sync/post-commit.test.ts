@@ -38,6 +38,17 @@ describe("post-commit derived work", () => {
 		expect(process).toHaveBeenCalledWith(env);
 	});
 
+	it.each(["batchRestore", "batchPurge", "empty"])(
+		"reserves a small derived-work budget for trash %s",
+		async (action) => {
+			const { app, ctx, pending, process } = fixture();
+			const env = {} as Env;
+			await app.request(`/api/admin/trash:${action}`, { method: "POST" }, env, ctx);
+			await Promise.all(pending);
+			expect(process).toHaveBeenCalledWith(env, undefined, 5);
+		},
+	);
+
 	it("awaits derived work inline for the L2 serialized vector sync binding", async () => {
 		const { app, ctx, events, pending, process } = fixture();
 		const env = { RESOURCE_ENV: "test", OCTO_VECTOR_SYNC_CONCURRENCY: "1" } as Env;

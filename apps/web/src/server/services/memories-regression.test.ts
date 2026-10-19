@@ -54,7 +54,7 @@ describe("memory permission and rollback regressions", () => {
 		await db.batch((await tags.merge("old", "target", admin.actor)).statements);
 		expect(await service.restore(admin, id)).toMatchObject({ tags: ["target"] });
 		const before = await state(db);
-		vi.spyOn(tags, "getById").mockResolvedValueOnce(null);
+		vi.spyOn(tags, "getManyByIds").mockResolvedValueOnce(new Map());
 		await expect(service.patch(admin, id, { title: "rejected" }, "2")).rejects.toMatchObject({
 			code: "tag_conflict",
 		});

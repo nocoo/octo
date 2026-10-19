@@ -224,6 +224,25 @@ these routes. Write requests require both Access and the allowed Origin.
 | POST | `/settings/embedding/test` | Current configuration or unsaved overrides; fixed probe text |
 | DELETE | `/trash/:id` | Purge a trashed memory; durable external cleanup |
 
+### 回收站批量管理
+
+仅 `/api/admin` 提供这些接口；必须通过 Access，写请求还必须通过同源检查。`/api/v1/trash` 不受此扩展影响。
+
+| 方法 | 路径 | 请求 / 响应 |
+|---|---|---|
+| GET | `/trash` | `q?,space?,limit?,cursor?` → `{items,total,next_cursor}` |
+| POST | `/trash:batchRestore` | `{ids}` → `{results,succeeded,failed}` |
+| POST | `/trash:batchPurge` | `{ids}` → `{results,succeeded,failed}` |
+| POST | `/trash:empty` | `{filters?:{q?,space?},expected_count?,cursor?}` → `{results,purged,remaining,next_cursor}` |
+
+- `q` 最长 500 字符，去除首尾空白，仅匹配标题或标签的字面子串；ASCII 不区分大小写，`%`、`_` 不作为通配符。`space` 使用 slug。未知字段、重复查询参数或无效游标均返回 400；`limit` 默认 25，范围 1–200。
+- 列表只返回记忆元数据和标签，不读取或返回 `body`，避免 200 条大正文超出 Worker 内存预算。按 ID 降序分页，游标经 HMAC 签名并绑定筛选条件和变更水位。分页排除水位之后新加入或变化的记忆，以及关联空间或标签的后续变更；`total` 是该快照当前仍匹配的数量，不是本页长度。全量选择必须完整枚举分页，不能把第一页当作全部。
+- 批量 ID 数量为 1–100，重复、空值或非法类型返回 400，超过 100 返回 413。`results` 保留请求顺序，每项为 `{id,ok,error?:{code,message}}`；单项失败不阻止其他项，内部错误信息不会返回。恢复复用单条恢复事务；彻底删除复用单条删除事务，缺失 ID 视为幂等成功。重复恢复不会生成额外版本。
+- 清空每次最多处理 10 条。初始请求的 `expected_count` 与当前匹配总数不一致时返回 409，不开始删除。续传使用相同筛选和原始确认数量，不以 `remaining` 替代原始数量。
+- 清空游标签名绑定初始变更水位、筛选、确认总数和下一批最多 10 个 ID；重放同一续传请求只重试这一批，不滑动到后面的记录。每条删除事务内部重新核对水位和当前版本，拒绝并发变化；之后新增、恢复后重新删除、改名或移入范围的记录不会被续传纳入。
+- `purged` 是本次实际删除数；已缺失的幂等成功不重复计数。`remaining` 包括快照中仍匹配但处理失败的记录，故可能大于零而 `next_cursor` 为 null；此时应显示失败项，停止自动循环，重新确认后重试。初始请求响应丢失后，带原确认数量重试可能返回 409；不能自动删除计数检查以继续。
+- D1 删除和 R2 清理任务、向量同步墓碑一起持久化。批量请求后台最多清理 10 个 R2 对象、协调 5 个向量任务；未完成任务留给后续请求或定时补偿。审计按调用保存请求项数、成功数、失败数，不保存 ID 列表或请求正文。
+
 Key metadata uses snake_case fields from the permission model, with `space_ids`
 as an array of existing space IDs from `GET /api/admin/spaces` `items[].id`,
 not `items[].slug`. Boolean flags must be JSON booleans. Role templates are `admin`, `project`, `drop`,

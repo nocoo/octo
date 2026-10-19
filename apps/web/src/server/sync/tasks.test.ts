@@ -24,6 +24,32 @@ afterEach(() => {
 });
 
 describe("derived work coordination", () => {
+	it("honors the small bulk budget without freezing the live synchronization clock", async () => {
+		const { env, raw } = await setup(6);
+		let now = 100;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => {
+				now += 100;
+				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+			}),
+		);
+		try {
+			expect(await runDerivedTasks(env, undefined, 5)).toEqual({ synced: 5, failed: 0 });
+			expect(
+				raw.prepare("SELECT MIN(indexed_at) AS at FROM memory_vectors").get()?.at,
+			).toBeGreaterThan(100);
+			expect(
+				raw
+					.prepare("SELECT count(*) AS count FROM vector_sync_jobs WHERE synced_generation IS NULL")
+					.get()?.count,
+			).toBe(1);
+		} finally {
+			raw.close();
+		}
+	});
+
 	it("leases and advances backfill before calls, preserving concurrent and interrupted drain fairness", async () => {
 		const { env, raw } = await setup(50);
 		raw.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-purge-tombstone')");
