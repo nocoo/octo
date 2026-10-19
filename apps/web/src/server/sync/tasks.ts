@@ -13,6 +13,8 @@ export async function runDerivedTasks(
 		...(now === undefined ? {} : { now }),
 		...(memoryIds === undefined ? {} : { memoryIds }),
 		...(limit === undefined ? {} : { limit }),
-		...(skipEmbedding ? {} : { beforeSyncBatch: (ids: string[]) => backfillMemories(env, ids) }),
+		...(skipEmbedding
+			? { deferMissingVectors: true }
+			: { beforeSyncBatch: (ids: string[]) => backfillMemories(env, ids) }),
 	});
 }

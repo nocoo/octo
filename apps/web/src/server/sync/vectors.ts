@@ -29,6 +29,7 @@ type SyncOptions = {
 	memoryIds?: string[];
 	beforeSync?: (memoryId: string) => Promise<unknown>;
 	beforeSyncBatch?: (memoryIds: string[]) => Promise<unknown>;
+	deferMissingVectors?: boolean;
 };
 
 type SourceVector = {
@@ -223,6 +224,13 @@ export async function synchronizeVectors(
 					},
 				]);
 			} else {
+				if (options.deferMissingVectors && (await embeddingIds([job])).has(job.memory_id)) {
+					await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
+						lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ?`)
+						.bind(timestamp(), job.memory_id, token)
+						.run();
+					return;
+				}
 				deletes.push(claimed);
 				return;
 			}

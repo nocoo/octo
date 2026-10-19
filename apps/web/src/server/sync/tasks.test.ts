@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import { encodeFloat32Vector } from "../search/math";
+import { authzFrom, MemoryService } from "../services/memories";
 import { fixture, SETTINGS } from "../settings/__tests__/fixture";
 import { saveEmbeddingSettings } from "../settings/config";
 import { runDerivedTasks } from "./tasks";
@@ -25,6 +26,22 @@ afterEach(() => {
 });
 
 describe("derived work coordination", () => {
+	it("still acknowledges deleted and purged vector jobs in a metadata-only drain", async () => {
+		const { env, raw } = await setup(2);
+		const fetcher = vi.fn();
+		vi.stubGlobal("fetch", fetcher);
+		raw.exec("UPDATE memories SET deleted_at = 1 WHERE id = 'memory-00'");
+		raw.exec("DELETE FROM memories WHERE id = 'memory-01'");
+		try {
+			expect(await runDerivedTasks(env, 100, undefined, undefined, true)).toEqual({
+				synced: 2,
+				failed: 0,
+			});
+			expect(fetcher).not.toHaveBeenCalled();
+		} finally {
+			raw.close();
+		}
+	});
 	it("never calls an embedding model for a metadata-only move drain", async () => {
 		const { env, raw } = await setup(1);
 		const fetcher = vi.fn(async () =>
@@ -35,10 +52,91 @@ describe("derived work coordination", () => {
 			await runDerivedTasks(env, 100, ["memory-00"], undefined, true);
 			expect(fetcher).not.toHaveBeenCalled();
 			expect(raw.prepare("SELECT * FROM memory_embedding_calls").all()).toEqual([]);
+			expect(
+				raw
+					.prepare("SELECT generation IS NOT synced_generation AS pending FROM vector_sync_jobs")
+					.get()?.pending,
+			).toBe(1);
+			expect(await runDerivedTasks(env, 10_100, ["memory-00"])).toEqual({ synced: 1, failed: 0 });
+			expect(fetcher).toHaveBeenCalledTimes(1);
 		} finally {
 			raw.close();
 		}
 	});
+	it.each([false, true])(
+		"hands concurrent content backfill to a normal drain after move upsert failure=%s",
+		async (upsertFails) => {
+			const { env, raw } = await setup(0);
+			raw.exec(
+				"INSERT INTO spaces (id, slug, name, created_at, updated_at) VALUES ('target','target','Target',1,1)",
+			);
+			const service = new MemoryService(env.DB);
+			const authz = authzFrom({
+				id: "client",
+				name: "client",
+				role: "admin",
+				ops: new Set(["r", "w", "u", "d"]),
+				scope: "all",
+				spaceIds: [],
+				ownedSpaceIds: [],
+				ownEntriesOnly: false,
+				autoOwnSpace: false,
+				expiresAt: null,
+			});
+			const memory = await service.create(authz, {
+				space: "s",
+				title: "Title",
+				body: "Original body",
+				type: "note",
+				tags: [],
+				importance: 0.5,
+				vector: { profile: "tiny", values: [0, 1, 0] },
+			});
+			const id = String(memory.id);
+			await service.move(authz, id, { space: "target" });
+			const entered = Promise.withResolvers<void>();
+			const release = Promise.withResolvers<void>();
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			vi.spyOn(D1BruteForceVectorStore.prototype, "upsert").mockImplementationOnce(async () => {
+				entered.resolve();
+				await release.promise;
+				if (upsertFails) throw new Error("temporary vector failure");
+			});
+			const fetcher = vi.fn(async () =>
+				Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] }),
+			);
+			vi.stubGlobal("fetch", fetcher);
+			const holder = runDerivedTasks(env, 100, [id], undefined, true);
+			try {
+				await entered.promise;
+				await service.patch(authz, id, { body: "New body", expected_version: 2 }, undefined);
+				expect(await runDerivedTasks(env, 101, [id])).toEqual({ synced: 0, failed: 0 });
+				release.resolve();
+				expect(await holder).toEqual({ synced: 0, failed: upsertFails ? 1 : 0 });
+				expect(fetcher).not.toHaveBeenCalled();
+				const job = raw
+					.prepare(`SELECT generation IS NOT synced_generation AS pending,
+						due_at, attempts, lease_until FROM vector_sync_jobs WHERE memory_id = ?`)
+					.get(id);
+				expect(job).toMatchObject({ pending: 1, attempts: 0, lease_until: 0 });
+				expect(job?.due_at).toBeLessThanOrEqual(10_100);
+				expect(await runDerivedTasks(env, 10_100, [id])).toEqual({ synced: 1, failed: 0 });
+				expect(fetcher).toHaveBeenCalledTimes(1);
+				expect(
+					raw
+						.prepare(`SELECT memory.version, vector.indexed_at,
+							vector.content_hash = memory.content_hash AS current
+							FROM memories memory JOIN memory_vectors vector ON vector.memory_id = memory.id
+							WHERE memory.id = ?`)
+						.get(id),
+				).toEqual({ version: 3, indexed_at: 10_100, current: 1 });
+			} finally {
+				release.resolve();
+				await holder;
+				raw.close();
+			}
+		},
+	);
 	it("combines a targeted write drain with the bulk work budget", async () => {
 		const { env, raw } = await setup(8);
 		const fetcher = vi.fn(async () =>
