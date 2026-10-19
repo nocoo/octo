@@ -167,7 +167,7 @@ describe("repeated vector smoke reports", () => {
 		expect(report.latencies_ms).toEqual({
 			create_indexed: { samples: runs, p50: medianRtt * 2, max: maxRtt * 2 },
 			create_vector_hit: { samples: runs, p50: medianRtt * 3 + 250, max: maxRtt * 3 + 250 },
-			update_new_rank1: { samples: runs, p50: medianRtt * 3 + 500, max: maxRtt * 3 + 500 },
+			update_new_rank1: { samples: runs, p50: medianRtt * 2 + 250, max: maxRtt * 2 + 250 },
 			update_old_gone: { samples: runs, p50: medianRtt * 4 + 750, max: maxRtt * 4 + 750 },
 		});
 		for (const run of report.runs) {
@@ -348,11 +348,132 @@ describe("production vector smoke with fake transport only", () => {
 		expect(report.latencies_ms).toEqual({
 			create_indexed: rtt * 2,
 			create_vector_hit: rtt * 3 + 250,
-			update_new_rank1: rtt * 3 + 500,
+			update_new_rank1: rtt * 2 + 250,
 			update_old_gone: rtt * 4 + 750,
 		});
 		expect(report.embedding_calls.put).toBe(0);
 		expect(report.embedding_calls.final).toBe(0);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
+	it.each(["lower-rank", "low-similarity", "fts-only", "absent", "later-regression"])(
+		"ignores hybrid %s for update rank-one convergence",
+		async (kind) => {
+			const transport = fixture();
+			let hybridPolls = 0;
+			transport.setOverride((call) => {
+				if (
+					call.body.mode !== "hybrid" ||
+					(call.body.vector as { values: number[] }).values[1] !== 1
+				)
+					return;
+				hybridPolls += 1;
+				if (kind === "later-regression" && hybridPolls === 1) return;
+				const target = { id: ids[0], scores: { vector: { similarity: 1 } } };
+				return transport.json({
+					items:
+						kind === "lower-rank"
+							? [{ id: ids[1], scores: { vector: { similarity: 0.8 } } }, target]
+							: kind === "low-similarity"
+								? [{ ...target, scores: { vector: { similarity: 0.98 } } }]
+								: kind === "fts-only"
+									? [{ ...target, scores: { vector: null } }]
+									: [],
+				});
+			});
+			const report = await runVectorSmoke(environment, transport.dependencies);
+			expect(report.ok).toBe(true);
+			expect(report.latencies_ms.update_new_rank1).toBe(252);
+			expect(hybridPolls).toBeGreaterThan(1);
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it.each(["wrong-rank", "low-similarity", "fts-only", "absent", "stale", "unindexed"])(
+		"rejects update convergence with vector evidence %s",
+		async (kind) => {
+			const transport = fixture();
+			transport.setOverride((call) => {
+				const target = transport.memories[0];
+				if (target?.values[1] !== 1) return;
+				if (
+					(kind === "stale" || kind === "unindexed") &&
+					call.init.method === "GET" &&
+					call.url.pathname.endsWith(target.id)
+				) {
+					return transport.json({
+						...target,
+						vector_status: [
+							{
+								profile: "tiny",
+								indexed: kind !== "unindexed",
+								stale: kind === "stale",
+								embedding_calls: 0,
+							},
+						],
+					});
+				}
+				if (
+					call.body.mode !== "vector" ||
+					(call.body.vector as { values: number[] }).values[1] !== 1
+				)
+					return;
+				if (kind === "stale" || kind === "unindexed") return;
+				return transport.json({
+					items:
+						kind === "wrong-rank"
+							? [
+									{ id: ids[1], scores: { vector: { similarity: 1 } } },
+									{ id: ids[0], scores: { vector: { similarity: 1 } } },
+								]
+							: kind === "low-similarity"
+								? [{ id: ids[0], scores: { vector: { similarity: 0.989 } } }]
+								: kind === "fts-only"
+									? [{ id: ids[0], scores: { vector: null } }]
+									: [],
+				});
+			});
+			const report = await runVectorSmoke(environment, transport.dependencies);
+			expect(report.ok).toBe(false);
+			expect(report.latencies_ms.update_new_rank1).toBeNull();
+			expect(report.failures).toEqual([{ phase: "update", code: "deadline_exceeded" }]);
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it("accepts the vector similarity threshold and detects later vector regressions", async () => {
+		const transport = fixture();
+		let vectorPolls = 0;
+		transport.setOverride((call) => {
+			if (call.body.mode !== "vector" || (call.body.vector as { values: number[] }).values[1] !== 1)
+				return;
+			vectorPolls += 1;
+			return transport.json({
+				items: vectorPolls === 1 ? [{ id: ids[0], scores: { vector: { similarity: 0.99 } } }] : [],
+			});
+		});
+		const report = await runVectorSmoke(environment, transport.dependencies);
+		expect(report.latencies_ms.update_new_rank1).toBe(252);
+		expect(report.failures).toEqual([{ phase: "update", code: "convergence_regressed" }]);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
+	it.each([0, 1])("still rejects duplicates in update hybrid vector %i", async (firstValue) => {
+		const transport = fixture();
+		transport.setOverride((call) => {
+			if (
+				transport.memories[0]?.values[1] !== 1 ||
+				call.body.mode !== "hybrid" ||
+				(call.body.vector as { values: number[] }).values[0] !== firstValue
+			)
+				return;
+			const item = { id: ids[1], scores: { vector: null } };
+			return transport.json({ items: [item, item] });
+		});
+		const report = await runVectorSmoke(environment, transport.dependencies);
+		expect(report.ok).toBe(false);
+		expect(report.latencies_ms.update_new_rank1).toBe(252);
+		expect(report.failures).toEqual([{ phase: "update", code: "duplicate_memory_ids" }]);
 		expect(report.cleanup.deleted).toBe(2);
 	});
 

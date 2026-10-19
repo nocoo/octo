@@ -331,7 +331,6 @@ export async function runVectorSmoke(
 			};
 			let indexed = false;
 			let vectorRank1 = false;
-			let hybridRank1 = false;
 			const near = (item: z.infer<typeof searchSchema>["items"][number]) =>
 				(item.scores.vector?.similarity ?? -1) >= MATCH_SIMILARITY;
 			const supplied = stage === "create" ? oldVector : newVector;
@@ -357,8 +356,7 @@ export async function runVectorSmoke(
 					}
 				},
 				async (budget: number) => {
-					const hits = await search(supplied, "hybrid", budget);
-					hybridRank1 = hits[0]?.id === target.id && near(hits[0]);
+					await search(supplied, "hybrid", budget);
 				},
 			];
 			if (stage === "update") {
@@ -377,7 +375,7 @@ export async function runVectorSmoke(
 				if (budget <= 0) break;
 				try {
 					await steps[report.polls[stage] % steps.length]?.(budget);
-					if (stage === "update") mark("update_new_rank1", indexed && vectorRank1 && hybridRank1);
+					if (stage === "update") mark("update_new_rank1", indexed && vectorRank1);
 					report.polls[stage] += 1;
 				} catch (error) {
 					if (
