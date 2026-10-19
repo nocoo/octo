@@ -1,5 +1,16 @@
 # Retrospective
 
+## 2026-10-19 — Assert backing data behind an accessible modal
+
+The first dashboard v2 Chromium run failed in the new deletion retry test:
+after the intentional 503, a default role locator could not find the backing
+table row while Basalt's modal correctly hid the rest of the page from the
+accessibility tree. The error and dialog were still present; this was not a
+deleted-row regression. The test now checks attachment with `includeHidden`
+and separately verifies the retained row through the real admin API. Use
+ordinary visible-role queries again after closing the dialog; do not weaken
+modal accessibility to satisfy a background-content assertion.
+
 ## 2026-10-19 — Verify color token formats before composition
 
 During the dashboard v2 pass I initially wrapped Basalt tag foreground tokens

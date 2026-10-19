@@ -60,7 +60,9 @@ test("revokes, cancels irreversible deletion, retries an error and removes the k
 	await deleteButton.click();
 	await confirmation.getByRole("button", { name: "永久删除", exact: true }).click();
 	await expect(confirmation.getByRole("alert")).toContainText("服务暂时不可用，请稍后重试。");
-	await expect(row).toBeVisible();
+	await expect(
+		page.getByRole("row", { includeHidden: true }).filter({ hasText: name }),
+	).toBeAttached();
 	expect((await admin.response(`/keys/${key.id}`)).status()).toBe(200);
 	const deleted = page.waitForResponse(
 		(response) =>
