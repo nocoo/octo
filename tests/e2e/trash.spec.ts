@@ -31,7 +31,7 @@ test("delete, restore, then title-check and confirm permanent deletion", async (
 	const checkbox = row.getByRole("checkbox");
 	await checkbox.click();
 	await expect(checkbox).toBeChecked();
-	await page.getByRole("button", { name: "恢复所选记忆（1）", exact: true }).click();
+	await page.getByRole("button", { name: "恢复所选", exact: true }).click();
 	await expect(row).toHaveCount(0);
 	expect((await admin.response(endpoint)).status()).toBe(200);
 	await page.goto(endpoint);
@@ -60,4 +60,69 @@ test("delete, restore, then title-check and confirm permanent deletion", async (
 	await page.reload();
 	await expect(page.getByRole("row").filter({ hasText: memory.title })).toHaveCount(0);
 	await capture(page, info, "trash-purged");
+});
+
+test("selects across pages, restores, bulk purges and confirms filtered empty counts", async ({
+	page,
+	admin,
+}, info) => {
+	const seed = await admin.memory();
+	const prefix = `Bulk trash ${seed.id}`;
+	const created = await admin.json<{ results: Array<{ ok: boolean; item: { id: string } }> }>(
+		"/memories:batchCreate",
+		"POST",
+		{
+			items: Array.from({ length: 26 }, (_, index) => ({
+				space: seed.space,
+				title: `${prefix} ${index}`,
+				body: "Trash bulk browser fixture",
+				type: "note",
+				tags: ["trash-bulk"],
+			})),
+		},
+	);
+	expect(created.results.every((result) => result.ok)).toBe(true);
+	const ids = created.results.map((result) => result.item.id);
+	await admin.json("/memories:batchDelete", "POST", { ids });
+	await admin.json(`/memories/${seed.id}`, "DELETE");
+	await page.goto(`/trash?q=${encodeURIComponent(prefix)}`);
+	await expect(page.getByRole("button", { name: "清空回收站（26）", exact: true })).toBeEnabled();
+	await page.getByRole("checkbox", { name: "全选当前页", exact: true }).click();
+	await expect(page.getByRole("checkbox", { name: "全选当前页", exact: true })).toBeChecked();
+	await capture(page, info, "trash-list-selection");
+	await page.getByRole("button", { name: "选择全部 26 条", exact: true }).click();
+	await expect(page.getByText("已选择 26 条记忆，范围为当前筛选的全部匹配项。")).toBeVisible();
+	await capture(page, info, "trash-bulk-bar");
+	await page.getByRole("button", { name: "恢复所选", exact: true }).click();
+	await expect(page.getByRole("button", { name: "清空回收站（0）", exact: true })).toBeVisible();
+	for (const id of ids) expect((await admin.response(`/memories/${id}`)).status()).toBe(200);
+	await admin.json("/memories:batchDelete", "POST", { ids });
+	await page.reload();
+	await expect(page.getByRole("button", { name: "清空回收站（26）", exact: true })).toBeEnabled();
+	const choices = page.getByRole("checkbox", { name: /^选择 Bulk trash / });
+	await choices.nth(0).click();
+	await expect(choices.nth(0)).toBeChecked();
+	await choices.nth(1).click();
+	await expect(choices.nth(1)).toBeChecked();
+	await page.getByRole("button", { name: "彻底删除所选", exact: true }).click();
+	const purge = page.getByRole("alertdialog");
+	await expect(purge).toContainText("2");
+	await capture(page, info, "trash-bulk-purge-confirm");
+	await purge.getByRole("button", { name: "确认彻底删除", exact: true }).click();
+	await expect(page.getByRole("button", { name: "清空回收站（24）", exact: true })).toBeEnabled();
+	await page.getByRole("button", { name: "清空回收站（24）", exact: true }).click();
+	const empty = page.getByRole("alertdialog");
+	await expect(empty).toContainText("24");
+	await expect(empty).toContainText(prefix);
+	await capture(page, info, "trash-empty-count-confirm");
+	await empty.getByRole("button", { name: "确认清空回收站", exact: true }).click();
+	await expect(page.getByRole("button", { name: "清空回收站（0）", exact: true })).toBeVisible();
+	const remaining = await admin.json<{ items: Array<{ id: string }>; total: number }>(
+		`/trash?space=${seed.space}`,
+	);
+	expect(remaining).toMatchObject({ total: 1, items: [{ id: seed.id }] });
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.reload();
+	await expect(page.getByRole("heading", { name: "回收站", exact: true })).toBeVisible();
+	await capture(page, info, "trash-mobile-empty");
 });

@@ -2,7 +2,7 @@ import { ThemeProvider } from "@nocoo/basalt";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import { GraphPage, SpacesPage, TagsPage, TimelinePage, TrashPage } from "./library";
+import { GraphPage, SpacesPage, TagsPage, TimelinePage } from "./library";
 import { LibraryBulkActions } from "./library-bulk";
 
 vi.mock("./library-graph", () => ({ default: () => null }));
@@ -21,7 +21,6 @@ describe("library page installed-component boundaries", () => {
 	it.each([
 		[TagsPage, "/tags", "标签"],
 		[SpacesPage, "/spaces", "空间"],
-		[TrashPage, "/trash", "回收站"],
 		[GraphPage, "/graph", "关系图"],
 		[TimelinePage, "/timeline", "时间线"],
 	] as const)("renders %s using the actual Basalt package", (Page, url, title) => {

@@ -38,7 +38,7 @@ const SpacesPage = lazy(() =>
 	import("./routes/library").then((page) => ({ default: page.SpacesPage })),
 );
 const TrashPage = lazy(() =>
-	import("./routes/library").then((page) => ({ default: page.TrashPage })),
+	import("./routes/trash").then((page) => ({ default: page.TrashPage })),
 );
 const GraphPage = lazy(() =>
 	import("./routes/library").then((page) => ({ default: page.GraphPage })),
