@@ -6,9 +6,9 @@ import { purgeIdempotencyOlderThan } from "./idempotency-repo";
 
 export const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-export async function runScheduledTasks(env: Env, now = Date.now()): Promise<{ purged: number }> {
+export async function runScheduledTasks(env: Env, now?: number): Promise<{ purged: number }> {
 	const [purged] = await Promise.all([
-		purgeIdempotencyOlderThan(env.DB, now - IDEMPOTENCY_RETENTION_MS),
+		purgeIdempotencyOlderThan(env.DB, (now ?? Date.now()) - IDEMPOTENCY_RETENTION_MS),
 		rollupUsage(env.DB),
 		runDerivedTasks(env, now),
 		cleanupExternalFiles(env),
