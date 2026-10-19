@@ -12,8 +12,9 @@ const HIDDEN = "mem_srch_l2_hid";
 const TRASHED = "mem_srch_l2_trash";
 const ACCENT = "mem_srch_l2_accent";
 const PLAIN = "mem_srch_l2_plain";
+const RETAINED = "mem_srch_l2_retained";
 const memoryIds = [VISIBLE, HIDDEN, TRASHED];
-const quotedIds = [...memoryIds, ACCENT, PLAIN].map((id) => `'${id}'`).join(",");
+const quotedIds = [...memoryIds, ACCENT, PLAIN, RETAINED].map((id) => `'${id}'`).join(",");
 const vector = { profile: "te3-small-1536", values: [3, 4, ...Array<number>(1534).fill(0)] };
 const tokens: Record<string, string> = {};
 const keyIds: Record<string, string> = {};
@@ -65,15 +66,19 @@ VALUES ('${material.keyid}','search-l2-${spec.name}','${hash}','project','${spec
 	}
 	commands.push(`INSERT INTO spaces (id,slug,name,created_at,updated_at) VALUES
 ('sp_srch_l2_vis','search-l2-vis','Visible',${now},${now}), ('sp_srch_l2_hid','search-l2-hid','Hidden',${now},${now});
-INSERT INTO tags VALUES ('tag_srch_infra','search-infra','Search infra',NULL,${now},${now}), ('tag_srch_alias','search-old-infra','Search old infra','tag_srch_infra',${now},${now});`);
+INSERT INTO tags VALUES ('tag_srch_infra','search-infra','Search infra',NULL,${now},${now}), ('tag_srch_alias','search-old-infra','Search old infra','tag_srch_infra',${now},${now});
+INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at,deleted_at)
+VALUES ('${RETAINED}','sp_srch_l2_vis','Retained mapping','','note','${source}','hash',${now},${now},${now});
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${RETAINED}',
+max(COALESCE((SELECT MAX(fts_rowid) FROM memories_fts_map),0),COALESCE((SELECT MAX(rowid) FROM memories_fts),0))+1;`);
 	const bytes = encodeFloat32Vector(l2Normalize(vector.values));
 	const blob = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 	for (const id of memoryIds) {
 		const space = id === HIDDEN ? "sp_srch_l2_hid" : "sp_srch_l2_vis";
 		commands.push(`INSERT INTO memories (id,space_id,title,body,type,importance,source_key_id,event_time,content_hash,created_at,updated_at,deleted_at)
 VALUES ('${id}','${space}','部署 cloudflare worker','正文包含部署与 cloudflare worker 配置 𠮷野','procedure',0.8,'${source}',${now},'hash',${now},${now},${id === TRASHED ? now : "NULL"});
-INSERT INTO memories_fts(title,body,tags) VALUES ('部署 cloudflare worker','正文包含部署与 cloudflare worker 配置 𠮷野','search-infra');
-INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}',COALESCE(MAX(fts_rowid),0)+1 FROM memories_fts_map;
+INSERT INTO memories_fts(rowid,title,body,tags) SELECT fts_rowid,'部署 cloudflare worker','正文包含部署与 cloudflare worker 配置 𠮷野','search-infra' FROM memories_fts_map WHERE memory_id='${id}';
 INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
 VALUES ('${id}','te3-small-1536','text-embedding-3-small',1536,X'${blob}','hash',${now});
 INSERT INTO memory_tags (memory_id, tag_id) VALUES ('${id}','tag_srch_infra');`);
@@ -84,8 +89,8 @@ INSERT INTO memory_tags (memory_id, tag_id) VALUES ('${id}','tag_srch_infra');`)
 	]) {
 		commands.push(`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
 VALUES ('${id}','sp_srch_l2_vis','Accent fixture','${body}','note','${source}','hash',${now},${now});
-INSERT INTO memories_fts(title,body,tags) VALUES ('Accent fixture','${body}','');
-INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}', rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;`);
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT '${id}',COALESCE(MAX(fts_rowid),0)+1 FROM memories_fts_map;
+INSERT INTO memories_fts(rowid,title,body,tags) SELECT fts_rowid,'Accent fixture','${body}','' FROM memories_fts_map WHERE memory_id='${id}';`);
 	}
 	await d1(["--command", commands.join("\n")]);
 });
@@ -119,6 +124,17 @@ type SearchBody = {
 };
 
 describe("POST /api/v1/search", () => {
+	it("preserves the unindexed trashed mapping while allocating live search fixtures", async () => {
+		expect(
+			await query(
+				await e2eD1(),
+				`SELECT m.deleted_at IS NOT NULL AS trashed,
+(SELECT COUNT(*) FROM memories_fts WHERE rowid=map.fts_rowid) AS indexed
+FROM memories m JOIN memories_fts_map map ON map.memory_id=m.id WHERE m.id='${RETAINED}'`,
+			),
+		).toEqual([{ trashed: 1, indexed: 0 }]);
+	});
+
 	it.each(["fts", "vector", "hybrid"])(
 		"returns visible results and real channel scores in %s mode",
 		async (mode) => {

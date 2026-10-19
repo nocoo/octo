@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { encodeFloat32Vector, l2Normalize } from "../../apps/web/src/server/search/math";
 import { assertAsyncTestMarker } from "../../scripts/local-d1";
-import { base, e2eD1, seedKey, sqlText } from "../fixtures/l2-batch";
+import { base, e2eD1, query, seedKey, sqlText } from "../fixtures/l2-batch";
 
 const spaceId = "sp_search_ranking";
 const profile = "te3-small-1536";
@@ -118,7 +118,8 @@ const memories = [
 	},
 ];
 const memoryId = (id: string) => `mem_ranking_${id}`;
-const idsSql = memories.map(({ id }) => sqlText(memoryId(id))).join(",");
+const retainedId = memoryId("retained-trash");
+const idsSql = [...memories.map(({ id }) => memoryId(id)), retainedId].map(sqlText).join(",");
 const fakeVector = (axis: number) =>
 	Array.from({ length: 1536 }, (_, index) => (index === axis ? 1 : 0));
 let key: { id: string; token: string } | undefined;
@@ -145,6 +146,10 @@ beforeAll(async () => {
 	key = await seedKey(d1, { ops: "r", scope: "spaces", spaceIds: [spaceId] });
 	const commands = [
 		`INSERT INTO spaces (id,slug,name,created_at,updated_at) VALUES (${sqlText(spaceId)},'search-ranking','Search ranking',1,1);`,
+		`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at,deleted_at)
+VALUES (${sqlText(retainedId)},${sqlText(spaceId)},'Retained mapping','','note',${sqlText(key.id)},'hash',1,1,1);
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT ${sqlText(retainedId)},
+max(COALESCE((SELECT MAX(fts_rowid) FROM memories_fts_map),0),COALESCE((SELECT MAX(rowid) FROM memories_fts),0))+1;`,
 	];
 	for (const [index, memory] of memories.entries()) {
 		const id = sqlText(memoryId(memory.id));
@@ -153,8 +158,8 @@ beforeAll(async () => {
 		const blob = Buffer.from(encodeFloat32Vector(l2Normalize(fakeVector(index)))).toString("hex");
 		commands.push(`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
 VALUES (${id},${sqlText(spaceId)},${title},${body},'note',${sqlText(key.id)},'ranking-hash',${index + 1},${index + 1});
-INSERT INTO memories_fts(title,body,tags) VALUES (${title},${body},'');
-INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT ${id},rowid FROM memories_fts ORDER BY rowid DESC LIMIT 1;
+INSERT INTO memories_fts_map(memory_id,fts_rowid) SELECT ${id},COALESCE(MAX(fts_rowid),0)+1 FROM memories_fts_map;
+INSERT INTO memories_fts(rowid,title,body,tags) SELECT fts_rowid,${title},${body},'' FROM memories_fts_map WHERE memory_id=${id};
 INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
 VALUES (${id},${sqlText(profile)},'text-embedding-3-small',1536,X'${blob}','ranking-hash',1);`);
 	}
@@ -162,6 +167,17 @@ VALUES (${id},${sqlText(profile)},'text-embedding-3-small',1536,X'${blob}','rank
 });
 
 afterAll(cleanup);
+
+it("preserves the unindexed trashed mapping while allocating live search fixtures", async () => {
+	expect(
+		await query(
+			await e2eD1(),
+			`SELECT m.deleted_at IS NOT NULL AS trashed,
+(SELECT COUNT(*) FROM memories_fts WHERE rowid=map.fts_rowid) AS indexed
+FROM memories m JOIN memories_fts_map map ON map.memory_id=m.id WHERE m.id=${sqlText(retainedId)}`,
+		),
+	).toEqual([{ trashed: 1, indexed: 0 }]);
+});
 
 type SearchBody = {
 	items: Array<{ id: string; scores: { fts: { rank: number } | null } }>;
