@@ -160,7 +160,7 @@ describe("admin spaces", () => {
 			const response = await request(`/${slug}`, "DELETE");
 			expect(response.status).toBe(409);
 			expect(await response.json()).toMatchObject({
-				error: { code: "version_conflict", request_id: "admin-request" },
+				error: { code: "space_not_empty", request_id: "admin-request" },
 			});
 			expect((await request(`/${slug}`)).status).toBe(200);
 		}

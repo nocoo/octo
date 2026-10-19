@@ -32,7 +32,7 @@ import { meResponse } from "./routes/v1/me";
 import { memoriesRoutes } from "./routes/v1/memories";
 import { moveRoutes } from "./routes/v1/moves";
 import { mountV1SearchRoutes } from "./routes/v1/search";
-import { spacesRoutes } from "./routes/v1/spaces";
+import { spacesRoutes, spaceWriteAuthorization } from "./routes/v1/spaces";
 import { tagsRoutes, tagWriteAuthorization } from "./routes/v1/tags";
 import { trashRoutes } from "./routes/v1/trash";
 import { usageRoutes } from "./routes/v1/usage";
@@ -83,6 +83,8 @@ export function createApp(): Hono<{
 	app.use("/api/v1/*", postCommitMiddleware(runDerivedTasks));
 	app.use("/api/admin/*", postCommitMiddleware(runDerivedTasks));
 	app.use("/api/v1/*", bearerMiddleware);
+	app.use("/api/v1/spaces", spaceWriteAuthorization);
+	app.use("/api/v1/spaces/:slug", spaceWriteAuthorization);
 	app.use("/api/v1/tags/:name", tagWriteAuthorization);
 	app.use("/api/v1/tags/:name/rename", tagWriteAuthorization);
 	app.use("/api/v1/tags/:name/merge", tagWriteAuthorization);

@@ -11,26 +11,3 @@ export function adminActor(context: Context<{ Bindings: Env; Variables: AppVars 
 export function conflict(message: string): ApiError {
 	return new ApiError("version_conflict", message);
 }
-
-export async function commitAdminMutation(
-	db: D1Database,
-	statement: D1PreparedStatement,
-	change: { entity: "space"; id: string; op: string; actor: string; at: number },
-): Promise<void> {
-	try {
-		const results = await db.batch([
-			statement,
-			db
-				.prepare(
-					"INSERT INTO changes (entity, entity_id, space_id, op, version, actor, at) SELECT ?, ?, ?, ?, NULL, ?, ? WHERE changes() > 0",
-				)
-				.bind(change.entity, change.id, change.id, change.op, change.actor, change.at),
-		]);
-		if (results[0]?.meta.changes === 0) throw conflict("resource changed or is not empty");
-	} catch (error) {
-		if (error instanceof Error && /UNIQUE constraint failed: spaces.slug/.test(error.message)) {
-			throw conflict("name or slug already exists");
-		}
-		throw error;
-	}
-}
