@@ -794,3 +794,5 @@ Independent MAX review found that the shared space service mapped known conflict
 ### 2026-10-19 — Distinguish library geometry from application overrides
 
 The rename-form composition test initially rejected every inline style in rendered markup, including Basalt Grid's own column template. The application had not introduced custom spacing. The assertion now rejects padding and margin overrides while allowing package-owned grid geometry, and the repository design gate checks application source separately. Test the forbidden customization rather than treating implementation details of an approved component as application violations.
+
+The first successful browser run also let Playwright scroll an offscreen rename button into view automatically. Screenshot inspection showed that the new trailing action column was hidden at the ordinary desktop width. The action now sits immediately beside the space name, with a RED-to-GREEN column-order regression and explicit browser viewport assertions before interaction and after reload. Successful automated clicks do not establish discoverability; check the initial viewport as well.

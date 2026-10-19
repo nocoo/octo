@@ -576,6 +576,28 @@ export function SpacesPage() {
 			),
 			sortValue: (space) => space.name,
 		},
+		{
+			id: "actions",
+			header: "操作",
+			width: "12ch",
+			accessor: (space) => (
+				<Button
+					size="sm"
+					variant="ghost"
+					disabled={state.busy}
+					aria-label={`重命名空间 ${space.name}`}
+					onClick={(event) => {
+						opener.current = event.currentTarget;
+						model.resetSpaceRename();
+						setRenameName(space.name);
+						setRenaming(space);
+					}}
+				>
+					<Pencil size={16} aria-hidden="true" />
+					重命名
+				</Button>
+			),
+		},
 		{ id: "slug", header: "标识", width: "36ch", accessor: (space) => space.slug },
 		{
 			id: "description",
@@ -606,28 +628,6 @@ export function SpacesPage() {
 			sortValue: (space) => space.memory_count,
 			textAlign: "end",
 			cellClassName: "tabular-nums",
-		},
-		{
-			id: "actions",
-			header: "操作",
-			width: "12ch",
-			accessor: (space) => (
-				<Button
-					size="sm"
-					variant="ghost"
-					disabled={state.busy}
-					aria-label={`重命名空间 ${space.name}`}
-					onClick={(event) => {
-						opener.current = event.currentTarget;
-						model.resetSpaceRename();
-						setRenameName(space.name);
-						setRenaming(space);
-					}}
-				>
-					<Pencil size={16} aria-hidden="true" />
-					重命名
-				</Button>
-			),
 		},
 	];
 	return (

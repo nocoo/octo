@@ -33,7 +33,7 @@ afterEach(() => {
 
 it.each([
 	[TagsPage, "/tags", "标签", ["24ch", "10ch", "24ch"]],
-	[SpacesPage, "/spaces", "空间", ["24ch", "36ch", "32ch", "24ch", "10ch", "12ch"]],
+	[SpacesPage, "/spaces", "空间", ["24ch", "12ch", "36ch", "32ch", "24ch", "10ch"]],
 	[GraphPage, "/graph", "图谱节点", ["24ch", "12ch", "10ch"]],
 	[GraphPage, "/graph", "图谱关系", ["24ch", "24ch", "12ch"]],
 	[TimelinePage, "/timeline", "2026-10-17 的时间线数据", ["28ch", "24ch", "24ch"]],
