@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — 2026-10-19
+## 0.3.0 — 2026-10-19
 
 ### Added
 
@@ -8,6 +8,7 @@
 - Single and ordered batch memory moves support optional optimistic concurrency checks and require update permission in both spaces, including own-entry restrictions.
 - Moves preserve memory IDs, version history, tag order, attachments and stored vectors. Source-space tombstones and destination events commit atomically with the memory change, and vector metadata synchronizes without embedding model calls.
 - MCP tools `create_space`, `update_space`, `delete_space` and `move_memory` share REST services, permissions and audit semantics.
+- The dashboard can rename spaces with field-level validation, accessible keyboard focus and persistent names after reload.
 
 ### Validation
 
