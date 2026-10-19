@@ -804,3 +804,7 @@ The same review found that the action column inherited DataTable's default sorta
 ### 2026-10-19 — Preserve backfill ownership during metadata-only drains
 
 MAX review reproduced a move holding the vector-sync lease while a body PATCH queued a newer content generation. The move's repair loop correctly avoided embedding calls but then acknowledged the newer missing-vector generation after deleting its stale index entry, delaying ordinary backfill until hourly reconciliation. Three RED regressions cover already-missing vectors and concurrent PATCH after both successful and failed move upserts. Metadata-only drains now release live missing-vector jobs without acknowledgement or backoff; the next ordinary drain can embed immediately, while deleted and purged jobs still complete. A no-model-call policy must preserve unfinished work ownership rather than treating absent derived data as completed work.
+
+### 2026-10-19 — Restore focus when a filtered rename removes its opener
+
+Rename cancellation coverage only exercised connected row buttons. MAX review reproduced a successful rename under a name-only filter: the updated row disappeared, its opener unmounted, and the dialog left focus on the document body. A unit callback regression and real Worker-backed Chromium journey failed before the fix. Closing the rename dialog now restores a connected opener or falls back to the space filter, preserving the user's filter and the persisted rename. Dialog focus tests must cover successful mutations that remove their own trigger as well as cancellation.

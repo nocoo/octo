@@ -559,6 +559,7 @@ export function SpacesPage() {
 	const [renaming, setRenaming] = useState<LibrarySpace | null>(null);
 	const [renameName, setRenameName] = useState("");
 	const opener = useRef<HTMLButtonElement | null>(null);
+	const filter = useRef<HTMLInputElement | null>(null);
 	const openCreate = (button: HTMLButtonElement) => {
 		opener.current = button;
 		setCreateError(null);
@@ -654,6 +655,7 @@ export function SpacesPage() {
 						<Input
 							className="w-basalt-28 max-w-full"
 							aria-label="筛选空间"
+							ref={filter}
 							value={params.get("q") ?? ""}
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
 							placeholder="查找空间"
@@ -714,9 +716,10 @@ export function SpacesPage() {
 				<DialogContent
 					size="sm"
 					onCloseAutoFocus={(event) => {
-						if (opener.current?.isConnected) {
+						const target = opener.current?.isConnected ? opener.current : filter.current;
+						if (target?.isConnected) {
 							event.preventDefault();
-							opener.current.focus();
+							target.focus();
 						}
 					}}
 				>

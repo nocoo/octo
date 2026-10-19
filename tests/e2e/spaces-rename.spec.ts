@@ -1,6 +1,28 @@
 import { randomUUID } from "node:crypto";
 import { capture, expect, test } from "./fixtures";
 
+test("keeps the name filter and returns focus when renaming hides the row", async ({
+	page,
+	admin,
+}) => {
+	const slug = `rename-filter-${randomUUID()}`;
+	const originalName = `原始空间${randomUUID()}`;
+	await admin.json("/spaces", "POST", { slug, name: originalName });
+	await page.goto(`/spaces?${new URLSearchParams({ q: originalName })}`);
+	await page.getByRole("button", { name: `重命名空间 ${originalName}`, exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "重命名空间", exact: true });
+	await dialog.getByLabel("空间名称", { exact: true }).fill("新空间");
+	await dialog.getByRole("button", { name: "保存名称", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(page.getByRole("button", { name: /重命名空间 / })).toHaveCount(0);
+	await expect(page.getByRole("textbox", { name: "筛选空间", exact: true })).toHaveValue(
+		originalName,
+	);
+	await expect(page.getByRole("textbox", { name: "筛选空间", exact: true })).toBeFocused();
+	expect(new URL(page.url()).searchParams.get("q")).toBe(originalName);
+	expect(await admin.json(`/spaces/${slug}`)).toMatchObject({ name: "新空间" });
+});
+
 test("renames a space through the dashboard and persists after reload", async ({
 	page,
 	admin,
