@@ -9,6 +9,9 @@ test("renames a space through the dashboard and persists after reload", async ({
 	const originalName = "字".repeat(256);
 	await admin.json("/spaces", "POST", { slug, name: originalName, description: "保留说明" });
 	await page.goto(`/spaces?q=${slug}`);
+	await expect(
+		page.getByRole("columnheader", { name: "操作", exact: true }).getByRole("button"),
+	).toHaveCount(0);
 	const opener = page.getByRole("button", { name: `重命名空间 ${originalName}`, exact: true });
 	await expect(opener).toBeInViewport({ ratio: 1 });
 	await expect(page.getByRole("link", { name: originalName, exact: true })).toHaveAttribute(

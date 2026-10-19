@@ -589,6 +589,7 @@ export function SpacesPage() {
 			id: "actions",
 			header: "操作",
 			width: "12ch",
+			sortable: false,
 			accessor: (space) => (
 				<Button
 					size="sm"

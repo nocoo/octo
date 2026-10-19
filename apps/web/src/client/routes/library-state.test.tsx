@@ -47,6 +47,14 @@ it("bounds long space names without losing their accessible text", () => {
 	expect(html).toContain(`aria-label="重命名空间 ${name}"`);
 });
 
+it("does not offer sorting for space actions", () => {
+	snapshot.state = { ...new LibraryModel("spaces").state, ready: true };
+	const html = render(SpacesPage, "/spaces");
+	const header = html.match(/<th\b[^>]*>[\s\S]*?<\/th>/g)?.find((cell) => cell.includes("操作"));
+	expect(header).toBeDefined();
+	expect(header).not.toContain("<button");
+});
+
 it.each([
 	[TagsPage, "/tags", "标签", ["24ch", "10ch", "24ch"]],
 	[SpacesPage, "/spaces", "空间", ["24ch", "12ch", "36ch", "32ch", "24ch", "10ch"]],
