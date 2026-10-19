@@ -26,9 +26,12 @@ import {
 	ArrowUpRight,
 	BookOpen,
 	KeyRound,
+	LayoutDashboard,
 	Network,
+	PenLine,
 	RefreshCw,
 	Search,
+	Trash2,
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
@@ -67,14 +70,14 @@ export function OverviewPage() {
 	}, [model]);
 	const activity = activitySeries(state.usage ?? []);
 	const table = (
-		<Table aria-label="按日期和智能体统计的调用量">
+		<Table className="octo-table" aria-label="按日期和智能体统计的调用量">
 			<TableHeader>
 				<TableRow>
 					<TableHead>日期</TableHead>
 					<TableHead>智能体</TableHead>
-					<TableHead>调用</TableHead>
-					<TableHead>错误</TableHead>
-					<TableHead>写入次数</TableHead>
+					<TableHead textAlign="end">调用</TableHead>
+					<TableHead textAlign="end">错误</TableHead>
+					<TableHead textAlign="end">写入次数</TableHead>
 				</TableRow>
 			</TableHeader>
 			<TableBody>
@@ -82,9 +85,9 @@ export function OverviewPage() {
 					<TableRow key={`${row.day}:${row.key_id}`}>
 						<TableCell>{row.day}</TableCell>
 						<TableCell>{row.key_id}</TableCell>
-						<TableCell>{row.calls}</TableCell>
-						<TableCell>{row.errors}</TableCell>
-						<TableCell>{row.writes}</TableCell>
+						<TableCell textAlign="end">{row.calls}</TableCell>
+						<TableCell textAlign="end">{row.errors}</TableCell>
+						<TableCell textAlign="end">{row.writes}</TableCell>
 					</TableRow>
 				))}
 			</TableBody>
@@ -93,7 +96,12 @@ export function OverviewPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title="总览"
+				title={
+					<span className="octo-page-title">
+						<LayoutDashboard className="octo-title-icon" aria-hidden="true" />
+						总览
+					</span>
+				}
 				actions={
 					<Button variant="secondary" disabled={state.loading} onClick={() => void model.load()}>
 						<RefreshCw size={16} />
@@ -122,10 +130,42 @@ export function OverviewPage() {
 			)}
 			<StatStrip
 				items={[
-					{ label: "有效记忆数", value: state.memoryCount ?? "—" },
-					{ label: "今日写入次数 · UTC 小时汇总", value: state.writesToday ?? "—" },
-					{ label: "今日调用密钥 · UTC 小时汇总", value: state.activeKeysToday ?? "—" },
-					{ label: "回收站记忆数", value: state.trashCount ?? "—" },
+					{
+						label: (
+							<span className="octo-stat-label text-basalt-tag-blue-foreground">
+								<BookOpen aria-hidden="true" />
+								有效记忆数
+							</span>
+						),
+						value: state.memoryCount ?? "—",
+					},
+					{
+						label: (
+							<span className="octo-stat-label text-basalt-tag-teal-foreground">
+								<PenLine aria-hidden="true" />
+								今日写入次数 · UTC 小时汇总
+							</span>
+						),
+						value: state.writesToday ?? "—",
+					},
+					{
+						label: (
+							<span className="octo-stat-label text-basalt-tag-violet-foreground">
+								<KeyRound aria-hidden="true" />
+								今日调用密钥 · UTC 小时汇总
+							</span>
+						),
+						value: state.activeKeysToday ?? "—",
+					},
+					{
+						label: (
+							<span className="octo-stat-label text-basalt-tag-amber-foreground">
+								<Trash2 aria-hidden="true" />
+								回收站记忆数
+							</span>
+						),
+						value: state.trashCount ?? "—",
+					},
 				]}
 			/>
 			<p className="text-basalt-sm text-basalt-muted-foreground" role="status">

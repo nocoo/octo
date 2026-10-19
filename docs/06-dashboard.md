@@ -62,5 +62,24 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 
 ## 6. 测试
 
+### Dashboard v2 presentation
+
+The installed Basalt 3.1.0 `TagBadge` owns the six-color, deterministic FNV-1a
+label palette and its light/dark foreground pairs. Tags, spaces and key scopes
+use label-based assignment; key lifecycle states use explicit semantic colors.
+The application tests repeatability, order independence and palette distribution.
+
+The logo's blue artwork includes a prominent RGB `(64, 144, 224)` cluster.
+`AccentProvider` overrides the supported `sky` swatch with the rounded
+`210 72% 56%` light value and a `210 72% 68%` dark value, preserving the hue
+while adjusting dark-theme luminance. Basalt chooses the contrasting foreground;
+chart and status palettes remain independent. The original logo assets are unchanged.
+
+Header actions retain the Basalt template gap and use the Giraffe reference's
+32px-wide controls, 34px control height and 18px icons, expressed through existing
+Basalt tokens. Tables retain native cell-painted hover/selection states and
+add token-colored headers, compact row separators and logical numeric/action
+alignment. No replacement controls or surface system are introduced.
+
 - L1：每个 ViewModel 的状态机、筛选和 URL 互相转换、diff 渲染模型、Markdown TOC 提取。
 - L3（Playwright Chromium，本地隔离）：搜索 → 阅读 → 编辑 → 冲突 → 回滚；创建 key → 明文只出现一次 → 吊销；删除 → 回收站 → 恢复 → 硬删除；移动端视口的阅读页。

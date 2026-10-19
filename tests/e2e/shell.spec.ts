@@ -1,5 +1,34 @@
 import { capture, expect, test } from "./fixtures";
 
+test("header actions match the compact template and logo accent in both themes", async ({
+	page,
+}) => {
+	for (const colorScheme of ["light", "dark"] as const) {
+		await page.emulateMedia({ colorScheme });
+		await page.goto("/keys");
+		const actions = page.locator("[data-basalt-header-actions]");
+		await expect(actions).toBeVisible();
+		const geometry = await actions.evaluate((element) => ({
+			gap: getComputedStyle(element).gap,
+			controls: [...element.querySelectorAll(":scope > button, :scope > a")].map((control) => ({
+				width: control.getBoundingClientRect().width,
+				height: control.getBoundingClientRect().height,
+				icon: control.querySelector("svg")?.getBoundingClientRect().width,
+			})),
+		}));
+		expect(geometry.gap).toBe("4px");
+		expect(geometry.controls).toEqual(
+			Array.from({ length: 4 }, () => ({ width: 32, height: 34, icon: 18 })),
+		);
+		await expect(page.locator("html")).toHaveAttribute("data-accent", "sky");
+		expect(
+			await page.evaluate(() =>
+				getComputedStyle(document.documentElement).getPropertyValue("--basalt-primary").trim(),
+			),
+		).toBe(colorScheme === "light" ? "210 72% 56%" : "210 72% 68%");
+	}
+});
+
 test("slash focuses search on its first lazy navigation", async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByRole("heading", { name: "总览", exact: true })).toBeVisible();
@@ -68,7 +97,7 @@ test("memory breadcrumbs link ancestors and retain the current page on mobile", 
 	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
-	for (const action of ["搜索与命令", "GitHub 仓库", "Octo on Hexly", "切换深色或浅色主题"])
+	for (const action of ["搜索与命令", "GitHub 仓库", "Octo 项目主页", "切换深色或浅色主题"])
 		await expect(header.getByLabel(action, { exact: true })).toBeInViewport({ ratio: 1 });
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await header.getByRole("link", { name: "记忆详情", exact: true }).click();

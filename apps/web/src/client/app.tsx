@@ -11,6 +11,7 @@ import {
 } from "react-router";
 import { AppShell } from "./components/layout/app-shell";
 import { notificationViewport } from "./components/layout/notifications";
+import { logoAccent } from "./lib/brand";
 
 const OverviewPage = lazy(() =>
 	import("./routes/overview").then((page) => ({ default: page.OverviewPage })),
@@ -108,7 +109,7 @@ const router = createBrowserRouter(
 export function App() {
 	return (
 		<ThemeProvider>
-			<AccentProvider defaultAccent="primary" persist={false}>
+			<AccentProvider defaultAccent="sky" paletteOverrides={logoAccent} persist={false}>
 				<LinkProvider render={RouterLink}>
 					<TooltipProvider>
 						{notificationViewport}

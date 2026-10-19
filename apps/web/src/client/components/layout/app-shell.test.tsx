@@ -53,6 +53,14 @@ it("leaves the single page heading to PageHeader", () => {
 	expect(html).toContain("总览");
 });
 
+it("uses compact header chrome and colorful navigation without mixed-language labels", () => {
+	const html = renderShell();
+	expect(html).toContain("octo-header");
+	expect(html).toContain("octo-nav-icon");
+	expect(html).toContain("Octo 项目主页");
+	expect(html).not.toContain("Octo on Hexly");
+});
+
 it("uses the adopted transparent seahorse in the application rail", () => {
 	const html = renderShell();
 	expect(html).toContain('src="/logo-24.png"');

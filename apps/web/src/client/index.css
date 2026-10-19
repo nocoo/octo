@@ -41,6 +41,66 @@ a {
 .octo-muted {
 	color: hsl(var(--basalt-muted-foreground));
 }
+.octo-page-title,
+.octo-stat-label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--basalt-space-lg);
+}
+.octo-title-icon {
+	width: var(--basalt-size-icon-display);
+	height: var(--basalt-size-icon-display);
+	flex-shrink: 0;
+	color: hsl(var(--basalt-primary));
+	stroke-width: 1.5;
+}
+.octo-stat-label svg {
+	width: var(--basalt-size-icon-lg);
+	height: var(--basalt-size-icon-lg);
+	stroke-width: 1.5;
+}
+.octo-nav-icon {
+	color: var(--basalt-tag-blue-foreground);
+}
+.octo-nav-icon[data-tone="探索"] {
+	color: var(--basalt-tag-violet-foreground);
+}
+.octo-nav-icon[data-tone="管理"] {
+	color: var(--basalt-tag-teal-foreground);
+}
+.octo-nav-icon[data-tone="系统"] {
+	color: var(--basalt-tag-amber-foreground);
+}
+.octo-header [data-basalt-header-actions] > button,
+.octo-header [data-basalt-header-actions] > a {
+	inline-size: var(--basalt-space-8);
+	block-size: var(--basalt-size-control);
+	border-radius: var(--basalt-radius-md);
+	color: hsl(var(--basalt-muted-foreground));
+}
+.octo-header [data-basalt-header-actions] > :hover {
+	color: hsl(var(--basalt-foreground));
+}
+.octo-header [data-basalt-header-actions] svg {
+	width: var(--basalt-text-xl);
+	height: var(--basalt-text-xl);
+	stroke-width: 1.5;
+}
+.octo-table {
+	font-variant-numeric: tabular-nums;
+}
+.octo-table thead th {
+	background: hsl(var(--basalt-muted));
+	color: hsl(var(--basalt-foreground));
+	font-weight: 600;
+	white-space: nowrap;
+}
+.octo-table tbody td {
+	border-bottom: var(--basalt-border-width) solid hsl(var(--basalt-border));
+}
+.octo-table tbody tr:last-child td {
+	border-bottom: 0;
+}
 ::view-transition-old(root),
 ::view-transition-new(root) {
 	animation-duration: var(--basalt-motion-normal);

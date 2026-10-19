@@ -209,7 +209,14 @@ export function AppShell() {
 								.map((item) => {
 									const Icon = icons[item.icon];
 									const icon = (
-										<Icon key={item.href} size={16} strokeWidth={1.5} aria-hidden="true" />
+										<Icon
+											key={item.href}
+											className="octo-nav-icon"
+											data-tone={item.group}
+											size={16}
+											strokeWidth={1.5}
+											aria-hidden="true"
+										/>
 									);
 									return isCollapsed ? (
 										<Tooltip key={item.href}>
@@ -286,6 +293,7 @@ export function AppShell() {
 			)}
 			<AppMain tabIndex={-1}>
 				<AppHeader
+					className="octo-header"
 					density="compact"
 					breadcrumbs={
 						mobile ? headerCrumbs(location.pathname).slice(-1) : headerCrumbs(location.pathname)
@@ -358,13 +366,13 @@ export function AppShell() {
 									</a>
 								</Button>
 							</HeaderHint>
-							<HeaderHint label="Octo on Hexly · 在新标签页打开">
+							<HeaderHint label="Octo 项目主页 · 在新标签页打开">
 								<Button variant="ghost" size="icon" asChild>
 									<a
 										href="https://hexly.ai/projects/octo"
 										target="_blank"
 										rel="noopener noreferrer"
-										aria-label="Octo on Hexly"
+										aria-label="Octo 项目主页"
 									>
 										<svg
 											viewBox="0 0 24 24"
@@ -378,7 +386,7 @@ export function AppShell() {
 											<path d="m12 2 8.66 5v10L12 22l-8.66-5V7Z" />
 											<path d="M12 2v20M3.34 7l17.32 10m0-10L3.34 17" />
 										</svg>
-										<span className="sr-only">Octo on Hexly</span>
+										<span className="sr-only">Octo 项目主页</span>
 									</a>
 								</Button>
 							</HeaderHint>
