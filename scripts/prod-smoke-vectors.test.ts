@@ -328,7 +328,10 @@ describe("production vector smoke with fake transport only", () => {
 			}
 			return response;
 		});
-		const promise = runVectorSmoke(environment, transport.dependencies);
+		const promise = runVectorSmoke(
+			{ ...environment, OCTO_SMOKE_REQUEST_TIMEOUT_MS: "2000" },
+			transport.dependencies,
+		);
 		await vi.runAllTimersAsync();
 		const report = await promise;
 		expect(interrupted).toBe(true);
@@ -604,19 +607,102 @@ describe("production vector smoke with fake transport only", () => {
 		},
 	);
 
-	it("aborts and bounds a transport that never resolves", async () => {
+	it.each(["", "0", "-1", "1.5", "01", " 2", "2 ", "NaN", "Infinity", "2147483648", KEY])(
+		"rejects invalid request timeout %s before transport calls",
+		async (timeout) => {
+			const transport = fixture();
+			const report = await runVectorSmoke(
+				{ ...environment, OCTO_SMOKE_REQUEST_TIMEOUT_MS: timeout },
+				transport.dependencies,
+			);
+			expect(report.ok).toBe(false);
+			expect(report.failures).toEqual([{ phase: "config", code: "invalid_environment" }]);
+			expect(transport.calls).toHaveLength(0);
+			expect(JSON.stringify(report)).not.toContain(KEY);
+		},
+	);
+
+	it.each([
+		[undefined, 8_000],
+		["1", 1],
+		["2500", 2_500],
+		["12000", 12_000],
+		["2147483647", 2_147_483_647],
+	] as const)("bounds unresolved requests with timeout %s", async (configured, timeout) => {
 		vi.useFakeTimers();
 		let signal: AbortSignal | null | undefined;
-		const promise = runVectorSmoke(environment, {
-			fetch: async (_url, init) => {
-				signal = init.signal;
-				return new Promise<Response>(() => {});
+		const promise = runVectorSmoke(
+			{ ...environment, OCTO_SMOKE_REQUEST_TIMEOUT_MS: configured },
+			{
+				fetch: async (_url, init) => {
+					signal = init.signal;
+					return new Promise<Response>(() => {});
+				},
 			},
-		});
-		await vi.advanceTimersByTimeAsync(2_000);
+		);
+		await vi.advanceTimersByTimeAsync(timeout - 1);
+		expect(signal?.aborted).toBe(false);
+		await vi.advanceTimersByTimeAsync(1);
 		const report = await promise;
 		expect(signal?.aborted).toBe(true);
 		expect(report.failures).toEqual([{ phase: "setup", code: "request_timeout" }]);
+	});
+
+	it("applies the configured timeout to response bodies and cleanup", async () => {
+		vi.useFakeTimers();
+		const transport = fixture();
+		const fetch = transport.dependencies.fetch;
+		const signals: (AbortSignal | null | undefined)[] = [];
+		transport.dependencies.fetch = vi.fn(async (url, init) => {
+			if (url.includes("include=vector_status") || init.method === "DELETE") {
+				signals.push(init.signal);
+				return new Response(new ReadableStream());
+			}
+			return fetch(url, init);
+		});
+		const promise = runVectorSmoke(
+			{ ...environment, OCTO_SMOKE_REQUEST_TIMEOUT_MS: "3000" },
+			transport.dependencies,
+		);
+		await vi.advanceTimersByTimeAsync(8_999);
+		expect(signals[2]?.aborted).toBe(false);
+		await vi.advanceTimersByTimeAsync(1);
+		const report = await promise;
+		expect(report.failures).toEqual([{ phase: "create", code: "request_timeout" }]);
+		expect(report.cleanup).toEqual({
+			attempted: 2,
+			deleted: 0,
+			errors: Array.from({ length: 2 }, () => ({ phase: "cleanup", code: "request_timeout" })),
+		});
+		expect(signals).toHaveLength(3);
+		expect(signals.every((signal) => signal?.aborted)).toBe(true);
+	});
+
+	it("caps a longer request timeout at the observation deadline", async () => {
+		vi.useFakeTimers();
+		const transport = fixture();
+		const fetch = transport.dependencies.fetch;
+		let signal: AbortSignal | null | undefined;
+		transport.dependencies.fetch = vi.fn(async (url, init) => {
+			if (!signal && url.includes("include=vector_status")) {
+				signal = init.signal;
+				return new Promise<Response>(() => {});
+			}
+			return fetch(url, init);
+		});
+		const promise = runVectorSmoke(
+			{ ...environment, OCTO_SMOKE_REQUEST_TIMEOUT_MS: "12000" },
+			transport.dependencies,
+		);
+		await vi.advanceTimersByTimeAsync(9_998);
+		expect(signal?.aborted).toBe(false);
+		await vi.advanceTimersByTimeAsync(1);
+		const report = await promise;
+		expect(signal?.aborted).toBe(true);
+		expect(report.failures).toEqual([{ phase: "create", code: "deadline_exceeded" }]);
+		expect(report.latencies_ms.create_indexed).toBeNull();
+		expect(report.latencies_ms.create_vector_hit).toBeNull();
+		expect(report.cleanup.deleted).toBe(2);
 	});
 
 	it("prints only JSON and returns nonzero without command-line secrets", async () => {

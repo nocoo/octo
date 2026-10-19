@@ -2,7 +2,7 @@ import { z } from "zod";
 import { runIfMain } from "./cli";
 
 const DEADLINE_MS = 10_000;
-const REQUEST_TIMEOUT_MS = 2_000;
+const REQUEST_TIMEOUT_MS = 8_000;
 const MATCH_SIMILARITY = 0.99;
 const idSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/);
 const versionedSchema = z.object({ id: idSchema, version: z.number().int().positive() });
@@ -88,6 +88,11 @@ function config(environment: Record<string, string | undefined>) {
 				.min(1)
 				.regex(/^[\x21-\x7e]+$/),
 			OCTO_SMOKE_SPACE: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+			OCTO_SMOKE_REQUEST_TIMEOUT_MS: z
+				.string()
+				.regex(/^[1-9][0-9]*$/)
+				.default(String(REQUEST_TIMEOUT_MS))
+				.pipe(z.coerce.number<string>().int().positive().max(2_147_483_647)),
 		})
 		.safeParse(environment);
 	if (!result.success) throw new SmokeError("invalid_environment");
@@ -108,6 +113,7 @@ function config(environment: Record<string, string | undefined>) {
 		origin: base.origin,
 		key: result.data.OCTO_SMOKE_API_KEY,
 		space: result.data.OCTO_SMOKE_SPACE,
+		requestTimeoutMs: result.data.OCTO_SMOKE_REQUEST_TIMEOUT_MS,
 	};
 }
 
@@ -159,7 +165,7 @@ export async function runVectorSmoke(
 		path: string,
 		method = "GET",
 		body?: unknown,
-		budget = REQUEST_TIMEOUT_MS,
+		budget = settings.requestTimeoutMs,
 	): Promise<unknown> {
 		const controller = new AbortController();
 		let timer: ReturnType<typeof setTimeout> | undefined;
@@ -169,7 +175,7 @@ export async function runVectorSmoke(
 					controller.abort();
 					reject(new SmokeError("request_timeout"));
 				},
-				Math.max(1, Math.ceil(Math.min(REQUEST_TIMEOUT_MS, budget))),
+				Math.max(1, Math.ceil(Math.min(settings.requestTimeoutMs, budget))),
 			);
 		});
 		try {
@@ -247,7 +253,7 @@ export async function runVectorSmoke(
 		async function read(
 			id: string,
 			stage: CounterStage,
-			budget = REQUEST_TIMEOUT_MS,
+			budget = settings.requestTimeoutMs,
 			requireZero = ["create", "noop", "tags"].includes(stage),
 		) {
 			const item = parse(
@@ -377,7 +383,7 @@ export async function runVectorSmoke(
 					if (
 						error instanceof SmokeError &&
 						error.code === "request_timeout" &&
-						budget <= REQUEST_TIMEOUT_MS
+						budget <= settings.requestTimeoutMs
 					)
 						break;
 					throw error;
@@ -406,7 +412,7 @@ export async function runVectorSmoke(
 		const sameVector = await mutate(target, newVector, "PUT");
 		if (sameVector.version !== target.version) record("noop_changed_version");
 		await read(target.id, "final");
-		await read(control.id, "final", REQUEST_TIMEOUT_MS, true);
+		await read(control.id, "final", settings.requestTimeoutMs, true);
 	} catch (error) {
 		report.failures.push(failure(phase, error));
 	} finally {

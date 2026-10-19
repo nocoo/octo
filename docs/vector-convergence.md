@@ -89,6 +89,12 @@ The space must already exist and be dedicated to smoke. Then run:
 bun run scripts/prod-smoke-vectors.ts
 ```
 
+`OCTO_SMOKE_REQUEST_TIMEOUT_MS` sets the per-request timeout, including response
+bodies and cleanup. It defaults to 8000 ms and must be a positive decimal integer
+without leading zeros, at most 2147483647 (the timer limit). Invalid values fail
+before any request. Observation requests are capped by the remaining 10-second
+window, even when the configured request timeout is longer.
+
 Set `OCTO_SMOKE_RUNS=N` to repeat the complete create/update/cleanup sequence
 sequentially (`N` defaults to 1 and must be a positive safe integer in decimal
 notation). The CLI emits one JSON object with `runs` containing every per-run
@@ -113,7 +119,7 @@ recorded when their own evidence arrives, not after the full rotation. Update
 rank-1 requires indexed/non-stale status and both new-vector search channels;
 observed regressions still fail the run. Control counters are checked outside
 the polling windows. A deadline-limited request timeout closes observation and
-still fails missing metrics; an ordinary two-second request timeout remains a
+still fails missing metrics; an ordinary request timeout (eight seconds by default) remains a
 transport failure. Only tracked IDs created by this run are
 soft-deleted in cleanup; it never purges, empties trash, creates spaces or changes
 embedding settings. Transport failures with unknown create outcomes may leave a
