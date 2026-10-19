@@ -31,6 +31,22 @@ afterEach(() => {
 	snapshot.state = null;
 });
 
+it("bounds long space names without losing their accessible text", () => {
+	const name = "字".repeat(256);
+	snapshot.state = {
+		...new LibraryModel("spaces").state,
+		ready: true,
+		spaces: [{ id: "s", slug: "work", name, description: "", owner_key_id: null, memory_count: 1 }],
+	};
+	const html = render(SpacesPage, "/spaces");
+	const link = html.match(/<a\b[^>]*href="\/memories\?spaces=work"[^>]*>[\s\S]*?<\/a>/)?.[0];
+	expect(link).toContain("block w-basalt-36 truncate");
+	expect(link).toContain(`title="${name}"`);
+	expect(link).toContain("data-tag-color=");
+	expect(link?.replace(/<[^>]*>/g, "")).toBe(name);
+	expect(html).toContain(`aria-label="重命名空间 ${name}"`);
+});
+
 it.each([
 	[TagsPage, "/tags", "标签", ["24ch", "10ch", "24ch"]],
 	[SpacesPage, "/spaces", "空间", ["24ch", "12ch", "36ch", "32ch", "24ch", "10ch"]],

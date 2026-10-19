@@ -6,13 +6,18 @@ test("renames a space through the dashboard and persists after reload", async ({
 	admin,
 }, info) => {
 	const slug = `rename-${randomUUID()}`;
-	await admin.json("/spaces", "POST", { slug, name: "原始空间", description: "保留说明" });
+	const originalName = "字".repeat(256);
+	await admin.json("/spaces", "POST", { slug, name: originalName, description: "保留说明" });
 	await page.goto(`/spaces?q=${slug}`);
-	const opener = page.getByRole("button", { name: "重命名空间 原始空间", exact: true });
+	const opener = page.getByRole("button", { name: `重命名空间 ${originalName}`, exact: true });
 	await expect(opener).toBeInViewport({ ratio: 1 });
+	await expect(page.getByRole("link", { name: originalName, exact: true })).toHaveAttribute(
+		"title",
+		originalName,
+	);
 	await opener.click();
 	const dialog = page.getByRole("dialog", { name: "重命名空间", exact: true });
-	await expect(dialog.getByLabel("空间名称", { exact: true })).toHaveValue("原始空间");
+	await expect(dialog.getByLabel("空间名称", { exact: true })).toHaveValue(originalName);
 	await dialog.getByLabel("空间名称", { exact: true }).fill("更新后的知识库");
 	const saved = page.waitForResponse(
 		(response) =>
@@ -28,7 +33,7 @@ test("renames a space through the dashboard and persists after reload", async ({
 	await expect(
 		page.getByRole("button", { name: "重命名空间 更新后的知识库", exact: true }),
 	).toBeInViewport({ ratio: 1 });
-	await expect(page.getByRole("link", { name: "原始空间", exact: true })).toHaveCount(0);
+	await expect(page.getByRole("link", { name: originalName, exact: true })).toHaveCount(0);
 	const persisted = await admin.json<{ name: string; slug: string; description: string }>(
 		`/spaces/${slug}`,
 	);

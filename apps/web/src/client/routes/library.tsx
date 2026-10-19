@@ -570,8 +570,17 @@ export function SpacesPage() {
 			header: "空间",
 			width: "24ch",
 			accessor: (space) => (
-				<Link href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}>
-					<TagBadge name={space.name} colorKey={space.slug} size="sm" />
+				<Link
+					href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}
+					className="block w-basalt-36 truncate"
+					title={space.name}
+				>
+					<TagBadge
+						name={space.name}
+						colorKey={space.slug}
+						size="sm"
+						className="inline-block truncate align-middle"
+					/>
 				</Link>
 			),
 			sortValue: (space) => space.name,
