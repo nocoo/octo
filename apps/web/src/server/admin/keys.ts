@@ -136,3 +136,13 @@ export async function revokeKey(db: D1Database, row: ApiKeyRow) {
 	);
 	return publicKey(await loadKey(db, row.id));
 }
+
+export async function deleteKey(db: D1Database, row: ApiKeyRow) {
+	if (row.revoked_at === null) throw conflict("revoke the key before deleting it");
+	await commitKeyMutation(
+		db
+			.prepare("DELETE FROM api_keys WHERE id = ? AND revoked_at IS NOT NULL AND updated_at = ?")
+			.bind(row.id, row.updated_at),
+	);
+	return { id: row.id, deleted: true };
+}

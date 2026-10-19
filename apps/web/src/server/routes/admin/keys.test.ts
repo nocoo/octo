@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadKey, revokeKey, rotateKey, updateKey } from "../../admin/keys";
+import { deleteKey, loadKey, revokeKey, rotateKey, updateKey } from "../../admin/keys";
+import { auditMiddleware } from "../../audit/middleware";
 import { lookupApiKey } from "../../auth/api-key";
 import type { AppVars, Env } from "../../env";
 import { toErrorResponse } from "../../lib/errors";
@@ -362,6 +363,7 @@ describe("admin keys", () => {
 		expect((await request(`/${key.id}/rotate`, "POST", {})).status).toBe(200);
 		expect((await request(`/${key.id}/revoke`, "POST")).status).toBe(200);
 		const deleted = await mint({ name: "deleted" });
+		expect((await request(`/${deleted.key.id}/revoke`, "POST")).status).toBe(200);
 		expect((await request(`/${deleted.key.id}`, "DELETE")).status).toBe(200);
 		expect(await changes.list({ kind: "all" }, { limit: 200 })).toEqual(before);
 		expect(await changes.head({ kind: "all" })).toBe(head);
@@ -523,17 +525,127 @@ describe("admin keys", () => {
 		expect(zero.status).toBe(200);
 		expect(await lookupApiKey(store.d1, pepper, fresh.plaintext)).toBeNull();
 		const latest = (await zero.json()) as { plaintext: string };
-		for (const [path, method] of [
-			[`/${key.id}/revoke`, "POST"],
-			[`/${key.id}`, "DELETE"],
-		]) {
-			const response = await request(path, method);
+		for (let attempt = 0; attempt < 2; attempt++) {
+			const response = await request(`/${key.id}/revoke`, "POST");
 			expect(response.status).toBe(200);
 			expect(await response.json()).toHaveProperty("revoked_at");
 		}
 		expect(await lookupApiKey(store.d1, pepper, latest.plaintext)).toBeNull();
 		expect(store.raw.prepare("SELECT COUNT(*) AS n FROM api_keys").get()).toMatchObject({ n: 1 });
 		expect((await request(`/${key.id}/rotate`, "POST", {})).status).toBe(409);
+	});
+
+	it("requires revocation before permanently deleting a key", async () => {
+		const { key, plaintext } = await mint();
+		const active = await loadKey(store.d1, key.id);
+		const denied = await request(`/${key.id}`, "DELETE");
+		expect(denied.status).toBe(409);
+		expect(await denied.json()).toMatchObject({ error: { code: "version_conflict" } });
+		expect(await loadKey(store.d1, key.id)).toEqual(active);
+		expect(await lookupApiKey(store.d1, pepper, plaintext)).not.toBeNull();
+		expect((await request(`/${key.id}/revoke`, "POST")).status).toBe(200);
+		const deleted = await request(`/${key.id}`, "DELETE");
+		expect(deleted.status).toBe(200);
+		expect(deleted.headers.get("Cache-Control")).toBe("no-store");
+		expect(await deleted.json()).toEqual({ id: key.id, deleted: true });
+		expect((await request(`/${key.id}`)).status).toBe(404);
+		expect((await request(`/${key.id}`, "DELETE")).status).toBe(404);
+		expect(await lookupApiKey(store.d1, pepper, plaintext)).toBeNull();
+		expect(await (await request()).json()).toEqual({ items: [], next_cursor: null });
+	});
+
+	it("conditionally deletes only the unchanged revoked key", async () => {
+		const { key } = await mint();
+		await revokeKey(store.d1, await loadKey(store.d1, key.id));
+		const revoked = await loadKey(store.d1, key.id);
+		store.raw.prepare("UPDATE api_keys SET updated_at = updated_at + 1 WHERE id = ?").run(key.id);
+		await expect(deleteKey(store.d1, revoked)).rejects.toMatchObject({
+			code: "version_conflict",
+		});
+		const current = await loadKey(store.d1, key.id);
+		store.raw.prepare("UPDATE api_keys SET revoked_at = NULL WHERE id = ?").run(key.id);
+		await expect(deleteKey(store.d1, current)).rejects.toMatchObject({
+			code: "version_conflict",
+		});
+		expect(await loadKey(store.d1, key.id)).toMatchObject({ revoked_at: null });
+	});
+
+	it("leaves a revoked key intact if its delete fails", async () => {
+		const { key } = await mint();
+		await revokeKey(store.d1, await loadKey(store.d1, key.id));
+		const revoked = await loadKey(store.d1, key.id);
+		store.raw.exec(
+			"CREATE TRIGGER reject_key_delete BEFORE DELETE ON api_keys BEGIN SELECT RAISE(ABORT, 'key delete unavailable'); END",
+		);
+		expect((await request(`/${key.id}`, "DELETE")).status).toBe(500);
+		expect(await loadKey(store.d1, key.id)).toEqual(revoked);
+	});
+
+	it("retains historical references with foreign keys enabled and audits deletion", async () => {
+		store.raw.exec("PRAGMA foreign_keys = ON");
+		const { key } = await mint();
+		await insertSpace(store.d1, { id: "owned", slug: "owned", ownerKeyId: key.id });
+		store.raw
+			.prepare(
+				"INSERT INTO memories (id, space_id, title, body, type, source_key_id, updated_by_key_id, content_hash, created_at, updated_at) VALUES ('memory', 'owned', 'Keep', 'History', 'note', ?, ?, 'hash', 1, 1)",
+			)
+			.run(key.id, key.id);
+		store.raw
+			.prepare(
+				"INSERT INTO audit_log (id, at, actor, method, route, status, request_id, duration_ms) VALUES ('history', 1, ?, 'GET', '/api/v1/me', 200, 'historical-request', 1)",
+			)
+			.run(`key:${key.id}`);
+		store.raw
+			.prepare("INSERT INTO usage_daily (day, key_id, calls) VALUES ('2026-10-19', ?, 1)")
+			.run(key.id);
+		await revokeKey(store.d1, await loadKey(store.d1, key.id));
+		const audited = new Hono<{ Bindings: Env; Variables: AppVars }>();
+		audited.use("*", async (context, next) => {
+			context.set("requestId", "00000000-0000-4000-8000-000000000001");
+			context.set("adminEmail", "owner@local");
+			await next();
+		});
+		audited.use("*", auditMiddleware);
+		audited.route("/api/admin/keys", keysRoutes());
+		const pending: Promise<unknown>[] = [];
+		const response = await audited.fetch(
+			new Request(`http://localhost/api/admin/keys/${key.id}`, { method: "DELETE" }),
+			{ DB: store.d1 } as Env,
+			{ waitUntil: (task: Promise<unknown>) => pending.push(task) } as unknown as ExecutionContext,
+		);
+		expect(response.status).toBe(200);
+		await response.json();
+		await Promise.all(pending);
+		expect(store.raw.prepare("SELECT * FROM api_keys").all()).toEqual([]);
+		expect(store.raw.prepare("SELECT owner_key_id FROM spaces WHERE id = 'owned'").get()).toEqual({
+			owner_key_id: key.id,
+		});
+		expect(
+			store.raw.prepare("SELECT source_key_id, updated_by_key_id FROM memories").get(),
+		).toEqual({
+			source_key_id: key.id,
+			updated_by_key_id: key.id,
+		});
+		expect(store.raw.prepare("SELECT key_id, calls FROM usage_daily").get()).toEqual({
+			key_id: key.id,
+			calls: 1,
+		});
+		expect(store.raw.prepare("SELECT actor FROM audit_log WHERE id = 'history'").get()).toEqual({
+			actor: `key:${key.id}`,
+		});
+		expect(
+			store.raw
+				.prepare("SELECT actor, method, route, status FROM audit_log WHERE id != 'history'")
+				.all(),
+		).toEqual([
+			{
+				actor: "admin:owner@local",
+				method: "DELETE",
+				route: "/api/admin/keys/:id",
+				status: 200,
+			},
+		]);
+		expect(store.raw.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 	});
 
 	it("fails closed for missing ids, duplicate names, missing pepper and malformed bodies", async () => {

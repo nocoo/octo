@@ -6,7 +6,15 @@ import {
 	keyRotateSchema,
 	resolveKeyInput,
 } from "../../admin/key-input";
-import { createKey, loadKey, publicKey, revokeKey, rotateKey, updateKey } from "../../admin/keys";
+import {
+	createKey,
+	deleteKey,
+	loadKey,
+	publicKey,
+	revokeKey,
+	rotateKey,
+	updateKey,
+} from "../../admin/keys";
 import type { ApiKeyRow } from "../../auth/api-key";
 import type { AppVars, Env } from "../../env";
 import { jsonOk } from "../../lib/errors";
@@ -48,7 +56,7 @@ export function keysRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		);
 	});
 	app.delete("/:id", async (context) =>
-		jsonOk(await revokeKey(context.env.DB, await loadKey(context.env.DB, context.req.param("id")))),
+		jsonOk(await deleteKey(context.env.DB, await loadKey(context.env.DB, context.req.param("id")))),
 	);
 	app.post("/:id/revoke", async (context) =>
 		jsonOk(await revokeKey(context.env.DB, await loadKey(context.env.DB, context.req.param("id")))),

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { L2_ACCESS_AUD, l2AccessIss, loadJwksState, signAccessJwt } from "../../scripts/jwks-stub";
 import { L2_JWKS_PORT } from "../../scripts/ports";
+import { e2eD1, query, sqlText } from "../fixtures/l2-batch";
 
 const base = process.env.OCTO_E2E ?? "http://127.0.0.1:17059";
 const origin = "https://octo.hexly.ai";
@@ -143,9 +144,12 @@ describe("admin keys real HTTP", () => {
 		expect((await admin(path)).status).toBe(200);
 		expect((await admin(`${path}/rotate`, "POST", {})).status).toBe(409);
 		const deletedKey = await mint();
-		expect((await admin(`keys/${deletedKey.key.id}`, "DELETE")).status).toBe(200);
+		expect((await admin(`keys/${deletedKey.key.id}/revoke`, "POST")).status).toBe(200);
+		const deleted = await admin(`keys/${deletedKey.key.id}`, "DELETE");
+		expect(deleted.status).toBe(200);
+		expect(await deleted.json()).toEqual({ id: deletedKey.key.id, deleted: true });
 		expect((await me(deletedKey.plaintext)).status).toBe(401);
-		expect((await admin(`keys/${deletedKey.key.id}`)).status).toBe(200);
+		expect((await admin(`keys/${deletedKey.key.id}`)).status).toBe(404);
 		const publicChanges = await fetch(
 			`${base}/api/v1/changes?cursor=${encodeURIComponent(head.cursor)}`,
 			{ headers: observerHeaders },
@@ -155,6 +159,78 @@ describe("admin keys real HTTP", () => {
 		expect(
 			await (await fetch(`${base}/api/v1/changes/head`, { headers: observerHeaders })).json(),
 		).toEqual(head);
+	});
+
+	it("deletes only revoked keys and retains usage and audit history", async () => {
+		const { key, plaintext } = await mint();
+		const path = `keys/${key.id}`;
+		const activeRequest = crypto.randomUUID();
+		const active = await admin(path, "DELETE", undefined, { "X-Request-Id": activeRequest });
+		expect(active.status).toBe(409);
+		expect(await active.json()).toMatchObject({ error: { code: "version_conflict" } });
+		expect(await (await admin(path)).json()).toMatchObject({ id: key.id, revoked_at: null });
+		expect((await me(plaintext)).status).toBe(200);
+		const database = await e2eD1();
+		const history = await query(
+			database,
+			`SELECT * FROM audit_log WHERE actor = ${sqlText(`key:${key.id}`)} ORDER BY id`,
+		);
+		const usage = await query(
+			database,
+			`SELECT * FROM usage_daily WHERE key_id = ${sqlText(key.id)} ORDER BY day`,
+		);
+		expect(history.length).toBeGreaterThan(0);
+		expect(usage.length).toBeGreaterThan(0);
+		expect((await admin(`${path}/revoke`, "POST")).status).toBe(200);
+		const deletedRequest = crypto.randomUUID();
+		const deleted = await admin(path, "DELETE", undefined, { "X-Request-Id": deletedRequest });
+		expect(deleted.status).toBe(200);
+		expect(deleted.headers.get("Cache-Control")).toBe("no-store");
+		expect(await deleted.json()).toEqual({ id: key.id, deleted: true });
+		expect((await admin(path)).status).toBe(404);
+		const missingRequest = crypto.randomUUID();
+		const missing = await admin(path, "DELETE", undefined, { "X-Request-Id": missingRequest });
+		expect(missing.status).toBe(404);
+		expect(await missing.json()).toMatchObject({ error: { code: "not_found" } });
+		const list = (await (await admin("keys")).json()) as { items: KeyMetadata[] };
+		expect(list.items.some((item) => item.id === key.id)).toBe(false);
+		await e2eD1();
+		expect(await query(database, `SELECT * FROM api_keys WHERE id = ${sqlText(key.id)}`)).toEqual(
+			[],
+		);
+		expect(
+			await query(
+				database,
+				`SELECT * FROM audit_log WHERE actor = ${sqlText(`key:${key.id}`)} ORDER BY id`,
+			),
+		).toEqual(history);
+		expect(
+			await query(
+				database,
+				`SELECT * FROM usage_daily WHERE key_id = ${sqlText(key.id)} ORDER BY day`,
+			),
+		).toEqual(usage);
+		for (const [requestId, status, errorCode] of [
+			[activeRequest, 409, "version_conflict"],
+			[deletedRequest, 200, null],
+			[missingRequest, 404, "not_found"],
+		] as const) {
+			expect(
+				await query(
+					database,
+					`SELECT actor, method, route, status, error_code FROM audit_log WHERE request_id = ${sqlText(requestId)}`,
+				),
+			).toEqual([
+				{
+					actor: `admin:${email}`,
+					method: "DELETE",
+					route: "/api/admin/keys/:id",
+					status,
+					error_code: errorCode,
+				},
+			]);
+		}
+		expect((await me(plaintext)).status).toBe(401);
 	});
 
 	it("uses array and boolean fields without accepting D1 storage aliases", async () => {

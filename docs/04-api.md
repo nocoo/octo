@@ -227,9 +227,10 @@ these routes. Write requests require both Access and the allowed Origin.
 | Method | Path | Request / behavior |
 |---|---|---|
 | GET / POST | `/keys` | List sanitized metadata / mint a role template |
-| GET / PATCH / DELETE | `/keys/:id` | Read / edit permissions / revoke, retaining history |
+| GET / PATCH | `/keys/:id` | Read / edit permissions |
+| DELETE | `/keys/:id` | Permanently delete a revoked key; active keys return 409 |
 | POST | `/keys/:id/rotate` | `{grace_ms?: 0..604800000}`; default zero |
-| POST | `/keys/:id/revoke` | Immediately revoke |
+| POST | `/keys/:id/revoke` | Immediately revoke, retaining the key and history |
 | GET / POST | `/spaces` | List / create `{slug,name,description?,owner_key_id?}` |
 | GET / PATCH / DELETE | `/spaces/:slug` | Read / edit / delete only when empty, including trash |
 | GET | `/audit` | Filter by `from,to,actor,action,status`; opaque `cursor`, bounded `limit` |
@@ -293,6 +294,17 @@ Key lists and space lists return `{items,next_cursor:null}`. Space PATCH uses
 the create fields, all optional; deletion returns `{id,slug,deleted:true}`.
 Key administration is recorded only in the protected audit log, never the
 public memory/space change stream.
+`DELETE /api/admin/keys/:id` is Access-admin-only and requires the same-origin
+write check. It accepts no body and returns `200 {id,deleted:true}` only after
+permanently removing an already revoked key. An unrevoked key, including an
+expired key, returns `409 version_conflict`; revoke it first with
+`POST /api/admin/keys/:id/revoke`. The delete is conditional on the key still
+being revoked and its metadata revision remaining unchanged; a concurrent
+change returns `409 version_conflict`. Missing keys, including repeat deletes,
+return `404 not_found`. The deleted key disappears from metadata reads and
+lists. Existing audit records, usage rows, owned spaces and memory attribution
+retain their original key IDs. Successful, conflicting and missing delete
+requests are audited through the standard request audit middleware.
 Space slugs are 1–64 lowercase alphanumeric characters with single interior
 hyphens. Keys with `auto_own_space` enabled, including `project`, require a name
 meeting the same slug contract so their space can be used by memory writes.
