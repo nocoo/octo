@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { decodeFloat32Vector } from "../search/math";
 import { fixture, SETTINGS } from "./__tests__/fixture";
@@ -26,6 +27,26 @@ function gateway() {
 afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
+});
+
+it("keys the exact truncated outbound text as the agreed model-dimensions-text tuple", async () => {
+	const { env, raw } = await setup();
+	const body = "content".repeat(3000);
+	raw.prepare("UPDATE memories SET body = ? WHERE id = 'm'").run(body);
+	const fetcher = gateway();
+	try {
+		expect(await backfillMemory(env, "m")).toBe(true);
+		const text = `Title\n\n${body}`.slice(0, 16000);
+		const expected = createHash("sha256")
+			.update(JSON.stringify(["tiny", 3, text]))
+			.digest("hex");
+		expect(raw.prepare("SELECT cache_key FROM embedding_cache").get()).toEqual({
+			cache_key: expected,
+		});
+		expect(JSON.parse(String(fetcher.mock.calls[0]?.[1].body)).input).toEqual([text]);
+	} finally {
+		raw.close();
+	}
 });
 
 it("caches batch vectors under the matching input rather than response position", async () => {

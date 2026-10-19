@@ -45,7 +45,7 @@
 ## Embedding economy
 
 Migration `0010_vector_convergence.sql` adds the visibility marker, a durable
-SHA-256 cache over the actual embedding text/model/dimensions, and per-memory/
+SHA-256 cache over JSON `[model, dimensions, actual embedding text]`, and per-memory/
 profile attempt counters. The text is `title + "\n\n" + body`, truncated to
 16,000 characters, matching the outbound input. Model and dimension changes
 produce separate cache entries. No plaintext gateway keys or input copies are
