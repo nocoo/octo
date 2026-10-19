@@ -739,3 +739,5 @@ Final contract reconciliation caught a cache serialization mismatch: implementat
 ### 2026-10-19 — Check the script target before choosing test helpers
 
 The smoke polling regression passed Vitest but used `findLastIndex`, which the scripts' ES2022 TypeScript target does not provide. The active pre-commit hook rejected the commit. The test now uses `map(...).lastIndexOf(...)` without changing the compiler contract. The preliminary shell also continued past a formatting failure because checks were separated with semicolons; dependent validation and commit commands must use success chaining. Runtime test success is not evidence of static compatibility.
+
+The repeated-run parser also passed runtime tests before the hook rejected Zod's default `unknown` coercion input in a string pipeline. Reading the installed declarations confirmed the supported `z.coerce.number<string>()` input parameter. Use the library's real input types rather than weakening TypeScript or casting away a pipeline mismatch.

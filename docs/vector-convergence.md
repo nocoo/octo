@@ -89,6 +89,17 @@ The space must already exist and be dedicated to smoke. Then run:
 bun run scripts/prod-smoke-vectors.ts
 ```
 
+Set `OCTO_SMOKE_RUNS=N` to repeat the complete create/update/cleanup sequence
+sequentially (`N` defaults to 1 and must be a positive safe integer in decimal
+notation). The CLI emits one JSON object with `runs` containing every per-run
+report and `latencies_ms` containing `samples`, `p50` and `max` for each metric.
+The p50 is the median, averaging the two middle samples for an even count.
+Only observed, non-null latencies contribute, including observations from runs
+that failed another check; missing metrics are never counted as zero. A metric
+without observations has null p50/max. Runs use distinct tags and clean up their
+own memories before the next run, even after a reported failure. Any failed run
+or invalid configuration makes the overall result fail with a nonzero exit.
+
 The script discovers the active cosine profile, creates its own run-tagged
 memories, and reports JSON: create-to-indexed and create-to-vector-hit latency,
 PUT-to-new-rank-1 and old-vector-gone latency, repeated duplicate-ID checks,

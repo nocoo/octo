@@ -44,6 +44,13 @@ type SmokeReport = {
 	failures: Failure[];
 	cleanup: { attempted: number; deleted: number; errors: Failure[] };
 };
+type LatencySummary = { samples: number; p50: number | null; max: number | null };
+type SmokeBatchReport = {
+	ok: boolean;
+	runs: SmokeReport[];
+	latencies_ms: Record<Latency, LatencySummary>;
+	failures: Failure[];
+};
 type Dependencies = {
 	fetch: (url: string, init: RequestInit) => Promise<Response>;
 	now: () => number;
@@ -427,9 +434,57 @@ export async function runVectorSmoke(
 	return report;
 }
 
+export async function runVectorSmokeBatch(
+	environment: Record<string, string | undefined> = process.env,
+	dependencies: Partial<Dependencies> = {},
+): Promise<SmokeBatchReport> {
+	const count = z
+		.string()
+		.regex(/^[1-9][0-9]*$/)
+		.default("1")
+		.pipe(z.coerce.number<string>().int().positive())
+		.safeParse(environment.OCTO_SMOKE_RUNS);
+	const runs: SmokeReport[] = [];
+	const failures: Failure[] = [];
+	if (count.success) {
+		for (let run = 0; run < count.data; run += 1) {
+			runs.push(await runVectorSmoke(environment, dependencies));
+		}
+	} else {
+		failures.push({ phase: "config", code: "invalid_environment" });
+	}
+	const summarize = (metric: Latency): LatencySummary => {
+		const values = runs
+			.map((run) => run.latencies_ms[metric])
+			.filter((latency) => latency !== null)
+			.sort((left, right) => left - right);
+		const middle = values.slice(
+			Math.floor((values.length - 1) / 2),
+			Math.floor(values.length / 2) + 1,
+		);
+		return {
+			samples: values.length,
+			p50:
+				middle.length === 0 ? null : middle.reduce((sum, value) => sum + value, 0) / middle.length,
+			max: values.at(-1) ?? null,
+		};
+	};
+	return {
+		ok: failures.length === 0 && runs.every((run) => run.ok),
+		runs,
+		latencies_ms: {
+			create_indexed: summarize("create_indexed"),
+			create_vector_hit: summarize("create_vector_hit"),
+			update_new_rank1: summarize("update_new_rank1"),
+			update_old_gone: summarize("update_old_gone"),
+		},
+		failures,
+	};
+}
+
 export async function main(): Promise<number> {
 	try {
-		const report = await runVectorSmoke();
+		const report = await runVectorSmokeBatch();
 		console.log(JSON.stringify(report));
 		return report.ok ? 0 : 1;
 	} catch {

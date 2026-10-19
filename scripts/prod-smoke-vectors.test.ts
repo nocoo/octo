@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { main, runVectorSmoke } from "./prod-smoke-vectors";
+import { main, runVectorSmoke, runVectorSmokeBatch } from "./prod-smoke-vectors";
 
 const KEY = "secret-never-print-this";
 const environment = {
@@ -52,7 +52,7 @@ function fixture(rtt = 1) {
 			if (path.endsWith("/spaces/dedicated-smoke")) return json({ slug: "dedicated-smoke" });
 			if (path.endsWith("/memories") && init.method === "POST") {
 				const memory: Stored = {
-					id: ids[memories.length] ?? "invalid",
+					id: ids[memories.length] ?? `01J${String(memories.length).padStart(23, "0")}`,
 					version: 1,
 					body: String(call.body.body),
 					tags: call.body.tags as string[],
@@ -65,6 +65,11 @@ function fixture(rtt = 1) {
 				const values = (call.body.vector as { values: number[] }).values;
 				return json({
 					items: memories
+						.filter((memory) =>
+							(call.body.filters as { tags_all: string[] }).tags_all.every((tag) =>
+								memory.tags.includes(tag),
+							),
+						)
 						.map((memory) => ({
 							id: memory.id,
 							scores: {
@@ -112,6 +117,9 @@ function fixture(rtt = 1) {
 		advance: (ms: number) => {
 			time += ms;
 		},
+		setRtt: (ms: number) => {
+			rtt = ms;
+		},
 	};
 }
 
@@ -119,6 +127,107 @@ afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllEnvs();
 	vi.restoreAllMocks();
+});
+
+describe("repeated vector smoke reports", () => {
+	it("defaults to one run with per-metric sample counts and p50/max", async () => {
+		const transport = fixture();
+		const report = await runVectorSmokeBatch(environment, transport.dependencies);
+		expect(report.ok).toBe(true);
+		expect(report.runs).toHaveLength(1);
+		expect(report.failures).toEqual([]);
+		for (const [metric, latency] of Object.entries(report.runs[0]?.latencies_ms ?? {})) {
+			expect(report.latencies_ms[metric as keyof typeof report.latencies_ms]).toEqual({
+				samples: 1,
+				p50: latency,
+				max: latency,
+			});
+		}
+	});
+
+	it.each([2, 3])("isolates %i runs and reports median/max", async (runs) => {
+		const transport = fixture();
+		const delays = [100, 800, 300];
+		let started = 0;
+		transport.setOverride((call) => {
+			if (call.url.pathname.includes("/spaces/")) {
+				transport.setRtt(delays[started] ?? 1);
+				started += 1;
+			}
+		});
+		const report = await runVectorSmokeBatch(
+			{ ...environment, OCTO_SMOKE_RUNS: String(runs) },
+			transport.dependencies,
+		);
+		expect(report.ok).toBe(true);
+		expect(report.runs).toHaveLength(runs);
+		expect(new Set(report.runs.map((run) => run.run)).size).toBe(runs);
+		const medianRtt = runs === 2 ? 450 : 300;
+		const maxRtt = 800;
+		expect(report.latencies_ms).toEqual({
+			create_indexed: { samples: runs, p50: medianRtt * 2, max: maxRtt * 2 },
+			create_vector_hit: { samples: runs, p50: medianRtt * 3 + 250, max: maxRtt * 3 + 250 },
+			update_new_rank1: { samples: runs, p50: medianRtt * 3 + 500, max: maxRtt * 3 + 500 },
+			update_old_gone: { samples: runs, p50: medianRtt * 4 + 750, max: maxRtt * 4 + 750 },
+		});
+		for (const run of report.runs) {
+			expect(run.cleanup).toEqual({ attempted: 2, deleted: 2, errors: [] });
+			expect(run.duplicate_checks).toBeGreaterThan(0);
+			expect(Object.values(run.embedding_calls)).toEqual([0, 0, 0, 0, 0, 0]);
+		}
+		const deletes = transport.calls.filter((call) => call.init.method === "DELETE");
+		expect(new Set(deletes.map((call) => call.url.pathname)).size).toBe(runs * 2);
+		expect(JSON.stringify(report)).not.toContain(KEY);
+	});
+
+	it("retains failed-run evidence, cleans up and continues without inventing missing latencies", async () => {
+		const transport = fixture();
+		transport.setOverride((call) => {
+			if (!call.url.pathname.endsWith("/search")) return;
+			if (transport.memories.length === 2) return transport.json({ items: [] });
+		});
+		const report = await runVectorSmokeBatch(
+			{ ...environment, OCTO_SMOKE_RUNS: "2" },
+			transport.dependencies,
+		);
+		expect(report.ok).toBe(false);
+		expect(report.runs.map((run) => run.ok)).toEqual([false, true]);
+		expect(report.runs.map((run) => run.cleanup.deleted)).toEqual([2, 2]);
+		expect(report.runs[0]?.failures).toContainEqual({ phase: "create", code: "deadline_exceeded" });
+		expect(report.latencies_ms.create_vector_hit).toEqual({ samples: 1, p50: 253, max: 253 });
+		expect(report.latencies_ms.create_indexed.samples).toBe(2);
+	});
+
+	it("returns null summaries rather than zero for metrics never observed", async () => {
+		const transport = fixture();
+		transport.setOverride(() => transport.json({ error: KEY }, 403));
+		const report = await runVectorSmokeBatch(
+			{ ...environment, OCTO_SMOKE_RUNS: "2" },
+			transport.dependencies,
+		);
+		expect(report.ok).toBe(false);
+		expect(report.runs).toHaveLength(2);
+		for (const summary of Object.values(report.latencies_ms)) {
+			expect(summary).toEqual({ samples: 0, p50: null, max: null });
+		}
+		expect(JSON.stringify(report)).not.toContain(KEY);
+	});
+
+	it.each(["", "0", "-1", "1.5", "01", " 2", "2 ", "NaN", "Infinity", "9007199254740992", KEY])(
+		"rejects invalid run counts before transport calls (%s)",
+		async (runs) => {
+			const transport = fixture();
+			const report = await runVectorSmokeBatch(
+				{ ...environment, OCTO_SMOKE_RUNS: runs },
+				transport.dependencies,
+			);
+			expect(report.ok).toBe(false);
+			expect(report.runs).toEqual([]);
+			expect(report.failures).toEqual([{ phase: "config", code: "invalid_environment" }]);
+			expect(transport.calls).toHaveLength(0);
+			expect(JSON.stringify(report)).not.toContain(KEY);
+		},
+	);
 });
 
 describe("production vector smoke with fake transport only", () => {
@@ -566,10 +675,11 @@ describe("production vector smoke with fake transport only", () => {
 		expect(f.calls).toHaveLength(0);
 	});
 
-	it("runs the default CLI dependencies entirely on fake timers and fake fetch", async () => {
+	it.each([undefined, "2"])("runs the CLI with %s runs on fake timers and fetch", async (runs) => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
 		const f = fixture();
 		for (const [key, value] of Object.entries(environment)) vi.stubEnv(key, value);
+		vi.stubEnv("OCTO_SMOKE_RUNS", runs);
 		vi.spyOn(globalThis, "fetch").mockImplementation((url, init) =>
 			f.dependencies.fetch(String(url), init ?? {}),
 		);
@@ -578,7 +688,10 @@ describe("production vector smoke with fake transport only", () => {
 		await vi.runAllTimersAsync();
 		expect(await promise).toBe(0);
 		expect(log).toHaveBeenCalledTimes(1);
-		expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({ ok: true });
+		const report = JSON.parse(String(log.mock.calls[0]?.[0]));
+		expect(report).toMatchObject({ ok: true });
+		expect(report.runs).toHaveLength(Number(runs ?? 1));
+		expect(report.latencies_ms.create_indexed.samples).toBe(Number(runs ?? 1));
 		expect(JSON.stringify(log.mock.calls)).not.toContain(KEY);
 	});
 
