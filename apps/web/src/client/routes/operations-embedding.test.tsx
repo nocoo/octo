@@ -3,6 +3,7 @@ import type { DataTableProps, DataTableSort } from "@nocoo/basalt/components/dat
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { APP_VERSION } from "../../lib/version";
 import type {
 	EmbeddingModel,
 	EmbeddingProfile,
@@ -278,7 +279,7 @@ describe("M7 embedding test result SSR", () => {
 			</MemoryRouter>,
 		);
 		expect(html).not.toContain("版本");
-		expect(html).not.toContain("0.1.1");
+		expect(html).not.toContain(APP_VERSION);
 	});
 });
 
