@@ -108,18 +108,22 @@ or invalid configuration makes the overall result fail with a nonzero exit.
 
 The script discovers the active cosine profile, creates its own run-tagged
 memories, and reports JSON: create-to-indexed and create-to-vector-hit latency,
-PUT-to-new-rank-1 and old-vector-gone latency, repeated duplicate-ID checks,
+PUT-to-indexed, new-rank-1 and old-vector-gone latency, repeated duplicate-ID checks,
 embedding counters and cleanup outcomes. It checks vector and hybrid results,
 uses exact old-ID absence in the vector channel, enforces a 10-second observation
 deadline and exits nonzero on failure. Each window starts after the target POST
 or vector PUT response, excluding write RTT and the preceding body-only PATCH.
 Each polling tick sends just one status GET or search, rotating through status,
-vector and hybrid checks with a 250 ms pause between requests. Metrics are
-recorded when their own evidence arrives, not after the full rotation. Update
-rank-1 (`update_new_rank1`) requires indexed/non-stale status and the target as
-the new-vector search's top hit with similarity >=0.99. Hybrid searches continue
+vector and hybrid checks with a 250 ms pause between requests. Satisfied metric
+steps are skipped without requests or pauses so pending metrics are polled more
+often. Metrics are recorded when their own evidence arrives, not after the full
+rotation. Update rank-1 (`update_new_rank1`) requires only the target as the
+new-vector search's top hit with similarity >=0.99. The independent
+`update_indexed` metric requires indexed/non-stale status after PUT and has its
+own sample count, p50 and max. Both metrics must converge. Hybrid searches continue
 only for duplicate-ID checks; their ranking, similarity and FTS-only hits do not
-gate convergence. Observed vector/status regressions still fail the run. Control
+gate convergence. Satisfied vector/status metrics are not polled again; these
+latencies measure first observation, not sustained convergence. Control
 counters are checked outside the polling windows. A deadline-limited request
 timeout closes observation and still fails missing metrics; an ordinary request timeout (eight seconds by
 default) remains a transport failure. Only tracked IDs created by this run are

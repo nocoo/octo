@@ -28,7 +28,12 @@ const searchSchema = z.object({
 });
 type Failure = { phase: string; code: string; status?: number };
 type CounterStage = "create" | "noop" | "tags" | "patch" | "put" | "final";
-type Latency = "create_indexed" | "create_vector_hit" | "update_new_rank1" | "update_old_gone";
+type Latency =
+	| "create_indexed"
+	| "create_vector_hit"
+	| "update_indexed"
+	| "update_new_rank1"
+	| "update_old_gone";
 type SmokeReport = {
 	ok: boolean;
 	run: string;
@@ -136,6 +141,7 @@ export async function runVectorSmoke(
 		latencies_ms: {
 			create_indexed: null,
 			create_vector_hit: null,
+			update_indexed: null,
 			update_new_rank1: null,
 			update_old_gone: null,
 		},
@@ -322,60 +328,72 @@ export async function runVectorSmoke(
 			const fields: Latency[] =
 				stage === "create"
 					? ["create_indexed", "create_vector_hit"]
-					: ["update_new_rank1", "update_old_gone"];
+					: ["update_indexed", "update_new_rank1", "update_old_gone"];
 			const mark = (field: Latency, ready: boolean) => {
 				const elapsed = deps.now() - start;
 				if (elapsed >= DEADLINE_MS) return;
 				if (ready && report.latencies_ms[field] === null) report.latencies_ms[field] = elapsed;
-				if (!ready && report.latencies_ms[field] !== null) record("convergence_regressed");
 			};
-			let indexed = false;
-			let vectorRank1 = false;
 			const near = (item: z.infer<typeof searchSchema>["items"][number]) =>
 				(item.scores.vector?.similarity ?? -1) >= MATCH_SIMILARITY;
 			const supplied = stage === "create" ? oldVector : newVector;
-			const steps = [
-				async (budget: number) => {
-					const current = await read(
-						target.id,
-						stage === "create" ? "create" : report.polls.update === 0 ? "put" : "final",
-						budget,
-					);
-					indexed = current.status.indexed && !current.status.stale;
-					if (stage === "create") mark("create_indexed", indexed);
-				},
-				async (budget: number) => {
-					const hits = await search(supplied, "vector", budget);
-					if (stage === "create") {
-						mark(
-							"create_vector_hit",
-							hits.some((item) => item.id === target.id && near(item)),
+			const indexedMetric = stage === "create" ? "create_indexed" : "update_indexed";
+			const vectorMetric = stage === "create" ? "create_vector_hit" : "update_new_rank1";
+			const steps: { metric?: Latency; poll: (budget: number) => Promise<void> }[] = [
+				{
+					metric: indexedMetric,
+					poll: async (budget) => {
+						const current = await read(
+							target.id,
+							stage === "create" ? "create" : report.polls.update === 0 ? "put" : "final",
+							budget,
 						);
-					} else {
-						vectorRank1 = hits[0]?.id === target.id && near(hits[0]);
-					}
+						mark(indexedMetric, current.status.indexed && !current.status.stale);
+					},
 				},
-				async (budget: number) => {
-					await search(supplied, "hybrid", budget);
+				{
+					metric: vectorMetric,
+					poll: async (budget) => {
+						const hits = await search(supplied, "vector", budget);
+						mark(
+							vectorMetric,
+							stage === "create"
+								? hits.some((item) => item.id === target.id && near(item))
+								: hits[0]?.id === target.id && near(hits[0]),
+						);
+					},
+				},
+				{
+					poll: async (budget) => {
+						await search(supplied, "hybrid", budget);
+					},
 				},
 			];
 			if (stage === "update") {
 				steps.push(
-					async (budget: number) => {
-						const hits = await search(oldVector, "vector", budget);
-						mark("update_old_gone", !hits.some((item) => item.id === target.id));
+					{
+						metric: "update_old_gone",
+						poll: async (budget) => {
+							const hits = await search(oldVector, "vector", budget);
+							mark("update_old_gone", !hits.some((item) => item.id === target.id));
+						},
 					},
-					async (budget: number) => {
-						await search(oldVector, "hybrid", budget);
+					{
+						poll: async (budget) => {
+							await search(oldVector, "hybrid", budget);
+						},
 					},
 				);
 			}
+			let stepIndex = 0;
 			while (true) {
 				const budget = deadline - deps.now();
 				if (budget <= 0) break;
+				const step = steps[stepIndex % steps.length];
+				stepIndex += 1;
+				if (!step || (step.metric && report.latencies_ms[step.metric] !== null)) continue;
 				try {
-					await steps[report.polls[stage] % steps.length]?.(budget);
-					if (stage === "update") mark("update_new_rank1", indexed && vectorRank1);
+					await step.poll(budget);
 					report.polls[stage] += 1;
 				} catch (error) {
 					if (
@@ -476,6 +494,7 @@ export async function runVectorSmokeBatch(
 		latencies_ms: {
 			create_indexed: summarize("create_indexed"),
 			create_vector_hit: summarize("create_vector_hit"),
+			update_indexed: summarize("update_indexed"),
 			update_new_rank1: summarize("update_new_rank1"),
 			update_old_gone: summarize("update_old_gone"),
 		},
