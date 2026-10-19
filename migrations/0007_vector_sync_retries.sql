@@ -1,6 +1,7 @@
 ALTER TABLE vector_sync_jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE vector_sync_jobs ADD COLUMN last_error TEXT;
 ALTER TABLE vector_sync_jobs ADD COLUMN dead_at INTEGER;
+ALTER TABLE vector_sync_jobs ADD COLUMN lease_dirty INTEGER NOT NULL DEFAULT 0;
 
 DROP INDEX vector_sync_due;
 CREATE INDEX vector_sync_due ON vector_sync_jobs(due_at, lease_until) WHERE dead_at IS NULL;

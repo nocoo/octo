@@ -63,7 +63,7 @@ export function applyMigrations(d1: D1Exec, migrationsDir = join(root, "migratio
 			"0006_tag_positions.sql": { table: "memory_tags", names: ["position"] },
 			"0007_vector_sync_retries.sql": {
 				table: "vector_sync_jobs",
-				names: ["attempts", "last_error", "dead_at"],
+				names: ["attempts", "last_error", "dead_at", "lease_dirty"],
 			},
 		}[file];
 		if (addedColumns) {

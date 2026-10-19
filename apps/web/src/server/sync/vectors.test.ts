@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import type { Env } from "../env";
 import { CloudflareVectorStore } from "../ports/vector/cloudflare";
 import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import { encodeFloat32Vector } from "../search/math";
 import { RECONCILE_INTERVAL_MS, SYNC_LEASE_MS, synchronizeVectors } from "./vectors";
+
+afterEach(() => vi.restoreAllMocks());
 
 function fixture() {
 	const { db, sqlite } = sqliteD1();
@@ -22,6 +24,155 @@ function fixture() {
 }
 
 describe("durable vector synchronization", () => {
+	it("starts queued work with a fresh lease and backs off from the failure time", async () => {
+		const { env, store, sqlite } = fixture();
+		const clock = vi.spyOn(Date, "now").mockReturnValue(100);
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		env.OCTO_VECTOR_SYNC_CONCURRENCY = "1";
+		sqlite.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-missing')");
+		store.upsert.mockImplementationOnce(async () => {
+			clock.mockReturnValue(100 + 2 * SYNC_LEASE_MS);
+		});
+		store.delete.mockImplementationOnce(async () => {
+			expect(
+				sqlite
+					.prepare("SELECT lease_until FROM vector_sync_jobs WHERE memory_id = 'z-missing'")
+					.get()?.lease_until,
+			).toBe(Date.now() + SYNC_LEASE_MS);
+			clock.mockReturnValue(100 + 3 * SYNC_LEASE_MS);
+			throw new Error("service unavailable");
+		});
+		expect(await synchronizeVectors(env, { store })).toEqual({ synced: 1, failed: 1 });
+		expect(
+			sqlite.prepare("SELECT due_at FROM vector_sync_jobs WHERE memory_id = 'z-missing'").get()
+				?.due_at,
+		).toBe(Date.now() + 2 * RECONCILE_INTERVAL_MS);
+		clock.mockRestore();
+		log.mockRestore();
+	});
+
+	it("keeps the fifth job exclusively leased after four slow concurrent preparations", async () => {
+		const { env, store, sqlite } = fixture();
+		const clock = vi.spyOn(Date, "now").mockReturnValue(100);
+		sqlite.exec("DELETE FROM vector_sync_jobs");
+		for (let index = 0; index < 5; index++)
+			sqlite.prepare("INSERT INTO vector_sync_jobs (memory_id) VALUES (?)").run(`job-${index}`);
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let calls = 0;
+		const first = synchronizeVectors(env, {
+			store,
+			beforeSync: async (memoryId) => {
+				calls++;
+				if (calls <= 4) {
+					if (calls === 4) entered.resolve();
+					await release.promise;
+				} else {
+					expect(
+						sqlite
+							.prepare("SELECT lease_until FROM vector_sync_jobs WHERE memory_id = ?")
+							.get(memoryId)?.lease_until,
+					).toBe(Date.now() + SYNC_LEASE_MS);
+					expect(await synchronizeVectors(env, { store })).toEqual({ synced: 0, failed: 0 });
+				}
+			},
+		});
+		await entered.promise;
+		clock.mockReturnValue(101 + SYNC_LEASE_MS);
+		release.resolve();
+		expect(await first).toEqual({ synced: 5, failed: 0 });
+		expect(store.delete).toHaveBeenCalledTimes(1);
+	});
+
+	it("rereads a restored generation queued before a batched delete", async () => {
+		const { env, store, sqlite, indexed } = fixture();
+		env.OCTO_VECTOR_SYNC_CONCURRENCY = "1";
+		sqlite.exec(
+			"UPDATE memories SET deleted_at = 50; INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-missing')",
+		);
+		expect(
+			await synchronizeVectors(env, {
+				store,
+				now: 100,
+				beforeSync: async (memoryId) => {
+					if (memoryId === "z-missing") sqlite.exec("UPDATE memories SET deleted_at = NULL");
+				},
+			}),
+		).toEqual({ synced: 2, failed: 0 });
+		expect(store.delete).toHaveBeenCalledExactlyOnceWith(["z-missing"]);
+		expect(indexed()).toBe(100);
+	});
+
+	it.each([0, 7])(
+		"does not discard the current owner's failure after a stale completion (prior failures %i)",
+		async (prior) => {
+			const { env, store, sqlite } = fixture();
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			sqlite.prepare("UPDATE vector_sync_jobs SET attempts = ?").run(prior);
+			const entered = Promise.withResolvers<void>();
+			const release = Promise.withResolvers<void>();
+			let newer: ReturnType<typeof synchronizeVectors> | undefined;
+			store.upsert
+				.mockImplementationOnce(async () => {
+					newer = synchronizeVectors(env, { store, now: 101 + SYNC_LEASE_MS });
+					await entered.promise;
+				})
+				.mockImplementationOnce(async () => {
+					entered.resolve();
+					await release.promise;
+					throw new Error("service unavailable");
+				});
+			try {
+				expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({
+					synced: 0,
+					failed: 0,
+				});
+			} finally {
+				release.resolve();
+			}
+			expect(await newer).toEqual({ synced: 0, failed: 1 });
+			expect(
+				sqlite.prepare("SELECT attempts, due_at, dead_at FROM vector_sync_jobs").get(),
+			).toEqual({
+				attempts: prior + 1,
+				due_at: 101 + SYNC_LEASE_MS + Math.min(2 ** (prior + 1), 24) * RECONCILE_INTERVAL_MS,
+				dead_at: prior === 7 ? 101 + SYNC_LEASE_MS : null,
+			});
+			expect(log.mock.calls.filter(([entry]) => entry.event === "vector_sync_dead")).toHaveLength(
+				prior === 7 ? 1 : 0,
+			);
+			expect(await synchronizeVectors(env, { store, now: 102 + SYNC_LEASE_MS })).toEqual({
+				synced: 0,
+				failed: 0,
+			});
+			log.mockRestore();
+		},
+	);
+
+	it("rechecks queued deletion leases before sending the batch", async () => {
+		const { env, store, sqlite } = fixture();
+		const clock = vi.spyOn(Date, "now").mockReturnValue(100);
+		env.OCTO_VECTOR_SYNC_CONCURRENCY = "1";
+		sqlite.exec(
+			"UPDATE memories SET deleted_at = 50; INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-missing')",
+		);
+		expect(
+			await synchronizeVectors(env, {
+				store,
+				beforeSync: async (memoryId) => {
+					if (memoryId === "z-missing") {
+						clock.mockReturnValue(101 + SYNC_LEASE_MS);
+						expect(await synchronizeVectors(env, { store, limit: 1 })).toEqual({
+							synced: 1,
+							failed: 0,
+						});
+					}
+				},
+			}),
+		).toEqual({ synced: 1, failed: 0 });
+		expect(store.delete.mock.calls).toEqual([[["memory"]], [["z-missing"]]]);
+	});
+
 	it("does not charge a failed stale generation to a concurrent mutation", async () => {
 		const { env, store, sqlite } = fixture();
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});

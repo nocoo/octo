@@ -51,11 +51,13 @@ async function invalidate(
 	await db.batch([
 		db.prepare("UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ?").bind(memoryId),
 		db
-			.prepare(`UPDATE vector_sync_jobs SET generation = generation + 1,
+			.prepare(`UPDATE vector_sync_jobs SET
+			generation = generation + CASE WHEN lease_token IS NULL OR lease_token = ? THEN 1 ELSE 0 END,
+			lease_dirty = CASE WHEN lease_token IS NOT NULL AND lease_token != ? THEN 1 ELSE 0 END,
 			due_at = CASE WHEN lease_token = ? OR (attempts = 0 AND dead_at IS NULL) THEN ? ELSE due_at END,
 			lease_until = CASE WHEN lease_token = ? THEN 0 ELSE lease_until END,
 			lease_token = CASE WHEN lease_token = ? THEN NULL ELSE lease_token END WHERE memory_id = ?`)
-			.bind(token, now, token, token, memoryId),
+			.bind(token, token, token, now, token, token, memoryId),
 	]);
 }
 
@@ -63,7 +65,8 @@ export async function synchronizeVectors(
 	env: Env,
 	options: SyncOptions = {},
 ): Promise<{ synced: number; failed: number }> {
-	const now = options.now ?? Date.now();
+	const timestamp = () => options.now ?? Date.now();
+	const now = timestamp();
 	const limit = Math.max(0, Math.min(500, Math.trunc(options.limit ?? 50)));
 	const configured = Number(env.OCTO_VECTOR_SYNC_CONCURRENCY);
 	const concurrency = Number.isInteger(configured) && configured >= 1 ? Math.min(configured, 4) : 4;
@@ -86,6 +89,7 @@ export async function synchronizeVectors(
 		.bind(now, now, limit)
 		.all<Job>();
 	const fail = async (job: Claim, stage: string, error: unknown) => {
+		const failedAt = timestamp();
 		totals.failed++;
 		const details = vectorErrorDetails(error);
 		const entry = {
@@ -97,22 +101,22 @@ export async function synchronizeVectors(
 		const failed = await env.DB.prepare(`UPDATE vector_sync_jobs SET attempts = attempts + 1,
 			last_error = ?, due_at = ? + min(1 << (attempts + 1), 24) * ?,
 			dead_at = CASE WHEN attempts + 1 >= ? THEN ? ELSE NULL END,
-			lease_token = NULL, lease_until = 0
+			lease_token = NULL, lease_until = 0, lease_dirty = 0
 			WHERE memory_id = ? AND generation = ? AND lease_token = ? AND dead_at IS NULL
 			RETURNING attempts, dead_at`)
 			.bind(
 				details.error_message,
-				now,
+				failedAt,
 				RECONCILE_INTERVAL_MS,
 				MAX_FAILURES,
-				now,
+				failedAt,
 				job.memory_id,
 				job.generation,
 				job.token,
 			)
 			.first<{ attempts: number; dead_at: number | null }>();
 		if (!failed) {
-			await invalidate(env.DB, job.memory_id, job.token, now);
+			await invalidate(env.DB, job.memory_id, job.token, failedAt);
 			return;
 		}
 		await env.DB.prepare(`UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ?
@@ -123,11 +127,12 @@ export async function synchronizeVectors(
 			console.error({ event: "vector_sync_dead", ...entry, attempts: failed.attempts });
 	};
 	const acknowledge = async (job: Claim, retry: Job[]) => {
+		const completedAt = timestamp();
 		const results = await env.DB.batch([
 			env.DB.prepare(`UPDATE memory_vectors SET indexed_at = ? WHERE memory_id = ? AND profile_id = ?
-				AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND lease_token = ?)
+				AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0)
 				AND EXISTS (SELECT 1 FROM memories WHERE id = ? AND deleted_at IS NULL)`).bind(
-				now,
+				completedAt,
 				job.memory_id,
 				profileId,
 				job.memory_id,
@@ -137,8 +142,8 @@ export async function synchronizeVectors(
 			),
 			env.DB.prepare(`UPDATE vector_sync_jobs SET synced_generation = generation, lease_token = NULL,
 				lease_until = 0, due_at = ?, attempts = 0, last_error = NULL, dead_at = NULL
-				WHERE memory_id = ? AND generation = ? AND lease_token = ?`).bind(
-				now + RECONCILE_INTERVAL_MS,
+				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0`).bind(
+				completedAt + RECONCILE_INTERVAL_MS,
 				job.memory_id,
 				job.generation,
 				job.token,
@@ -147,16 +152,17 @@ export async function synchronizeVectors(
 		if (results[1]?.meta.changes === 1) {
 			totals.synced++;
 		} else {
-			await invalidate(env.DB, job.memory_id, job.token, now);
+			await invalidate(env.DB, job.memory_id, job.token, completedAt);
 			retry.push(job);
 		}
 	};
 	const syncAttempt = async (job: Job, deletes: Claim[], retry: Job[]) => {
 		const token = crypto.randomUUID();
+		const claimedAt = timestamp();
 		const claim =
-			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?
+			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?, lease_dirty = 0
 			WHERE memory_id = ? AND dead_at IS NULL AND lease_until <= ? AND due_at <= ? RETURNING generation`)
-				.bind(token, now + SYNC_LEASE_MS, now, job.memory_id, now, now)
+				.bind(token, claimedAt + SYNC_LEASE_MS, claimedAt, job.memory_id, claimedAt, claimedAt)
 				.first<{ generation: number }>();
 		if (!claim) return;
 		const claimed = { ...job, token, generation: claim.generation };
@@ -164,9 +170,10 @@ export async function synchronizeVectors(
 		try {
 			await options.beforeSync?.(job.memory_id);
 			stage = "read";
-			const current = await env.DB.prepare(`SELECT generation FROM vector_sync_jobs
-				WHERE memory_id = ? AND lease_token = ?`)
-				.bind(job.memory_id, token)
+			const refreshedAt = timestamp();
+			const current = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_until = ?, due_at = ?
+				WHERE memory_id = ? AND lease_token = ? RETURNING generation`)
+				.bind(refreshedAt + SYNC_LEASE_MS, refreshedAt, job.memory_id, token)
 				.first<{ generation: number }>();
 			if (!current) return;
 			claimed.generation = current.generation;
@@ -211,15 +218,32 @@ export async function synchronizeVectors(
 			const deletes: Claim[] = [];
 			const retry: Job[] = [];
 			await concurrent(pending, concurrency, (job) => syncAttempt(job, deletes, retry));
-			if (deletes.length > 0) {
+			const ready: Claim[] = [];
+			await concurrent(deletes, concurrency, async (job) => {
+				const refreshedAt = timestamp();
+				const owned = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_until = ?, due_at = ?
+					WHERE memory_id = ? AND generation = ? AND lease_token = ? RETURNING memory_id`)
+					.bind(refreshedAt + SYNC_LEASE_MS, refreshedAt, job.memory_id, job.generation, job.token)
+					.first();
+				if (owned) {
+					ready.push(job);
+				} else {
+					const released = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
+						lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ? RETURNING memory_id`)
+						.bind(refreshedAt, job.memory_id, job.token)
+						.first();
+					if (released) retry.push(job);
+				}
+			});
+			if (ready.length > 0) {
 				try {
-					await store.delete(deletes.map((job) => job.memory_id));
+					await store.delete(ready.map((job) => job.memory_id));
 				} catch (error) {
-					await concurrent(deletes, concurrency, (job) => fail(job, "delete", error));
+					await concurrent(ready, concurrency, (job) => fail(job, "delete", error));
 					pending = retry;
 					continue;
 				}
-				await concurrent(deletes, concurrency, async (job) => {
+				await concurrent(ready, concurrency, async (job) => {
 					try {
 						await acknowledge(job, retry);
 					} catch (error) {

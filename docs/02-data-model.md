@@ -190,6 +190,10 @@ clears retry state. A new authoritative memory/vector/space-slug mutation resets
 the failure budget and revives the job; an expired or stale completion cannot
 consume a newer generation's budget or clear its backoff. HTTP writes, MCP writes
 and cron use this same path.
+The `lease_dirty` flag records a stale external completion while a newer lease
+is active. It forces successful work to reconcile again without changing that
+owner's authoritative generation or losing its failure budget. Claims clear
+the flag; real source mutations still advance the generation and reset retries.
 Failures emit structured `vector_sync_failed` logs with the memory ID, an
 allowlisted error name/code, a fixed stage-specific message, and `error_message`
 limited to 300 characters. Message redaction retains only known public Vectorize
@@ -211,6 +215,10 @@ jobs run concurrently; another drain skips their live leases and can
 reach untouched deletion tombstones. After backfill, synchronization rechecks
 lease ownership and reads the current generation before reading the vector;
 an expired owner's completion cannot acknowledge a newer owner's work.
+Each actual claim and post-backfill refresh reads the current clock, rather than
+reusing the drain start time. A queued delete refreshes and checks its lease and
+generation immediately before joining the provider batch; superseded claims are
+not sent. Retry and anti-entropy delays start from failure/completion time.
 Completed rows and tombstones are intentionally retained; this is the durable
 recovery cost of a destination without conditional/fenced writes.
 
