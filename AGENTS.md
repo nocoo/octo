@@ -58,6 +58,12 @@ Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-veri
 
 Details: [docs/07-dev-workflow.md](docs/07-dev-workflow.md).
 
+## Release, CI and deploy
+
+- Release: no release script. Version lives only in root `package.json` (`X.Y.Z`); tags and GitHub Releases use `vX.Y.Z`. Usually bump Z, Y for feature changes, X only with Zheng's approval. Manual cut per the workflow `nocoo-repo-steward` versioning reference: bump `package.json`, `bun install` to sync `bun.lock`, update root `CHANGELOG.md` (create it on the first release; no tags exist yet) from commits since the last tag, commit through hooks, push, then `git tag vX.Y.Z && git push origin vX.Y.Z` and `gh release create vX.Y.Z`. Release only when Zheng asks or another bot needs the change.
+- CI (`.github/workflows/ci.yml`, push and PR to `main`, via `nocoo/base-ci` `quality.yml`): gates `test-skip`, `no-remote`, `wrangler-vars`, `client-fetch`; typecheck; Biome lint; `test:coverage` (≥95%); build (`bun run build` incl. `gate:production`, plus `wrangler deploy --dry-run`); L2 `test:e2e:api`; L3 `test:e2e:bdd`. Merge only when green.
+- Deploy: Cloudflare Worker `octo` at `https://octo.hexly.ai` (custom domain, D1 `octo-db`, R2 `octo-files`, Vectorize). Deploy with wrangler from the MacBook (Studio has no wrangler login) out of a fresh worktree at remote `main` (confirm with `git ls-remote`): apply pending migrations with `wrangler d1 migrations apply octo-db --remote` before dependent code, then `wrangler deploy`, then verify `/api/live` reports the deployed `git_sha`. Never print secrets.
+
 ## Resources and isolation
 
 | Lane | Ports (approved 2026-10-17, nmem `octo-local-ports`) | Boundary |
