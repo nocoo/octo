@@ -59,7 +59,7 @@ describe.each(operations)("$event", ({ event, run }) => {
 			vi.fn(async () => {
 				if (stage === "request") throw new Error(`${SECRET} private-body private-query`);
 				if (stage === "parse") return new Response(`${SECRET} private-body`);
-				return Response.json({ data: [{ embedding: [1] }] });
+				return Response.json({ data: [{ index: 0, embedding: [1] }] });
 			}),
 		);
 		const result = await run(env);
@@ -127,7 +127,7 @@ it("tests an unsaved key and URL over broken stored credentials without persisti
 	raw.exec("UPDATE settings SET ciphertext = x'00' WHERE key = 'embedding.api_key'");
 	const before = raw.prepare("SELECT * FROM settings ORDER BY key").all();
 	const logger = vi.spyOn(console, "error").mockImplementation(() => {});
-	const fetcher = vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] }));
+	const fetcher = vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] }));
 	vi.stubGlobal("fetch", fetcher);
 	const result = await testEmbeddingSettings(env, {
 		base_url: "https://override.example/v1/",
@@ -159,7 +159,7 @@ it("round-trips an 83-byte ciphertext through D1 hex and the stored-key test pat
 		"fetch",
 		vi.fn(async (_url: string, init: RequestInit) => {
 			expect(new Headers(init.headers).get("Authorization")).toBe(`Bearer ${credential}`);
-			return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+			return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 		}),
 	);
 	expect(await testEmbeddingSettings(env, {})).toMatchObject({ match: true, reason: null });

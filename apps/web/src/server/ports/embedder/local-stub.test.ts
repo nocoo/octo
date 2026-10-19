@@ -57,16 +57,16 @@ describe("real local embedding gateway", () => {
 	});
 
 	it.each([
-		{ embedding: [1], stage: "dims" },
-		{ embedding: [0, 0], stage: "parse" },
-		{ embedding: [NaN, 0], stage: "parse" },
+		{ index: 0, embedding: [1], stage: "dims" },
+		{ index: 0, embedding: [0, 0], stage: "parse" },
+		{ index: 0, embedding: [NaN, 0], stage: "parse" },
 	])("rejects malformed real upstream vectors: $embedding", async ({ embedding, stage }) => {
 		const local = await stub({ embedding });
 		await expect(embedder(local.baseUrl).embed(["x"])).rejects.toMatchObject({ reason: { stage } });
 	});
 
 	it("rejects a real HTTP response missing an embedding for one input", async () => {
-		const local = await stub({ responseBody: { data: [{ embedding: [3, 4] }] } });
+		const local = await stub({ responseBody: { data: [{ index: 0, embedding: [3, 4] }] } });
 		await expect(embedder(local.baseUrl).embed(["hello", "world"])).rejects.toThrow(
 			"embedding count mismatch",
 		);

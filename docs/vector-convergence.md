@@ -48,6 +48,9 @@ to previously embedded text reuse stored vectors/cache. Current client vectors
 skip the model and even gateway decryption/configuration. A batch claims memory
 jobs first, then cache keys, sends only distinct missing inputs, caches successful
 embeddings before the guarded memory-vector transaction, and releases claims.
+Gateway responses must supply a unique integer `data[].index` for every input
+from zero through input-count minus one. Response order is irrelevant; missing,
+duplicate or out-of-range indices reject the batch before caching any vector.
 Another live holder cannot double-embed/upsert. Cache contention and gateway
 429/5xx/config/storage failures reject the preparation batch so its memory jobs
 retain backoff/dead-letter behavior. Stale-memory CAS misses preserve the cache

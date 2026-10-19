@@ -42,17 +42,29 @@ export class GatewayEmbedder implements QueryEmbedder {
 			}
 			stage = "parse";
 			const body = (await res.json()) as {
-				data?: Array<{ embedding?: unknown } | null>;
+				data?: Array<{ embedding?: unknown; index?: unknown } | null>;
 			};
 			if (!Array.isArray(body.data) || body.data.length !== texts.length) {
 				throw new EmbeddingFailure({ stage }, "embedding count mismatch");
 			}
-			return body.data.map((row) => {
+			const ordered = new Array<number[]>(texts.length);
+			for (const row of body.data) {
 				const values = row?.embedding;
 				if (!Array.isArray(values)) throw new EmbeddingFailure({ stage }, "invalid embedding");
 				if (values.length !== this.config.dims) throw new EmbeddingDimensionError(values.length);
-				return assertVectorValues(values, this.config.dims);
-			});
+				const index = row?.index;
+				if (
+					typeof index !== "number" ||
+					!Number.isInteger(index) ||
+					index < 0 ||
+					index >= texts.length ||
+					ordered[index] !== undefined
+				) {
+					throw new EmbeddingFailure({ stage }, "invalid embedding index");
+				}
+				ordered[index] = assertVectorValues(values, this.config.dims);
+			}
+			return ordered;
 		} catch (error) {
 			if (controller.signal.aborted) throw new EmbeddingFailure({ stage: "timeout" });
 			if (error instanceof EmbeddingFailure) throw error;

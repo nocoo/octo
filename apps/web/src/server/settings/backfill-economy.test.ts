@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { decodeFloat32Vector } from "../search/math";
 import { fixture, SETTINGS } from "./__tests__/fixture";
 import { backfillMemories, backfillMemory } from "./backfill";
 import { saveEmbeddingSettings } from "./config";
@@ -16,7 +17,7 @@ async function setup() {
 function gateway() {
 	const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
 		const { input } = JSON.parse(String(init.body)) as { input: string[] };
-		return Response.json({ data: input.map(() => ({ embedding: [1, 0, 0] })) });
+		return Response.json({ data: input.map((_text, index) => ({ index, embedding: [1, 0, 0] })) });
 	});
 	vi.stubGlobal("fetch", fetcher);
 	return fetcher;
@@ -25,6 +26,37 @@ function gateway() {
 afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
+});
+
+it("caches batch vectors under the matching input rather than response position", async () => {
+	const { env, raw } = await setup();
+	raw.exec(
+		"INSERT INTO memories (id, space_id, title, body, type, source_key_id, content_hash, created_at, updated_at) VALUES ('second', 's', 'Other', 'Body', 'note', 'source-client', 'h2', 1, 1)",
+	);
+	const fetcher = vi.fn(async () =>
+		Response.json({
+			data: [
+				{ index: 1, embedding: [0, 1, 0] },
+				{ index: 0, embedding: [1, 0, 0] },
+			],
+		}),
+	);
+	vi.stubGlobal("fetch", fetcher);
+	expect(await backfillMemories(env, ["m", "second"])).toBe(2);
+	const vector = (id: string) =>
+		decodeFloat32Vector(
+			raw.prepare("SELECT vector FROM memory_vectors WHERE memory_id = ?").get(id)
+				?.vector as Uint8Array,
+			3,
+		);
+	expect(vector("m")).toEqual([1, 0, 0]);
+	expect(vector("second")).toEqual([0, 1, 0]);
+	raw.exec("DELETE FROM memory_vectors");
+	expect(await backfillMemories(env, ["second", "m"])).toBe(2);
+	expect(vector("m")).toEqual([1, 0, 0]);
+	expect(vector("second")).toEqual([0, 1, 0]);
+	expect(fetcher).toHaveBeenCalledTimes(1);
+	raw.close();
 });
 
 it("reuses persisted text embeddings after no-op, tags, requeue, and content changing away and back", async () => {
@@ -55,7 +87,7 @@ it("retains a generated vector rejected by stale version CAS and uses it on retr
 	const fetcher = gateway();
 	fetcher.mockImplementationOnce(async () => {
 		raw.exec("UPDATE memories SET version = 2 WHERE id = 'm'");
-		return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+		return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 	});
 	expect(await backfillMemory(env, "m")).toBe(false);
 	expect(await backfillMemory(env, "m")).toBe(true);
@@ -102,7 +134,7 @@ it("durably claims shared cache keys and rejects busy work instead of acknowledg
 	const fetcher = vi.fn(async () => {
 		started();
 		await held;
-		return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+		return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 	});
 	vi.stubGlobal("fetch", fetcher);
 	vi.spyOn(console, "error").mockImplementation(() => {});
@@ -197,7 +229,7 @@ it("rejects a lost cache lease before any memory vector is written", async () =>
 	const fetcher = gateway();
 	fetcher.mockImplementationOnce(async () => {
 		raw.exec("UPDATE embedding_cache SET lease_token = 'other-owner'");
-		return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+		return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 	});
 	await expect(backfillMemory(env, "m")).rejects.toMatchObject({
 		code: "unavailable",
@@ -214,7 +246,7 @@ it("separates identical text by model and dimensions and reuses previous profile
 	const { env, raw } = await setup();
 	const fetcher = vi.fn(async () => {
 		const dims = raw.prepare("SELECT dims FROM embedding_profiles WHERE id = 'tiny'").get()?.dims;
-		return Response.json({ data: [{ embedding: dims === 2 ? [1, 0] : [1, 0, 0] }] });
+		return Response.json({ data: [{ index: 0, embedding: dims === 2 ? [1, 0] : [1, 0, 0] }] });
 	});
 	vi.stubGlobal("fetch", fetcher);
 	expect(await backfillMemory(env, "m")).toBe(true);

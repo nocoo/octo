@@ -193,7 +193,7 @@ describe("embedding settings", () => {
 				model: "tiny",
 				input: ["Octo embedding connection test."],
 			});
-			return Response.json({ data: [{ embedding: [3, 4, 0] }] });
+			return Response.json({ data: [{ index: 0, embedding: [3, 4, 0] }] });
 		});
 		vi.stubGlobal("fetch", fetcher);
 		expect(await testEmbeddingSettings(env, SETTINGS)).toEqual({
@@ -223,7 +223,7 @@ describe("embedding settings", () => {
 		});
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, 0] }] })),
 		);
 		expect(await testEmbeddingSettings(env, SETTINGS)).toMatchObject({
 			dims: 2,

@@ -41,7 +41,7 @@ describe("post-commit embedding backfill", () => {
 		});
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] })),
 		);
 		expect(await backfillMemory(env, "m")).toBe(true);
 		expect(await backfillMemory(env, "m")).toBe(false);
@@ -67,7 +67,7 @@ describe("post-commit embedding backfill", () => {
 			expect(JSON.parse(String(init.body))).toEqual({ model: "tiny", input: ["Title\n\nBody"] });
 			expect(new Headers(init.headers).get("User-Agent")).toMatch(/^octo\//);
 			expect(raw.prepare("SELECT title FROM memories WHERE id = 'm'").get()?.title).toBe("Title");
-			return Response.json({ data: [{ embedding: [3, 4, 0] }] });
+			return Response.json({ data: [{ index: 0, embedding: [3, 4, 0] }] });
 		});
 		vi.stubGlobal("fetch", fetcher);
 		expect(await backfillMemory(env, "m")).toBe(true);
@@ -98,7 +98,7 @@ describe("post-commit embedding backfill", () => {
 		);
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [0, 1, 0] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [0, 1, 0] }] })),
 		);
 		expect(await backfillMemory(env, "m")).toBe(true);
 		expect(raw.prepare("SELECT indexed_at, content_hash FROM memory_vectors").get()).toMatchObject({
@@ -119,7 +119,7 @@ describe("post-commit embedding backfill", () => {
 			vi.fn(async (_url: string, init: RequestInit) => {
 				const { input } = JSON.parse(String(init.body)) as { input: string[] };
 				expect(input[0]).toBe(`Title\n\n${"x".repeat(BACKFILL_TEXT_MAX_CHARS - 7)}`);
-				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+				return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 			}),
 		);
 		expect(await backfillMemory(env, "m")).toBe(true);
@@ -162,7 +162,7 @@ describe("post-commit embedding backfill", () => {
 			"fetch",
 			vi.fn(async () => {
 				raw.exec(sql);
-				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+				return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 			}),
 		);
 		expect(await backfillMemory(env, "m")).toBe(false);
@@ -184,7 +184,7 @@ describe("post-commit embedding backfill", () => {
 						"INSERT INTO memory_vectors VALUES ('m', 'tiny', 'tiny', 3, x'000000000000803f00000000', 'hash-1', 999, 2) ON CONFLICT(memory_id, profile_id) DO UPDATE SET vector = excluded.vector, content_hash = excluded.content_hash, indexed_at = excluded.indexed_at",
 					);
 					raw.exec("UPDATE memory_vectors SET indexed_at = 999 WHERE memory_id = 'm'");
-					return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+					return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 				}),
 			);
 			expect(await backfillMemory(env, "m")).toBe(false);
@@ -206,7 +206,7 @@ describe("post-commit embedding backfill", () => {
 		await expect(backfillMemory(env, "m")).rejects.toMatchObject({ reason: { stage: "request" } });
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] })),
 		);
 		const prepare = env.DB.prepare.bind(env.DB);
 		vi.spyOn(env.DB, "prepare").mockImplementation((sql) => {
@@ -247,7 +247,7 @@ it.each(["dim = 2", "embedding_model = 'old-model'"])(
 		raw.exec(`UPDATE memory_vectors SET ${change}`);
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [0, 1, 0] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [0, 1, 0] }] })),
 		);
 		expect(await backfillMemory(env, "m")).toBe(true);
 	},

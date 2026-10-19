@@ -80,7 +80,7 @@ describe("safe gateway failure categories", () => {
 	it("retains safe dimension metadata", async () => {
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [1] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1] }] })),
 		);
 		await expect(new GatewayEmbedder(config).embed(["private-input"])).rejects.toMatchObject({
 			reason: { stage: "dims" },

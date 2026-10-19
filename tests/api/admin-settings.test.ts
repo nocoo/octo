@@ -97,7 +97,7 @@ describe("Access-only embedding settings", () => {
 			const vector = Array.from({ length: mode === "wrong-dims" ? 2 : profile.dims }, (_, i) =>
 				i === 0 ? 1 : 0,
 			);
-			res.end(JSON.stringify({ data: [{ embedding: vector }] }));
+			res.end(JSON.stringify({ data: [{ index: 0, embedding: vector }] }));
 		});
 		await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 		try {

@@ -52,7 +52,10 @@ export function startLocalEmbedderStub(
 				res.end(
 					JSON.stringify(
 						options.responseBody ?? {
-							data: (parsed.input ?? []).map(() => ({ embedding: options.embedding ?? [3, 4] })),
+							data: (parsed.input ?? []).map((_text, index) => ({
+								index,
+								embedding: options.embedding ?? [3, 4],
+							})),
 						},
 					),
 				);

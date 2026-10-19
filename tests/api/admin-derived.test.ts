@@ -126,7 +126,12 @@ describe("admin profiles and durable derived work over HTTP", () => {
 			response.setHeader("Content-Type", "application/json");
 			response.end(
 				JSON.stringify({
-					data: [{ embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)) }],
+					data: [
+						{
+							index: 0,
+							embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)),
+						},
+					],
 				}),
 			);
 		});

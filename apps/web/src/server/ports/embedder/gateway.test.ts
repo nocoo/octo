@@ -8,6 +8,49 @@ afterEach(() => {
 });
 
 describe("GatewayEmbedder", () => {
+	it("associates out-of-order batch vectors by their input index", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () =>
+				Response.json({
+					data: [
+						{ index: 1, embedding: [0, 1] },
+						{ index: 0, embedding: [1, 0] },
+					],
+				}),
+			),
+		);
+		expect(await new GatewayEmbedder(config).embed(["first", "second"])).toEqual([
+			[1, 0],
+			[0, 1],
+		]);
+	});
+
+	it.each([
+		[undefined, 1],
+		[0, 0],
+		[-1, 1],
+		[0, 2],
+		[0, 0.5],
+		["0", 1],
+		[null, 1],
+	])("rejects incomplete, repeated or invalid batch indices %j", async (first, second) => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () =>
+				Response.json({
+					data: [
+						{ index: first, embedding: [1, 0] },
+						{ index: second, embedding: [0, 1] },
+					],
+				}),
+			),
+		);
+		await expect(new GatewayEmbedder(config).embed(["first", "second"])).rejects.toMatchObject({
+			reason: { stage: "parse" },
+		});
+	});
+
 	it.each([
 		["https://gateway.example", "https://gateway.example/v1/embeddings"],
 		["https://gateway.example/v1", "https://gateway.example/v1/embeddings"],
@@ -15,7 +58,7 @@ describe("GatewayEmbedder", () => {
 		["https://gateway.example/proxy/v1/", "https://gateway.example/proxy/v1/embeddings"],
 		["https://gateway.example/proxy", "https://gateway.example/proxy/v1/embeddings"],
 	])("normalizes API base %s without duplicating v1", async (baseUrl, endpoint) => {
-		const fetcher = vi.fn(async () => Response.json({ data: [{ embedding: [1, 0] }] }));
+		const fetcher = vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, 0] }] }));
 		vi.stubGlobal("fetch", fetcher);
 		await new GatewayEmbedder({ ...config, baseUrl }).embed(["fixed"]);
 		expect(fetcher).toHaveBeenCalledWith(endpoint, expect.any(Object));
@@ -24,7 +67,7 @@ describe("GatewayEmbedder", () => {
 	it("strips a trailing slash from the base URL", async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo) => {
 			expect(String(input)).toBe("http://127.0.0.1:9/v1/embeddings");
-			return Response.json({ data: [{ embedding: [1, 0] }] });
+			return Response.json({ data: [{ index: 0, embedding: [1, 0] }] });
 		});
 		vi.stubGlobal("fetch", fetchMock);
 		expect(await new GatewayEmbedder(config).embed(["x"])).toEqual([[1, 0]]);
@@ -104,10 +147,16 @@ describe("GatewayEmbedder", () => {
 		{ name: "non-array string", body: { data: "invalid" } },
 		{ name: "null", body: { data: null } },
 		{ name: "empty", body: { data: [] } },
-		{ name: "fewer", body: { data: [{ embedding: [3, 4] }] } },
+		{ name: "fewer", body: { data: [{ index: 0, embedding: [3, 4] }] } },
 		{
 			name: "extra",
-			body: { data: [{ embedding: [3, 4] }, { embedding: [3, 4] }, { embedding: [3, 4] }] },
+			body: {
+				data: [
+					{ index: 0, embedding: [3, 4] },
+					{ index: 1, embedding: [3, 4] },
+					{ index: 2, embedding: [3, 4] },
+				],
+			},
 		},
 	])("rejects $name embeddings for nonempty input", async ({ body }) => {
 		vi.stubGlobal(
@@ -122,7 +171,14 @@ describe("GatewayEmbedder", () => {
 	it("normalizes one embedding per input", async () => {
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [3, 4] }, { embedding: [4, 3] }] })),
+			vi.fn(async () =>
+				Response.json({
+					data: [
+						{ index: 0, embedding: [3, 4] },
+						{ index: 1, embedding: [4, 3] },
+					],
+				}),
+			),
 		);
 		expect(await new GatewayEmbedder(config).embed(["hello", "world"])).toEqual([
 			[0.6, 0.8],
@@ -144,7 +200,7 @@ it("blocks credential-bearing redirects and exposes only safe dimension metadata
 		vi.fn(async (_input: RequestInfo, init: RequestInit) => {
 			expect(init.redirect).toBe("manual");
 			expect(new Headers(init.headers).get("User-Agent")).toMatch(/^octo\//);
-			return Response.json({ data: [{ embedding: [1, 2, 3] }] });
+			return Response.json({ data: [{ index: 0, embedding: [1, 2, 3] }] });
 		}),
 	);
 	await expect(new GatewayEmbedder(config).embed(["fixed"])).rejects.toMatchObject({

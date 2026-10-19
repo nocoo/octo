@@ -110,7 +110,7 @@ describe("admin embedding settings routes", () => {
 		const { request, raw } = setup();
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] })),
 		);
 		const response = await request("POST", "/test", SETTINGS);
 		expect(response.status).toBe(200);

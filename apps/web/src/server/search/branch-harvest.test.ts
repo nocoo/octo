@@ -38,7 +38,10 @@ describe("branch harvest", () => {
 				async () =>
 					new Response(
 						JSON.stringify({
-							data: [{ embedding: [1, 0] }, { embedding: [0, 1] }],
+							data: [
+								{ index: 0, embedding: [1, 0] },
+								{ index: 1, embedding: [0, 1] },
+							],
 						}),
 						{ status: 200 },
 					),

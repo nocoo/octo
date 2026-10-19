@@ -98,7 +98,7 @@ describe("derived work coordination", () => {
 				calls++;
 				entered.resolve();
 				await release.promise;
-				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+				return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 			}),
 		);
 		const abandoned = runDerivedTasks(env, 100);
@@ -142,7 +142,7 @@ describe("derived work coordination", () => {
 		const { env, raw } = await setup(1);
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] })),
+			vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] })),
 		);
 		try {
 			expect(await runDerivedTasks(env, 100)).toEqual({ synced: 1, failed: 0 });
