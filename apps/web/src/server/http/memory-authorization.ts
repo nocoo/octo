@@ -23,12 +23,13 @@ export async function authorizeMemoryRequest(
 	const path = context.req.path.slice(prefix.length).replace(/\/$/, "");
 	const method = context.req.method;
 	const create = method === "POST" && path === "/memories";
-	const memory = /^\/memories\/([^/]+)(\/(?:rollback|vector))?$/.exec(path);
+	const memory = /^\/memories\/([^/]+)(\/(?:rollback|vector|move))?$/.exec(path);
 	const restore = method === "POST" && /^\/trash\/([^/]+)\/restore$/.exec(path);
 	const update =
 		memory &&
 		((method === "PATCH" && !memory[2]) ||
 			(method === "POST" && memory[2] === "/rollback") ||
+			(method === "POST" && memory[2] === "/move") ||
 			(method === "PUT" && memory[2] === "/vector"));
 	const remove = memory && method === "DELETE" && !memory[2];
 	if (!create && !update && !remove && !restore) return;
@@ -83,7 +84,11 @@ export async function authorizeMemoryRequest(
 	const payload = await readAuthorizationBody(context);
 	if (!payload || typeof payload !== "object") return;
 	let destination: string | undefined;
-	if (method === "PATCH" && "space" in payload && typeof payload.space === "string") {
+	if (
+		(method === "PATCH" || memory?.[2] === "/move") &&
+		"space" in payload &&
+		typeof payload.space === "string"
+	) {
 		const space = await repo.spaceBySlug(payload.space);
 		if (!space) throw new ApiError("not_found", "not found");
 		destination = space.id;

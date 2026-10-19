@@ -2,7 +2,13 @@ import type { MiddlewareHandler } from "hono";
 import type { AppVars, Env } from "../env";
 
 export function postCommitMiddleware(
-	process: (env: Env, now?: number, memoryIds?: string[], limit?: number) => Promise<unknown>,
+	process: (
+		env: Env,
+		now?: number,
+		memoryIds?: string[],
+		limit?: number,
+		skipEmbedding?: boolean,
+	) => Promise<unknown>,
 ): MiddlewareHandler<{ Bindings: Env; Variables: AppVars }> {
 	return async (context, next) => {
 		await next();
@@ -26,11 +32,13 @@ export function postCommitMiddleware(
 		const ids = context.get("vectorMemoryIds");
 		const memoryIds = ids ? [...new Set(ids)] : undefined;
 		const work = (
-			/^\/api\/admin\/trash:(batchRestore|batchPurge|empty)$/.test(context.req.path)
-				? process(context.env, undefined, memoryIds, 5)
-				: memoryIds
-					? process(context.env, undefined, memoryIds)
-					: process(context.env)
+			/^\/api\/v1\/(?:memories\/[^/]+\/move|memories:batchMove)$/.test(context.req.path)
+				? process(context.env, undefined, memoryIds, undefined, true)
+				: /^\/api\/admin\/trash:(batchRestore|batchPurge|empty)$/.test(context.req.path)
+					? process(context.env, undefined, memoryIds, 5)
+					: memoryIds
+						? process(context.env, undefined, memoryIds)
+						: process(context.env)
 		).catch(() => {
 			console.error("derived_work_failed");
 		});

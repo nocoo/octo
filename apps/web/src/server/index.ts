@@ -30,6 +30,7 @@ import { changesRoutes } from "./routes/v1/changes";
 import { embeddingProfilesRoutes } from "./routes/v1/embedding-profiles";
 import { meResponse } from "./routes/v1/me";
 import { memoriesRoutes } from "./routes/v1/memories";
+import { moveRoutes } from "./routes/v1/moves";
 import { mountV1SearchRoutes } from "./routes/v1/search";
 import { spacesRoutes } from "./routes/v1/spaces";
 import { tagsRoutes, tagWriteAuthorization } from "./routes/v1/tags";
@@ -92,6 +93,7 @@ export function createApp(): Hono<{
 	app.use("/api/admin/*", adminWriteOriginMiddleware);
 	app.get("/api/v1/me", (c) => meResponse(c));
 	app.route("/api/v1", createV1Routes());
+	app.route("/api/v1", moveRoutes());
 	mountV1SearchRoutes(app);
 	app.route("/api/v1/memories", memoriesRoutes());
 	app.route("/api/v1/trash", trashRoutes());

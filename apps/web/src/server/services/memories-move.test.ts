@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type ApiPrincipal, parseOps } from "../auth/authorize";
+import type { Env } from "../env";
 import { insertSpace, insertTinyProfile, openTestD1 } from "../repo/__tests__/sqlite-d1";
+import { searchAuthzFromPrincipal } from "../search/authz";
+import { searchMemories } from "../search/service";
 import { authzFrom, MemoryService } from "./memories";
 
 function principal(overrides: Partial<ApiPrincipal> = {}): ApiPrincipal {
@@ -39,6 +42,48 @@ async function setup() {
 }
 
 describe("memory moves", () => {
+	it("rechecks current D1 space for stale vector hits and both text indexes", async () => {
+		const { db, service, authz, id } = await setup();
+		await db
+			.prepare("UPDATE embedding_profiles SET active = CASE WHEN id = 'tiny-3' THEN 1 ELSE 0 END")
+			.run();
+		await service.move(authz, id, { space: "target" });
+		const generation = await db
+			.prepare("SELECT generation FROM vector_sync_jobs WHERE memory_id = ?")
+			.bind(id)
+			.first<{ generation: number }>();
+		const memory = await service.get(authz, id, new Set());
+		const query = vi.fn(async () => ({
+			matches: [
+				{
+					id,
+					score: 1,
+					metadata: { generation: generation?.generation, content_hash: memory.content_hash },
+				},
+			],
+		}));
+		const env = { DB: db, RESOURCE_ENV: "production", VEC: { query } } as unknown as Env;
+		for (const space of ["source", "target"]) {
+			const key = principal({ scope: "spaces", spaceIds: [space] });
+			const searchAuthz = searchAuthzFromPrincipal(key);
+			for (const input of [
+				{ mode: "vector" as const, vector: { profile: "tiny-3", values: [1, 0, 0] } },
+				{ mode: "fts" as const, query: "preserve" },
+				{ mode: "fts" as const, query: "me" },
+			]) {
+				const result = await searchMemories(searchAuthz, { ...input, limit: 20 }, { db, env });
+				expect(result.items.map((item) => item.id)).toEqual(space === "source" ? [] : [id]);
+			}
+			const list = await service.list(authzFrom(key), {
+				filters: {},
+				include: new Set(),
+				limit: 20,
+			});
+			expect(list.items.map((item) => item.id)).toEqual(space === "source" ? [] : [id]);
+		}
+		expect(query).toHaveBeenCalled();
+	});
+
 	it("preserves content, vectors and history and emits source tombstone plus destination event", async () => {
 		const { db, service, authz, id } = await setup();
 		const before = await db

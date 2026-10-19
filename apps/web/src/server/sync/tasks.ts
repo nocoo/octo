@@ -7,11 +7,12 @@ export async function runDerivedTasks(
 	now?: number,
 	memoryIds?: string[],
 	limit?: number,
+	skipEmbedding = false,
 ) {
 	return synchronizeVectors(env, {
 		...(now === undefined ? {} : { now }),
 		...(memoryIds === undefined ? {} : { memoryIds }),
 		...(limit === undefined ? {} : { limit }),
-		beforeSyncBatch: (ids) => backfillMemories(env, ids),
+		...(skipEmbedding ? {} : { beforeSyncBatch: (ids: string[]) => backfillMemories(env, ids) }),
 	});
 }

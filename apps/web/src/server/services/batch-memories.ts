@@ -1,4 +1,5 @@
 import type { MemoryCreate, MemoryPatch } from "../../lib/schema/memory";
+import type { MemoryMove } from "../../lib/schema/memory-move";
 import type { ApiPrincipal } from "../auth/authorize";
 import type { AppVars } from "../env";
 import { ApiError } from "../lib/errors";
@@ -279,6 +280,11 @@ export class BatchMemoryService implements MemoryService {
 	async delete(id: string, ctx: MemoryServiceContext): Promise<{ trashed_at: string }> {
 		const { service, authz } = this.state(ctx);
 		return service.remove(authz, id);
+	}
+
+	async move(id: string, input: MemoryMove, ctx: MemoryServiceContext): Promise<void> {
+		const { service, authz } = this.state(ctx);
+		await service.move(authz, id, input);
 	}
 
 	private async output(

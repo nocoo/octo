@@ -55,6 +55,7 @@ describe("createApp", () => {
 			"/api/v1/memories:batchCreate",
 			"/api/v1/memories:batchUpdate",
 			"/api/v1/memories:batchDelete",
+			"/api/v1/memories:batchMove",
 			"/api/v1/memories:batchGet",
 		]);
 	});

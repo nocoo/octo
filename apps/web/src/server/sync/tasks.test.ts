@@ -25,6 +25,20 @@ afterEach(() => {
 });
 
 describe("derived work coordination", () => {
+	it("never calls an embedding model for a metadata-only move drain", async () => {
+		const { env, raw } = await setup(1);
+		const fetcher = vi.fn(async () =>
+			Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] }),
+		);
+		vi.stubGlobal("fetch", fetcher);
+		try {
+			await runDerivedTasks(env, 100, ["memory-00"], undefined, true);
+			expect(fetcher).not.toHaveBeenCalled();
+			expect(raw.prepare("SELECT * FROM memory_embedding_calls").all()).toEqual([]);
+		} finally {
+			raw.close();
+		}
+	});
 	it("combines a targeted write drain with the bulk work budget", async () => {
 		const { env, raw } = await setup(8);
 		const fetcher = vi.fn(async () =>
