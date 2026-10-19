@@ -7,6 +7,8 @@ body,
 body {
 	font-family: var(--basalt-font-sans, -apple-system), BlinkMacSystemFont, "Segoe UI", sans-serif;
 	font-size: var(--basalt-text-base);
+	line-height: var(--basalt-leading-body);
+	-webkit-font-smoothing: antialiased;
 	color: hsl(var(--basalt-foreground));
 	background: hsl(var(--basalt-background));
 }
@@ -30,13 +32,64 @@ a {
 	max-width: 100%;
 	background: hsl(var(--basalt-background));
 }
-.octo-rail-slot {
-	inline-size: calc(var(--basalt-size-rail) - 2 * var(--basalt-space-nav-inset));
-	flex-shrink: 0;
-	justify-items: center;
+.octo-brand-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding-left: var(--basalt-space-layout-sm);
 }
 .octo-home-link {
-	block-size: var(--basalt-size-touch);
+	display: flex;
+	align-items: center;
+	gap: var(--basalt-space-lg);
+	min-width: 0;
+	color: hsl(var(--basalt-foreground));
+	text-decoration: none;
+}
+.octo-home-link:hover {
+	text-decoration: none;
+}
+.octo-home-link img {
+	flex-shrink: 0;
+}
+.octo-brand-title {
+	font-size: var(--basalt-text-2xl);
+	font-weight: 600;
+}
+.octo-version {
+	flex-shrink: 0;
+	border-radius: var(--basalt-radius-md);
+	background: hsl(var(--basalt-secondary));
+	color: hsl(var(--basalt-muted-foreground));
+	padding: var(--basalt-space-xs) var(--basalt-space-md);
+	font-family: var(--font-mono);
+	font-size: var(--basalt-text-xs);
+	line-height: var(--basalt-leading-tight);
+	font-weight: 500;
+}
+.octo-collapse {
+	width: var(--basalt-space-7);
+	flex-shrink: 0;
+}
+.octo-expand {
+	align-self: center;
+	margin-bottom: var(--basalt-space-sm);
+}
+[data-basalt-sidebar][data-collapsed] .octo-brand-row {
+	justify-content: center;
+	padding-left: unset;
+}
+.octo-search-inset {
+	padding-inline: var(--basalt-space-nav-inset);
+}
+.octo-avatar {
+	width: var(--basalt-space-9);
+	height: var(--basalt-space-9);
+	flex-shrink: 0;
+}
+.octo-avatar > span {
+	font-size: var(--basalt-text-sm);
 }
 .octo-muted {
 	color: hsl(var(--basalt-muted-foreground));
@@ -71,26 +124,15 @@ a {
 .octo-nav-icon[data-tone="系统"] {
 	color: var(--basalt-tag-amber-foreground);
 }
-.octo-header [data-basalt-header-actions] > button,
-.octo-header [data-basalt-header-actions] > a {
+.octo-header-link {
 	inline-size: var(--basalt-space-8);
-	block-size: var(--basalt-size-control);
-	min-inline-size: var(--basalt-space-8);
-	min-block-size: var(--basalt-size-control);
 	border-radius: var(--basalt-radius-md);
 	color: hsl(var(--basalt-muted-foreground));
 }
-.octo-header [data-basalt-header-actions] > :hover {
+.octo-header-link:hover {
 	color: hsl(var(--basalt-foreground));
 }
-@media (pointer: coarse) {
-	.octo-header [data-basalt-header-actions] > button,
-	.octo-header [data-basalt-header-actions] > a {
-		min-inline-size: var(--basalt-size-touch);
-		min-block-size: var(--basalt-size-touch);
-	}
-}
-.octo-header [data-basalt-header-actions] svg {
+.octo-header-link svg {
 	width: var(--basalt-text-xl);
 	height: var(--basalt-text-xl);
 	stroke-width: 1.5;
@@ -156,6 +198,13 @@ a {
 	height: var(--basalt-size-table-row);
 }
 @media (width < 768px) {
+	.octo-island {
+		margin-inline: var(--basalt-space-lg);
+		margin-bottom: var(--basalt-space-lg);
+	}
+	.octo-brand-title {
+		font-size: var(--basalt-text-xl);
+	}
 	.octo-island table:has(.octo-empty--page) thead {
 		display: none;
 	}

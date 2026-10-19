@@ -73,7 +73,12 @@ it("separates the brand home link from the visible collapse control", () => {
 	const collapse = html.match(/<button\b[^>]*aria-label="收起侧栏"[^>]*>[\s\S]*?<\/button>/)?.[0];
 	expect(collapse).toBeDefined();
 	expect(collapse).not.toContain("logo-24.png");
-	expect(html).toContain("data-basalt-header-leading");
+	expect(html).not.toContain("data-basalt-header-leading");
+	expect(html.indexOf('aria-label="收起侧栏"')).toBeLessThan(
+		html.indexOf('data-slot="sidebar-nav"'),
+	);
+	expect(html).toContain("octo-version");
+	expect(html).toContain('data-slot="sidebar-group"');
 	expect(html).toContain('href="https://hexly.ai/projects/octo"');
 	expect(html.indexOf('aria-label="GitHub 仓库"')).toBeLessThan(
 		html.indexOf('aria-label="切换深色或浅色主题"'),
@@ -100,7 +105,7 @@ it("links back to the library and memory from version history", () => {
 it("uses the Basalt shell without duplicate custom layout wrappers", () => {
 	const html = renderShell();
 	expect(html.match(/data-basalt-island=/g)).toHaveLength(1);
-	for (const removed of ["octo-island-wrap", "octo-rail-search", "octo-brand"])
+	for (const removed of ["octo-island-wrap", "octo-rail-search", 'class="octo-brand"'])
 		expect(html).not.toContain(removed);
 	expect(html).toContain("空间");
 	expect(html).toContain("接口密钥");

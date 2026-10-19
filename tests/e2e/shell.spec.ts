@@ -1,8 +1,6 @@
 import { capture, expect, test } from "./fixtures";
 
-test("header actions match the compact template and logo accent in both themes", async ({
-	page,
-}) => {
+test("header actions match Giraffe geometry and logo accent in both themes", async ({ page }) => {
 	for (const colorScheme of ["light", "dark"] as const) {
 		await page.emulateMedia({ colorScheme });
 		await page.goto("/keys");
@@ -17,9 +15,21 @@ test("header actions match the compact template and logo accent in both themes",
 			})),
 		}));
 		expect(geometry.gap).toBe("4px");
-		expect(geometry.controls).toEqual(
-			Array.from({ length: 4 }, () => ({ width: 32, height: 34, icon: 18 })),
-		);
+		expect(geometry.controls).toEqual([
+			...Array.from({ length: 3 }, () => ({ width: 34, height: 34, icon: 18 })),
+			{ width: 34, height: 34, icon: 14 },
+		]);
+		expect(
+			await page
+				.locator("[data-basalt-header]")
+				.evaluate((el) => el.getBoundingClientRect().height),
+		).toBe(56);
+		const type = await page.locator(".octo-version").evaluate((el) => ({
+			font: getComputedStyle(el).fontFamily,
+			size: getComputedStyle(el).fontSize,
+		}));
+		expect(type.font).toContain("mono");
+		expect(type.size).toBe("11px");
 		await expect(page.locator("html")).toHaveAttribute("data-accent", "sky");
 		const colors = await page.evaluate(() => {
 			const style = getComputedStyle(document.documentElement);
@@ -42,6 +52,31 @@ test("slash focuses search on its first lazy navigation", async ({ page }) => {
 	await expect(search).toBeFocused();
 	await page.keyboard.type("first search");
 	await expect(search).toHaveValue("first search");
+});
+
+test("sidebar groups, collapsed search and content insets match the reference shell", async ({
+	page,
+}) => {
+	await page.goto("/settings");
+	const rail = page.locator("[data-basalt-sidebar]");
+	const group = rail.getByRole("button", { name: "工作台", exact: true });
+	await expect(group).toHaveAttribute("aria-expanded", "true");
+	await group.click();
+	await expect(rail.getByRole("button", { name: "记忆库", exact: true })).not.toBeVisible();
+	await group.click();
+	await expect(rail.getByRole("button", { name: "记忆库", exact: true })).toBeVisible();
+	await rail.getByRole("button", { name: "收起侧栏", exact: true }).click();
+	await rail.getByRole("button", { name: "搜索命令 (⌘K)", exact: true }).click();
+	await expect(page.getByRole("listbox")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await rail.getByRole("button", { name: "展开侧栏", exact: true }).click();
+	for (const width of [1440, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		const island = page.locator("[data-basalt-island]");
+		await expect(island).toHaveCSS("margin-inline-start", width < 768 ? "8px" : "12px");
+		await expect(island).toHaveCSS("padding", width < 768 ? "16px" : "24px 32px");
+		expect((await island.boundingBox())?.y).toBe(56);
+	}
 });
 
 test("mobile navigation restores focus to its opener", async ({ page }) => {
@@ -69,7 +104,10 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 		for (const width of [1440, 768]) {
 			await page.setViewportSize({ width, height: 900 });
 			const expanded = await center('img[alt="Octo"]');
-			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(expanded, 0);
+			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBe(26);
+			const search = rail.getByRole("button", { name: "搜索与命令" });
+			expect((await search.boundingBox())?.width).toBe(244);
+			expect((await search.boundingBox())?.height).toBe(38);
 			await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
 			await expect(page.getByRole("button", { name: "展开侧栏", exact: true })).toBeVisible();
 			expect(await center('img[alt="Octo"]')).toBeCloseTo(expanded, 0);

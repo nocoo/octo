@@ -816,3 +816,7 @@ Independent MAX review found that an all-failed move batch checked target existe
 ### 2026-10-19 — Measure empty states inside their actual scroll containers
 
 The first full-height empty-state pass looked centered on desktop, but table column widths pushed the composition outside the mobile viewport. Narrow empty tables now omit their unused headings; populated tables retain their original layout. Chromium also exposed a fractional-pixel clipping edge after scrolling an action into a short viewport, so empty-state actions use token-based scroll margins. Geometry checks cover the enclosing table cell or card, reserve pagination space, and verify horizontal alignment, complete action visibility, and dialog focus restoration. A centered child or a successful automated click alone does not establish that the complete composition is visible.
+
+### 2026-10-19 — Compare computed geometry, not utility names
+
+Giraffe's header links declare a 32px width but Basalt's minimum control size makes them 34px in Chrome. Copying the utility width alone would preserve Octo's mismatch. During shell alignment, a Basalt Grid wrapper also initially used its default two columns, halving the sidebar search width and wrapping its label. The wrapper now explicitly declares one column, and browser regressions assert the full 244px by 38px search and actual header-control dimensions. Check library defaults and computed geometry before treating similar markup as visual parity.

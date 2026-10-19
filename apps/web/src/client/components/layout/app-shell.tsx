@@ -2,7 +2,6 @@ import {
 	Avatar,
 	AvatarFallback,
 	AvatarImage,
-	Badge,
 	Button,
 	CommandEmpty,
 	CommandGroup,
@@ -18,11 +17,11 @@ import {
 	SheetTitle,
 	Sidebar,
 	SidebarFooter,
+	SidebarGroup,
 	SidebarHeader,
 	SidebarIconItem,
 	SidebarItem,
 	SidebarNav,
-	SidebarPartition,
 	SidebarSearch,
 	SidebarUser,
 	ThemeToggle,
@@ -35,7 +34,6 @@ import { AppMain, AppSkipLink, AppShell as Frame } from "@nocoo/basalt/component
 import { Banner } from "@nocoo/basalt/components/banner";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
-import { Text } from "@nocoo/basalt/components/text";
 import {
 	Activity,
 	BookOpen,
@@ -162,6 +160,7 @@ export function AppShell() {
 	function rail(isCollapsed: boolean) {
 		const avatar = (
 			<Avatar
+				className="octo-avatar"
 				role="img"
 				aria-label={isCollapsed ? `${identityName} · ${identityLabel}` : identityName}
 				tabIndex={isCollapsed ? 0 : undefined}
@@ -175,77 +174,119 @@ export function AppShell() {
 		return (
 			<Sidebar collapsed={isCollapsed}>
 				<SidebarHeader>
-					<Button variant="ghost" size="icon" className="octo-rail-slot octo-home-link" asChild>
-						<Link href="/" aria-label="Octo 首页" onClick={() => setDrawer(false)}>
+					<Grid className="octo-brand-row">
+						<Link
+							href="/"
+							className="octo-home-link"
+							aria-label="Octo 首页"
+							onClick={() => setDrawer(false)}
+						>
 							<img
 								src="/logo-24.png"
 								srcSet="/logo-24.png 1x, /logo-48.png 2x"
-								width={24}
-								height={24}
+								width={28}
+								height={28}
 								alt="Octo"
 							/>
+							{!isCollapsed && (
+								<>
+									<strong className="octo-brand-title">Octo</strong>
+									<span className="octo-version">v{APP_VERSION}</span>
+								</>
+							)}
 						</Link>
-					</Button>
-					{!isCollapsed && (
-						<>
-							<Text as="strong" variant="heading" size="xl">
-								Octo
-							</Text>
-							<Badge variant="secondary">v{APP_VERSION}</Badge>
-						</>
-					)}
+						{!isCollapsed && (
+							<Button
+								variant="ghost"
+								size="icon"
+								className="octo-collapse"
+								aria-label="收起侧栏"
+								aria-expanded={!collapsed}
+								onClick={() => (mobile ? setDrawer(false) : setCollapsed(true))}
+							>
+								<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
+							</Button>
+						)}
+					</Grid>
 				</SidebarHeader>
-				<SidebarNav aria-label="主导航">
-					{!isCollapsed && (
+				{isCollapsed ? (
+					<Button
+						variant="ghost"
+						size="icon"
+						className="octo-expand"
+						aria-label="展开侧栏"
+						aria-expanded={false}
+						onClick={() => setCollapsed(false)}
+					>
+						<PanelLeftOpen strokeWidth={1.5} aria-hidden="true" />
+					</Button>
+				) : (
+					<Grid columns={1} className="octo-search-inset">
 						<SidebarSearch onClick={() => setPalette(true)} shortcut="⌘ K">
 							搜索与命令
 						</SidebarSearch>
+					</Grid>
+				)}
+				<SidebarNav aria-label="主导航">
+					{isCollapsed && (
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<SidebarIconItem aria-label="搜索命令 (⌘K)" onClick={() => setPalette(true)}>
+									<Search size={16} strokeWidth={1.5} aria-hidden="true" />
+								</SidebarIconItem>
+							</TooltipTrigger>
+							<TooltipContent side="right">搜索与命令 · ⌘ K</TooltipContent>
+						</Tooltip>
 					)}
-					{Array.from(new Set(navigation.map((item) => item.group))).map((group) => (
-						<Fragment key={group}>
-							{!isCollapsed && <SidebarPartition>{group}</SidebarPartition>}
-							{navigation
-								.filter((item) => item.group === group)
-								.map((item) => {
-									const Icon = icons[item.icon];
-									const icon = (
-										<Icon
-											key={item.href}
-											className="octo-nav-icon"
-											data-tone={item.group}
-											size={16}
-											strokeWidth={1.5}
-											aria-hidden="true"
-										/>
-									);
-									return isCollapsed ? (
-										<Tooltip key={item.href}>
-											<TooltipTrigger asChild>
-												<SidebarIconItem
-													active={active(item.href)}
-													aria-current={active(item.href) ? "page" : undefined}
-													aria-label={item.label}
-													onClick={() => go(item.href)}
-												>
-													{icon}
-												</SidebarIconItem>
-											</TooltipTrigger>
-											<TooltipContent side="right">{item.label}</TooltipContent>
-										</Tooltip>
-									) : (
-										<SidebarItem
-											key={item.href}
-											active={active(item.href)}
-											aria-current={active(item.href) ? "page" : undefined}
-											onClick={() => go(item.href)}
-										>
-											{icon}
-											<span>{item.label}</span>
-										</SidebarItem>
-									);
-								})}
-						</Fragment>
-					))}
+					{Array.from(new Set(navigation.map((item) => item.group))).map((group) => {
+						const items = navigation
+							.filter((item) => item.group === group)
+							.map((item) => {
+								const Icon = icons[item.icon];
+								const icon = (
+									<Icon
+										key={item.href}
+										className="octo-nav-icon"
+										data-tone={item.group}
+										size={16}
+										strokeWidth={1.5}
+										aria-hidden="true"
+									/>
+								);
+								return isCollapsed ? (
+									<Tooltip key={item.href}>
+										<TooltipTrigger asChild>
+											<SidebarIconItem
+												active={active(item.href)}
+												aria-current={active(item.href) ? "page" : undefined}
+												aria-label={item.label}
+												onClick={() => go(item.href)}
+											>
+												{icon}
+											</SidebarIconItem>
+										</TooltipTrigger>
+										<TooltipContent side="right">{item.label}</TooltipContent>
+									</Tooltip>
+								) : (
+									<SidebarItem
+										key={item.href}
+										active={active(item.href)}
+										aria-current={active(item.href) ? "page" : undefined}
+										onClick={() => go(item.href)}
+									>
+										{icon}
+										<span>{item.label}</span>
+									</SidebarItem>
+								);
+							});
+						return isCollapsed ? (
+							<Fragment key={group}>{items}</Fragment>
+						) : (
+							<SidebarGroup key={group} label={group} defaultOpen>
+								{items}
+							</SidebarGroup>
+						);
+					})}
 				</SidebarNav>
 				<SidebarFooter>
 					{isCollapsed ? (
@@ -256,15 +297,7 @@ export function AppShell() {
 							</TooltipContent>
 						</Tooltip>
 					) : (
-						<SidebarUser
-							name={identityName}
-							email={identityLabel}
-							avatar={
-								<Grid columns={1} className="octo-rail-slot">
-									{avatar}
-								</Grid>
-							}
-						/>
+						<SidebarUser name={identityName} email={identityLabel} avatar={avatar} />
 					)}
 				</SidebarFooter>
 			</Sidebar>
@@ -294,7 +327,6 @@ export function AppShell() {
 			<AppMain tabIndex={-1}>
 				<AppHeader
 					className="octo-header"
-					density="compact"
 					breadcrumbs={
 						mobile ? headerCrumbs(location.pathname).slice(-1) : headerCrumbs(location.pathname)
 					}
@@ -312,23 +344,7 @@ export function AppShell() {
 							>
 								<Menu aria-hidden="true" />
 							</Button>
-						) : (
-							<HeaderHint label={collapsed ? "展开侧栏" : "收起侧栏"}>
-								<Button
-									variant="ghost"
-									size="icon"
-									aria-label={collapsed ? "展开侧栏" : "收起侧栏"}
-									aria-expanded={!collapsed}
-									onClick={() => setCollapsed((current) => !current)}
-								>
-									{collapsed ? (
-										<PanelLeftOpen strokeWidth={1.5} aria-hidden="true" />
-									) : (
-										<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
-									)}
-								</Button>
-							</HeaderHint>
-						)
+						) : null
 					}
 					actions={
 						<>
@@ -336,6 +352,7 @@ export function AppShell() {
 								<Button
 									variant="ghost"
 									size="icon"
+									className="octo-header-link"
 									aria-label="搜索与命令"
 									onClick={() => setPalette(true)}
 								>
@@ -343,7 +360,7 @@ export function AppShell() {
 								</Button>
 							</HeaderHint>
 							<HeaderHint label="GitHub 仓库 · 在新标签页打开">
-								<Button variant="ghost" size="icon" asChild>
+								<Button variant="ghost" size="icon" className="octo-header-link" asChild>
 									<a
 										href="https://github.com/nocoo/octo"
 										target="_blank"
@@ -367,7 +384,7 @@ export function AppShell() {
 								</Button>
 							</HeaderHint>
 							<HeaderHint label="Octo 项目主页 · 在新标签页打开">
-								<Button variant="ghost" size="icon" asChild>
+								<Button variant="ghost" size="icon" className="octo-header-link" asChild>
 									<a
 										href="https://hexly.ai/projects/octo"
 										target="_blank"
