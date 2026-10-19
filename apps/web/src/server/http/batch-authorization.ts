@@ -6,6 +6,7 @@ import {
 	batchUpdateBodySchema,
 } from "../../lib/schema/batch";
 import { batchMoveSchema } from "../../lib/schema/memory-move";
+import { spaceVisible } from "../auth/authorize";
 import type { AppVars, Env } from "../env";
 import { ApiError } from "../lib/errors";
 import { JSON_BODY_MAX_BYTES, parseStrict } from "../lib/validate";
@@ -84,6 +85,8 @@ export async function authorizeBatchReplay(
 	}
 	const repo = new MemoryRepo(context.env.DB);
 	const authz = await currentMemoryAuthz(context);
+	if (destination && !spaceVisible(authz.principal, destination))
+		throw new ApiError("not_found", "not found");
 	for (const [index, result] of cached.data.results.entries()) {
 		if (!result.ok && result.error?.code !== "version_conflict") continue;
 		const id = op === "delete" || op === "move" || !result.ok ? ids[index] : result.item?.id;

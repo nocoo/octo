@@ -56,6 +56,43 @@ async function setup() {
 }
 
 describe("move endpoints", () => {
+	it.each(["spaces", "own"])(
+		"hides unavailable targets on all-failed batch replays with %s scope",
+		async (scope) => {
+			const { db, key, request } = await setup();
+			await db
+				.prepare("UPDATE api_keys SET scope = ?, space_ids_json = '[\"source\"]' WHERE id = ?")
+				.bind(scope, key.row.id)
+				.run();
+			await db
+				.prepare("UPDATE spaces SET owner_key_id = ? WHERE id = 'source'")
+				.bind(key.row.id)
+				.run();
+			const firstResults = [];
+			const replays = [];
+			for (const space of ["target", "nonexistent"]) {
+				const payload = { space, items: [{ id: "missing-memory" }] };
+				const headers = { "Idempotency-Key": `all-failed-${space}` };
+				const first = await request("/memories:batchMove", "POST", payload, headers);
+				expect(first.status).toBe(200);
+				const result = await first.json();
+				expect(result).toMatchObject({
+					results: [{ id: "missing-memory", ok: false, error: { code: "not_found" } }],
+				});
+				firstResults.push(result);
+				replays.push(await request("/memories:batchMove", "POST", payload, headers));
+			}
+			expect(firstResults[0]).toEqual(firstResults[1]);
+			expect(replays.map((response) => response.status)).toEqual([404, 404]);
+			for (const replay of replays) {
+				expect(replay.headers.get("Idempotent-Replayed")).toBeNull();
+				expect(await replay.json()).toMatchObject({
+					error: { code: "not_found", message: "not found" },
+				});
+			}
+		},
+	);
+
 	it("rolls back every memory artifact and replay record on a commit failure", async () => {
 		const { db, request, create } = await setup();
 		const first = await create();

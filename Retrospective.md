@@ -808,3 +808,7 @@ MAX review reproduced a move holding the vector-sync lease while a body PATCH qu
 ### 2026-10-19 — Restore focus when a filtered rename removes its opener
 
 Rename cancellation coverage only exercised connected row buttons. MAX review reproduced a successful rename under a name-only filter: the updated row disappeared, its opener unmounted, and the dialog left focus on the document body. A unit callback regression and real Worker-backed Chromium journey failed before the fix. Closing the rename dialog now restores a connected opener or falls back to the space filter, preserving the user's filter and the persisted rename. Dialog focus tests must cover successful mutations that remove their own trigger as well as cancellation.
+
+### 2026-10-19 — Check batch replay targets before skipping failed items
+
+Independent MAX review found that an all-failed move batch checked target existence during idempotent replay but skipped every item's authorization. A hidden existing target therefore replayed with HTTP 200 while a nonexistent target returned HTTP 404, revealing hidden space existence. Two RED regressions reproduced the difference for explicit-space and owned-space scopes. Replay now checks current target visibility before skipping failed items, returning the same 404 for hidden and nonexistent targets. Initial batches retain identical per-item not-found results for both targets. Test all-failed cached responses as well as successful or mixed batches whenever authorization depends on iterating their items.
