@@ -24,6 +24,86 @@ function fixture() {
 }
 
 describe("durable vector synchronization", () => {
+	it("prioritizes the committed memory independently of a full backlog", async () => {
+		const { env, sqlite, store, indexed } = fixture();
+		for (let index = 0; index < 60; index++) {
+			sqlite.prepare("INSERT INTO vector_sync_jobs (memory_id) VALUES (?)").run(`backlog-${index}`);
+		}
+		expect(await synchronizeVectors(env, { store, now: 100, memoryIds: ["memory"] })).toEqual({
+			synced: 1,
+			failed: 0,
+		});
+		expect(indexed()).toBe(100);
+		expect(store.delete).not.toHaveBeenCalled();
+		expect(store.upsert).toHaveBeenCalledTimes(1);
+		expect(store.upsert).toHaveBeenCalledWith([
+			expect.objectContaining({
+				id: "memory",
+				metadata: expect.objectContaining({ generation: 2, content_hash: "hash" }),
+			}),
+		]);
+	});
+
+	it("does not upsert a stale body vector and deletes its deterministic ID immediately", async () => {
+		const { env, sqlite, store, indexed } = fixture();
+		sqlite.exec("UPDATE memories SET content_hash = 'changed', version = 2");
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 1, failed: 0 });
+		expect(store.upsert).not.toHaveBeenCalled();
+		expect(store.delete).toHaveBeenCalledWith(["memory"]);
+		expect(indexed()).toBeNull();
+	});
+
+	it("marks accepted vectors visible only after a matching query generation and content hash", async () => {
+		const { env, sqlite, store, indexed } = fixture();
+		const query = vi.fn(async () => [
+			{ id: "memory", score: 1, generation: 1, content_hash: "hash" },
+		]);
+		await synchronizeVectors(env, { store: { ...store, query }, now: 100 });
+		expect(indexed()).toBe(100);
+		expect(
+			sqlite.prepare("SELECT visible_generation FROM vector_sync_jobs").get()?.visible_generation,
+		).toBeNull();
+		query.mockResolvedValue([{ id: "memory", score: 1, generation: 2, content_hash: "hash" }]);
+		await synchronizeVectors(env, { store: { ...store, query }, now: 101 });
+		expect(
+			sqlite.prepare("SELECT visible_generation FROM vector_sync_jobs").get()?.visible_generation,
+		).toBe(2);
+		expect(store.upsert).toHaveBeenCalledTimes(1);
+	});
+
+	it("respects backoff even when a write targets a failed generation", async () => {
+		const { env, sqlite, store } = fixture();
+		sqlite.exec("UPDATE vector_sync_jobs SET attempts = 1, due_at = 1000");
+		expect(await synchronizeVectors(env, { store, now: 100, memoryIds: ["memory"] })).toEqual({
+			synced: 0,
+			failed: 0,
+		});
+		expect(store.upsert).not.toHaveBeenCalled();
+	});
+
+	it("fails all claimed batch members when embedding preparation rejects", async () => {
+		const { env, sqlite, store } = fixture();
+		sqlite.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('other')");
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const beforeSyncBatch = vi.fn(async () => {
+			throw new Error("gateway failed");
+		});
+		expect(await synchronizeVectors(env, { store, now: 100, beforeSyncBatch })).toEqual({
+			synced: 0,
+			failed: 2,
+		});
+		expect(beforeSyncBatch).toHaveBeenCalledWith(["memory", "other"]);
+		expect(store.upsert).not.toHaveBeenCalled();
+		expect(
+			sqlite
+				.prepare(
+					"SELECT count(*) AS count FROM vector_sync_jobs WHERE attempts = 1 AND lease_token IS NULL",
+				)
+				.get()?.count,
+		).toBe(2);
+		log.mockRestore();
+	});
+
 	it("starts queued work with a fresh lease and backs off from the failure time", async () => {
 		const { env, store, sqlite } = fixture();
 		const clock = vi.spyOn(Date, "now").mockReturnValue(100);
@@ -423,6 +503,8 @@ describe("durable vector synchronization", () => {
 				id: "memory",
 				values: [1, 0],
 				metadata: {
+					generation: 2,
+					content_hash: "hash",
 					space: "kb",
 					type: "note",
 					source: "source",

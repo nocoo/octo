@@ -63,6 +63,7 @@ function makeStore(kind: "cloudflare" | "d1"): VectorStore {
 	const sqlite = new DatabaseSync(":memory:");
 	databases.push(sqlite);
 	sqlite.exec(migrationSqlForNode(readFileSync("migrations/0001_core.sql", "utf8")));
+	sqlite.exec("UPDATE embedding_profiles SET model = 'model', dims = 2");
 	sqlite.exec(
 		"INSERT INTO spaces VALUES ('visible','visible','Visible','',NULL,1,1), ('hidden','hidden','Hidden','',NULL,1,1)",
 	);

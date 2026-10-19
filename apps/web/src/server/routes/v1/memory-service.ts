@@ -12,9 +12,10 @@ export function memoryService(
 		new TagRepo(context.env.DB, undefined, undefined, context.get("writeStatements")),
 		undefined,
 		undefined,
-		new MemoryRepo(context.env.DB, (statements, mapError) => {
+		new MemoryRepo(context.env.DB, (statements, mapError, memoryId) => {
 			context.get("writeStatements").push(...statements);
 			context.set("writeError", mapError);
+			context.set("vectorMemoryIds", [...(context.get("vectorMemoryIds") ?? []), memoryId]);
 		}),
 		undefined,
 		undefined,

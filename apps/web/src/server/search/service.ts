@@ -1,11 +1,12 @@
 import type { SearchRequest } from "../../lib/schema/search";
-import type { Env } from "../env";
+import { type Env, resourceEnv } from "../env";
 import { d1Results } from "../lib/d1";
 import { ApiError } from "../lib/errors";
 import { buildVectorMetadataFilter } from "../ports/vector/filter";
-import type { VectorStore } from "../ports/vector/types";
+import { capVectorTopK, type VectorStore } from "../ports/vector/types";
 import type { AuthzContext } from "./authz";
 import { intersectRequestedSpaces } from "./authz";
+import { loadPendingVectorHits, revalidateCurrentVectorHits } from "./current-vector-hits";
 import { buildMemoryFilterSql, resolveMemoryFilterSql, type SqlFilter } from "./filters-sql";
 import { runFtsChannel } from "./fts-channel";
 import { DEFAULT_FUSION, fuseChannels, type RankedChannel } from "./fusion";
@@ -28,6 +29,15 @@ export type SearchDeps = {
 function bm25ToNormalized(hits: Array<{ id: string; bm25: number }>): Map<string, number> {
 	const scores = new Map(hits.map((h) => [h.id, -h.bm25]));
 	return minMaxNormalize(scores);
+}
+
+function uniqueChannelHits<T extends { id: string }>(hits: T[], score: (hit: T) => number): T[] {
+	const unique = new Map<string, T>();
+	for (const hit of hits) {
+		const previous = unique.get(hit.id);
+		if (!previous || score(hit) > score(previous)) unique.set(hit.id, hit);
+	}
+	return [...unique.values()].sort((a, b) => score(b) - score(a));
 }
 
 export async function revalidateVectorHits(
@@ -101,6 +111,8 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 	const queryVector =
 		mode !== "fts" && req.vector ? await normalizeQueryVector(deps.db, req.vector) : undefined;
 	if (queryVector && spaceIds.length > 0) {
+		const production =
+			deps.env !== undefined && resourceEnv(deps.env.RESOURCE_ENV) === "production";
 		const filter = buildVectorMetadataFilter(req.filters, spaceSlugs);
 		const sqlFilter = buildMemoryFilterSql(req.filters, spaceIds);
 		const store =
@@ -115,15 +127,33 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 			vector: queryVector,
 			topK: candidateK,
 			filter,
-			returnMetadata: false,
+			returnMetadata: production,
 		});
-		const eligible = await revalidateVectorHits(deps.db, raw, sqlFilter);
-		vectorHits = await revalidateVectorHits(deps.db, eligible, contentFilter);
+		const validated = production
+			? await revalidateCurrentVectorHits(deps.db, raw, sqlFilter, profile, queryVector)
+			: await revalidateVectorHits(deps.db, raw, sqlFilter);
+		const eligible = uniqueChannelHits(
+			validated.filter((hit) => hit.score > 0),
+			(hit) => hit.score,
+		);
+		const filtered = await revalidateVectorHits(deps.db, eligible, contentFilter);
+		vectorHits = [...filtered];
+		if (production) {
+			vectorHits.push(
+				...(await loadPendingVectorHits(deps.db, contentFilter, profile, queryVector, candidateK)),
+			);
+		}
+		vectorHits = uniqueChannelHits(
+			vectorHits.filter((hit) => hit.score > 0),
+			(hit) => hit.score,
+		).slice(0, candidateK);
 		vectorTruncated =
 			Boolean(req.filters?.tags_all?.length || req.filters?.tags_any?.length) &&
-			eligible.length >= candidateK &&
+			eligible.length >= capVectorTopK(candidateK, production) &&
+			filtered.length < eligible.length &&
 			vectorHits.length < candidateK;
 	}
+	ftsHits = uniqueChannelHits(ftsHits, (hit) => -hit.bm25).slice(0, candidateK);
 
 	const candidateIds = [...new Set([...ftsHits, ...vectorHits].map((hit) => hit.id))];
 	const memories = await loadMemoriesByIds(deps.db, candidateIds, contentFilter);

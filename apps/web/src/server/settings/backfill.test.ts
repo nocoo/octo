@@ -194,7 +194,7 @@ describe("post-commit embedding backfill", () => {
 		},
 	);
 
-	it("swallows gateway/storage/config failure and emits static diagnostics only", async () => {
+	it("propagates gateway/storage/config failure and emits static diagnostics only", async () => {
 		const { env, raw } = await setup();
 		const logger = vi.spyOn(console, "error").mockImplementation(() => {});
 		vi.stubGlobal(
@@ -203,7 +203,7 @@ describe("post-commit embedding backfill", () => {
 				throw new Error(`gateway raw body ${SECRET}`);
 			}),
 		);
-		expect(await backfillMemory(env, "m")).toBe(false);
+		await expect(backfillMemory(env, "m")).rejects.toMatchObject({ reason: { stage: "request" } });
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async () => Response.json({ data: [{ embedding: [1, 0, 0] }] })),
@@ -213,11 +213,12 @@ describe("post-commit embedding backfill", () => {
 			if (sql.startsWith("INSERT INTO memory_vectors")) throw new Error(SECRET);
 			return prepare(sql);
 		});
-		expect(await backfillMemory(env, "m")).toBe(false);
+		await expect(backfillMemory(env, "m")).rejects.toMatchObject({ reason: { stage: "config" } });
 		vi.restoreAllMocks();
 		vi.spyOn(console, "error").mockImplementation(() => {});
+		raw.exec("DELETE FROM embedding_cache");
 		raw.exec("UPDATE settings SET ciphertext = x'00' WHERE key = 'embedding.api_key'");
-		expect(await backfillMemory(env, "m")).toBe(false);
+		await expect(backfillMemory(env, "m")).rejects.toMatchObject({ reason: { stage: "decrypt" } });
 		expect(logger.mock.calls.slice(0, 2)).toEqual([
 			[{ event: "embedding_backfill_failed", stage: "request", host: "gateway.example" }],
 			[{ event: "embedding_backfill_failed", stage: "config", host: "gateway.example" }],
@@ -230,9 +231,9 @@ it("makes no request when enabled without credentials or URL", async () => {
 	const { env } = await setup({ ...SETTINGS, api_key: null });
 	const fetcher = vi.fn();
 	vi.stubGlobal("fetch", fetcher);
-	expect(await backfillMemory(env, "m")).toBe(false);
+	await expect(backfillMemory(env, "m")).rejects.toMatchObject({ reason: { stage: "config" } });
 	await saveEmbeddingSettings(env, { api_key: SECRET, base_url: null }, "admin:e@local");
-	expect(await backfillMemory(env, "m")).toBe(false);
+	await expect(backfillMemory(env, "m")).rejects.toMatchObject({ reason: { stage: "config" } });
 	expect(fetcher).not.toHaveBeenCalled();
 });
 

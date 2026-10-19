@@ -19,6 +19,8 @@ octo 是部署在 Zheng 个人 Cloudflare 付费账户上的私人记忆 / 知�
 | 09 | [MCP 服务](09-mcp.md) | 无状态 Streamable HTTP、工具 schema、错误映射、bot 接入 |
 | 99 | [待决问题](99-open-questions.md) | 尚需 Zheng 决定的事项 |
 
+Operational contract: [Vector convergence, embedding economy and smoke](vector-convergence.md).
+
 冲突时的优先级：质量看 07，表结构看 02，HTTP 看 04，权限看 05，页面看 06。01 是方向性摘要。
 
 本目录只写设计。实现前，先按 [07](07-dev-workflow.md) 写失败测试。

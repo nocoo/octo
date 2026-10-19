@@ -263,7 +263,28 @@ export class MemoryService {
 			}));
 		}
 		if (include.has("vector_status")) {
-			extra.vector_status = await this.memories.vectorStatus(row.id, row.content_hash);
+			const stored = await this.memories.vectorStatus(row.id, row.content_hash);
+			const { results } = await this.db
+				.prepare(`SELECT profile.id AS profile, COALESCE(counter.calls, 0) AS embedding_calls
+				FROM embedding_profiles profile LEFT JOIN memory_embedding_calls counter ON counter.profile_id = profile.id AND counter.memory_id = ?
+				WHERE profile.active = 1 OR counter.memory_id IS NOT NULL OR EXISTS
+				(SELECT 1 FROM memory_vectors vector WHERE vector.memory_id = ? AND vector.profile_id = profile.id)
+				ORDER BY profile.id`)
+				.bind(row.id, row.id)
+				.all<{ profile: string; embedding_calls: number }>();
+			const statuses = new Map(
+				stored.map((status) => [status.profile, { ...status, embedding_calls: 0 }]),
+			);
+			for (const counter of results) {
+				const status = statuses.get(counter.profile) ?? {
+					profile: counter.profile,
+					indexed: false,
+					stale: false,
+					embedding_calls: 0,
+				};
+				statuses.set(counter.profile, { ...status, embedding_calls: counter.embedding_calls });
+			}
+			extra.vector_status = [...statuses.values()];
 		}
 		if (!(await this.memories.unchangedIds([row])).has(row.id))
 			throw new ApiError("not_found", "not found");

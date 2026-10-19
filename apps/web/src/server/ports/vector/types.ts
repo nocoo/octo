@@ -8,6 +8,8 @@ export type VectorQueryInput = {
 export type VectorQueryHit = {
 	id: string;
 	score: number;
+	generation?: number;
+	content_hash?: string;
 };
 
 export interface VectorStore {

@@ -113,7 +113,10 @@ describe("memory v1 routes", () => {
 			id: item.id,
 			versions_count: 1,
 			attachments: [],
-			vector_status: [{ profile: "tiny-3", indexed: false, stale: false }],
+			vector_status: [
+				{ profile: "tiny-3", indexed: false, stale: false, embedding_calls: 0 },
+				{ profile: "te3-small-1536", indexed: false, stale: false, embedding_calls: 0 },
+			],
 		});
 
 		const patched = await app.request(

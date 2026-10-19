@@ -32,11 +32,11 @@ describe("derived work coordination", () => {
 			"fetch",
 			vi.fn(async () => {
 				now += 100;
-				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
+				return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
 			}),
 		);
 		try {
-			expect(await runDerivedTasks(env, undefined, 5)).toEqual({ synced: 5, failed: 0 });
+			expect(await runDerivedTasks(env, undefined, undefined, 5)).toEqual({ synced: 5, failed: 0 });
 			expect(
 				raw.prepare("SELECT MIN(indexed_at) AS at FROM memory_vectors").get()?.at,
 			).toBeGreaterThan(100);
@@ -50,19 +50,19 @@ describe("derived work coordination", () => {
 		}
 	});
 
-	it("leases and advances backfill before calls, preserving concurrent and interrupted drain fairness", async () => {
+	it("batches shared content once and fences concurrent cron/write drains", async () => {
 		const { env, raw } = await setup(50);
 		raw.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-purge-tombstone')");
 		const entered = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
 		let calls = 0;
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async () => {
 				calls++;
-				const held = calls <= 4;
-				if (calls === 4) entered.resolve();
-				if (held) await release.promise;
+				entered.resolve();
+				await release.promise;
 				return Response.json({ data: [{ embedding: [1, 0, 0] }] });
 			}),
 		);
@@ -75,34 +75,31 @@ describe("derived work coordination", () => {
 				WHERE lease_token IS NOT NULL AND lease_until = ? AND due_at = 100`)
 					.get(100 + SYNC_LEASE_MS)?.count,
 			).toBe(4);
-			expect(await runDerivedTasks(env, 101)).toEqual({ synced: 47, failed: 0 });
-			expect(calls).toBe(50);
+			expect(await runDerivedTasks(env, 101)).toEqual({ synced: 0, failed: 47 });
+			expect(calls).toBe(1);
 			expect(
 				raw
 					.prepare(
 						"SELECT synced_generation FROM vector_sync_jobs WHERE memory_id = 'z-purge-tombstone'",
 					)
 					.get()?.synced_generation,
-			).toBe(1);
-			const recoveredAt = 101 + SYNC_LEASE_MS;
-			expect(await runDerivedTasks(env, recoveredAt)).toEqual({ synced: 4, failed: 0 });
-			expect(calls).toBe(54);
-			expect(
-				raw
-					.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at = ?")
-					.get(recoveredAt)?.count,
-			).toBe(4);
+			).toBeNull();
 			release.resolve();
-			expect(await abandoned).toEqual({ synced: 0, failed: 0 });
+			expect(await abandoned).toEqual({ synced: 4, failed: 0 });
+			const recoveredAt = 101 + 2 * 60 * 60 * 1000;
+			await runDerivedTasks(env, recoveredAt);
+			await runDerivedTasks(env, recoveredAt);
+			expect(calls).toBe(1);
 			expect(
 				raw
-					.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at = ?")
-					.get(recoveredAt)?.count,
-			).toBe(4);
+					.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at IS NOT NULL")
+					.get()?.count,
+			).toBe(50);
 		} finally {
 			release.resolve();
 			await abandoned;
 			raw.close();
+			log.mockRestore();
 		}
 	});
 

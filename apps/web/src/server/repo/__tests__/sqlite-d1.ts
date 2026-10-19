@@ -14,6 +14,7 @@ type Bound = {
 };
 
 export function sqliteD1(db: DatabaseSync): D1Database {
+	let pending: Promise<unknown> = Promise.resolve();
 	const prepare = (sql: string): Bound => {
 		const stmt: Bound = {
 			sql,
@@ -43,19 +44,24 @@ export function sqliteD1(db: DatabaseSync): D1Database {
 	};
 	return {
 		prepare,
-		async batch(stmts: Array<{ run: () => Promise<unknown> }>) {
-			db.exec("BEGIN");
-			try {
-				const out: unknown[] = [];
-				for (const stmt of stmts) {
-					out.push(await stmt.run());
+		batch(stmts: Array<{ run: () => Promise<unknown> }>) {
+			const execute = async () => {
+				db.exec("BEGIN");
+				try {
+					const out: unknown[] = [];
+					for (const stmt of stmts) {
+						out.push(await stmt.run());
+					}
+					db.exec("COMMIT");
+					return out as D1Result[];
+				} catch (err) {
+					db.exec("ROLLBACK");
+					throw err;
 				}
-				db.exec("COMMIT");
-				return out as D1Result[];
-			} catch (err) {
-				db.exec("ROLLBACK");
-				throw err;
-			}
+			};
+			const result = pending.then(execute);
+			pending = result.catch(() => {});
+			return result;
 		},
 	} as unknown as D1Database;
 }

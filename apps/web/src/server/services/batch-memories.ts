@@ -31,6 +31,7 @@ export type MemoryServiceContext = {
 	statements: D1PreparedStatement[];
 	principal: ApiPrincipal;
 	setWriteError?: (mapper: AppVars["writeError"]) => void;
+	vectorMemoryIds?: string[];
 };
 
 export interface MemoryService {
@@ -58,9 +59,10 @@ class BatchMemoryRepo extends MemoryRepo {
 	private committedReads = false;
 
 	constructor(private readonly ctx: MemoryServiceContext) {
-		super(ctx.db, (statements, mapError) => {
+		super(ctx.db, (statements, mapError, memoryId) => {
 			ctx.statements.push(...statements);
 			this.stagedErrors.push(mapError);
+			ctx.vectorMemoryIds?.push(memoryId);
 		});
 	}
 
@@ -72,6 +74,7 @@ class BatchMemoryRepo extends MemoryRepo {
 		const errors = new Map(this.errors);
 		const errorCount = this.stagedErrors.length;
 		const statementCount = this.ctx.statements.length;
+		const memoryCount = this.ctx.vectorMemoryIds?.length ?? 0;
 		return () => {
 			this.rows = rows;
 			this.tags = tags;
@@ -80,6 +83,7 @@ class BatchMemoryRepo extends MemoryRepo {
 			this.errors = errors;
 			this.stagedErrors.length = errorCount;
 			this.ctx.statements.length = statementCount;
+			if (this.ctx.vectorMemoryIds) this.ctx.vectorMemoryIds.length = memoryCount;
 		};
 	}
 

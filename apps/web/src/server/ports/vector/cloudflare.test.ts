@@ -2,6 +2,36 @@ import { describe, expect, it, vi } from "vitest";
 import { CloudflareVectorStore } from "./cloudflare";
 
 describe("CloudflareVectorStore", () => {
+	it("awaits index upserts and deletions", async () => {
+		const upsert = vi.fn(async () => ({}));
+		const deleteByIds = vi.fn(async () => ({}));
+		const store = new CloudflareVectorStore({ upsert, deleteByIds } as never);
+		const records = [{ id: "memory", values: [1, 0] }];
+		await store.upsert(records);
+		await store.delete(["memory"]);
+		expect(upsert).toHaveBeenCalledExactlyOnceWith(records);
+		expect(deleteByIds).toHaveBeenCalledExactlyOnceWith(["memory"]);
+	});
+
+	it("extracts only typed generation and content hash verification metadata", async () => {
+		const query = vi.fn(async () => ({
+			matches: [
+				{ id: "verified", score: 1, metadata: { generation: 4, content_hash: "hash" } },
+				{ id: "invalid", score: 0.9, metadata: { generation: "4", content_hash: 4 } },
+			],
+		}));
+		expect(
+			await new CloudflareVectorStore({ query } as never).query({
+				vector: [1],
+				topK: 10,
+				returnMetadata: true,
+			}),
+		).toEqual([
+			{ id: "verified", score: 1, generation: 4, content_hash: "hash" },
+			{ id: "invalid", score: 0.9 },
+		]);
+	});
+
 	it("maps query options and caps topK", async () => {
 		const query = vi.fn(async () => ({
 			matches: [{ id: "m1", score: 0.9 }, { id: "m2" }],

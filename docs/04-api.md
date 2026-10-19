@@ -81,6 +81,17 @@ Vector PUT uses the same versioned write contract as PATCH: supply
 and supports idempotency through the same atomic write boundary. The body is
 `{profile,values,expected_version?}`, not a nested `vector` object.
 
+`GET /memories/:id?include=vector_status` returns entries with
+`{profile,indexed,stale,embedding_calls}` for active, stored or counted profiles.
+`indexed` means the current vector upsert was accepted, not externally query-visible;
+an active profile without a stored vector reports `indexed=false, stale=false`.
+`embedding_calls` is the durable number of outbound embedding batch attempts in
+which this memory/profile participated (including failed attempts); cache hits
+and client-supplied vectors add zero. The count is permission-scoped through the
+memory read, not a global provider counter. A changed-body PATCH can start
+backfill before a later client PUT; its call must not be attributed to PUT.
+See [vector convergence and smoke usage](vector-convergence.md).
+
 `batchUpdate.items[]` 与 MCP `update_memory` 使用同一个严格输入规则，内部统一为 flat：
 
 ```json

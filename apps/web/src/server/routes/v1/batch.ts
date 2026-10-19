@@ -25,7 +25,10 @@ type BatchErr = {
 type BatchResult<T> = BatchOk<T> | BatchErr;
 
 function serviceCtx(c: Context<{ Bindings: Env; Variables: AppVars }>): MemoryServiceContext {
+	const vectorMemoryIds: string[] = [];
+	c.set("vectorMemoryIds", vectorMemoryIds);
 	return {
+		vectorMemoryIds,
 		db: c.env.DB,
 		statements: c.get("writeStatements"),
 		principal: c.get("apiKey"),

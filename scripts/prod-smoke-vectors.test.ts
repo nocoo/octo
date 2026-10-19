@@ -1,0 +1,601 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { main, runVectorSmoke } from "./prod-smoke-vectors";
+
+const KEY = "secret-never-print-this";
+const environment = {
+	OCTO_SMOKE_BASE_URL: "https://smoke.example/",
+	OCTO_SMOKE_API_KEY: KEY,
+	OCTO_SMOKE_SPACE: "dedicated-smoke",
+};
+const ids = ["01JAAAAAAAAAAAAAAAAAAAAAAA", "01JBBBBBBBBBBBBBBBBBBBBBBB"];
+type Stored = { id: string; version: number; body: string; tags: string[]; values: number[] };
+type Call = { url: URL; init: RequestInit; body: Record<string, unknown> };
+
+function fixture() {
+	let time = 0;
+	const calls: Call[] = [];
+	const memories: Stored[] = [];
+	let override: ((call: Call) => Response | undefined) | undefined;
+	const json = (value: unknown, status = 200) => Response.json(value, { status });
+	const dependencies = {
+		now: () => time,
+		sleep: async (ms: number) => {
+			time += ms;
+		},
+		fetch: vi.fn(async (url: string, init: RequestInit) => {
+			time += 1;
+			const call: Call = { url: new URL(url), init, body: JSON.parse(String(init.body ?? "{}")) };
+			calls.push(call);
+			const response = override?.(call);
+			if (response) return response;
+			const path = call.url.pathname;
+			if (path.endsWith("/embedding-profiles")) {
+				return json({
+					active_profile: "tiny",
+					items: [{ id: "tiny", dims: 3, metric: "cosine", active: true }],
+				});
+			}
+			if (path.endsWith("/spaces/dedicated-smoke")) return json({ slug: "dedicated-smoke" });
+			if (path.endsWith("/memories") && init.method === "POST") {
+				const memory: Stored = {
+					id: ids[memories.length] ?? "invalid",
+					version: 1,
+					body: String(call.body.body),
+					tags: call.body.tags as string[],
+					values: (call.body.vector as { values: number[] }).values,
+				};
+				memories.push(memory);
+				return json(memory, 201);
+			}
+			if (path.endsWith("/search")) {
+				const values = (call.body.vector as { values: number[] }).values;
+				return json({
+					items: memories
+						.map((memory) => ({
+							id: memory.id,
+							scores: {
+								vector: {
+									similarity: memory.values.reduce((sum, n, i) => sum + n * (values[i] ?? 0), 0),
+								},
+							},
+						}))
+						.filter((item) => item.scores.vector.similarity > 0)
+						.sort((a, b) => b.scores.vector.similarity - a.scores.vector.similarity),
+				});
+			}
+			const memory = memories.find((item) => path.includes(item.id));
+			if (!memory) throw new Error(`unexpected request ${KEY}`);
+			if (init.method === "DELETE") return json({ trashed_at: "2026-10-19T00:00:00Z" });
+			if (init.method === "PATCH" || init.method === "PUT") {
+				expect(call.body.expected_version).toBe(memory.version);
+				const changed =
+					(call.body.body !== undefined && call.body.body !== memory.body) ||
+					(call.body.tags !== undefined &&
+						JSON.stringify(call.body.tags) !== JSON.stringify(memory.tags)) ||
+					(call.body.values !== undefined &&
+						JSON.stringify(call.body.values) !== JSON.stringify(memory.values));
+				if (call.body.body !== undefined) memory.body = String(call.body.body);
+				if (call.body.tags !== undefined) memory.tags = call.body.tags as string[];
+				if (call.body.values !== undefined) memory.values = call.body.values as number[];
+				if (changed) memory.version += 1;
+				return json(memory);
+			}
+			expect(call.url.searchParams.get("include")).toBe("vector_status");
+			return json({
+				...memory,
+				vector_status: [{ profile: "tiny", indexed: true, stale: false, embedding_calls: 0 }],
+			});
+		}),
+	};
+	return {
+		calls,
+		memories,
+		dependencies,
+		json,
+		setOverride: (fn: typeof override) => {
+			override = fn;
+		},
+		advance: (ms: number) => {
+			time += ms;
+		},
+	};
+}
+
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllEnvs();
+	vi.restoreAllMocks();
+});
+
+describe("production vector smoke with fake transport only", () => {
+	it("measures both full observation windows, client-vector economy and scoped repeated searches", async () => {
+		const f = fixture();
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.ok).toBe(true);
+		expect(report.failures).toEqual([]);
+		expect(report.cleanup).toEqual({ attempted: 2, deleted: 2, errors: [] });
+		for (const latency of Object.values(report.latencies_ms)) {
+			expect(latency).toBeGreaterThan(0);
+			expect(latency).toBeLessThan(10_000);
+		}
+		expect(report.embedding_calls).toEqual({
+			create: 0,
+			noop: 0,
+			tags: 0,
+			patch: 0,
+			put: 0,
+			final: 0,
+		});
+		expect(report.embedding_call_deltas).toEqual({ put_since_patch: 0, final_since_patch: 0 });
+		expect(report.post_patch_attribution).toBe("unverified_body_patch_may_embed");
+		expect(report.polls.create).toBeGreaterThan(3);
+		expect(report.polls.update).toBeGreaterThan(3);
+		const creates = f.calls.filter(
+			(call) => call.init.method === "POST" && call.url.pathname.endsWith("/memories"),
+		);
+		expect(creates).toHaveLength(2);
+		for (const create of creates) {
+			expect(create.body.space).toBe(environment.OCTO_SMOKE_SPACE);
+			expect(create.body.title).toContain(report.run);
+			expect(create.body.tags).toContain(report.run);
+		}
+		const searches = f.calls.filter((call) => call.url.pathname.endsWith("/search"));
+		expect(new Set(searches.map((call) => call.body.mode))).toEqual(new Set(["vector", "hybrid"]));
+		for (const call of searches) {
+			expect(call.body.filters).toEqual({ spaces: ["dedicated-smoke"], tags_all: [report.run] });
+		}
+		for (const call of f.calls) {
+			expect(call.url.origin).toBe("https://smoke.example");
+			expect(call.init.redirect).toBe("error");
+			expect(call.init.signal).toBeInstanceOf(AbortSignal);
+			expect(new Headers(call.init.headers).get("authorization")).toBe(`Bearer ${KEY}`);
+		}
+		expect(
+			f.calls.filter((call) => call.init.method === "DELETE").map((call) => call.url.pathname),
+		).toEqual(ids.map((id) => `/api/v1/memories/${id}`));
+		expect(JSON.stringify(report)).not.toContain(KEY);
+	});
+
+	it.each(["indexed", "hit", "new", "old"])(
+		"fails the strict deadline for %s without skipping cleanup",
+		async (kind) => {
+			const f = fixture();
+			f.setOverride((call) => {
+				if (
+					kind === "indexed" &&
+					call.init.method === "GET" &&
+					call.url.searchParams.has("include")
+				) {
+					return f.json({
+						...f.memories.find((m) => call.url.pathname.includes(m.id)),
+						vector_status: [{ profile: "tiny", indexed: false, stale: false, embedding_calls: 0 }],
+					});
+				}
+				if (!call.url.pathname.endsWith("/search")) return;
+				if (kind === "hit") return f.json({ items: [] });
+				const updated = f.memories.find((memory) => memory.body.includes("updated"));
+				if (kind === "new" && updated) return f.json({ items: [] });
+				if (kind === "old" && updated)
+					return f.json({ items: [{ id: updated.id, scores: { vector: { similarity: 1 } } }] });
+			});
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.ok).toBe(false);
+			expect(report.failures.some((failure) => failure.code === "deadline_exceeded")).toBe(true);
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it.each(["vector", "hybrid"])("detects duplicate IDs on later %s polls", async (mode) => {
+		const f = fixture();
+		let count = 0;
+		f.setOverride((call) => {
+			if (!call.url.pathname.endsWith("/search") || call.body.mode !== mode || ++count !== 4)
+				return;
+			const item = { id: ids[0], scores: { vector: { similarity: 1 } } };
+			return f.json({ items: [item, item] });
+		});
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.ok).toBe(false);
+		expect(report.failures).toContainEqual({ phase: "create", code: "duplicate_memory_ids" });
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
+	it("detects a search convergence regression after the first successful sample", async () => {
+		const f = fixture();
+		let count = 0;
+		f.setOverride((call) =>
+			call.url.pathname.endsWith("/search") && ++count === 5 ? f.json({ items: [] }) : undefined,
+		);
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.failures).toContainEqual({ phase: "create", code: "convergence_regressed" });
+	});
+
+	it.each([undefined, -1, "0", 1])(
+		"rejects unavailable or nonzero embedding counters (%s)",
+		async (counter) => {
+			const f = fixture();
+			f.setOverride((call) =>
+				call.url.searchParams.has("include")
+					? f.json({
+							id: ids[0],
+							version: 1,
+							vector_status: [
+								{ profile: "tiny", indexed: true, stale: false, embedding_calls: counter },
+							],
+						})
+					: undefined,
+			);
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.ok).toBe(false);
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it("reads an absent-vector counter but cannot claim index convergence", async () => {
+		const f = fixture();
+		f.setOverride((call) =>
+			call.url.searchParams.has("include")
+				? f.json({
+						id: f.memories.find((m) => call.url.pathname.includes(m.id))?.id,
+						version: 1,
+						vector_status: [{ profile: "tiny", indexed: false, stale: true, embedding_calls: 0 }],
+					})
+				: undefined,
+		);
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.embedding_calls.create).toBe(0);
+		expect(report.latencies_ms.create_indexed).toBeNull();
+		expect(report.ok).toBe(false);
+	});
+
+	it("sanitizes operation and cleanup failures and only deletes IDs obtained from its own creates", async () => {
+		const f = fixture();
+		f.setOverride((call) => {
+			if (call.init.method === "PATCH") throw new Error(`network headers/body ${KEY}`);
+			if (call.init.method === "DELETE" && call.url.pathname.includes(String(ids[0]))) {
+				return f.json({ error: { message: KEY } }, 403);
+			}
+		});
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.ok).toBe(false);
+		expect(report.cleanup.attempted).toBe(2);
+		expect(report.cleanup.deleted).toBe(1);
+		expect(report.cleanup.errors).toEqual([{ phase: "cleanup", code: "http_error", status: 403 }]);
+		expect(JSON.stringify(report)).not.toContain(KEY);
+		expect(report.failures).toContainEqual({ phase: "noop", code: "request_failed" });
+	});
+
+	it("cleans the first create when the second operation fails", async () => {
+		const f = fixture();
+		f.setOverride((call) =>
+			call.init.method === "POST" &&
+			call.url.pathname.endsWith("/memories") &&
+			f.memories.length === 1
+				? f.json({ error: KEY }, 500)
+				: undefined,
+		);
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.cleanup).toEqual({ attempted: 1, deleted: 1, errors: [] });
+		expect(report.ok).toBe(false);
+	});
+
+	it.each(["..", "../trash/empty", "%2e%2e", "//evil.example", `id?key=${KEY}`])(
+		"rejects unsafe returned IDs (%s) without arbitrary cleanup",
+		async (id) => {
+			const f = fixture();
+			f.setOverride((call) =>
+				call.url.pathname.endsWith("/memories") ? f.json({ id, version: 1 }) : undefined,
+			);
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.ok).toBe(false);
+			expect(report.cleanup.attempted).toBe(0);
+			expect(f.calls.some((call) => call.init.method === "DELETE")).toBe(false);
+			expect(JSON.stringify(report)).not.toContain(KEY);
+		},
+	);
+
+	it.each([
+		{},
+		{ ...environment, OCTO_SMOKE_API_KEY: "" },
+		{ ...environment, OCTO_SMOKE_SPACE: ".." },
+		{ ...environment, OCTO_SMOKE_BASE_URL: "https://evil.example/path/../" },
+		{ ...environment, OCTO_SMOKE_BASE_URL: `https://user:${KEY}@smoke.example` },
+		{ ...environment, OCTO_SMOKE_BASE_URL: `https://smoke.example?key=${KEY}` },
+		{ ...environment, OCTO_SMOKE_BASE_URL: "http://smoke.example" },
+	])("validates env before any transport calls", async (env) => {
+		const f = fixture();
+		const report = await runVectorSmoke(env, f.dependencies);
+		expect(report.ok).toBe(false);
+		expect(report.failures).toEqual([{ phase: "config", code: "invalid_environment" }]);
+		expect(f.calls).toHaveLength(0);
+		expect(JSON.stringify(report)).not.toContain(KEY);
+	});
+
+	it.each(["space", "profile", "dimensions", "metric", "json"])(
+		"fails closed on unexpected %s schema",
+		async (kind) => {
+			const f = fixture();
+			f.setOverride((call) => {
+				if (kind === "space" && call.url.pathname.includes("/spaces/"))
+					return f.json({ slug: "wrong" });
+				if (!call.url.pathname.endsWith("/embedding-profiles")) return;
+				if (kind === "json") return new Response(KEY);
+				return f.json({
+					active_profile: kind === "profile" ? null : "tiny",
+					items: [
+						{
+							id: "tiny",
+							dims: kind === "dimensions" ? 1 : 3,
+							metric: kind === "metric" ? "euclidean" : "cosine",
+							active: true,
+						},
+					],
+				});
+			});
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.ok).toBe(false);
+			expect(report.cleanup.attempted).toBe(0);
+			expect(JSON.stringify(report)).not.toContain(KEY);
+		},
+	);
+
+	it("aborts and bounds a transport that never resolves", async () => {
+		vi.useFakeTimers();
+		let signal: AbortSignal | null | undefined;
+		const promise = runVectorSmoke(environment, {
+			fetch: async (_url, init) => {
+				signal = init.signal;
+				return new Promise<Response>(() => {});
+			},
+		});
+		await vi.advanceTimersByTimeAsync(2_000);
+		const report = await promise;
+		expect(signal?.aborted).toBe(true);
+		expect(report.failures).toEqual([{ phase: "setup", code: "request_timeout" }]);
+	});
+
+	it("prints only JSON and returns nonzero without command-line secrets", async () => {
+		for (const key of Object.keys(environment)) vi.stubEnv(key, "");
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		expect(await main()).toBe(1);
+		expect(log).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({ ok: false });
+	});
+
+	it.each(["PATCH", "PUT"])(
+		"rejects a %s response that changes the target ID before any further write",
+		async (method) => {
+			const f = fixture();
+			const foreign = "01JCCCCCCCCCCCCCCCCCCCCCCC";
+			f.setOverride((call) =>
+				call.init.method === method ? f.json({ id: foreign, version: 2 }) : undefined,
+			);
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.failures.some((item) => item.code === "unexpected_memory_id")).toBe(true);
+			expect(f.calls.some((call) => call.url.pathname.includes(foreign))).toBe(false);
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it("does not accept convergence first observed exactly at the deadline", async () => {
+		const f = fixture();
+		let delayed = false;
+		f.setOverride((call) => {
+			if (!delayed && call.url.searchParams.has("include")) {
+				delayed = true;
+				f.advance(9_997);
+			}
+		});
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.ok).toBe(false);
+		expect(report.latencies_ms.create_indexed).toBeNull();
+		expect(report.failures).toContainEqual({ phase: "create", code: "deadline_exceeded" });
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
+	it.each(["noop", "tags"])(
+		"observes and fails nonzero embedding attempts in %s",
+		async (stage) => {
+			const f = fixture();
+			let current = "create";
+			f.setOverride((call) => {
+				if (call.init.method === "PATCH")
+					current = call.body.tags
+						? "tags"
+						: call.body.body?.toString().includes("updated")
+							? "body"
+							: "noop";
+				if (call.init.method === "PUT") current = current === "body" ? "put" : "final";
+				if (current === stage && call.url.searchParams.has("include")) {
+					const memory = f.memories.find((m) => call.url.pathname.includes(m.id));
+					return f.json({
+						...memory,
+						vector_status: [{ profile: "tiny", indexed: true, stale: false, embedding_calls: 1 }],
+					});
+				}
+			});
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.ok).toBe(false);
+			expect(report.embedding_calls[stage as "noop" | "tags"]).toBe(1);
+			expect(report.failures.some((failure) => failure.code === "embedding_calls_nonzero")).toBe(
+				true,
+			);
+		},
+	);
+
+	it.each(["missing", "duplicate", "other-profile"])(
+		"rejects %s active vector status rather than inventing a zero counter",
+		async (kind) => {
+			const f = fixture();
+			const entry = {
+				profile: kind === "other-profile" ? "other" : "tiny",
+				indexed: true,
+				stale: false,
+				embedding_calls: 0,
+			};
+			f.setOverride((call) =>
+				call.url.searchParams.has("include")
+					? f.json({
+							id: ids[0],
+							version: 1,
+							vector_status:
+								kind === "missing" ? [] : kind === "duplicate" ? [entry, entry] : [entry],
+						})
+					: undefined,
+			);
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.failures).toContainEqual({ phase: "create", code: "missing_vector_status" });
+			expect(report.cleanup.deleted).toBe(2);
+		},
+	);
+
+	it("detects a server repeating a created ID and only cleans it once", async () => {
+		const f = fixture();
+		f.setOverride((call) =>
+			call.init.method === "POST" &&
+			call.url.pathname.endsWith("/memories") &&
+			f.memories.length === 1
+				? f.json({ id: ids[0], version: 1 })
+				: undefined,
+		);
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.failures).toContainEqual({ phase: "create", code: "duplicate_created_id" });
+		expect(report.cleanup).toEqual({ attempted: 1, deleted: 1, errors: [] });
+	});
+
+	it.each(["PATCH", "PUT"])(
+		"detects a %s no-op incorrectly changing the version",
+		async (method) => {
+			const f = fixture();
+			let puts = 0;
+			f.setOverride((call) => {
+				if (call.init.method === "PUT") puts += 1;
+				if (
+					call.init.method !== method ||
+					(method === "PUT" ? puts !== 2 : call.body.body !== f.memories[0]?.body)
+				)
+					return;
+				const memory = f.memories[0];
+				if (memory) memory.version += 1;
+				return f.json(memory);
+			});
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.failures.some((item) => item.code === "noop_changed_version")).toBe(true);
+		},
+	);
+
+	it("does not confuse hybrid FTS-only items with vector matches", async () => {
+		const f = fixture();
+		f.setOverride((call) =>
+			call.url.pathname.endsWith("/search")
+				? f.json({ items: [{ id: ids[0], scores: { vector: null } }] })
+				: undefined,
+		);
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.ok).toBe(false);
+		expect(report.latencies_ms.create_vector_hit).toBeNull();
+	});
+
+	it("sanitizes unexpected runtime errors and still cleans up", async () => {
+		const f = fixture();
+		f.dependencies.sleep = async () => {
+			throw new Error(KEY);
+		};
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.failures).toContainEqual({ phase: "create", code: "runtime_error" });
+		expect(report.cleanup.deleted).toBe(2);
+		expect(JSON.stringify(report)).not.toContain(KEY);
+	});
+
+	it("rejects a malformed origin without echoing URL parser errors", async () => {
+		const f = fixture();
+		const report = await runVectorSmoke(
+			{ ...environment, OCTO_SMOKE_BASE_URL: "https://[invalid]" },
+			f.dependencies,
+		);
+		expect(report.failures).toEqual([{ phase: "config", code: "invalid_environment" }]);
+		expect(f.calls).toHaveLength(0);
+	});
+
+	it("runs the default CLI dependencies entirely on fake timers and fake fetch", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+		const f = fixture();
+		for (const [key, value] of Object.entries(environment)) vi.stubEnv(key, value);
+		vi.spyOn(globalThis, "fetch").mockImplementation((url, init) =>
+			f.dependencies.fetch(String(url), init ?? {}),
+		);
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const promise = main();
+		await vi.runAllTimersAsync();
+		expect(await promise).toBe(0);
+		expect(log).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({ ok: true });
+		expect(JSON.stringify(log.mock.calls)).not.toContain(KEY);
+	});
+
+	it("reports only a fixed code if CLI startup itself throws sensitive text", async () => {
+		vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
+			throw new Error(KEY);
+		});
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		expect(await main()).toBe(1);
+		expect(JSON.stringify(log.mock.calls)).not.toContain(KEY);
+		expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
+			ok: false,
+			failures: [{ phase: "runtime", code: "runtime_error" }],
+		});
+	});
+
+	it("fails old-vector disappearance even for a low positive stale match", async () => {
+		const f = fixture();
+		f.setOverride((call) => {
+			const target = f.memories[0];
+			if (
+				target?.body.includes("updated") &&
+				call.url.pathname.endsWith("/search") &&
+				(call.body.vector as { values: number[] }).values[0] === 1
+			) {
+				return f.json({ items: [{ id: target.id, scores: { vector: { similarity: 0.01 } } }] });
+			}
+		});
+		const report = await runVectorSmoke(environment, f.dependencies);
+		expect(report.latencies_ms.update_old_gone).toBeNull();
+		expect(report.failures).toContainEqual({ phase: "update", code: "deadline_exceeded" });
+		expect(report.ok).toBe(false);
+		expect(report.cleanup.deleted).toBe(2);
+	});
+
+	it.each(["patch", "put", "final"])(
+		"reports %s embedding work after body-only PATCH without attributing it to PUT",
+		async (stage) => {
+			const f = fixture();
+			let current = "create";
+			f.setOverride((call) => {
+				if (call.init.method === "PATCH" && call.body.body?.toString().includes("updated")) {
+					expect(call.body.vector).toBeUndefined();
+					current = "patch";
+				}
+				if (call.init.method === "PUT") current = current === "patch" ? "put" : "final";
+				if (call.url.searchParams.has("include") && call.url.pathname.includes(String(ids[0]))) {
+					const active =
+						stage === "patch"
+							? current !== "create"
+							: stage === "put"
+								? ["put", "final"].includes(current)
+								: current === "final";
+					return f.json({
+						...f.memories[0],
+						vector_status: [
+							{ profile: "tiny", indexed: true, stale: false, embedding_calls: active ? 1 : 0 },
+						],
+					});
+				}
+			});
+			const report = await runVectorSmoke(environment, f.dependencies);
+			expect(report.ok).toBe(true);
+			expect(report.embedding_calls.final).toBe(1);
+			expect(report.embedding_call_deltas.final_since_patch).toBe(stage === "patch" ? 0 : 1);
+			expect(report.post_patch_attribution).toBe("unverified_body_patch_may_embed");
+		},
+	);
+});

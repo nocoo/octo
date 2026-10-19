@@ -1,11 +1,17 @@
 import type { Env } from "../env";
-import { backfillMemory } from "../settings/backfill";
+import { backfillMemories } from "../settings/backfill";
 import { synchronizeVectors } from "./vectors";
 
-export async function runDerivedTasks(env: Env, now?: number, limit = 50) {
+export async function runDerivedTasks(
+	env: Env,
+	now?: number,
+	memoryIds?: string[],
+	limit?: number,
+) {
 	return synchronizeVectors(env, {
 		...(now === undefined ? {} : { now }),
-		limit,
-		beforeSync: (memoryId) => backfillMemory(env, memoryId),
+		...(memoryIds === undefined ? {} : { memoryIds }),
+		...(limit === undefined ? {} : { limit }),
+		beforeSyncBatch: (ids) => backfillMemories(env, ids),
 	});
 }

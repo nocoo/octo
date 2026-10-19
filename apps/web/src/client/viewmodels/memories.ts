@@ -37,7 +37,7 @@ export interface Memory {
 	deleted_by?: string | null;
 	attachments?: AttachmentSummary[];
 	versions_count?: number;
-	vector_status?: { profile: string; indexed: boolean; stale: boolean }[];
+	vector_status?: { profile: string; indexed: boolean; stale: boolean; embedding_calls: number }[];
 }
 
 export interface MemoryVersion {

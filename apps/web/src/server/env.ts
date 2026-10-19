@@ -5,6 +5,7 @@ import type { ApiError } from "./lib/errors";
 export type AppVars = {
 	requestId: string;
 	writeStatements: D1PreparedStatement[];
+	vectorMemoryIds: string[];
 	writeError: (error: unknown) => ApiError | undefined | Promise<ApiError | undefined>;
 	requestHashBody: string;
 	attachmentUpload: ParsedUpload;

@@ -37,6 +37,16 @@ export const memoryOutput = z.looseObject({
 	content_hash: z.string(),
 	source_key_id: z.string().nullable(),
 	updated_by_key_id: z.string().nullable(),
+	vector_status: z
+		.array(
+			z.object({
+				profile: z.string(),
+				indexed: z.boolean(),
+				stale: z.boolean(),
+				embedding_calls: z.number().int().nonnegative(),
+			}),
+		)
+		.optional(),
 });
 
 export const searchOutput = z.object({

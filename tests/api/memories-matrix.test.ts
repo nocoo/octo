@@ -335,7 +335,9 @@ describe("M2 endpoint method behavior matrix", () => {
 		const status = await request(`/memories/${item.id}?include=vector_status`, "GET", "full");
 		expect(status.status).toBe(200);
 		expect(await status.json()).toMatchObject({
-			vector_status: [{ profile, indexed: false, stale: false }],
+			vector_status: expect.arrayContaining([
+				{ profile, indexed: false, stale: false, embedding_calls: 0 },
+			]),
 		});
 		const overflow = await request(`/memories/${item.id}`, "PATCH", "full", {
 			expected_version: 2,

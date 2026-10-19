@@ -60,6 +60,7 @@ export function applyMigrations(d1: D1Exec, migrationsDir = join(root, "migratio
 			continue;
 		}
 		const addedColumns = {
+			"0010_vector_convergence.sql": { table: "vector_sync_jobs", names: ["visible_generation"] },
 			"0006_tag_positions.sql": { table: "memory_tags", names: ["position"] },
 			"0007_vector_sync_retries.sql": {
 				table: "vector_sync_jobs",

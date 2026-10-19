@@ -214,7 +214,7 @@ describe.each(["fts", "hybrid"])("representative search ranking in %s mode", (mo
 		expect(result.items[0]?.id).toBe(memoryId(target));
 		expect(result.items[0]?.scores.fts?.rank).toBe(1);
 		expect(result.channels.fts.candidates).toBeGreaterThan(0);
-		if (mode === "hybrid") expect(result.channels.vector.candidates).toBe(memories.length);
+		if (mode === "hybrid") expect(result.channels.vector.candidates).toBe(1);
 		if (query === "what does he drink in the morning") {
 			expect(result.channels.fts.candidates).toBe(1);
 		}

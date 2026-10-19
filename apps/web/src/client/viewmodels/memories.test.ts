@@ -145,7 +145,9 @@ describe("MemoryModel", () => {
 			...memory,
 			attachments: [attachment],
 			versions_count: 1,
-			vector_status: [{ profile: "te3-small-1536", indexed: false, stale: true }],
+			vector_status: [
+				{ profile: "te3-small-1536", indexed: false, stale: true, embedding_calls: 0 },
+			],
 		} satisfies Memory;
 		const version = {
 			memory_id: memory.id,

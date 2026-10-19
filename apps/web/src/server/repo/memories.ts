@@ -51,6 +51,7 @@ export type MemoryWrite = {
 export type MemoryWriteStage = (
 	statements: D1PreparedStatement[],
 	mapError: (error: unknown) => Promise<ApiError | undefined>,
+	memoryId: string,
 ) => void;
 
 export type StoredVector = {
@@ -293,8 +294,10 @@ export class MemoryRepo {
 						.bind(input.spaceId)
 						.first<{ slug: string }>();
 			if (!space) throw new ApiError("not_found", "not found");
-			this.stage(stmts, (error) =>
-				this.conflict(input.id, input.expectedVersion, input.op === "restore", error),
+			this.stage(
+				stmts,
+				(error) => this.conflict(input.id, input.expectedVersion, input.op === "restore", error),
+				input.id,
 			);
 			return {
 				id: input.id,
@@ -372,7 +375,7 @@ export class MemoryRepo {
 		if (this.stage) {
 			const current = await this.get(id);
 			if (!current) throw new ApiError("not_found", "not found");
-			this.stage(statements, () => this.conflict(id, expected.version, false));
+			this.stage(statements, () => this.conflict(id, expected.version, false), id);
 			return { ...current, deleted_at: now, deleted_by: actor, updated_at: now };
 		}
 		let results: unknown[];

@@ -71,7 +71,16 @@ export class CloudflareVectorStore implements VectorStore {
 			for (const match of d1Results({ results: result.matches })) {
 				const score = match.score ?? 0;
 				if (!hits.has(match.id) || score > (hits.get(match.id) as VectorQueryHit).score) {
-					hits.set(match.id, { id: match.id, score });
+					const generation = match.metadata?.generation;
+					const contentHash = match.metadata?.content_hash;
+					hits.set(match.id, {
+						id: match.id,
+						score,
+						...(typeof generation === "number" && Number.isSafeInteger(generation)
+							? { generation }
+							: {}),
+						...(typeof contentHash === "string" ? { content_hash: contentHash } : {}),
+					});
 				}
 			}
 		}

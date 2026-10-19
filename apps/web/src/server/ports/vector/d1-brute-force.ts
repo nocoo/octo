@@ -32,7 +32,9 @@ SELECT mv.memory_id, mv.dim, mv.vector
 FROM memory_vectors mv
 JOIN memories m ON m.id = mv.memory_id
 JOIN spaces s ON s.id = m.space_id
+JOIN embedding_profiles p ON p.id = mv.profile_id
 WHERE mv.profile_id = ?
+AND mv.content_hash = m.content_hash AND mv.embedding_model = p.model AND mv.dim = p.dims
 AND ${clauses.join(" AND ")}
 `;
 		const rows = await this.db

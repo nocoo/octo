@@ -110,7 +110,7 @@ POST /api/v1/search
 ```
 
 - `query` 和 `vector` 至少要有一个；`mode` 默认根据给了什么推断。
-- 每个通道各取 `candidate_k = min(100, limit*5)` 个候选。
+- Each channel targets `candidate_k = min(100, limit*5)`. Production Vectorize requests metadata, so its remote portion is capped at 50; pending D1 vectors can fill the remaining candidate budget. Each channel is deduplicated by memory ID before ranks, fusion and limits. Only strictly positive cosine similarity contributes vector hits; orthogonal/negative vectors do not match.
 - **RRF（默认）：** `fused = Σ w_c / (k + rank_c)`；分数稳定，不依赖各通道分数的尺度。
 - **weighted（可选）：** 各通道做 min-max 归一化后加权求和。
 - 结果按 `fused` 降序排列，同分时按 `updated_at` 降序。
@@ -136,7 +136,7 @@ POST /api/v1/search
 ## 5. 一致性和权限
 
 - 向量命中的 id 一律回 D1 校验：存在、未删除、space 可见、过滤条件全部满足。这能挡住 D1 / Vectorize 不同步造成的幽灵结果。
-- **已知限制：Vectorize 最终一致。** D1 写入成功、同步任务已提交，甚至 Vectorize upsert 成功，都不保证新向量立即可被查询。在写入后的传播窗口内，相同查询的向量候选数可能不同（例如先返回 5 条、稍后返回 11 条），混合搜索的结果及排序也可能随之变化；`channels.vector.candidates` 是本次经 D1 重新校验后的候选数，不是符合条件的记忆总数。D1 校验能排除已删除、已移出可见空间或不再满足过滤条件的旧命中，但不能找回尚未被 Vectorize 召回的新向量；需要立即读取刚写入的数据时使用 GET / batchGet，不能把即时搜索漏项当作写入失败后重建。传播收敛前不承诺重复查询的候选数或排序稳定，本地 D1 暴力向量适配器也不模拟此延迟。
+- **Vectorize remains eventually consistent.** Production hits must match D1's current generation and content hash, active profile/model/dimensions, authorization and filters. Scores are recomputed from the current D1 vector; stale or unverifiable metadata is dropped. Generations not yet observed by a self-vector query are merged from D1 using 100-row keyset pages and bounded top-K storage, even if upsert is pending, backed off or dead. This overlay has no arbitrary propagation timeout. `indexed=true` means accepted, not query-visible. Under healthy D1/Vectorize request latency, the write-to-indexed/search target is at most 10 seconds; external failures retain durable backoff, not a false success. Full semantics and measurement boundaries: [vector convergence](vector-convergence.md).
 - 无权访问的 space：在两个通道里都以 SQL / filter 条件排除，计数里也不出现（「不可见」而不是「禁止访问」）。
 - 搜索不写审计以外的任何数据。
 

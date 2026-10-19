@@ -92,7 +92,9 @@ describe("memory CRUD", () => {
 			id: item.id,
 			versions_count: 1,
 			attachments: [],
-			vector_status: [{ profile, indexed: false, stale: false }],
+			vector_status: expect.arrayContaining([
+				{ profile, indexed: false, stale: false, embedding_calls: 0 },
+			]),
 		});
 
 		const patched = await fetch(`${base}/api/v1/memories/${item.id}`, {

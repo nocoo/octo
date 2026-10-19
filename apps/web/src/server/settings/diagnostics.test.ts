@@ -20,7 +20,8 @@ const operations = [
 	},
 	{
 		event: "embedding_backfill_failed",
-		run: (env: ReturnType<typeof fixture>["env"]) => backfillMemory(env, "m"),
+		run: (env: ReturnType<typeof fixture>["env"]) =>
+			backfillMemory(env, "m").catch((error: unknown) => error),
 	},
 	{
 		event: "embedding_query_failed",

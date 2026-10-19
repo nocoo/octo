@@ -45,9 +45,25 @@ describe("post-commit derived work", () => {
 			const env = {} as Env;
 			await app.request(`/api/admin/trash:${action}`, { method: "POST" }, env, ctx);
 			await Promise.all(pending);
-			expect(process).toHaveBeenCalledWith(env, undefined, 5);
+			expect(process).toHaveBeenCalledWith(env, undefined, undefined, 5);
 		},
 	);
+	it("passes only committed memory IDs to the write-triggered drain", async () => {
+		const process = vi.fn(async () => {});
+		const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
+		app.use("*", postCommitMiddleware(process));
+		app.post("/api/v1/memories", (context) => {
+			context.set("vectorMemoryIds", ["fresh", "fresh", "second"]);
+			return context.json({ id: "fresh" }, 201);
+		});
+		const pending: Promise<unknown>[] = [];
+		const env = {} as Env;
+		await app.request("/api/v1/memories", { method: "POST" }, env, {
+			waitUntil: (promise: Promise<unknown>) => pending.push(promise),
+		} as unknown as ExecutionContext);
+		await Promise.all(pending);
+		expect(process).toHaveBeenCalledWith(env, undefined, ["fresh", "second"]);
+	});
 
 	it("awaits derived work inline for the L2 serialized vector sync binding", async () => {
 		const { app, ctx, events, pending, process } = fixture();

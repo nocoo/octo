@@ -16,6 +16,16 @@ function dbWithProfile(dims: number) {
 }
 
 describe("searchMemories vector validation", () => {
+	it("fails closed without an explicitly local environment or a production index", async () => {
+		await expect(
+			searchMemories(
+				{ keyId: "k", visibleSpaceIds: ["s1"] },
+				{ vector: { profile: "te3-small-1536", values: [1, 0] }, mode: "vector" },
+				{ db: dbWithProfile(2) },
+			),
+		).rejects.toMatchObject({ code: "unavailable", message: "VEC binding is required" });
+	});
+
 	it("rejects unknown embedding profiles", async () => {
 		const db = {
 			prepare: (sql: string) => ({

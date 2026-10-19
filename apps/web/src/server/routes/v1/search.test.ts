@@ -257,8 +257,8 @@ describe("v1 search routes", () => {
 		);
 		expect(response.status).toBe(200);
 		expect(query).toHaveBeenCalledExactlyOnceWith([0.6, 0.8], {
-			topK: 100,
-			returnMetadata: "none",
+			topK: 50,
+			returnMetadata: "all",
 			filter: {
 				space: { $in: ["slug-s1"] },
 				type: { $in: ["note"] },
@@ -280,7 +280,7 @@ describe("v1 search routes", () => {
 		const types = Array.from({ length: 50 }, (_, i) => `type-${i}-配置-"\\`);
 		const query = vi.fn(async (vector: number[], options: VectorizeQueryOptions) => {
 			expect(vector).toEqual([0.6, 0.8]);
-			expect(options.topK).toBe(100);
+			expect(options.topK).toBe(50);
 			expect(new TextEncoder().encode(JSON.stringify(options.filter)).length).toBeLessThan(2048);
 			expect(options.filter).toMatchObject({
 				importance: { $gte: 0.2, $lte: 0.8 },

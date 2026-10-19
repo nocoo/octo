@@ -175,10 +175,14 @@ triggers enqueue vector changes and indexed metadata changes inside the original
 write transaction, invalidate `indexed_at`, and retain a deletion tombstone after
 purge. No external call occurs while preparing or committing memory SQL.
 
-After a successful HTTP commit, `waitUntil` runs bounded reconciliation through
-the `VectorStore` port. A D1 lease serializes work for each memory; the worker
+After a successful HTTP/MCP commit, `waitUntil` synchronizes that write's memory
+IDs through the `VectorStore` port, independently of the global cron backlog.
+Batch writes collect only successful staged IDs; rollback removes staged IDs,
+and no-op/idempotent replays schedule no memory work. A D1 lease serializes work for each memory; the worker
 reads the current active-profile vector and metadata, upserts live vectors, and
-deletes missing/trashed vectors. Only the claimed generation may acknowledge
+deletes missing/trashed/content-stale vectors. The Vectorize ID is exactly the
+memory ID (one vector per memory, no generation suffix or chunk IDs). Upserts
+include `generation` and `content_hash` metadata. Only the claimed generation may acknowledge
 `indexed_at`. A concurrent mutation can be reclaimed within the same drain,
 with at most three generation-repair rounds per selected job. Provider failures
 are never retried in-run: migration `0007_vector_sync_retries.sql` persists
@@ -205,14 +209,17 @@ Completed jobs and purge tombstones remain available
 for periodic anti-entropy reconciliation: a lease alone cannot fence an old
 Vectorize call after a process pauses or crashes in the non-transactional gap.
 Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.
-Each drain selects 50 jobs by default (explicit limits are capped at 500), with a 60-second lease and a one-hour
+Cron selects 50 jobs by default (explicit limits are capped at 500); write drains
+select their supplied memory IDs, without bypassing backoff or live leases. Both use a 60-second lease and a one-hour
 anti-entropy interval. Failed work is moved behind untouched due work, so a
 persistently failing prefix cannot starve later updates or purge tombstones.
 Claiming a lease also advances its queue position before the external call;
 an abandoned or hung call therefore cannot reclaim the queue head forever.
 The same claim covers embedding backfill before any gateway call. At most four
-jobs run concurrently; another drain skips their live leases and can
-reach untouched deletion tombstones. After backfill, synchronization rechecks
+jobs form one embedding batch; distinct missing content hashes share one gateway
+request and identical hashes share one input. Another drain skips their live leases.
+If preparation rejects, every claim in that batch takes the durable failure path,
+including any deletion tombstone in that batch. After backfill, synchronization rechecks
 lease ownership and reads the current generation before reading the vector;
 an expired owner's completion cannot acknowledge a newer owner's work.
 Each actual claim and post-backfill refresh reads the current clock, rather than
@@ -230,7 +237,24 @@ accepts positive integers, capped at four; absent, fractional or invalid values
 use four. The local workerd harness sets it to `1` and awaits test post-commit
 work to avoid drain deadlocks. The old inverted parallel flag is removed.
 
-Apply migration 0007 before deploying this worker version. Inspect dead work with
+Apply migration `0010_vector_convergence.sql` before deploying this worker version.
+It adds nullable `vector_sync_jobs.visible_generation`, `embedding_cache`
+(hash key, model, dimensions, vector, lease token/expiry and update time), and
+`memory_embedding_calls` (memory/profile primary key and outbound participation
+count). Cached text is not stored separately. The cache survives a stale memory
+CAS; cache hits, retries and requeues never repeat a successful embedding request.
+All final memory-vector writes in a preparation batch commit atomically after
+generated embeddings have been cached. Cache claim conflicts and gateway/config/
+storage failures reject, rather than acknowledging an absent vector.
+
+`indexed_at` means Vectorize accepted the current-generation upsert, not that
+Vectorize queries can see it. A self-vector query must return the same ID,
+generation and content hash before `visible_generation` advances. Visibility
+checks also run for accepted pending generations without repeating an upsert.
+Until then, search reads the current D1 vector through a bounded-memory overlay;
+there is no time-based expiry. See [the convergence contract](vector-convergence.md).
+
+Inspect dead work with
 `SELECT memory_id, attempts, last_error, dead_at FROM vector_sync_jobs WHERE dead_at IS NOT NULL`.
 After fixing the provider, an authorized operator can explicitly retry dead rows
 with `UPDATE vector_sync_jobs SET attempts = 0, last_error = NULL, dead_at = NULL, due_at = 0 WHERE dead_at IS NOT NULL`.

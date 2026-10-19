@@ -155,7 +155,9 @@ async function commit(context: McpContext): Promise<void> {
 	context.set("mcpWrite", true);
 	try {
 		context.executionCtx.waitUntil(
-			runDerivedTasks(context.env).catch(() => {
+			runDerivedTasks(context.env, undefined, [
+				...new Set(context.get("vectorMemoryIds") ?? []),
+			]).catch(() => {
 				console.error("derived_work_failed");
 			}),
 		);
@@ -168,6 +170,7 @@ export async function callTool(
 	args: unknown,
 ): Promise<CallToolResult> {
 	context.set("writeStatements", []);
+	context.set("vectorMemoryIds", []);
 	try {
 		const data = await selected.execute(args);
 		await commit(context);
