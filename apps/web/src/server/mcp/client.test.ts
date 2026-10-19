@@ -6,7 +6,8 @@ import { memoryInput, names, setup } from "./__tests__/app";
 
 describe("official MCP client interoperability", () => {
 	it("negotiates HTTP and validates every tool's published output schema", async () => {
-		const { app, env, headers, ctx, flush, db } = await setup();
+		const { app, env, headers, ctx, flush, db, sqlite, key } = await setup();
+		sqlite.prepare("UPDATE api_keys SET role = 'admin' WHERE id = ?").run(key.row.id);
 		await insertTinyProfile(db);
 		await db.prepare("UPDATE embedding_profiles SET active = 1 WHERE id = 'tiny-3'").run();
 		const vector = { profile: "tiny-3", values: [1, 0, 0] };
@@ -27,6 +28,8 @@ describe("official MCP client interoperability", () => {
 			const id = (created.structuredContent as { id: string }).id;
 			expect(id).toEqual(expect.any(String));
 			const calls = [
+				["create_space", { slug: "sdk-space", name: "SDK space" }],
+				["update_space", { slug: "sdk-space", description: "Updated" }],
 				["get_memory", { id }],
 				["batch_get", { ids: [id] }],
 				["search", { query: "octopus", mode: "fts" }],
@@ -36,6 +39,9 @@ describe("official MCP client interoperability", () => {
 				["list_changes", {}],
 				["update_memory", { id, patch: { title: "updated", expected_version: 1 } }],
 				["update_memory", { id, title: "flat update", importance: 1, expected_version: 2 }],
+				["move_memory", { id, space: "sdk-space", expected_version: 3 }],
+				["move_memory", { id, space: "kb" }],
+				["delete_space", { slug: "sdk-space" }],
 				["delete_memory", { id }],
 			] as const;
 			for (const [name, args] of calls) {

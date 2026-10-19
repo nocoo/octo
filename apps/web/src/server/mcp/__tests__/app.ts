@@ -10,10 +10,14 @@ export const names = [
 	"batch_get",
 	"create_memory",
 	"update_memory",
+	"move_memory",
 	"delete_memory",
 	"list_changes",
 	"list_tags",
 	"list_spaces",
+	"create_space",
+	"update_space",
+	"delete_space",
 ];
 
 export const memoryInput = {

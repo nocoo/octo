@@ -5,6 +5,11 @@ import {
 	memoryTypeSchema,
 	memoryUpdateSchema,
 } from "../../lib/schema/memory";
+import { memoryMoveSchema } from "../../lib/schema/memory-move";
+import {
+	spaceManagementCreateSchema,
+	spaceManagementPatchSchema,
+} from "../../lib/schema/space-management";
 
 const id = z.string().min(1);
 const timestamp = z.string();
@@ -93,20 +98,30 @@ export const tagsOutput = z.object({
 	),
 	next_cursor: z.null(),
 });
+export const spaceOutput = z.object({
+	id: z.string(),
+	slug: z.string(),
+	name: z.string(),
+	description: z.string(),
+	owner_key_id: z.string().nullable(),
+	memory_count: z.number().int(),
+	created_at: timestamp,
+	updated_at: timestamp,
+});
 export const spacesOutput = z.object({
-	items: z.array(
-		z.object({
-			id: z.string(),
-			slug: z.string(),
-			name: z.string(),
-			description: z.string(),
-			owner_key_id: z.string().nullable(),
-			memory_count: z.number().int(),
-			created_at: timestamp,
-			updated_at: timestamp,
-		}),
-	),
+	items: z.array(spaceOutput),
 	next_cursor: z.null(),
+});
+export const spaceCreateInput = spaceManagementCreateSchema;
+export const spaceIdInput = z.strictObject({ slug: spaceManagementCreateSchema.shape.slug });
+export const spaceUpdateInput = z
+	.strictObject({ ...spaceIdInput.shape, ...spaceManagementPatchSchema.shape })
+	.refine((input) => input.name !== undefined || input.description !== undefined)
+	.meta({ minProperties: 2 });
+export const spaceDeleteOutput = z.object({ id, slug: z.string(), deleted: z.literal(true) });
+export const moveInput = z.strictObject({
+	id: z.string().min(1).max(64),
+	...memoryMoveSchema.shape,
 });
 
 export const idInput = z.strictObject({ id });

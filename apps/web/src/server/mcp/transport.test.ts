@@ -6,6 +6,57 @@ import { names, setup } from "./__tests__/app";
 afterEach(() => vi.restoreAllMocks());
 
 describe("stateless MCP transport", () => {
+	it("publishes strict space CRUD and optional-version move schemas", async () => {
+		const { rpc, flush } = await setup();
+		const body = (await (await rpc("tools/list")).json()) as {
+			result: { tools: { name: string; inputSchema: Record<string, unknown> }[] };
+		};
+		for (const [name, valid, invalid] of [
+			[
+				"create_space",
+				[{ slug: "new-space", name: "New space" }],
+				[
+					{ slug: "new-space", name: "New space", owner_key_id: null },
+					{ slug: "Bad Slug", name: "Name" },
+				],
+			],
+			[
+				"update_space",
+				[
+					{ slug: "kb", name: "Renamed" },
+					{ slug: "kb", description: "" },
+				],
+				[
+					{ slug: "kb" },
+					{ slug: "kb", owner_key_id: "key" },
+					{ slug: "kb", patch: { slug: "other" } },
+				],
+			],
+			["delete_space", [{ slug: "kb" }], [{ slug: "kb", force: true }]],
+			[
+				"move_memory",
+				[
+					{ id: "m", space: "dest" },
+					{ id: "m", space: "dest", expected_version: 0 },
+				],
+				[
+					{ id: "m" },
+					{ id: "m", space: "dest", expected_version: -1 },
+					{ id: "m", space: "dest", title: "not a move" },
+				],
+			],
+		] as const) {
+			const schema = body.result.tools.find((tool) => tool.name === name)?.inputSchema;
+			expect(schema, name).toBeDefined();
+			const validate = new AjvJsonSchemaValidator().getValidator(schema ?? {});
+			for (const input of valid)
+				expect(validate(input).valid, `${name}: ${JSON.stringify(input)}`).toBe(true);
+			for (const input of invalid)
+				expect(validate(input).valid, `${name}: ${JSON.stringify(input)}`).toBe(false);
+		}
+		await flush();
+	});
+
 	it("publishes an update schema that rejects empty patches and mixed forms", async () => {
 		const { rpc, flush } = await setup();
 		const response = await rpc("tools/list");

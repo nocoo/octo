@@ -33,14 +33,16 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 - 非浏览器 bot 不需要 `Origin`；如有 `Origin`，必须精确匹配生产域名，开发环境匹配开发域名。不反射 Origin，不启用跨域 CORS。
 - 每次工具调用从本次已验证的 principal 构造 v1 authz，使用原有服务及 `authorize()`。不可见 space / memory 是 `not_found`；列表、搜索、计数、batchGet 和变更流不暴露不可见对象。`own_entries_only` 和移动的源/目标权限保持不变。
 - 不增加 key 管理、embedding 设置、硬删除、附件或恢复工具。`delete_memory` 只移入回收站。
+- `create_space`、`update_space`、`delete_space` 仅允许 role 为 `admin` 的 API key；即使 custom key 具备全部操作权限也返回 `forbidden`。空间管理不提供 owner 字段，更新只允许 name / description，slug 不可变。重复 slug 为 `version_conflict`；不存在为 `not_found`；包含任何 memory（包括回收站）的空间不能删除，返回 `space_not_empty`。
 - 标签名称是 v1 的全局字典；`list_tags` 与同 key 的 REST 列表完全一致，只返回至少被一条可见 space 中未删除 memory 使用的标签，`use_count > 0` 且仅统计这些可见引用。仅在不可见 space 使用、仅被回收站引用或完全未使用的标签不返回；`all`、`spaces`、`own` 范围均遵守此规则。标签本身仍不是按 space 私有的资源。
 - 写工具复用 v1 的 staged `memoryService()`，并在返回成功前执行一次 D1 batch（memory、版本、tags、FTS、change event 等同批提交）。失败不提交残留 statements；成功后按 v1 的机制调度派生索引任务。
+- 空间写工具复用 v1 与 dashboard 共用的空间管理服务，由服务直接提交资源与 change event 的 D1 batch，不再经过 memory staged batch。空间创建、更新、删除成功后才标记为 MCP write；当前空间更新即使传入相同字段值也会提交更新并计为 write。空间调用失败不计 write。
 - 外层 audit middleware 对每个 HTTP 调用记录一次 `route=/mcp`、actor、HTTP status、request id、耗时和字节数。不记录工具 arguments、响应正文、key、原始 URL 或任意客户端提供的工具名。HTTP `200` 的工具失败仍记录 Octo `error_code`，不能误报为成功。
-- 审计用扩展表 `mcp_audit_writes(audit_id)` 标识已提交的 MCP 写操作（仅 memory D1 batch 成功后，在审计 batch 中同时写入 audit_log 和标记）。usage 汇总同时检查 error_code，MCP initialize、通知、读工具和失败写入均不计为 writes；REST 的现有方法分类保持不变。新增 migration `0005_mcp_audit.sql` 只创建幂等的审计扩展表，不存 session 或工具参数；本功能尚未部署，无历史 MCP 记录需要回填。
+- 审计用扩展表 `mcp_audit_writes(audit_id)` 标识已提交的 MCP 写操作（memory staged batch 或空间服务 D1 batch 成功后，在审计 batch 中同时写入 audit_log 和标记）。usage 汇总同时检查 error_code，MCP initialize、通知、读工具、无变化 memory 更新/移动和失败写入均不计为 writes；REST 的现有方法分类保持不变。migration `0005_mcp_audit.sql` 只创建幂等的审计扩展表，不存 session 或工具参数；本次空间工具复用该表，无需新迁移。
 
 ## 3. 工具输入 schema
 
-`tools/list` 返回以下九个固定名称及可机器读取的 JSON Schema；不按 key 隐藏工具名称，权限在调用时判定。对象输入是 strict object，拒绝未定义字段。`?` 表示可选；没有参数的工具传 `{}`，也允许省略 arguments。
+`tools/list` 返回以下十三个固定名称及可机器读取的 JSON Schema；不按 key 隐藏工具名称，权限在调用时判定。对象输入是 strict object，拒绝未定义字段。`?` 表示可选；没有参数的工具传 `{}`，也允许省略 arguments。
 
 | 工具 | 输入 | 既有实现 / 权限 |
 |---|---|---|
@@ -49,10 +51,14 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 | `batch_get` | 原 `batchGetRequestSchema`：`{ids: nonempty string[1..100]}` | `batchGetMemories` + `requireSearchRead`；`r`，不可见 ID 与不存在 ID 一同放入 missing |
 | `create_memory` | 原 `memoryCreateSchema`：`{space, title, body, type, tags, importance?: number[0,1], event_time?, vector?}` | staged `MemoryService.create`；目标 space 的 `w` |
 | `update_memory` | `{id, expected_version, ...fields}` 或 `{id, patch: {expected_version, ...fields}}`，严格二选一；fields 至少提供一个可更新字段，`importance?: number[0,1]` | staged `MemoryService.patch`；`u`，移动同时检查两端 |
+| `move_memory` | `{id: string[1..64], space: slug, expected_version?: nonnegative integer}` | staged `MemoryService.move`；源与目标 space 均须 `u`，遵守 `own_entries_only` |
 | `delete_memory` | `{id: nonempty string}` | staged `MemoryService.remove`；`d` |
 | `list_changes` | `{cursor?: nonempty string, limit?: integer[1,200], spaces?: nonempty string[]}`；默认 limit 50，cursor 是原 v1 不透明游标 | `MemoryService.listChanges`；`r` |
 | `list_tags` | `{}` | v1 标签列表服务；`r`，只返回可见 space 中有未删除 memory 引用的标签及正数计数 |
 | `list_spaces` | `{}` | v1 space 列表服务；`r`，仅返回可见 space |
+| `create_space` | `{slug, name, description?}`；description 默认空字符串 | 共享空间管理服务；仅 admin-role key |
+| `update_space` | `{slug, name?, description?}`；name / description 至少一个 | 共享空间管理服务；仅 admin-role key；slug 是目标标识，不是可修改字段 |
+| `delete_space` | `{slug}` | 共享空间管理服务；仅 admin-role key；包括回收站在内必须为空 |
 
 `Vector`、`Filters`、`Fusion` 直接复用 `apps/web/src/lib/schema/{memory,filters,search}.ts`，不另设 MCP 方言。`space` 最长 64，`title` 1–500，tags 最多 100 个且各 1–64，importance 在 0–1；type 为 fact / preference / decision / procedure / event / log / note；event_time 是 UTC ISO 日期。更新允许清空 event_time / vector。向量维数由原有 profile 校验，最多 1536。
 
@@ -70,6 +76,10 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 搜索 `filters.importance` 为 `{min?: number[0,1], max?: number[0,1]}`；创建、更新和过滤的 importance 都包含边界 0 和 1，不接受超出范围或非数字值。单条 REST PATCH 仍使用 flat body 的 `expected_version` 或 `If-Match`；REST rollback 仍为 `{to_version: positive integer}` 配合 `If-Match`，不是 update patch，也没有对应 MCP 工具。
 
+空间 slug 为 1–64 个小写字母/数字段，以单个连字符分隔；name 去除首尾空白后为 1–256 字符，description 最长 10000 字符。创建和更新均拒绝 `owner_key_id` 或其他未知字段；owner 管理只留在 dashboard。
+
+`move_memory` 只移动未删除的 memory，回收站条目返回 `not_found`。`expected_version` 可省略；提供后必须匹配当前版本，不匹配返回 `version_conflict`（包括合法的 0），检查先于同空间 no-op。同空间返回当前 Memory，不增加版本、不写 change event、不调度派生任务，也不计 MCP write。实际移动保持 id、历史、标签、附件引用及已存向量，新增版本与移动 change event；立即按目标空间判断可见性。移动后的派生任务明确跳过 embedding backfill，只用 D1 中已存向量同步索引元数据，不调用 embedding 模型。没有批量移动 MCP 工具；批量需求走 REST。
+
 ## 4. 工具输出 schema
 
 成功的 MCP `CallToolResult` 同时包含 `structuredContent: Result` 和 `content: [{type: "text", text: JSON.stringify(Result)}]`。`tools/list.outputSchema` 是 object，`anyOf` 明确描述成功 Result 或下节 error 对象；官方 SDK 1.32.1 客户端即使收到 `isError=true`，仍会校验存在的 structuredContent，因此失败分支也必须在 schema 中。数据字段与 v1 相同，不添加 REST 外层信封或 MCP 专属数据副本。
@@ -77,12 +87,14 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 | 工具 | Result 对象 schema |
 |---|---|
 | `search` | `{items: SearchMemory[], channels: {fts: {candidates: integer, partial: boolean, partial_reason: null}, vector: {candidates: integer, truncated: boolean, profile: string\|null}}}` |
-| `get_memory` / `create_memory` / `update_memory` | `Memory` |
+| `get_memory` / `create_memory` / `update_memory` / `move_memory` | `Memory` |
 | `batch_get` | `{items: MemorySummary[], missing: string[]}` |
 | `delete_memory` | `{trashed_at: string}`（UTC ISO） |
 | `list_changes` | `{items: Change[], next_cursor: string\|null}` |
 | `list_tags` | `{items: Tag[], next_cursor: null}` |
 | `list_spaces` | `{items: Space[], next_cursor: null}` |
+| `create_space` / `update_space` | `Space` |
+| `delete_space` | `{id: string, slug: string, deleted: true}` |
 
 - `Memory`：id、space、title、body、type、tags（string[]）、importance（number，0–1）、event_time（string|null）、version（integer）、content_hash、source_key_id、updated_by_key_id、created_at、updated_at。可选扩展为 versions_count、attachments、vector_status、deleted_at、deleted_by，按 v1 include 和序列化器决定。
 - `MemorySummary` 是 v1 搜索/batchGet 的既有投影：id、space、title、body、type、tags、importance（number，0–1）、event_time、created_at、updated_at，不包含 CRUD 的版本与来源字段。`SearchMemory` 是 MemorySummary 加 scores 对象、可选 snippet；channels 和 scores 沿用 [03](03-search.md)。
@@ -104,7 +116,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 | 未知工具 / 非法 tools/call RPC 参数 | HTTP 200，JSON-RPC `-32602` |
 | 工具参数或业务失败 | HTTP 200，`result.isError=true`；content 和 structuredContent 含 `{error:{code,message,request_id,details?}}` |
 
-工具的 `validation_failed`、`not_found`、`forbidden`、`version_conflict`、`vector_dimension_mismatch` 等沿用 v1 code；未知异常统一 `internal` / `internal error`，提交故障按 v1 compensation mapper 转换或返回 `unavailable`。不泄漏 SQL、堆栈、配置或秘密。bot 必须同时检查 HTTP、JSON-RPC error 和 `isError`，不能仅凭 HTTP 200 判断成功。
+工具的 `validation_failed`、`not_found`、`forbidden`、`version_conflict`、`space_not_empty`、`vector_dimension_mismatch` 等沿用 v1 code；未知异常统一 `internal` / `internal error`，提交故障按 v1 compensation mapper 转换或返回 `unavailable`。不泄漏 SQL、堆栈、配置或秘密。bot 必须同时检查 HTTP、JSON-RPC error 和 `isError`，不能仅凭 HTTP 200 判断成功。
 
 不实现 MCP 写入幂等键或会话重放。更新用 `expected_version` 防止覆盖；创建响应丢失时，bot 必须先核对数据，不应自动重试可能已提交的 create。需要 REST 幂等键的任务继续走 v1。
 
@@ -126,4 +138,4 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 
 bot 先 initialize（协议 `2025-11-25`、clientInfo、capabilities），发送 `notifications/initialized`，然后 tools/list 和 tools/call；后续 HTTP 请求照常带 key 和协议版本，不传或保存 session id。SDK 客户端可用 `Client` + `StreamableHTTPClientTransport` 并在 `requestInit.headers` 注入 Authorization。
 
-L2 必须通过真实 Miniflare/workerd HTTP 覆盖 initialize、通知、九个工具的成功和拒绝、无 key、坏 key、非法 JSON / RPC / 参数、HTTP 方法和媒体类型、空间隐藏、并发同 ID 请求的无状态隔离以及审计不泄密；更新、删除后从 v1 验证数据与事务效果。本地测试不用任何远端 Cloudflare 资源。生产 bot 冒烟须在单独获准部署后执行，本分支不声称已完成生产接入。
+L2 必须通过真实 Miniflare/workerd HTTP 覆盖 initialize、通知、十三个工具的成功和拒绝、无 key、坏 key、非法 JSON / RPC / 参数、HTTP 方法和媒体类型、空间隐藏、并发同 ID 请求的无状态隔离以及审计不泄密；更新、删除、移动后从 v1 验证数据与事务效果。空间 CRUD 覆盖 admin/custom 角色、owner 拒绝、重复 slug、回收站阻止删除与 write 计数；移动覆盖两端 update、own_entries_only、可选/冲突版本、同空间 no-op、回收站与源空间读取隔离。本地测试不用任何远端 Cloudflare 资源。生产 bot 冒烟须在单独获准部署后执行，本分支不声称已完成生产接入。

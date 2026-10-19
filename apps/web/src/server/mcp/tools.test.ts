@@ -135,7 +135,7 @@ describe("MCP v1 service adapter", () => {
 		});
 		await flush();
 	});
-	it("executes all nine tools with v1 data, atomic writes and structured results", async () => {
+	it("executes core tools with v1 data, atomic writes and structured results", async () => {
 		const { call, sqlite, flush, db } = await setup();
 		const batch = vi.spyOn(db, "batch");
 		const created = (await call("create_memory", memoryInput)).result;

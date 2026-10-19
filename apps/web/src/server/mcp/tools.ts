@@ -13,6 +13,11 @@ import { batchGetMemories } from "../search/batch-get";
 import { searchMemories } from "../search/service";
 import { listSpaces, listTags } from "../services/catalog";
 import { authzFrom, MemoryService } from "../services/memories";
+import {
+	createManagedSpace,
+	deleteManagedSpace,
+	updateManagedSpace,
+} from "../services/space-management";
 import { runDerivedTasks } from "../sync/tasks";
 import {
 	batchGetOutput,
@@ -24,8 +29,14 @@ import {
 	getInput,
 	idInput,
 	memoryOutput,
+	moveInput,
 	searchOutput,
+	spaceCreateInput,
+	spaceDeleteOutput,
+	spaceIdInput,
+	spaceOutput,
 	spacesOutput,
+	spaceUpdateInput,
 	tagsOutput,
 	updateInput,
 } from "./schemas";
@@ -106,6 +117,13 @@ export function createTools(context: McpContext) {
 			({ id, ...patch }) => memoryService(context).patch(authz, id, patch, undefined),
 		),
 		tool(
+			"move_memory",
+			"Move a live memory between spaces authorized for update, optionally checking its version.",
+			moveInput,
+			memoryOutput,
+			({ id, ...input }) => memoryService(context).move(authz, id, input),
+		),
+		tool(
 			"delete_memory",
 			"Move a memory to trash; never permanently delete.",
 			idInput,
@@ -133,6 +151,39 @@ export function createTools(context: McpContext) {
 			spacesOutput,
 			() => listSpaces(context.env.DB, principal),
 		),
+		tool(
+			"create_space",
+			"Create a space with an admin-role API key; no ownership management.",
+			spaceCreateInput,
+			spaceOutput,
+			async (input) => {
+				const result = await createManagedSpace(context.env.DB, principal, input);
+				context.set("mcpWrite", true);
+				return result;
+			},
+		),
+		tool(
+			"update_space",
+			"Update a space name or description with an admin-role API key; its slug is immutable.",
+			spaceUpdateInput,
+			spaceOutput,
+			async ({ slug, ...patch }) => {
+				const result = await updateManagedSpace(context.env.DB, principal, slug, patch);
+				context.set("mcpWrite", true);
+				return result;
+			},
+		),
+		tool(
+			"delete_space",
+			"Delete an empty space with an admin-role API key; trash also prevents deletion.",
+			spaceIdInput,
+			spaceDeleteOutput,
+			async ({ slug }) => {
+				const result = await deleteManagedSpace(context.env.DB, principal, slug);
+				context.set("mcpWrite", true);
+				return result;
+			},
+		),
 	];
 }
 
@@ -140,7 +191,7 @@ function content(data: Record<string, unknown>): CallToolResult {
 	return { content: [{ type: "text", text: JSON.stringify(data) }], structuredContent: data };
 }
 
-async function commit(context: McpContext): Promise<void> {
+async function commit(context: McpContext, skipEmbedding: boolean): Promise<void> {
 	const statements = context.get("writeStatements");
 	if (!statements.length) return;
 	try {
@@ -155,9 +206,13 @@ async function commit(context: McpContext): Promise<void> {
 	context.set("mcpWrite", true);
 	try {
 		context.executionCtx.waitUntil(
-			runDerivedTasks(context.env, undefined, [
-				...new Set(context.get("vectorMemoryIds") ?? []),
-			]).catch(() => {
+			runDerivedTasks(
+				context.env,
+				undefined,
+				[...new Set(context.get("vectorMemoryIds") ?? [])],
+				undefined,
+				skipEmbedding,
+			).catch(() => {
 				console.error("derived_work_failed");
 			}),
 		);
@@ -173,7 +228,7 @@ export async function callTool(
 	context.set("vectorMemoryIds", []);
 	try {
 		const data = await selected.execute(args);
-		await commit(context);
+		await commit(context, selected.definition.name === "move_memory");
 		return content(data);
 	} catch (error) {
 		const known = error instanceof ApiError ? error : new ApiError("internal", "internal error");

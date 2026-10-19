@@ -28,10 +28,14 @@ const toolNames = [
 	"batch_get",
 	"create_memory",
 	"update_memory",
+	"move_memory",
 	"delete_memory",
 	"list_changes",
 	"list_tags",
 	"list_spaces",
+	"create_space",
+	"update_space",
+	"delete_space",
 ];
 
 function rpcId(body: RpcResponse): string | number | null | undefined {
@@ -103,6 +107,198 @@ async function tableCounts(d1: Awaited<ReturnType<typeof e2eD1>>) {
 }
 
 describe("stateless MCP Streamable HTTP", () => {
+	it("manages spaces only with admin-role keys and audits successful direct mutations", async () => {
+		const d1 = await e2eD1();
+		const admin = await seedKey(d1);
+		const custom = await seedKey(d1);
+		await d1(["--command", `UPDATE api_keys SET role = 'custom' WHERE id = ${sqlText(custom.id)}`]);
+		const slug = `mcp-space-${crypto.randomUUID()}`;
+		for (const [name, args] of [
+			["create_space", { slug, name: "Space" }],
+			["update_space", { slug, name: "Renamed" }],
+			["delete_space", { slug }],
+		] as const) {
+			const missingKey = await callTool(null, name, args);
+			expect(missingKey.status).toBe(401);
+			await toolError(await callTool(custom.token, name, args), "forbidden");
+		}
+		await toolError(
+			await callTool(admin.token, "create_space", { slug, name: "Space", owner_key_id: null }),
+			"validation_failed",
+		);
+		const created = await toolSuccess(
+			await callTool(admin.token, "create_space", { slug, name: "Space" }),
+		);
+		const space = created.structuredContent as { id: string };
+		expect(created.structuredContent).toMatchObject({
+			slug,
+			name: "Space",
+			owner_key_id: null,
+			memory_count: 0,
+		});
+		await toolError(
+			await callTool(admin.token, "create_space", { slug, name: "Duplicate" }),
+			"version_conflict",
+		);
+		const updated = await toolSuccess(
+			await callTool(admin.token, "update_space", {
+				slug,
+				name: "Renamed",
+				description: "Description",
+			}),
+		);
+		expect(updated.structuredContent).toMatchObject({
+			id: space.id,
+			slug,
+			name: "Renamed",
+			description: "Description",
+		});
+		await toolError(await callTool(admin.token, "update_space", { slug }), "validation_failed");
+		await toolError(
+			await callTool(admin.token, "update_space", { slug, owner_key_id: admin.id }),
+			"validation_failed",
+		);
+		const memory = await createSeedMemory(admin.token, slug, crypto.randomUUID());
+		await toolError(await callTool(admin.token, "delete_space", { slug }), "space_not_empty");
+		await toolSuccess(await callTool(admin.token, "delete_memory", { id: memory.id }));
+		await toolError(await callTool(admin.token, "delete_space", { slug }), "space_not_empty");
+		const emptySlug = `mcp-empty-${crypto.randomUUID()}`;
+		await toolSuccess(
+			await callTool(admin.token, "create_space", { slug: emptySlug, name: "Empty" }),
+		);
+		expect(
+			(await toolSuccess(await callTool(admin.token, "delete_space", { slug: emptySlug })))
+				.structuredContent,
+		).toMatchObject({ slug: emptySlug, deleted: true });
+		await toolError(await callTool(admin.token, "delete_space", { slug: emptySlug }), "not_found");
+		await toolError(
+			await callTool(admin.token, "update_space", { slug: emptySlug, name: "Gone" }),
+			"not_found",
+		);
+		expect(
+			await query(
+				d1,
+				`SELECT op, actor FROM changes WHERE entity_id = ${sqlText(space.id)} ORDER BY seq`,
+			),
+		).toEqual(["created", "updated"].map((op) => ({ op, actor: `key:${admin.id}` })));
+		expect(
+			await query(
+				d1,
+				`SELECT count(*) AS n FROM mcp_audit_writes w JOIN audit_log a ON a.id = w.audit_id WHERE actor = ${sqlText(`key:${admin.id}`)}`,
+			),
+		).toEqual([{ n: 5 }]);
+		expect(
+			await query(
+				d1,
+				`SELECT count(*) AS n FROM mcp_audit_writes w JOIN audit_log a ON a.id = w.audit_id WHERE actor = ${sqlText(`key:${custom.id}`)}`,
+			),
+		).toEqual([{ n: 0 }]);
+	});
+
+	it("moves memories with optional versions, dual-space update authorization and accurate write audit", async () => {
+		const d1 = await e2eD1();
+		const source = await seedSpace(d1);
+		const destination = await seedSpace(d1);
+		const key = await seedKey(d1, {
+			scope: "spaces",
+			spaceIds: [source.id, destination.id],
+			ownEntriesOnly: true,
+		});
+		const oldReader = await seedKey(d1, { ops: "r", scope: "spaces", spaceIds: [source.id] });
+		const sourceUpdater = await seedKey(d1, { ops: "u", scope: "spaces", spaceIds: [source.id] });
+		const foreign = await seedKey(d1);
+		const needle = `mcpmove${crypto.randomUUID().replaceAll("-", "")}`;
+		const memory = await createSeedMemory(key.token, source.slug, needle);
+		const other = await createSeedMemory(foreign.token, source.slug, crypto.randomUUID());
+		await toolError(
+			await callTool(key.token, "move_memory", { id: other.id, space: destination.slug }),
+			"forbidden",
+		);
+		await toolError(
+			await callTool(oldReader.token, "move_memory", { id: memory.id, space: source.slug }),
+			"forbidden",
+		);
+		await toolError(
+			await callTool(sourceUpdater.token, "move_memory", {
+				id: memory.id,
+				space: destination.slug,
+			}),
+			"not_found",
+		);
+		await toolError(
+			await callTool(key.token, "move_memory", {
+				id: memory.id,
+				space: destination.slug,
+				expected_version: 0,
+			}),
+			"version_conflict",
+		);
+		await toolError(
+			await callTool(key.token, "move_memory", {
+				id: memory.id,
+				space: destination.slug,
+				expected_version: -1,
+			}),
+			"validation_failed",
+		);
+		expect(
+			(
+				await toolSuccess(
+					await callTool(key.token, "move_memory", { id: memory.id, space: source.slug }),
+				)
+			).structuredContent,
+		).toMatchObject({ id: memory.id, space: source.slug, version: 1 });
+		const moved = await toolSuccess(
+			await callTool(key.token, "move_memory", {
+				id: memory.id,
+				space: destination.slug,
+				expected_version: 1,
+			}),
+		);
+		expect(moved.structuredContent).toMatchObject({
+			id: memory.id,
+			space: destination.slug,
+			version: 2,
+		});
+		await toolError(
+			await callTool(key.token, "move_memory", {
+				id: memory.id,
+				space: destination.slug,
+				expected_version: 1,
+			}),
+			"version_conflict",
+		);
+		const hidden = await fetch(`${base}/api/v1/memories/${memory.id}`, {
+			headers: { Authorization: `Bearer ${oldReader.token}` },
+		});
+		expect(hidden.status).toBe(404);
+		await toolError(await callTool(oldReader.token, "get_memory", { id: memory.id }), "not_found");
+		expect(
+			(await toolSuccess(await callTool(oldReader.token, "search", { query: needle, mode: "fts" })))
+				.structuredContent,
+		).toMatchObject({ items: [] });
+		expect(
+			await query(
+				d1,
+				`SELECT version, op FROM memory_versions WHERE memory_id = ${sqlText(memory.id)} ORDER BY version`,
+			),
+		).toEqual([
+			{ version: 1, op: "create" },
+			{ version: 2, op: "move" },
+		]);
+		await toolSuccess(await callTool(key.token, "delete_memory", { id: memory.id }));
+		await toolError(
+			await callTool(key.token, "move_memory", { id: memory.id, space: source.slug }),
+			"not_found",
+		);
+		expect(
+			await query(
+				d1,
+				`SELECT count(*) AS n FROM mcp_audit_writes w JOIN audit_log a ON a.id = w.audit_id WHERE actor = ${sqlText(`key:${key.id}`)}`,
+			),
+		).toEqual([{ n: 2 }]);
+	});
+
 	it("rolls up logical tool errors and committed writes instead of POST counts", async () => {
 		const d1 = await e2eD1();
 		const key = await seedKey(d1);
@@ -141,7 +337,7 @@ describe("stateless MCP Streamable HTTP", () => {
 		}
 	});
 
-	it("initializes, accepts initialized notification, and lists all nine stable tool schemas", async () => {
+	it("initializes, accepts initialized notification, and lists all thirteen stable tool schemas", async () => {
 		const d1 = await e2eD1();
 		const full = await seedKey(d1);
 		const reader = await seedKey(d1, { ops: "r" });
@@ -297,7 +493,7 @@ describe("stateless MCP Streamable HTTP", () => {
 		expect((await toolSuccess(two)).structuredContent?.id).toBe(second.id);
 	});
 
-	it("serves all nine tools over real HTTP with the documented result shapes", async () => {
+	it("serves the core memory and catalog tools over real HTTP with documented result shapes", async () => {
 		const d1 = await e2eD1();
 		const key = await seedKey(d1);
 		const space = await seedSpace(d1);
