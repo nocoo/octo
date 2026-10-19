@@ -31,7 +31,7 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 | `/memories/:id/history` | 版本 | 版本列表 + 左右或行内 diff（字段级 + 正文）；选中任意版本 → 回滚（ConfirmDialog） |
 | `/search` | 搜索 | 与 API 功能对等：模式（hybrid / fts / vector）、融合方法和参数、过滤条件；每个结果展示各通道分数条（fts / vector / fused）。查询文本由 Worker 经 `QueryEmbedder` 转成向量（「向量模型」设置页配置的网关）；未配置时降级为全文 + 过滤，见 03 §2.1 |
 | `/tags` | 标签 | 用量表、重命名、合并（预览受影响条目数）；标签共现图 |
-| `/spaces` | Space | 列表、新建、负责的 key、计数 |
+| `/spaces` | 空间 | 列表、新建、重命名、所属密钥、记忆计数 |
 | `/graph` | 关系图 | 标签 ↔ memory 二部图 / 标签共现图（力导向，WebGL 或 canvas；节点数上限 + 聚类） |
 | `/timeline` | 时间线 | 按 `event_time` / `created_at` 排布的事件时间线，可缩放 |
 | `/keys` | API Key | 按角色模板创建；明文只显示一次（可复制，关闭后不可再看）；轮换（宽限期）、吊销、过期；每个 key 的用量 sparkline |
@@ -40,6 +40,8 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 | `/trash` | 回收站 | 分页选择、全部匹配项选择、批量恢复/彻底删除；按当前筛选清空并危险确认数量；单条永久删除保留标题核验 |
 | `/settings` | 设置 | embedding profile、版本信息 |
 | `/settings/embedding` | 向量模型 | base URL、API key（只能写，显示「已设置 ••••abcd」，可以替换或清除）、model（默认 text-embedding-3-small）、dims（默认 1536）、「测试连接」按钮、服务端补向量开关（默认关）；只通过 Access 保护的 admin API 访问 |
+
+空间页每行的「重命名」打开 Basalt 紧凑弹窗。修改「空间名称」并点击「保存名称」，通过现有 `PATCH /api/admin/spaces/:slug` 只提交名称；空间标识、说明、所属密钥和记忆均不变。名称复用共享 schema，去除首尾空白后为 1 至 256 个字符。客户端和服务端校验均按问题路径把中文提示关联到对应字段；请求故障保留在弹窗内，可修改重试或取消。保存成功后刷新列表，重新加载页面仍显示新名称。
 
 ## 4. 可视化
 

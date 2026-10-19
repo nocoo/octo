@@ -790,3 +790,7 @@ MAX review found that retaining a deleted key's space-owner ID was insufficient:
 ### 2026-10-19 — Match direct and staged transaction errors
 
 Independent MAX review found that the shared space service mapped known conflicts but rethrew unknown direct D1 commit failures. REST's staged commit boundary already returned `unavailable`, while the MCP boundary converted the same failure to `internal`. Four RED regressions reproduced the divergence across the service and all three space tools. The direct commit boundary now returns a redacted `unavailable` error, preserving recognized conflicts, full rollback and failed-write audit accounting. The first commit hook also caught an admin-route regression assertion that still expected the old `internal` response; it now verifies the same shared `unavailable` contract. Shared mutation logic does not guarantee identical adapter semantics: test transaction failures through every commit boundary and document each transport's validation order separately.
+
+### 2026-10-19 — Distinguish library geometry from application overrides
+
+The rename-form composition test initially rejected every inline style in rendered markup, including Basalt Grid's own column template. The application had not introduced custom spacing. The assertion now rejects padding and margin overrides while allowing package-owned grid geometry, and the repository design gate checks application source separately. Test the forbidden customization rather than treating implementation details of an approved component as application violations.

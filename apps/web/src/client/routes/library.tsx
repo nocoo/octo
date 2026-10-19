@@ -72,6 +72,7 @@ import {
 	timelineOptions,
 	updateLibraryUrl,
 } from "../viewmodels/library-visualizations";
+import { SpaceRenameForm } from "./space-rename";
 
 const GraphCanvas = lazy(() => import("./library-graph"));
 
@@ -555,6 +556,8 @@ export function SpacesPage() {
 	const [params, setParams] = useSearchParams();
 	const [creating, setCreating] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
+	const [renaming, setRenaming] = useState<LibrarySpace | null>(null);
+	const [renameName, setRenameName] = useState("");
 	const opener = useRef<HTMLButtonElement | null>(null);
 	const openCreate = (button: HTMLButtonElement) => {
 		opener.current = button;
@@ -604,6 +607,28 @@ export function SpacesPage() {
 			textAlign: "end",
 			cellClassName: "tabular-nums",
 		},
+		{
+			id: "actions",
+			header: "操作",
+			width: "12ch",
+			accessor: (space) => (
+				<Button
+					size="sm"
+					variant="ghost"
+					disabled={state.busy}
+					aria-label={`重命名空间 ${space.name}`}
+					onClick={(event) => {
+						opener.current = event.currentTarget;
+						model.resetSpaceRename();
+						setRenameName(space.name);
+						setRenaming(space);
+					}}
+				>
+					<Pencil size={16} aria-hidden="true" />
+					重命名
+				</Button>
+			),
+		},
 	];
 	return (
 		<Grid columns={1} gap="lg">
@@ -634,7 +659,11 @@ export function SpacesPage() {
 					</>
 				}
 			/>
-			<LibraryStatus state={state} onRetry={() => void model.load()} hideError={creating} />
+			<LibraryStatus
+				state={state}
+				onRetry={() => void model.load()}
+				hideError={creating || renaming !== null}
+			/>
 			{state.ready && (
 				<LayerCard padding="none">
 					<DataTable
@@ -663,6 +692,48 @@ export function SpacesPage() {
 					/>
 				</LayerCard>
 			)}
+			<Dialog
+				open={renaming !== null}
+				onOpenChange={(open) => {
+					if (!open && !state.busy) {
+						setRenaming(null);
+						model.resetSpaceRename();
+					}
+				}}
+			>
+				<DialogContent
+					size="sm"
+					onCloseAutoFocus={(event) => {
+						if (opener.current?.isConnected) {
+							event.preventDefault();
+							opener.current.focus();
+						}
+					}}
+				>
+					<DialogHeader>
+						<DialogTitle>重命名空间</DialogTitle>
+						<DialogDescription>仅修改显示名称，不会改变空间标识或其中的记忆。</DialogDescription>
+					</DialogHeader>
+					<SpaceRenameForm
+						name={renameName}
+						pending={state.busy}
+						fieldError={state.renameFieldErrors.name ?? null}
+						error={state.error}
+						onChange={(name) => {
+							setRenameName(name);
+							model.resetSpaceRename();
+						}}
+						onCancel={() => {
+							setRenaming(null);
+							model.resetSpaceRename();
+						}}
+						onSubmit={async () => {
+							if (renaming && (await model.renameSpace(renaming.slug, renameName)))
+								setRenaming(null);
+						}}
+					/>
+				</DialogContent>
+			</Dialog>
 			<Dialog
 				open={creating}
 				onOpenChange={(open) => {

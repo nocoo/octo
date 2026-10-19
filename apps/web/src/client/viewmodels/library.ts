@@ -1,4 +1,6 @@
+import { spaceManagementCreateSchema } from "../../lib/schema/space-management";
 import { type AdminClient, ApiError, adminApi } from "../lib/api";
+import { apiFieldErrors, issueFieldErrors } from "../lib/field-errors";
 import { Store } from "../lib/store";
 
 export interface LibraryMemory {
@@ -44,7 +46,11 @@ export interface LibraryState {
 	spaces: LibrarySpace[];
 	keys: LibraryKey[];
 	truncated: boolean;
+	renameFieldErrors: Partial<Record<"name", string>>;
 }
+
+const spaceRenameSchema = spaceManagementCreateSchema.pick({ name: true });
+const spaceRenameMessages = { name: "请输入 1 至 256 个字符的空间名称。" };
 
 export function selectedIds(params: URLSearchParams): string[] {
 	return [...new Set(params.getAll("selected").filter(Boolean))];
@@ -107,6 +113,7 @@ export class LibraryModel extends Store<LibraryState> {
 			spaces: [],
 			keys: [],
 			truncated: false,
+			renameFieldErrors: {},
 		});
 	}
 
@@ -182,6 +189,41 @@ export class LibraryModel extends Store<LibraryState> {
 			this.set({
 				notice:
 					"memories" in result ? `已合并标签，影响 ${result.memories} 条记忆` : "已重命名标签",
+			});
+			await this.refreshCommitted();
+		});
+	}
+
+	resetSpaceRename(): void {
+		if (this.state.busy) return;
+		this.set({ renameFieldErrors: {}, error: null, notice: null });
+	}
+
+	renameSpace(slug: string, name: string): Promise<boolean> {
+		if (this.state.busy) return Promise.resolve(false);
+		const parsed = spaceRenameSchema.safeParse({ name });
+		this.set({
+			renameFieldErrors: parsed.success
+				? {}
+				: issueFieldErrors(parsed.error.issues, spaceRenameMessages),
+			error: null,
+			notice: null,
+		});
+		if (!parsed.success) return Promise.resolve(false);
+		return this.run(async () => {
+			let renamed: LibrarySpace;
+			try {
+				renamed = await this.api.request<LibrarySpace>(`/spaces/${encodeURIComponent(slug)}`, {
+					method: "PATCH",
+					json: parsed.data,
+				});
+			} catch (error) {
+				this.set({ renameFieldErrors: apiFieldErrors(error, spaceRenameMessages) });
+				throw error;
+			}
+			this.set({
+				spaces: this.state.spaces.map((space) => (space.slug === slug ? renamed : space)),
+				notice: "空间已重命名",
 			});
 			await this.refreshCommitted();
 		});
