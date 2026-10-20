@@ -59,7 +59,7 @@ async function invalidate(
 			.prepare(`UPDATE vector_sync_jobs SET
 			generation = generation + CASE WHEN lease_token IS NULL OR lease_token = ? THEN 1 ELSE 0 END,
 			lease_dirty = CASE WHEN lease_token IS NOT NULL AND lease_token != ? THEN 1 ELSE 0 END,
-			due_at = CASE WHEN lease_token = ? OR (attempts = 0 AND dead_at IS NULL) THEN ? ELSE due_at END,
+			due_at = CASE WHEN lease_token = ? OR (last_error IS NULL AND dead_at IS NULL) THEN ? ELSE due_at END,
 			lease_until = CASE WHEN lease_token = ? THEN 0 ELSE lease_until END,
 			lease_token = CASE WHEN lease_token = ? THEN NULL ELSE lease_token END WHERE memory_id = ?`)
 			.bind(token, token, token, now, token, token, memoryId),

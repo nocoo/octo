@@ -41,6 +41,30 @@ function addVectors(sqlite: ReturnType<typeof fixture>["sqlite"], count: number)
 }
 
 describe("durable vector synchronization", () => {
+	it("preserves a newer rate-limit deadline after an old upsert completes", async () => {
+		const { env, sqlite, store } = fixture();
+		vi.useFakeTimers();
+		vi.spyOn(Math, "random").mockReturnValue(0.5);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		store.upsert
+			.mockImplementationOnce(async () => {
+				expect(await synchronizeVectors(env, { store, now: 60_551 })).toEqual({
+					synced: 0,
+					failed: 1,
+				});
+			})
+			.mockRejectedValue(new Error("Too Many Requests"));
+		const work = synchronizeVectors(env, { store, now: 100 });
+		await vi.runAllTimersAsync();
+		expect(await work).toEqual({ synced: 0, failed: 0 });
+		expect(store.upsert).toHaveBeenCalledTimes(4);
+		expect(sqlite.prepare("SELECT due_at, attempts, dead_at FROM vector_sync_jobs").get()).toEqual({
+			due_at: 150_551,
+			attempts: 0,
+			dead_at: null,
+		});
+	});
+
 	it.each([false, true])(
 		"batches ready vectors into 100-record calls with backfill=%s",
 		async (backfill) => {

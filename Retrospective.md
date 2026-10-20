@@ -36,6 +36,11 @@ tests only; legitimate newly requeued backfill requests failed its assertions an
 timed out. Gateway fixtures now distinguish connection tests from background
 embedding requests and return one vector per input, preserving connection-test
 failure modes rather than suppressing the production backfill behavior.
+MAX review then reproduced stale completions cancelling a newer rate-limit
+deadline because invalidation equated zero attempts with no backoff. The RED
+regression holds a newer throttled owner's deadline across an older completion.
+Invalidation now checks the explicit error state rather than the failure counter;
+uncharged retries are still retries, and source mutations alone reset that state.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 
