@@ -58,6 +58,20 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 	it("does not render an empty body diff for a metadata-only revision", () => {
 		expect(render(HistoryPage, "/memories/m1/history")).not.toContain('aria-label="正文差异"');
 	});
+	it("formats event time differences rather than leaking epoch milliseconds", () => {
+		overrides.history = {
+			diff: {
+				from: 1,
+				to: 2,
+				fields: [{ field: "event_time", from: null, to: 1792469106000 }],
+				body: { hunks: [] },
+			},
+		};
+		const html = render(HistoryPage, "/memories/m1/history");
+		expect(html).toContain("2026/10/20 04:05:06 UTC");
+		expect(html).toContain("未设置");
+		expect(html).not.toContain("1792469106000");
+	});
 	it("announces a partially selected memory page", () => {
 		overrides.list = { items: [memory, { ...memory, id: "m2" }] };
 		expect(render(MemoriesPage, "/memories?selected=m1")).toMatch(/aria-checked="mixed"/);

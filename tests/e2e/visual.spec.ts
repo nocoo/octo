@@ -130,6 +130,12 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 				await expect(trend).toContainText("1 次调用");
 				await expect(trend).toContainText(`${new Date().toISOString().slice(0, 10)}：1 次`);
 			}
+			if (name === "history") {
+				await expect(
+					page.locator(".octo-memory-value").filter({ hasText: "2026/10/20 04:05:06 UTC" }),
+				).toBeVisible();
+				await expect(page.getByText("1792469106000", { exact: true })).toHaveCount(0);
+			}
 			await capture(page, info, `${variant}-${name}`);
 			if (name === "memories") {
 				await page.getByRole("radio", { name: "卡片", exact: true }).click();

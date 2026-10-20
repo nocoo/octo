@@ -1177,7 +1177,9 @@ export function HistoryPage() {
 													<p className="octo-memory-value">
 														{field.field === "type"
 															? (memoryTypeLabels[String(field[side])] ?? "未知类型")
-															: String(field[side] ?? "未设置")}
+															: field.field === "event_time" && field[side] !== null
+																? `${formatDateTime(typeof field[side] === "number" ? field[side] : String(field[side]), "UTC")} UTC`
+																: String(field[side] ?? "未设置")}
 													</p>
 												</LayerCard.Well>
 											),

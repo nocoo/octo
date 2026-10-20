@@ -9,8 +9,10 @@ export function formatBytes(bytes: number): string {
 	return `${formatNumber(bytes / 1024 ** unit)} ${["B", "KiB", "MiB", "GiB"][unit]}`;
 }
 
-export function formatDateTime(value: string | null, timeZone?: string): string {
-	if (!value || !Number.isFinite(Date.parse(value))) return "—";
+export function formatDateTime(value: string | number | null, timeZone?: string): string {
+	if (value === null) return "—";
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return "—";
 	return new Intl.DateTimeFormat("zh-CN", {
 		year: "numeric",
 		month: "2-digit",
@@ -20,5 +22,5 @@ export function formatDateTime(value: string | null, timeZone?: string): string 
 		second: "2-digit",
 		hourCycle: "h23",
 		...(timeZone ? { timeZone } : {}),
-	}).format(new Date(value));
+	}).format(date);
 }

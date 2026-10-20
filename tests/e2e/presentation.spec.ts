@@ -75,3 +75,23 @@ test("pagination aligns labels and controls while date filters follow the native
 		await expect(from).toHaveCSS("color-scheme", colorScheme);
 	}
 });
+
+test("audit virtualization reaches the last record with two-line timestamps", async ({
+	page,
+	admin,
+}) => {
+	for (let index = 0; index < 40; index++) await admin.json("/spaces");
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.emulateMedia({ colorScheme: "dark" });
+	await page.goto("/audit?action=%2Fapi%2Fadmin%2Fspaces");
+	const table = page.getByRole("table", { name: "审计记录", exact: true });
+	await expect(table.locator("[data-audit-row]").first()).toBeVisible();
+	const total = Number(await table.getAttribute("aria-rowcount"));
+	expect(total).toBeGreaterThan(40);
+	await page.getByLabel("可滚动的审计记录", { exact: true }).evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	const last = table.locator(`[data-audit-row][aria-rowindex="${total}"]`);
+	await expect(last).toBeInViewport({ ratio: 1 });
+	await expect(table.locator('[data-audit-row][aria-rowindex="2"]')).toHaveCount(0);
+});

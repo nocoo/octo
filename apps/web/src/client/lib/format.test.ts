@@ -24,4 +24,8 @@ describe("record formatting", () => {
 		expect(formatDateTime(null)).toBe("—");
 		expect(formatDateTime("invalid")).toBe("—");
 	});
+	it("formats the epoch milliseconds returned in history diffs, including zero", () => {
+		expect(formatDateTime(1792469106000, "UTC")).toBe("2026/10/20 04:05:06");
+		expect(formatDateTime(0, "UTC")).toBe("1970/01/01 00:00:00");
+	});
 });
