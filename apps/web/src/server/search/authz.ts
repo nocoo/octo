@@ -28,24 +28,18 @@ export function canReadSpace(authz: AuthzContext, spaceId: string): boolean {
 	return authz.visibleSpaceIds.includes(spaceId);
 }
 
-export function intersectRequestedSpaces(
+export function intersectRequestedSpaceIds(
 	authz: AuthzContext,
-	requested: string[] | undefined,
+	requestedIds: string[] | undefined,
 	spaceSlugById: Map<string, string>,
 ): string[] {
 	const visibleIds =
 		authz.visibleSpaceIds === "all"
 			? [...spaceSlugById.keys()]
 			: authz.visibleSpaceIds.filter((id) => spaceSlugById.has(id));
-	if (!requested || requested.length === 0) {
+	if (requestedIds === undefined) {
 		return visibleIds;
 	}
-	const slugToId = new Map<string, string>();
-	for (const [id, slug] of spaceSlugById) {
-		slugToId.set(slug, id);
-	}
-	const wanted = requested
-		.map((slug) => slugToId.get(slug))
-		.filter((id): id is string => id !== undefined);
-	return wanted.filter((id) => visibleIds.includes(id));
+	const wanted = new Set(requestedIds);
+	return visibleIds.filter((id) => wanted.has(id));
 }

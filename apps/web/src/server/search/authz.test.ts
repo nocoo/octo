@@ -3,7 +3,7 @@ import { parseOps } from "../auth/authorize";
 import { ApiError } from "../lib/errors";
 import {
 	canReadSpace,
-	intersectRequestedSpaces,
+	intersectRequestedSpaceIds,
 	requireSearchRead,
 	searchAuthzFromPrincipal,
 } from "./authz";
@@ -113,12 +113,15 @@ describe("authz helpers", () => {
 		},
 	);
 
-	it("intersects requested slugs with visibility", () => {
+	it("intersects requested ids with visibility", () => {
 		expect(
-			intersectRequestedSpaces({ keyId: "k", visibleSpaceIds: ["s1"] }, ["alpha", "beta"], spaces),
+			intersectRequestedSpaceIds({ keyId: "k", visibleSpaceIds: ["s1"] }, ["s1", "s2"], spaces),
 		).toEqual(["s1"]);
 		expect(
-			intersectRequestedSpaces({ keyId: "k", visibleSpaceIds: "all" }, undefined, spaces),
+			intersectRequestedSpaceIds({ keyId: "k", visibleSpaceIds: "all" }, undefined, spaces),
 		).toEqual(["s1", "s2"]);
+		expect(intersectRequestedSpaceIds({ keyId: "k", visibleSpaceIds: "all" }, [], spaces)).toEqual(
+			[],
+		);
 	});
 });

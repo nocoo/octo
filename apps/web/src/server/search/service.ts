@@ -6,7 +6,7 @@ import { buildVectorMetadataFilter } from "../ports/vector/filter";
 import { capVectorTopK, type VectorStore } from "../ports/vector/types";
 import { resolveSpaceSlug } from "../repo/spaces";
 import type { AuthzContext } from "./authz";
-import { intersectRequestedSpaces } from "./authz";
+import { intersectRequestedSpaceIds } from "./authz";
 import { loadPendingVectorHits, revalidateCurrentVectorHits } from "./current-vector-hits";
 import { buildMemoryFilterSql, resolveMemoryFilterSql, type SqlFilter } from "./filters-sql";
 import { runFtsChannel } from "./fts-channel";
@@ -94,14 +94,18 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 	};
 	const mode = inferSearchMode(req);
 	const spaceMap = await loadSpaceSlugMap(deps.db);
-	const requested = req.filters?.spaces
-		? await Promise.all(
-				req.filters.spaces.map(
-					async (slug) => (await resolveSpaceSlug(deps.db, slug))?.slug ?? slug,
-				),
-			)
-		: undefined;
-	const spaceIds = [...new Set(intersectRequestedSpaces(authz, requested, spaceMap))];
+	let requestedIds: string[] | undefined;
+	if (req.filters?.spaces?.length) {
+		requestedIds = [];
+		for (const slug of req.filters.spaces) {
+			const space = await resolveSpaceSlug(deps.db, slug);
+			if (space) {
+				requestedIds.push(space.id);
+				spaceMap.set(space.id, space.slug);
+			}
+		}
+	}
+	const spaceIds = [...new Set(intersectRequestedSpaceIds(authz, requestedIds, spaceMap))];
 	const spaceSlugs = spaceIds
 		.map((id) => spaceMap.get(id))
 		.filter((slug): slug is string => slug !== undefined);

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { intersectRequestedSpaces } from "./authz";
+import { intersectRequestedSpaceIds } from "./authz";
 
-describe("intersectRequestedSpaces", () => {
-	it("ignores unknown slugs", () => {
+describe("intersectRequestedSpaceIds", () => {
+	it("ignores unknown ids", () => {
 		const spaces = new Map([["s1", "alpha"]]);
 		expect(
-			intersectRequestedSpaces({ keyId: "k", visibleSpaceIds: "all" }, ["missing"], spaces),
+			intersectRequestedSpaceIds({ keyId: "k", visibleSpaceIds: "all" }, ["missing"], spaces),
 		).toEqual([]);
 	});
 });

@@ -1,5 +1,19 @@
 # Retrospective
 
+### 2026-10-20 — Keep rename-sensitive reads on immutable IDs
+
+Independent max-effort review reproduced an empty scoped search when a rename
+landed between loading the ID-to-slug map and resolving a requested alias. The
+first implementation converted the resolved ID back to a slug and looked it up
+in the older map. Search now intersects resolved IDs directly and uses the latest
+resolved slug only for derived vector metadata. FTS and production-style pending
+vector tests force this interleaving and verify both results and scope isolation.
+
+The same review found that idempotent space PATCH responses lost their new ETag
+because generic replay persisted only status and body. Response contracts must
+cover replay and commit-race recovery, not just the initial route handler; derive
+the replay token from the immutable saved result, never from a later live row.
+
 ### 2026-10-20 — Distinguish fixture failures from feature RED
 
 The first slug-edit browser regression omitted the required memory `tags` field,
