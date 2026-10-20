@@ -20,6 +20,13 @@ migration runner, whose repeat-application regression caught the duplicate table
 Check both the production migration sequence and local rerun behavior when adding
 a numbered migration; keep repeat runs harmless without resetting existing data.
 
+The Herdr split ratio was initially interpreted as the new pane's share, leaving
+the controller at two thirds rather than one third. Inspect `pane layout` after
+splitting: the ratio describes the first pane. Resizing to 0.33 restored the
+required layout. CLI inspection also rejected an unsupported `gh workflow view
+--json` flag and a working-agent history read. Check subcommand help first and
+use the visible source for active agents; reserve history reads for settled ones.
+
 ### 2026-10-20 — Inspect shared fixtures before adding setup
 
 The vector invalidation regression initially inserted a destination space already
