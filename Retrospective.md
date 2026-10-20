@@ -13,6 +13,9 @@ The same review found that idempotent space PATCH responses lost their new ETag
 because generic replay persisted only status and body. Response contracts must
 cover replay and commit-race recovery, not just the initial route handler; derive
 the replay token from the immutable saved result, never from a later live row.
+Hono merges a losing response's headers when replacing it with a recovered
+response, so recovery must clear stale ETag and body-length metadata before
+returning the cached result. Test the response envelope, not only its JSON body.
 
 ### 2026-10-20 — Distinguish fixture failures from feature RED
 

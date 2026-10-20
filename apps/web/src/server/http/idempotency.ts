@@ -11,7 +11,28 @@ import { requestHash } from "./request-hash";
 function replayResponse(
 	context: Context<{ Bindings: Env; Variables: AppVars }>,
 	outcome: { status: number; body: string },
+	prefix: string,
 ): Response {
+	const headers = new Headers({
+		"content-type": "application/json; charset=utf-8",
+		"Idempotent-Replayed": "true",
+	});
+	if (
+		context.req.method === "PATCH" &&
+		/^\/spaces\/[^/]+\/?$/.test(context.req.path.slice(prefix.length))
+	) {
+		context.header("ETag", undefined);
+		context.header("Content-Length", undefined);
+		if (outcome.status >= 200 && outcome.status < 300) {
+			try {
+				const updatedAt = JSON.parse(outcome.body)?.updated_at;
+				if (typeof updatedAt === "string") {
+					const version = Date.parse(updatedAt);
+					if (Number.isFinite(version)) headers.set("ETag", `"${version}"`);
+				}
+			} catch {}
+		}
+	}
 	if (outcome.status >= 400) {
 		try {
 			const parsed = errorCodeSchema.safeParse(JSON.parse(outcome.body)?.error?.code);
@@ -20,7 +41,7 @@ function replayResponse(
 	}
 	return new Response(outcome.body, {
 		status: outcome.status,
-		headers: { "content-type": "application/json; charset=utf-8", "Idempotent-Replayed": "true" },
+		headers,
 	});
 }
 
@@ -79,7 +100,7 @@ export function idempotencyMiddleware(
 			if (existing) {
 				await authorizeMemoryRequest(c, existing, prefix);
 				await authorizeBatchReplay(c, existing, prefix);
-				return replayResponse(c, existing);
+				return replayResponse(c, existing, prefix);
 			}
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
@@ -109,7 +130,7 @@ export function idempotencyMiddleware(
 				if (outcome) {
 					await authorizeMemoryRequest(c, outcome, prefix);
 					await authorizeBatchReplay(c, outcome, prefix);
-					c.res = replayResponse(c, outcome);
+					c.res = replayResponse(c, outcome, prefix);
 					return;
 				}
 			} catch (err) {

@@ -351,6 +351,66 @@ async function expectSlugError(response: Response, status: number) {
 }
 
 describe("space slug aliases over HTTP", () => {
+	it("replays the saved PATCH ETag and body without mutating a subsequently renamed space", async () => {
+		const headers = await mint({});
+		const original = await createRenameSpace(headers);
+		const requestHeaders = {
+			...headers,
+			"If-Match": `"${Date.parse(original.updated_at)}"`,
+		};
+		const body = { slug: `replayed-${crypto.randomUUID()}`, name: "Saved name" };
+		const first = await mutateSpace(
+			"PATCH",
+			`/${original.slug}`,
+			requestHeaders,
+			body,
+			"space-etag",
+		);
+		expect(first.status).toBe(200);
+		const saved = await first.text();
+		const etag = `"${Date.parse((JSON.parse(saved) as SpaceDetail).updated_at)}"`;
+		expect(first.headers.get("ETag")).toBe(etag);
+		const latestSlug = `latest-${crypto.randomUUID()}`;
+		const changed = await mutateSpace("PATCH", `/${body.slug}`, headers, {
+			slug: latestSlug,
+			name: "Current name",
+		});
+		expect(changed.status).toBe(200);
+		expect(changed.headers.get("ETag")).not.toBe(etag);
+		const current = await changed.text();
+		const exec = await e2eD1();
+		const snapshot = async () => ({
+			space: await query(exec, `SELECT * FROM spaces WHERE id = ${sqlText(original.id)}`),
+			aliases: await query(
+				exec,
+				`SELECT * FROM space_slug_aliases WHERE space_id = ${sqlText(original.id)} ORDER BY slug`,
+			),
+			changes: await query(
+				exec,
+				`SELECT * FROM changes WHERE entity_id = ${sqlText(original.id)} ORDER BY seq`,
+			),
+		});
+		const before = await snapshot();
+		const replay = await mutateSpace(
+			"PATCH",
+			`/${original.slug}`,
+			requestHeaders,
+			body,
+			"space-etag",
+		);
+		expect(replay.status).toBe(200);
+		expect(replay.headers.get("Idempotent-Replayed")).toBe("true");
+		expect(replay.headers.get("ETag")).toBe(etag);
+		expect([null, String(new TextEncoder().encode(saved).byteLength)]).toContain(
+			replay.headers.get("Content-Length"),
+		);
+		expect(await replay.text()).toBe(saved);
+		expect(await snapshot()).toEqual(before);
+		const after = await fetch(`${base}/api/v1/spaces/${latestSlug}`, { headers });
+		expect(after.status).toBe(200);
+		expect(await after.text()).toBe(current);
+	});
+
 	it("returns canonical slugs through GET/PATCH/DELETE aliases and removes aliases on delete", async () => {
 		const headers = await mint({});
 		const original = await createRenameSpace(headers);
