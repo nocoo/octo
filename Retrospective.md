@@ -46,6 +46,12 @@ The reviewer also paused failure handling between lease release and clearing
 attempts, after which the old clear erased its acknowledgement permanently.
 A RED interleaving regression now proves that clearing requires a still-pending
 generation, so completed newer work cannot match the delayed failure update.
+MAX review found a second priority boundary inside a large ready chunk: if later
+records became stale before the first flush, a PUT arriving during that flush
+still waited behind 15 seconds of newly required embeddings. A timing regression
+reproduced the delay. Mid-chunk repairs now yield embedding claims back to the
+durable queue and run first in the next bounded repair round. Test transitions
+before and during a flush, not just mutations after a fully prepared batch.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 

@@ -396,6 +396,17 @@ export async function synchronizeVectors(
 					);
 					if (embeddingClaims.length === 0) continue;
 					await flushReady();
+					if (retry.length > 0) {
+						await concurrent(embeddingClaims, concurrency, async (claim) => {
+							const released = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
+								lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ? RETURNING memory_id`)
+								.bind(timestamp(), claim.memory_id, claim.token)
+								.first();
+							if (released) retry.push(claim);
+						});
+						retry.push(...pending.slice(offset + concurrency));
+						break;
+					}
 					try {
 						await options.beforeSyncBatch(embeddingClaims.map((claim) => claim.memory_id));
 					} catch (error) {

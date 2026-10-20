@@ -248,6 +248,9 @@ Ready upserts are grouped into calls of at most 100 vectors, below the Workers
 binding limit of 1,000. Embedding groups retain at most four jobs so a large slow
 backfill does not hold completed vectors behind unrelated requests. Ready work
 flushes before entering a newly needed embedding batch, including repair rounds.
+If that flush creates generation repairs, unstarted embedding claims are released
+and queued behind those repairs before any slow gateway call. The same three-round
+bound still applies; unfinished jobs remain durably pending without a live lease.
 Deletes are grouped into `deleteByIds` chunks of at most 100 IDs. A rejected
 chunk defers only its own jobs; other chunks acknowledge independently. Successful
 chunks acknowledge each generation separately, repairing concurrent restores
