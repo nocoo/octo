@@ -194,6 +194,22 @@ describe("key form", () => {
 			expect.objectContaining({ name: "project-agent", role: "custom" }),
 		);
 	});
+	it("retains selected ids when a space slug and display name change", async () => {
+		const { props, render, submit } = setup({
+			initial: { ...existing, role: "custom", scope: "spaces", space_ids: ["space-1"] },
+		});
+		expect(control(render(), MultiSelect).props.value).toEqual(["space-1"]);
+		props.spaces = [{ ...spaces[0], id: "space-1", name: "新设计资料", slug: "new-design" }];
+		const tree = render();
+		expect(control(tree, MultiSelect).props).toMatchObject({
+			value: ["space-1"],
+			options: [{ value: "space-1", label: "新设计资料（new-design）" }],
+		});
+		await submit(tree);
+		expect(props.onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ permissions: expect.objectContaining({ space_ids: ["space-1"] }) }),
+		);
+	});
 
 	it("edits project expiry without changing its immutable name or fixed template", async () => {
 		const { props, render, submit } = setup({ initial: existing });

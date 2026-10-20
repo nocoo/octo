@@ -26,6 +26,7 @@ export interface LibrarySpace {
 	description: string;
 	owner_key_id: string | null;
 	memory_count: number;
+	updated_at: string;
 }
 export interface LibraryKey {
 	id: string;
@@ -46,11 +47,14 @@ export interface LibraryState {
 	spaces: LibrarySpace[];
 	keys: LibraryKey[];
 	truncated: boolean;
-	renameFieldErrors: Partial<Record<"name", string>>;
+	renameFieldErrors: Partial<Record<"name" | "slug", string>>;
 }
 
-const spaceRenameSchema = spaceManagementCreateSchema.pick({ name: true });
-const spaceRenameMessages = { name: "请输入 1 至 256 个字符的空间名称。" };
+const spaceRenameSchema = spaceManagementCreateSchema.pick({ name: true, slug: true });
+const spaceRenameMessages = {
+	name: "请输入 1 至 256 个字符的空间名称。",
+	slug: "请输入 1 至 64 位小写字母、数字与单连字符，不能以连字符开头或结尾。",
+};
 
 export function selectedIds(params: URLSearchParams): string[] {
 	return [...new Set(params.getAll("selected").filter(Boolean))];
@@ -199,9 +203,9 @@ export class LibraryModel extends Store<LibraryState> {
 		this.set({ renameFieldErrors: {}, error: null, notice: null });
 	}
 
-	renameSpace(slug: string, name: string): Promise<boolean> {
+	renameSpace(space: LibrarySpace, input: { name: string; slug: string }): Promise<boolean> {
 		if (this.state.busy) return Promise.resolve(false);
-		const parsed = spaceRenameSchema.safeParse({ name });
+		const parsed = spaceRenameSchema.safeParse(input);
 		this.set({
 			renameFieldErrors: parsed.success
 				? {}
@@ -213,16 +217,27 @@ export class LibraryModel extends Store<LibraryState> {
 		return this.run(async () => {
 			let renamed: LibrarySpace;
 			try {
-				renamed = await this.api.request<LibrarySpace>(`/spaces/${encodeURIComponent(slug)}`, {
-					method: "PATCH",
-					json: parsed.data,
-				});
+				renamed = await this.api.request<LibrarySpace>(
+					`/spaces/${encodeURIComponent(space.slug)}`,
+					{
+						method: "PATCH",
+						headers: { "If-Match": String(Date.parse(space.updated_at)) },
+						json: parsed.data,
+					},
+				);
 			} catch (error) {
-				this.set({ renameFieldErrors: apiFieldErrors(error, spaceRenameMessages) });
+				this.set({
+					renameFieldErrors:
+						error instanceof ApiError && error.status === 409 && error.code === "version_conflict"
+							? issueFieldErrors(error.details?.issues ?? [], {
+									slug: "空间标识已被占用，请使用其他标识。",
+								})
+							: apiFieldErrors(error, spaceRenameMessages),
+				});
 				throw error;
 			}
 			this.set({
-				spaces: this.state.spaces.map((space) => (space.slug === slug ? renamed : space)),
+				spaces: this.state.spaces.map((item) => (item.id === space.id ? renamed : item)),
 				notice: "空间已重命名",
 			});
 			await this.refreshCommitted();

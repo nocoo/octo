@@ -5,18 +5,22 @@ import { Save } from "lucide-react";
 
 export function SpaceRenameForm({
 	name,
+	slug,
 	pending,
-	fieldError,
+	fieldErrors,
 	error,
-	onChange,
+	onNameChange,
+	onSlugChange,
 	onCancel,
 	onSubmit,
 }: {
 	name: string;
+	slug: string;
 	pending: boolean;
-	fieldError: string | null;
+	fieldErrors: Partial<Record<"name" | "slug", string>>;
 	error: string | null;
-	onChange: (name: string) => void;
+	onNameChange: (name: string) => void;
+	onSlugChange: (slug: string) => void;
 	onCancel: () => void;
 	onSubmit: () => Promise<void>;
 }) {
@@ -33,8 +37,8 @@ export function SpaceRenameForm({
 					label="空间名称"
 					htmlFor="space-rename-name"
 					required
-					error={fieldError}
-					hint="名称最多 256 个字符，空间标识保持不变。"
+					error={fieldErrors.name ?? null}
+					hint="名称最多 256 个字符。"
 				>
 					<Input
 						id="space-rename-name"
@@ -43,10 +47,29 @@ export function SpaceRenameForm({
 						required
 						disabled={pending}
 						autoComplete="off"
-						onChange={(event) => onChange(event.target.value)}
+						onChange={(event) => onNameChange(event.target.value)}
 					/>
 				</Field>
-				{error && !fieldError && (
+				<Field
+					label="空间标识"
+					htmlFor="space-rename-slug"
+					required
+					error={fieldErrors.slug ?? null}
+					hint="1 至 64 位小写字母、数字与单连字符；旧标识仍可使用 30 天。"
+				>
+					<Input
+						id="space-rename-slug"
+						name="slug"
+						value={slug}
+						required
+						disabled={pending}
+						autoComplete="off"
+						autoCapitalize="none"
+						spellCheck={false}
+						onChange={(event) => onSlugChange(event.target.value)}
+					/>
+				</Field>
+				{error && !fieldErrors.name && !fieldErrors.slug && (
 					<Banner role="alert" variant="error" size="sm" title="保存失败" description={error} />
 				)}
 			</Grid>
@@ -56,7 +79,7 @@ export function SpaceRenameForm({
 				</Button>
 				<Button type="submit" loading={pending} disabled={pending}>
 					<Save size={16} aria-hidden="true" />
-					{pending ? "正在保存" : "保存名称"}
+					{pending ? "正在保存" : "保存更改"}
 				</Button>
 			</DialogFooter>
 		</form>

@@ -36,7 +36,17 @@ it("bounds long space names without losing their accessible text", () => {
 	snapshot.state = {
 		...new LibraryModel("spaces").state,
 		ready: true,
-		spaces: [{ id: "s", slug: "work", name, description: "", owner_key_id: null, memory_count: 1 }],
+		spaces: [
+			{
+				id: "s",
+				slug: "work",
+				name,
+				description: "",
+				owner_key_id: null,
+				memory_count: 1,
+				updated_at: "2026-10-20T04:00:00.000Z",
+			},
+		],
 	};
 	const html = render(SpacesPage, "/spaces");
 	const link = html.match(/<a\b[^>]*href="\/memories\?spaces=work"[^>]*>[\s\S]*?<\/a>/)?.[0];
@@ -87,6 +97,7 @@ it.each([
 					description: "用于检索与协作的知识空间",
 					owner_key_id: null,
 					memory_count: 1,
+					updated_at: "2026-10-20T04:00:00.000Z",
 				},
 			],
 		};
@@ -183,6 +194,7 @@ describe("library unknown, failed and empty states", () => {
 					description: "",
 					owner_key_id: null,
 					memory_count: 1,
+					updated_at: "2026-10-20T04:00:00.000Z",
 				},
 			],
 		};

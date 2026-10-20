@@ -10,6 +10,11 @@ intended. Inspect fixture contracts and the first failing assertion before
 accepting a RED run. A shell wrapper also used zsh's readonly `status` variable;
 use a normal variable such as `result` to preserve the test exit code.
 
+The controller initially assumed API validation paths were arrays and suggested
+widening the client parser. The actual shared server serializer emits dotted
+strings. The unnecessary parser change was removed before commit. Inspect both
+ends of an existing error contract before adding compatibility handling.
+
 The new alias migration initially lacked the idempotent DDL used by the local
 migration runner, whose repeat-application regression caught the duplicate table.
 Check both the production migration sequence and local rerun behavior when adding

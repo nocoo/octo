@@ -72,6 +72,7 @@ describe("library page installed-component boundaries", () => {
 					description: "",
 					owner_key_id: null,
 					memory_count: 12,
+					updated_at: "2026-10-20T04:00:00.000Z",
 				},
 			],
 		};

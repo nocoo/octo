@@ -561,6 +561,7 @@ export function SpacesPage() {
 	const [createError, setCreateError] = useState<string | null>(null);
 	const [renaming, setRenaming] = useState<LibrarySpace | null>(null);
 	const [renameName, setRenameName] = useState("");
+	const [renameSlug, setRenameSlug] = useState("");
 	const opener = useRef<HTMLButtonElement | null>(null);
 	const filter = useRef<HTMLInputElement | null>(null);
 	const openCreate = (button: HTMLButtonElement) => {
@@ -604,6 +605,7 @@ export function SpacesPage() {
 						opener.current = event.currentTarget;
 						model.resetSpaceRename();
 						setRenameName(space.name);
+						setRenameSlug(space.slug);
 						setRenaming(space);
 					}}
 				>
@@ -729,15 +731,22 @@ export function SpacesPage() {
 				>
 					<DialogHeader>
 						<DialogTitle>重命名空间</DialogTitle>
-						<DialogDescription>仅修改显示名称，不会改变空间标识或其中的记忆。</DialogDescription>
+						<DialogDescription>
+							修改名称或标识不会影响记忆和密钥权限，旧标识仍可使用 30 天。
+						</DialogDescription>
 					</DialogHeader>
 					<SpaceRenameForm
 						name={renameName}
+						slug={renameSlug}
 						pending={state.busy}
-						fieldError={state.renameFieldErrors.name ?? null}
+						fieldErrors={state.renameFieldErrors}
 						error={state.error}
-						onChange={(name) => {
+						onNameChange={(name) => {
 							setRenameName(name);
+							model.resetSpaceRename();
+						}}
+						onSlugChange={(slug) => {
+							setRenameSlug(slug);
 							model.resetSpaceRename();
 						}}
 						onCancel={() => {
@@ -745,7 +754,10 @@ export function SpacesPage() {
 							model.resetSpaceRename();
 						}}
 						onSubmit={async () => {
-							if (renaming && (await model.renameSpace(renaming.slug, renameName)))
+							if (
+								renaming &&
+								(await model.renameSpace(renaming, { name: renameName, slug: renameSlug }))
+							)
 								setRenaming(null);
 						}}
 					/>

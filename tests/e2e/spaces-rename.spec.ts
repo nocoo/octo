@@ -12,7 +12,7 @@ test("keeps the name filter and returns focus when renaming hides the row", asyn
 	await page.getByRole("button", { name: `重命名空间 ${originalName}`, exact: true }).click();
 	const dialog = page.getByRole("dialog", { name: "重命名空间", exact: true });
 	await dialog.getByLabel("空间名称", { exact: true }).fill("新空间");
-	await dialog.getByRole("button", { name: "保存名称", exact: true }).click();
+	await dialog.getByRole("button", { name: "保存更改", exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 	await expect(page.getByRole("button", { name: /重命名空间 / })).toHaveCount(0);
 	await expect(page.getByRole("textbox", { name: "筛选空间", exact: true })).toHaveValue(
@@ -49,7 +49,7 @@ test("renames a space through the dashboard and persists after reload", async ({
 			response.url().endsWith(`/api/admin/spaces/${slug}`) &&
 			response.request().method() === "PATCH",
 	);
-	await dialog.getByRole("button", { name: "保存名称", exact: true }).click();
+	await dialog.getByRole("button", { name: "保存更改", exact: true }).click();
 	expect((await saved).status()).toBe(200);
 	await expect(dialog).not.toBeVisible();
 	await expect(page.getByRole("link", { name: "更新后的知识库", exact: true })).toBeVisible();
@@ -93,14 +93,14 @@ test("places local and API name validation beside the name field", async ({
 	const dialog = page.getByRole("dialog", { name: "重命名空间", exact: true });
 	const name = dialog.getByLabel("空间名称", { exact: true });
 	await name.fill("   ");
-	await dialog.getByRole("button", { name: "保存名称", exact: true }).click();
+	await dialog.getByRole("button", { name: "保存更改", exact: true }).click();
 	await expect(name).toHaveAttribute("aria-invalid", "true");
 	await expect(name).toHaveAttribute("aria-describedby", "space-rename-name-error");
 	await expect(dialog.getByRole("alert")).toHaveText("请输入 1 至 256 个字符的空间名称。");
 	expect(writes).toBe(0);
 	await name.fill("合法名称");
 	await expect(dialog.getByRole("alert")).toHaveCount(0);
-	await dialog.getByRole("button", { name: "保存名称", exact: true }).click();
+	await dialog.getByRole("button", { name: "保存更改", exact: true }).click();
 	await expect(dialog.getByRole("alert")).toHaveText("请输入 1 至 256 个字符的空间名称。");
 	await expect(name).toHaveValue("合法名称");
 	await expect(dialog.getByRole("alert")).toBeInViewport();
@@ -127,7 +127,7 @@ test("keeps failed writes in the dialog and allows cancellation without changing
 	await opener.click();
 	const dialog = page.getByRole("dialog", { name: "重命名空间", exact: true });
 	await dialog.getByLabel("空间名称", { exact: true }).fill("未保存的名称");
-	await dialog.getByRole("button", { name: "保存名称", exact: true }).click();
+	await dialog.getByRole("button", { name: "保存更改", exact: true }).click();
 	await expect(dialog.getByRole("alert")).toContainText("服务暂时不可用，请稍后重试。");
 	await expect(dialog.getByLabel("空间名称", { exact: true })).not.toHaveAttribute(
 		"aria-invalid",
