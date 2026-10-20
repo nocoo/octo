@@ -104,6 +104,13 @@ describe("library page installed-component boundaries", () => {
 		const html = render(Page, url);
 		expect(html).toContain(label);
 		for (const table of html.matchAll(/<table\b[^>]*>/g)) expect(table[0]).toContain("octo-table");
+		if (Page === GraphPage) {
+			for (const [kind, color] of [
+				["标签", "blue"],
+				["记忆", "teal"],
+			])
+				expect(html).toMatch(new RegExp(`<span[^>]*data-tag-color="${color}"[^>]*>${kind}</span>`));
+		}
 	});
 	it("shows exact UTC timestamp range controls without implying inclusive whole dates", () => {
 		const html = render(TimelinePage, "/timeline?from=2026-10-17T00%3A00%3A00Z&zoom=hour");

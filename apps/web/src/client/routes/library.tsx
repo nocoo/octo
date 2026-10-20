@@ -189,7 +189,7 @@ function GraphTables({
 			accessor: (node) => (
 				<TagBadge
 					name={{ tag: "标签", memory: "记忆", cluster: "聚合节点" }[node.kind]}
-					color={({ tag: "teal", memory: "blue", cluster: "amber" } as const)[node.kind]}
+					color={({ tag: "blue", memory: "teal", cluster: "slate" } as const)[node.kind]}
 					size="sm"
 				/>
 			),
