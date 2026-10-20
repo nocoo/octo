@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 — 2026-10-20
+
+### Added
+
+- Rename space slugs through REST, MCP and the dashboard without changing ID-bound key permissions, ownership, memories, versions or attachments.
+- Resolve former slugs for 30 days, reject live-alias collisions with field-level errors, allow renaming back, and remove aliases when a space is deleted.
+- Expose space ETags and optional If-Match concurrency checks; stale updates return 412. Dashboard edits submit the current token and display Chinese slug validation errors.
+- Add legacy-data migration fixtures, scoped-key HTTP contracts, and real-browser persistence and error journeys.
+
+### Changed
+
+- MCP `update_space` now requires `space` as the target selector; optional `slug` is the new slug, and optional `if_match` uses the space's updated-at millisecond token. Update callers from the previous `{slug, name?, description?}` shape; no compatibility selector remains.
+- Retain existing Vectorize slug metadata with transactional invalidation, resynchronization and D1 authorization rechecks; no new remote metadata index is required.
+
+### Migration
+
+- Apply `0012_space_slug_aliases.sql` before running the new Worker. It adds aliases and atomic collision/lifecycle triggers; existing ID-based data and permissions are preserved without rewrites. No remote migration or deployment is performed by this change.
+
 ## 0.4.1 — 2026-10-20
 
 ### Fixed
