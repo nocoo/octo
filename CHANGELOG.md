@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1 — 2026-10-20
+
+### Fixed
+
+- Batch ready Vectorize upserts into at most 100 records per call, retaining per-job leases, acknowledgements, generation checks and write-time priority over slow embedding work.
+- Retry rate-limited upserts and deletes twice with bounded exponential jitter. Persistent throttling reschedules jobs after 60–120 seconds without spending the failure budget or moving jobs toward the dead state.
+- Stop hourly rewrites of acknowledged generations while continuing visibility checks and invalidation-driven synchronization for writes, moves, restores and profile changes.
+- Fence claims and acknowledgements against an in-flight switch of the active embedding profile.
+
+### Migration
+
+- Apply `0011_vector_profile_invalidation.sql` before deploying: active embedding profile changes now invalidate vector acknowledgements and requeue affected memories. No remote migration or deployment is performed by this change.
+
 ## 0.4.0 — 2026-10-19
 
 ### Changed
