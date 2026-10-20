@@ -23,13 +23,15 @@ describe("stateless MCP transport", () => {
 			[
 				"update_space",
 				[
-					{ slug: "kb", name: "Renamed" },
-					{ slug: "kb", description: "" },
+					{ space: "kb", name: "Renamed" },
+					{ space: "kb", description: "" },
+					{ space: "kb", slug: "renamed", if_match: "123" },
 				],
 				[
-					{ slug: "kb" },
-					{ slug: "kb", owner_key_id: "key" },
-					{ slug: "kb", patch: { slug: "other" } },
+					{ space: "kb" },
+					{ space: "kb", if_match: "123" },
+					{ space: "kb", owner_key_id: "key" },
+					{ space: "kb", patch: { slug: "other" } },
 				],
 			],
 			["delete_space", [{ slug: "kb" }], [{ slug: "kb", force: true }]],

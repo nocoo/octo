@@ -188,13 +188,13 @@ describe("space CRUD over real HTTP", () => {
 		}
 	});
 
-	it("rejects empty patches, immutable slugs, owner management and unknown fields", async () => {
+	it("rejects empty patches, invalid slugs, owner management and unknown fields", async () => {
 		const headers = await mint({});
 		const slug = `strict-${crypto.randomUUID()}`;
 		expect((await mutateSpace("POST", "", headers, { slug, name: "Strict" })).status).toBe(201);
 		for (const patch of [
 			{},
-			{ slug: "changed" },
+			{ slug: "Bad Slug" },
 			{ owner_key_id: null },
 			{ unexpected: true },
 			{ name: " " },
@@ -305,5 +305,365 @@ describe("space CRUD over real HTTP", () => {
 			(await mutateSpace("POST", "", headers, { slug, name: "Rollback" }, "rollback")).status,
 		).toBe(201);
 		expect((await mutateSpace("DELETE", `/${slug}`, headers)).status).toBe(200);
+	});
+});
+
+type SpaceDetail = {
+	id: string;
+	slug: string;
+	name: string;
+	description: string;
+	updated_at: string;
+};
+
+async function createRenameSpace(headers: Record<string, string>) {
+	const slug = `rename-${crypto.randomUUID()}`;
+	const response = await mutateSpace("POST", "", headers, {
+		slug,
+		name: "Original name",
+		description: "Original description",
+	});
+	expect(response.status).toBe(201);
+	return (await response.json()) as SpaceDetail;
+}
+
+function memoryRequest(
+	path: string,
+	headers: Record<string, string>,
+	method = "GET",
+	body?: unknown,
+) {
+	return fetch(`${base}/api/v1${path}`, {
+		method,
+		headers: { "Content-Type": "application/json", ...headers },
+		...(body === undefined ? {} : { body: JSON.stringify(body) }),
+	});
+}
+
+async function expectSlugError(response: Response, status: number) {
+	expect(response.status).toBe(status);
+	expect(await response.json()).toMatchObject({
+		error: {
+			code: status === 409 ? "version_conflict" : "validation_failed",
+			details: { issues: expect.arrayContaining([expect.objectContaining({ path: "slug" })]) },
+		},
+	});
+}
+
+describe("space slug aliases over HTTP", () => {
+	it("returns canonical slugs through GET/PATCH/DELETE aliases and removes aliases on delete", async () => {
+		const headers = await mint({});
+		const original = await createRenameSpace(headers);
+		const slug = `canonical-${crypto.randomUUID()}`;
+		const renamed = await mutateSpace("PATCH", `/${original.slug}`, headers, { slug });
+		expect(renamed.status).toBe(200);
+		expect(await renamed.json()).toMatchObject({
+			...original,
+			slug,
+			updated_at: expect.any(String),
+		});
+		const exec = await e2eD1();
+		const aliases = await query<{
+			slug: string;
+			space_id: string;
+			created_at: number;
+			expires_at: number;
+		}>(
+			exec,
+			`SELECT slug, space_id, created_at, expires_at FROM space_slug_aliases WHERE space_id = ${sqlText(original.id)}`,
+		);
+		expect(aliases).toEqual([
+			{
+				slug: original.slug,
+				space_id: original.id,
+				created_at: expect.any(Number),
+				expires_at: expect.any(Number),
+			},
+		]);
+		expect((aliases[0]?.expires_at ?? 0) - (aliases[0]?.created_at ?? 0)).toBe(30 * 86_400_000);
+		for (const selector of [original.slug, slug]) {
+			const get = await fetch(`${base}/api/v1/spaces/${selector}`, { headers });
+			expect(get.status).toBe(200);
+			expect(await get.json()).toMatchObject({
+				id: original.id,
+				slug,
+				name: original.name,
+				description: original.description,
+			});
+		}
+		const edited = await mutateSpace("PATCH", `/${original.slug}`, headers, {
+			name: "Changed name",
+		});
+		expect(edited.status).toBe(200);
+		expect(await edited.json()).toMatchObject({
+			id: original.id,
+			slug,
+			name: "Changed name",
+			description: original.description,
+		});
+		const described = await mutateSpace("PATCH", `/${slug}`, headers, {
+			description: "Changed description",
+		});
+		expect(described.status).toBe(200);
+		expect(await described.json()).toMatchObject({
+			id: original.id,
+			slug,
+			name: "Changed name",
+			description: "Changed description",
+		});
+		const deleted = await mutateSpace("DELETE", `/${original.slug}`, headers);
+		expect(deleted.status).toBe(200);
+		expect(await deleted.json()).toEqual({ id: original.id, slug, deleted: true });
+		expect(
+			await query(
+				exec,
+				`SELECT slug FROM space_slug_aliases WHERE space_id = ${sqlText(original.id)}`,
+			),
+		).toEqual([]);
+		for (const selector of [original.slug, slug]) {
+			expect((await fetch(`${base}/api/v1/spaces/${selector}`, { headers })).status).toBe(404);
+		}
+	});
+
+	it.each([false, true])(
+		"accepts %s-quoted millisecond If-Match tokens and rejects stale updates atomically",
+		async (quoted) => {
+			const headers = await mint({});
+			const original = await createRenameSpace(headers);
+			const get = await fetch(`${base}/api/v1/spaces/${original.slug}`, { headers });
+			expect(get.status).toBe(200);
+			const token = String(Date.parse(original.updated_at));
+			expect(get.headers.get("ETag")).toBe(`"${token}"`);
+			const ifMatch = quoted ? `"${token}"` : token;
+			const slug = `matched-${crypto.randomUUID()}`;
+			const renamed = await mutateSpace(
+				"PATCH",
+				`/${original.slug}`,
+				{ ...headers, "If-Match": ifMatch },
+				{ slug },
+			);
+			expect(renamed.status).toBe(200);
+			const current = (await renamed.json()) as SpaceDetail;
+			expect(Date.parse(current.updated_at)).toBeGreaterThan(Number(token));
+			expect(renamed.headers.get("ETag")).toBe(`"${Date.parse(current.updated_at)}"`);
+			const stale = await mutateSpace(
+				"PATCH",
+				`/${original.slug}`,
+				{ ...headers, "If-Match": ifMatch },
+				{ slug: `stale-${crypto.randomUUID()}`, name: "Must not change" },
+			);
+			expect(stale.status).toBe(412);
+			expect(await stale.json()).toMatchObject({ error: { code: "version_conflict" } });
+			const after = await fetch(`${base}/api/v1/spaces/${slug}`, { headers });
+			expect(await after.json()).toEqual(current);
+			const exec = await e2eD1();
+			expect(
+				await query(
+					exec,
+					`SELECT op FROM changes WHERE entity_id = ${sqlText(original.id)} ORDER BY seq`,
+				),
+			).toEqual([{ op: "created" }, { op: "updated" }]);
+			expect(
+				await query(
+					exec,
+					`SELECT slug FROM space_slug_aliases WHERE space_id = ${sqlText(original.id)}`,
+				),
+			).toEqual([{ slug: original.slug }]);
+		},
+	);
+
+	it.each(["Bad Slug", "bad_slug", "-leading", "trailing-", "double--dash", "", "a".repeat(65)])(
+		"reports the invalid slug field for %j",
+		async (slug) => {
+			const headers = await mint({});
+			const original = await createRenameSpace(headers);
+			await expectSlugError(
+				await mutateSpace("PATCH", `/${original.slug}`, headers, { slug }),
+				400,
+			);
+			const after = await fetch(`${base}/api/v1/spaces/${original.slug}`, { headers });
+			expect(await after.json()).toEqual(original);
+		},
+	);
+
+	it("rejects canonical/live-alias collisions, allows same-space rename-back and ignores expired aliases", async () => {
+		const headers = await mint({});
+		const first = await createRenameSpace(headers);
+		const second = await createRenameSpace(headers);
+		await expectSlugError(
+			await mutateSpace("PATCH", `/${first.slug}`, headers, { slug: second.slug }),
+			409,
+		);
+		const canonical = `occupied-${crypto.randomUUID()}`;
+		expect(
+			(await mutateSpace("PATCH", `/${first.slug}`, headers, { slug: canonical })).status,
+		).toBe(200);
+		await expectSlugError(
+			await mutateSpace("PATCH", `/${second.slug}`, headers, { slug: first.slug }),
+			409,
+		);
+		await expectSlugError(
+			await mutateSpace("POST", "", headers, { slug: first.slug, name: "Alias collision" }),
+			409,
+		);
+		const back = await mutateSpace("PATCH", `/${canonical}`, headers, { slug: first.slug });
+		expect(back.status).toBe(200);
+		expect(await back.json()).toMatchObject({ id: first.id, slug: first.slug });
+		expect((await fetch(`${base}/api/v1/spaces/${canonical}`, { headers })).status).toBe(200);
+		await d1(
+			`UPDATE space_slug_aliases SET expires_at = ${Date.now() - 1} WHERE slug = ${sqlText(canonical)}`,
+		);
+		for (const method of ["GET", "PATCH", "DELETE"]) {
+			const missing =
+				method === "GET"
+					? await fetch(`${base}/api/v1/spaces/${canonical}`, { headers })
+					: await mutateSpace(
+							method,
+							`/${canonical}`,
+							headers,
+							method === "PATCH" ? { name: "Expired" } : undefined,
+						);
+			expect(missing.status).toBe(404);
+		}
+		const reused = await mutateSpace("PATCH", `/${second.slug}`, headers, { slug: canonical });
+		expect(reused.status).toBe(200);
+		expect(await reused.json()).toMatchObject({ id: second.id, slug: canonical });
+	});
+
+	it("keeps ID-scoped read/write/search permissions and alias memory/change filters after rename", async () => {
+		const admin = await mint({});
+		const original = await createRenameSpace(admin);
+		const outside = await createRenameSpace(admin);
+		const scoped = await mint({
+			role: "project",
+			scope: "spaces",
+			space_ids_json: JSON.stringify([original.id]),
+		});
+		const denied = await mint({
+			role: "project",
+			scope: "spaces",
+			space_ids_json: JSON.stringify([outside.id]),
+		});
+		const needle = `renamesearch${crypto.randomUUID().replaceAll("-", "")}`;
+		const before = await memoryRequest("/memories", scoped, "POST", {
+			space: original.slug,
+			title: needle,
+			body: needle,
+			type: "note",
+			tags: [],
+		});
+		expect(before.status).toBe(201);
+		const memory = (await before.json()) as { id: string };
+		const slug = `scoped-${crypto.randomUUID()}`;
+		expect((await mutateSpace("PATCH", `/${original.slug}`, admin, { slug })).status).toBe(200);
+		const read = await memoryRequest(`/memories/${memory.id}`, scoped);
+		expect(read.status).toBe(200);
+		expect(await read.json()).toMatchObject({ id: memory.id, space: slug, version: 1 });
+		const updated = await memoryRequest(`/memories/${memory.id}`, scoped, "PATCH", {
+			body: `${needle} updated`,
+			expected_version: 1,
+		});
+		expect(updated.status).toBe(200);
+		expect(await updated.json()).toMatchObject({ id: memory.id, space: slug, version: 2 });
+		for (const selector of [original.slug, slug]) {
+			const created = await memoryRequest("/memories", scoped, "POST", {
+				space: selector,
+				title: needle,
+				body: needle,
+				type: "note",
+				tags: [],
+			});
+			expect(created.status).toBe(201);
+			expect(await created.json()).toMatchObject({ space: slug });
+		}
+		for (const selector of [original.slug, slug, `${original.slug},${slug}`]) {
+			const listed = await memoryRequest(`/memories?spaces=${selector}`, scoped);
+			expect(listed.status).toBe(200);
+			const list = (await listed.json()) as { items: Array<{ id: string; space: string }> };
+			expect(list.items).toHaveLength(3);
+			expect(list.items.every((item) => item.space === slug)).toBe(true);
+			const found = await memoryRequest("/search", scoped, "POST", {
+				query: needle,
+				mode: "fts",
+				filters: { spaces: selector.split(",") },
+			});
+			expect(found.status).toBe(200);
+			expect(await found.json()).toMatchObject({
+				items: expect.arrayContaining([expect.objectContaining({ id: memory.id, space: slug })]),
+			});
+			const changes = await memoryRequest(`/changes?spaces=${selector}&limit=200`, scoped);
+			expect(changes.status).toBe(200);
+			expect(await changes.json()).toMatchObject({
+				items: expect.arrayContaining([
+					expect.objectContaining({ entity_id: memory.id, space_id: original.id }),
+				]),
+			});
+			const hidden = await memoryRequest(`/memories?spaces=${selector}`, denied);
+			expect(await hidden.json()).toMatchObject({ items: [] });
+			const hiddenChanges = await memoryRequest(`/changes?spaces=${selector}`, denied);
+			expect(await hiddenChanges.json()).toMatchObject({ items: [] });
+			const hiddenSearch = await memoryRequest("/search", denied, "POST", {
+				query: needle,
+				mode: "fts",
+				filters: { spaces: selector.split(",") },
+			});
+			expect(await hiddenSearch.json()).toMatchObject({ items: [] });
+		}
+		for (const selector of [original.slug, slug]) {
+			expect((await fetch(`${base}/api/v1/spaces/${selector}`, { headers: denied })).status).toBe(
+				404,
+			);
+			expect(
+				(
+					await memoryRequest("/memories", denied, "POST", {
+						space: selector,
+						title: "Denied",
+						body: "Denied",
+						type: "note",
+						tags: [],
+					})
+				).status,
+			).toBe(404);
+		}
+		expect((await memoryRequest(`/memories/${memory.id}`, denied)).status).toBe(404);
+		expect(
+			(
+				await memoryRequest(`/memories/${memory.id}`, denied, "PATCH", {
+					title: "Denied",
+					expected_version: 2,
+				})
+			).status,
+		).toBe(404);
+		const exec = await e2eD1();
+		const keyId = scoped.Authorization?.split("_")[1] ?? "";
+		expect(
+			await query(exec, `SELECT space_ids_json FROM api_keys WHERE id = ${sqlText(keyId)}`),
+		).toEqual([{ space_ids_json: JSON.stringify([original.id]) }]);
+		await d1(
+			`UPDATE space_slug_aliases SET expires_at = ${Date.now() - 1} WHERE slug = ${sqlText(original.slug)}`,
+		);
+		expect(
+			(
+				await memoryRequest("/memories", scoped, "POST", {
+					space: original.slug,
+					title: "Expired",
+					body: "Expired",
+					type: "note",
+					tags: [],
+				})
+			).status,
+		).toBe(404);
+		for (const path of [`/memories?spaces=${original.slug}`, `/changes?spaces=${original.slug}`]) {
+			expect(await (await memoryRequest(path, scoped)).json()).toMatchObject({ items: [] });
+		}
+		expect(
+			await (
+				await memoryRequest("/search", scoped, "POST", {
+					query: needle,
+					mode: "fts",
+					filters: { spaces: [original.slug] },
+				})
+			).json(),
+		).toMatchObject({ items: [] });
 	});
 });

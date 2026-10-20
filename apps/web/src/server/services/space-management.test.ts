@@ -94,9 +94,8 @@ describe("space management service", () => {
 		]);
 	});
 
-	it("validates schema bounds and rejects owner and slug mutations", () => {
+	it("validates schema bounds and rejects owner mutations", () => {
 		for (const body of [
-			{ slug: "changed" },
 			{ owner_key_id: null },
 			{ extra: true },
 			{ name: " " },

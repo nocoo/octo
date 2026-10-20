@@ -24,7 +24,7 @@ describe("MCP space management and moves", () => {
 		});
 		const id = created.structuredContent.id;
 		expect(
-			(await call("update_space", { slug: "new-space", name: "Renamed", description: "Details" }))
+			(await call("update_space", { space: "new-space", name: "Renamed", description: "Details" }))
 				.result.structuredContent,
 		).toMatchObject({ id, slug: "new-space", name: "Renamed", description: "Details" });
 		expect((await call("delete_space", { slug: "new-space" })).result.structuredContent).toEqual({
@@ -48,7 +48,7 @@ describe("MCP space management and moves", () => {
 
 	it.each([
 		["create_space", { slug: "new-space", name: "New space" }],
-		["update_space", { slug: "kb", name: "Renamed" }],
+		["update_space", { space: "kb", name: "Renamed" }],
 		["delete_space", { slug: "kb" }],
 	] as const)("requires the admin role for %s even with every operation", async (name, input) => {
 		const { call, sqlite, flush } = await setup();
@@ -66,9 +66,10 @@ describe("MCP space management and moves", () => {
 	it.each([
 		["create_space", { slug: "new-space", name: "New space", owner_key_id: null }],
 		["create_space", { slug: "Bad Slug", name: "New space" }],
-		["update_space", { slug: "kb" }],
-		["update_space", { slug: "kb", name: "Renamed", owner_key_id: "key" }],
-		["update_space", { slug: "kb", patch: { slug: "renamed" } }],
+		["update_space", { space: "kb" }],
+		["update_space", { space: "kb", name: "Renamed", owner_key_id: "key" }],
+		["update_space", { space: "kb", patch: { slug: "renamed" } }],
+		["update_space", { slug: "kb", name: "Renamed" }],
 		["delete_space", { slug: "kb", extra: true }],
 		["move_memory", { id: "id", space: "dest", expected_version: -1 }],
 		["move_memory", { id: "id", space: "dest", expected_version: 1.5 }],
@@ -96,8 +97,9 @@ describe("MCP space management and moves", () => {
 			expect(
 				(
 					await call(name, {
-						slug: "missing",
-						...(name === "update_space" ? { name: "Missing" } : {}),
+						...(name === "update_space"
+							? { space: "missing", name: "Missing" }
+							: { slug: "missing" }),
 					})
 				).result.structuredContent,
 			).toMatchObject({ error: { code: "not_found" } });
@@ -120,7 +122,8 @@ describe("MCP space management and moves", () => {
 		await call("create_space", { slug: "details", name: "Original", description: "Keep" });
 		for (let index = 0; index < 2; index++) {
 			expect(
-				(await call("update_space", { slug: "details", name: "Renamed" })).result.structuredContent,
+				(await call("update_space", { space: "details", name: "Renamed" })).result
+					.structuredContent,
 			).toMatchObject({ slug: "details", name: "Renamed", description: "Keep" });
 		}
 		await flush();
@@ -133,7 +136,7 @@ describe("MCP space management and moves", () => {
 
 	it.each([
 		["create_space", { slug: "failed", name: "Failed" }],
-		["update_space", { slug: "kb", name: "Failed" }],
+		["update_space", { space: "kb", name: "Failed" }],
 		["delete_space", { slug: "kb" }],
 	] as const)(
 		"rolls back failed %s transactions with a redacted unavailable error",

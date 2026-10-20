@@ -164,11 +164,18 @@ export function createTools(context: McpContext) {
 		),
 		tool(
 			"update_space",
-			"Update a space name or description with an admin-role API key; its slug is immutable.",
+			"Update a space with an admin-role API key. Select the current slug or a live alias with space; slug is the new slug. Old slugs resolve for 30 days; key bindings remain on the space id. Optional if_match is the updated_at millisecond timestamp (HTTP ETag); stale tokens fail with 412.",
 			spaceUpdateInput,
 			spaceOutput,
-			async ({ slug, ...patch }) => {
-				const result = await updateManagedSpace(context.env.DB, principal, slug, patch);
+			async ({ space, if_match, ...patch }) => {
+				const result = await updateManagedSpace(
+					context.env.DB,
+					principal,
+					space,
+					patch,
+					undefined,
+					if_match,
+				);
 				context.set("mcpWrite", true);
 				return result;
 			},

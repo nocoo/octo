@@ -29,7 +29,7 @@ describe("official MCP client interoperability", () => {
 			expect(id).toEqual(expect.any(String));
 			const calls = [
 				["create_space", { slug: "sdk-space", name: "SDK space" }],
-				["update_space", { slug: "sdk-space", description: "Updated" }],
+				["update_space", { space: "sdk-space", description: "Updated" }],
 				["get_memory", { id }],
 				["batch_get", { ids: [id] }],
 				["search", { query: "octopus", mode: "fts" }],

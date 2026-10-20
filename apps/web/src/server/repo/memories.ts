@@ -5,6 +5,7 @@ import { ApiError } from "../lib/errors";
 import { tagTokenStatement, wordIndexStatements } from "../search/word-index";
 import { encodeCursor, type MemoryCursor } from "./memories-cursor";
 import type { VectorWrite } from "./memories-vector";
+import { resolveSpaceSlug } from "./spaces";
 
 export type MemoryOp = "create" | "update" | "rollback" | "restore" | "move";
 
@@ -121,10 +122,7 @@ export class MemoryRepo {
 	) {}
 
 	async spaceBySlug(slug: string): Promise<{ id: string; slug: string; name: string } | null> {
-		return this.db
-			.prepare("SELECT id, slug, name FROM spaces WHERE slug = ?")
-			.bind(slug)
-			.first<{ id: string; slug: string; name: string }>();
+		return resolveSpaceSlug(this.db, slug);
 	}
 
 	async get(id: string): Promise<MemoryRecord | null> {

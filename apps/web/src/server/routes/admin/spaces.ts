@@ -32,9 +32,10 @@ export function adminSpacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }>
 			),
 		),
 	);
-	app.get("/:slug", async (context) =>
-		jsonOk(serializeSpace(await loadSpace(context.env.DB, context.req.param("slug")))),
-	);
+	app.get("/:slug", async (context) => {
+		const space = await loadSpace(context.env.DB, context.req.param("slug"));
+		return jsonOk(serializeSpace(space), 200, { ETag: `"${space.updated_at}"` });
+	});
 	app.post("/", async (context) => {
 		const input = parseStrict(spaceCreateSchema, await readJsonLimited(context.req.raw));
 		const row = await createSpace(context.env.DB, input, adminActor(context));
@@ -43,11 +44,21 @@ export function adminSpacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }>
 	app.patch("/:slug", async (context) => {
 		const row = await loadSpace(context.env.DB, context.req.param("slug"));
 		const patch = parseStrict(spacePatchSchema, await readJsonLimited(context.req.raw));
+		const updated = await updateSpace(
+			context.env.DB,
+			row,
+			patch,
+			adminActor(context),
+			undefined,
+			context.req.header("If-Match"),
+		);
 		return jsonOk(
 			serializeSpace({
-				...(await updateSpace(context.env.DB, row, patch, adminActor(context))),
+				...updated,
 				memory_count: row.memory_count,
 			}),
+			200,
+			{ ETag: `"${updated.updated_at}"` },
 		);
 	});
 	app.delete("/:slug", async (context) => {

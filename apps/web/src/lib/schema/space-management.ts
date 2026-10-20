@@ -14,6 +14,7 @@ export const spaceManagementCreateSchema = z.strictObject({
 
 export const spaceManagementPatchSchema = z
 	.strictObject({
+		slug: spaceSlugSchema,
 		name: spaceManagementCreateSchema.shape.name,
 		description: spaceManagementCreateSchema.shape.description.removeDefault(),
 	})

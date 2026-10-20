@@ -14,6 +14,9 @@ export async function runScheduledTasks(env: Env, now?: number): Promise<{ purge
 		runDerivedTasks(env, now),
 		cleanupExternalFiles(env),
 		backfillWordIndex(env.DB),
+		env.DB.prepare("DELETE FROM space_slug_aliases WHERE expires_at <= ?")
+			.bind(now ?? Date.now())
+			.run(),
 	]);
 	return { purged };
 }

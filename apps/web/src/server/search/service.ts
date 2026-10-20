@@ -4,6 +4,7 @@ import { d1Results } from "../lib/d1";
 import { ApiError } from "../lib/errors";
 import { buildVectorMetadataFilter } from "../ports/vector/filter";
 import { capVectorTopK, type VectorStore } from "../ports/vector/types";
+import { resolveSpaceSlug } from "../repo/spaces";
 import type { AuthzContext } from "./authz";
 import { intersectRequestedSpaces } from "./authz";
 import { loadPendingVectorHits, revalidateCurrentVectorHits } from "./current-vector-hits";
@@ -93,7 +94,14 @@ export async function searchMemories(authz: AuthzContext, req: SearchRequest, de
 	};
 	const mode = inferSearchMode(req);
 	const spaceMap = await loadSpaceSlugMap(deps.db);
-	const spaceIds = intersectRequestedSpaces(authz, req.filters?.spaces, spaceMap);
+	const requested = req.filters?.spaces
+		? await Promise.all(
+				req.filters.spaces.map(
+					async (slug) => (await resolveSpaceSlug(deps.db, slug))?.slug ?? slug,
+				),
+			)
+		: undefined;
+	const spaceIds = [...new Set(intersectRequestedSpaces(authz, requested, spaceMap))];
 	const spaceSlugs = spaceIds
 		.map((id) => spaceMap.get(id))
 		.filter((slug): slug is string => slug !== undefined);

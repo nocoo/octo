@@ -377,8 +377,10 @@ describe("admin spaces real HTTP", () => {
 			description: "Updated",
 			owner_key_id: null,
 		});
-		expect((await admin(`spaces/${slug}`)).status).toBe(404);
-		const deleted = await admin(`spaces/${renamed}`, "DELETE");
+		const alias = await admin(`spaces/${slug}`);
+		expect(alias.status).toBe(200);
+		expect(await alias.json()).toMatchObject({ id: space.id, slug: renamed });
+		const deleted = await admin(`spaces/${slug}`, "DELETE");
 		expect(deleted.status).toBe(200);
 		expect(await deleted.json()).toEqual({ id: space.id, slug: renamed, deleted: true });
 		expect((await admin(`spaces/${renamed}`)).status).toBe(404);

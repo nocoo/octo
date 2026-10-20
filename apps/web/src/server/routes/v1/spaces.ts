@@ -40,15 +40,15 @@ export function spacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	app.patch("/:slug", async (c) => {
 		const patch = parseStrict(spaceManagementPatchSchema, await readJsonLimited(c.req.raw));
 		c.set("writeError", mapSpaceWriteError);
-		return jsonOk(
-			await updateManagedSpace(
-				c.env.DB,
-				c.get("apiKey"),
-				c.req.param("slug"),
-				patch,
-				c.get("writeStatements"),
-			),
+		const space = await updateManagedSpace(
+			c.env.DB,
+			c.get("apiKey"),
+			c.req.param("slug"),
+			patch,
+			c.get("writeStatements"),
+			c.req.header("If-Match"),
 		);
+		return jsonOk(space, 200, { ETag: `"${Date.parse(String(space.updated_at))}"` });
 	});
 	app.delete("/:slug", async (c) => {
 		c.set("writeError", mapSpaceWriteError);
@@ -78,7 +78,7 @@ export function spacesRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 		if (!space) {
 			throw new ApiError("not_found", "not found");
 		}
-		return jsonOk(serializeSpace(space));
+		return jsonOk(serializeSpace(space), 200, { ETag: `"${space.updated_at}"` });
 	});
 
 	return app;

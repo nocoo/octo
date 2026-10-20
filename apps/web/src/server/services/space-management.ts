@@ -8,7 +8,8 @@ import { ApiError } from "../lib/errors";
 import { serializeSpace } from "../lib/http";
 import { newUlid } from "../lib/ulid";
 import { parseStrict } from "../lib/validate";
-import { SpaceRepo, type SpaceRow, type SpaceWithCount } from "../repo/spaces";
+import { resolveSpaceSlug, SpaceRepo, type SpaceRow, type SpaceWithCount } from "../repo/spaces";
+import { expectedVersion } from "./memories";
 
 type SpaceCreate = z.output<typeof spaceManagementCreateSchema> & { owner_key_id?: string | null };
 type SpacePatch = { [K in keyof SpaceCreate]?: SpaceCreate[K] | undefined };
@@ -24,11 +25,20 @@ export function mapSpaceWriteError(error: unknown): ApiError | undefined {
 	}
 	if (
 		message.includes("UNIQUE constraint failed: spaces.slug") ||
-		message.includes("NOT NULL constraint failed: spaces.name")
+		message.includes("space slug alias conflict")
 	) {
-		return new ApiError("version_conflict", "space changed or slug already exists");
+		return slugConflict();
+	}
+	if (message.includes("NOT NULL constraint failed: spaces.name")) {
+		return new ApiError("version_conflict", "space changed", null, 412);
 	}
 	return undefined;
+}
+
+function slugConflict(): ApiError {
+	return new ApiError("version_conflict", "space slug already exists", {
+		issues: [{ path: "slug", message: "space slug already exists" }],
+	});
 }
 
 async function commitSpaceMutation(
@@ -79,8 +89,8 @@ export async function createSpace(
 ): Promise<SpaceRow> {
 	const owner = input.owner_key_id ?? null;
 	await validateOwner(db, owner);
-	if (await db.prepare("SELECT id FROM spaces WHERE slug = ?").bind(input.slug).first()) {
-		throw new ApiError("version_conflict", "space slug already exists");
+	if (await resolveSpaceSlug(db, input.slug)) {
+		throw slugConflict();
 	}
 	const now = Date.now();
 	const row: SpaceRow = {
@@ -111,7 +121,20 @@ export async function updateSpace(
 	patch: SpacePatch,
 	actor: string,
 	staged?: D1PreparedStatement[],
+	ifMatch?: string,
 ): Promise<SpaceRow> {
+	if (ifMatch !== undefined && expectedVersion(ifMatch) !== row.updated_at) {
+		throw new ApiError(
+			"version_conflict",
+			"space changed",
+			{ current_version: row.updated_at },
+			412,
+		);
+	}
+	if (patch.slug !== undefined && patch.slug !== row.slug) {
+		const taken = await resolveSpaceSlug(db, patch.slug);
+		if (taken && taken.id !== row.id) throw slugConflict();
+	}
 	const now = Math.max(Date.now(), row.updated_at + 1);
 	const updated: SpaceRow = {
 		...row,
@@ -191,12 +214,13 @@ export async function updateManagedSpace(
 	slug: string,
 	patch: z.input<typeof spaceManagementPatchSchema>,
 	staged?: D1PreparedStatement[],
+	ifMatch?: string,
 ) {
 	requireSpaceAdmin(principal);
 	const input = parseStrict(spaceManagementPatchSchema, patch);
 	const row = await loadSpace(db, slug);
 	return serializeSpace({
-		...(await updateSpace(db, row, input, principalActor(principal), staged)),
+		...(await updateSpace(db, row, input, principalActor(principal), staged, ifMatch)),
 		memory_count: row.memory_count,
 	});
 }

@@ -115,9 +115,16 @@ export const spacesOutput = z.object({
 export const spaceCreateInput = spaceManagementCreateSchema;
 export const spaceIdInput = z.strictObject({ slug: spaceManagementCreateSchema.shape.slug });
 export const spaceUpdateInput = z
-	.strictObject({ ...spaceIdInput.shape, ...spaceManagementPatchSchema.shape })
-	.refine((input) => input.name !== undefined || input.description !== undefined)
-	.meta({ minProperties: 2 });
+	.strictObject({
+		space: spaceManagementCreateSchema.shape.slug,
+		...spaceManagementPatchSchema.shape,
+		if_match: z.string().optional(),
+	})
+	.refine(
+		(input) =>
+			input.slug !== undefined || input.name !== undefined || input.description !== undefined,
+	)
+	.meta({ anyOf: [{ required: ["slug"] }, { required: ["name"] }, { required: ["description"] }] });
 export const spaceDeleteOutput = z.object({ id, slug: z.string(), deleted: z.literal(true) });
 export const moveInput = z.strictObject({
 	id: z.string().min(1).max(64),

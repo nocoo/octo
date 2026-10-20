@@ -257,7 +257,7 @@ describe("space management with API keys", () => {
 	it("rejects immutable slugs, owner management, unknown fields and empty updates", async () => {
 		expect((await request("POST", "", input)).status).toBe(201);
 		for (const body of [
-			{ slug: "renamed" },
+			{ slug: "Invalid Slug" },
 			{ owner_key_id: null },
 			{ unexpected: true },
 			{},

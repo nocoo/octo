@@ -15,6 +15,15 @@ export type SpaceRow = {
 
 export type SpaceWithCount = SpaceRow & { memory_count: number };
 
+export function resolveSpaceSlug(db: D1Database, slug: string): Promise<SpaceRow | null> {
+	return db
+		.prepare(
+			"SELECT * FROM spaces WHERE slug = ? OR id = (SELECT space_id FROM space_slug_aliases WHERE slug = ? AND expires_at > ?)",
+		)
+		.bind(slug, slug, Date.now())
+		.first<SpaceRow>();
+}
+
 export async function prepareOwnSpace(
 	db: D1Database,
 	key: { id: string; name: string },
@@ -26,10 +35,7 @@ export async function prepareOwnSpace(
 		.bind(key.id)
 		.first<SpaceRow>();
 	if (owned) return { row: owned };
-	const existing = await db
-		.prepare("SELECT * FROM spaces WHERE slug = ?")
-		.bind(key.name)
-		.first<SpaceRow>();
+	const existing = await resolveSpaceSlug(db, key.name);
 	if (existing) throw new ApiError("unprocessable", "own space slug is taken");
 	const timestamp = now();
 	const row: SpaceRow = {
@@ -97,10 +103,7 @@ export class SpaceRepo {
 	}
 
 	async getVisibleBySlug(slug: string, visible: VisibleSpaces): Promise<SpaceWithCount | null> {
-		const row = await this.db
-			.prepare("SELECT * FROM spaces WHERE slug = ?")
-			.bind(slug)
-			.first<SpaceRow>();
+		const row = await resolveSpaceSlug(this.db, slug);
 		if (!row) {
 			return null;
 		}
@@ -130,6 +133,9 @@ export async function ensureAutoOwnSpace(
 		.first<SpaceRow>();
 	if (owned) {
 		return owned;
+	}
+	if (await resolveSpaceSlug(db, key.name)) {
+		throw new ApiError("unprocessable", "own space slug is taken");
 	}
 	const ts = now();
 	await db

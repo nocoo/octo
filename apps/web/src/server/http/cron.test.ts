@@ -98,4 +98,12 @@ describe("runScheduledTasks", () => {
 			{ idem_key: "boundary" },
 		]);
 	});
+	it("purges only expired space aliases", async () => {
+		const { db, sqlite } = sqliteD1();
+		sqlite.exec(
+			"INSERT INTO space_slug_aliases VALUES ('expired', 'space:kb', 0, 10), ('live', 'space:kb', 0, 11)",
+		);
+		await runScheduledTasks({ DB: db, RESOURCE_ENV: "test" } as Env, 10);
+		expect(sqlite.prepare("SELECT slug FROM space_slug_aliases").all()).toEqual([{ slug: "live" }]);
+	});
 });

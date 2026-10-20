@@ -115,7 +115,7 @@ describe("stateless MCP Streamable HTTP", () => {
 		const slug = `mcp-space-${crypto.randomUUID()}`;
 		for (const [name, args] of [
 			["create_space", { slug, name: "Space" }],
-			["update_space", { slug, name: "Renamed" }],
+			["update_space", { space: slug, name: "Renamed" }],
 			["delete_space", { slug }],
 		] as const) {
 			const missingKey = await callTool(null, name, args);
@@ -142,7 +142,7 @@ describe("stateless MCP Streamable HTTP", () => {
 		);
 		const updated = await toolSuccess(
 			await callTool(admin.token, "update_space", {
-				slug,
+				space: slug,
 				name: "Renamed",
 				description: "Description",
 			}),
@@ -153,9 +153,12 @@ describe("stateless MCP Streamable HTTP", () => {
 			name: "Renamed",
 			description: "Description",
 		});
-		await toolError(await callTool(admin.token, "update_space", { slug }), "validation_failed");
 		await toolError(
-			await callTool(admin.token, "update_space", { slug, owner_key_id: admin.id }),
+			await callTool(admin.token, "update_space", { space: slug }),
+			"validation_failed",
+		);
+		await toolError(
+			await callTool(admin.token, "update_space", { space: slug, owner_key_id: admin.id }),
 			"validation_failed",
 		);
 		const memory = await createSeedMemory(admin.token, slug, crypto.randomUUID());
@@ -172,7 +175,7 @@ describe("stateless MCP Streamable HTTP", () => {
 		).toMatchObject({ slug: emptySlug, deleted: true });
 		await toolError(await callTool(admin.token, "delete_space", { slug: emptySlug }), "not_found");
 		await toolError(
-			await callTool(admin.token, "update_space", { slug: emptySlug, name: "Gone" }),
+			await callTool(admin.token, "update_space", { space: emptySlug, name: "Gone" }),
 			"not_found",
 		);
 		expect(
@@ -193,6 +196,152 @@ describe("stateless MCP Streamable HTTP", () => {
 				`SELECT count(*) AS n FROM mcp_audit_writes w JOIN audit_log a ON a.id = w.audit_id WHERE actor = ${sqlText(`key:${custom.id}`)}`,
 			),
 		).toEqual([{ n: 0 }]);
+	});
+
+	it("renames through update_space.space with canonical aliases, ID scopes and optional if_match", async () => {
+		const d1 = await e2eD1();
+		const admin = await seedKey(d1);
+		const space = await seedSpace(d1);
+		const scoped = await seedKey(d1, { scope: "spaces", spaceIds: [space.id] });
+		const outside = await seedSpace(d1);
+		const hidden = await seedKey(d1, { scope: "spaces", spaceIds: [outside.id] });
+		const needle = `mcprename${crypto.randomUUID().replaceAll("-", "")}`;
+		const memory = await createSeedMemory(scoped.token, space.slug, needle);
+		const slug = `mcp-renamed-${crypto.randomUUID()}`;
+		await toolError(
+			await callTool(admin.token, "update_space", { slug: space.slug, name: "Legacy selector" }),
+			"validation_failed",
+		);
+		const renamed = await toolSuccess(
+			await callTool(admin.token, "update_space", { space: space.slug, slug, if_match: '"0"' }),
+		);
+		expect(renamed.structuredContent).toMatchObject({
+			id: space.id,
+			slug,
+			name: space.slug,
+			description: "",
+		});
+		const current = renamed.structuredContent as { updated_at: string };
+		await toolError(
+			await callTool(admin.token, "update_space", {
+				space: space.slug,
+				name: "Stale",
+				if_match: "0",
+			}),
+			"version_conflict",
+		);
+		const changed = await toolSuccess(
+			await callTool(admin.token, "update_space", {
+				space: space.slug,
+				description: "Details",
+				if_match: String(Date.parse(current.updated_at)),
+			}),
+		);
+		expect(changed.structuredContent).toMatchObject({
+			id: space.id,
+			slug,
+			name: space.slug,
+			description: "Details",
+		});
+		expect(
+			(await toolSuccess(await callTool(scoped.token, "get_memory", { id: memory.id })))
+				.structuredContent,
+		).toMatchObject({ id: memory.id, space: slug });
+		for (const selector of [space.slug, slug]) {
+			const created = await toolSuccess(
+				await callTool(scoped.token, "create_memory", {
+					space: selector,
+					title: needle,
+					body: needle,
+					type: "note",
+					tags: [],
+				}),
+			);
+			expect(created.structuredContent).toMatchObject({ space: slug });
+			const found = await toolSuccess(
+				await callTool(scoped.token, "search", {
+					query: needle,
+					mode: "fts",
+					filters: { spaces: [selector] },
+				}),
+			);
+			expect(found.structuredContent).toMatchObject({
+				items: expect.arrayContaining([expect.objectContaining({ id: memory.id, space: slug })]),
+			});
+			const changes = await toolSuccess(
+				await callTool(scoped.token, "list_changes", { spaces: [selector] }),
+			);
+			expect(changes.structuredContent).toMatchObject({
+				items: expect.arrayContaining([
+					expect.objectContaining({ entity_id: memory.id, space_id: space.id }),
+				]),
+			});
+			await toolError(
+				await callTool(hidden.token, "create_memory", {
+					space: selector,
+					title: "Hidden",
+					body: "Hidden",
+					type: "note",
+					tags: [],
+				}),
+				"not_found",
+			);
+			expect(
+				(
+					await toolSuccess(
+						await callTool(hidden.token, "search", {
+							query: needle,
+							mode: "fts",
+							filters: { spaces: [selector] },
+						}),
+					)
+				).structuredContent,
+			).toMatchObject({ items: [] });
+		}
+		await toolError(await callTool(hidden.token, "get_memory", { id: memory.id }), "not_found");
+		const empty = await seedSpace(d1);
+		const canonical = `mcp-empty-renamed-${crypto.randomUUID()}`;
+		await toolSuccess(
+			await callTool(admin.token, "update_space", { space: empty.slug, slug: canonical }),
+		);
+		expect(
+			(await toolSuccess(await callTool(admin.token, "delete_space", { slug: empty.slug })))
+				.structuredContent,
+		).toMatchObject({ id: empty.id, slug: canonical, deleted: true });
+	});
+
+	it("publishes the new update_space selector and field errors without accepting the old shape", async () => {
+		const d1 = await e2eD1();
+		const admin = await seedKey(d1);
+		const space = await seedSpace(d1);
+		const other = await seedSpace(d1);
+		const listed = await rpcBody(await postMcp(admin.token, rpcEnvelope("tools/list")));
+		const tools = listed.result?.tools as Array<{
+			name: string;
+			inputSchema: { required: string[]; properties: Record<string, unknown> };
+		}>;
+		const schema = tools.find((tool) => tool.name === "update_space")?.inputSchema;
+		expect(schema?.required).toContain("space");
+		expect(schema?.required).not.toContain("slug");
+		expect(schema?.properties).toMatchObject({
+			space: expect.any(Object),
+			slug: expect.any(Object),
+			if_match: expect.any(Object),
+		});
+		for (const [slug, code] of [
+			["Bad Slug", "validation_failed"],
+			[other.slug, "version_conflict"],
+		] as const) {
+			const failed = await toolError(
+				await callTool(admin.token, "update_space", { space: space.slug, slug }),
+				code,
+			);
+			expect(failed.structuredContent).toMatchObject({
+				error: {
+					details: { issues: expect.arrayContaining([expect.objectContaining({ path: "slug" })]) },
+				},
+			});
+		}
 	});
 
 	it("moves memories with optional versions, dual-space update authorization and accurate write audit", async () => {

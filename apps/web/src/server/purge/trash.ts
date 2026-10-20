@@ -53,8 +53,10 @@ function selection(filters: Filters, head?: number, after?: string) {
 		values.push(filters.q, filters.q);
 	}
 	if (filters.space) {
-		clauses.push("s.slug = ?");
-		values.push(filters.space);
+		clauses.push(
+			"(s.slug = ? OR s.id = (SELECT space_id FROM space_slug_aliases WHERE slug = ? AND expires_at > ?))",
+		);
+		values.push(filters.space, filters.space, Date.now());
 	}
 	if (head !== undefined) {
 		clauses.push(unchangedTrashSql());

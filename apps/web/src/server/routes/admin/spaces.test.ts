@@ -77,7 +77,7 @@ describe("admin spaces", () => {
 			description: "Changed",
 			owner_key_id: null,
 		});
-		expect((await request("/workspace")).status).toBe(404);
+		expect(await (await request("/workspace")).json()).toMatchObject({ slug: "renamed" });
 		expect((await request("/renamed", "PATCH", { name: "New name" })).status).toBe(200);
 		const deleted = await request("/renamed", "DELETE");
 		expect(deleted.status).toBe(200);
