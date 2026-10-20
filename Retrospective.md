@@ -19,6 +19,11 @@ retry with its captured, now-inactive profile and acknowledge obsolete work.
 A failing regression now covers switching profiles during upsert. Claims and
 acknowledgements require the captured profile to remain the sole active profile,
 leaving switched work pending for a fresh drain.
+The full L2 run still modeled invalidation by clearing `indexed_at` and changing
+only `due_at`, which exercised the retired periodic rewrite path. It now verifies
+that a legacy deadline does not rewrite an acknowledged vector, then mutates
+authoritative metadata and proves the trigger-driven cron repair. Update
+integration fixtures alongside changed scheduling contracts, not just unit tests.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 

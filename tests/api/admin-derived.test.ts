@@ -88,10 +88,15 @@ describe("admin profiles and durable derived work over HTTP", () => {
 		expect((await admin(`/trash/${id}/restore`, "POST", {})).status).toBe(200);
 		await drain();
 		expect((await vector())[0]?.indexed_at).toEqual(expect.any(Number));
+		const indexedAt = (await vector())[0]?.indexed_at;
 		await db([
 			"--command",
-			`UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ${sqlText(id)}; UPDATE vector_sync_jobs SET due_at = 0 WHERE memory_id = ${sqlText(id)}`,
+			`UPDATE vector_sync_jobs SET due_at = 0 WHERE memory_id = ${sqlText(id)}`,
 		]);
+		await drain(true);
+		expect((await vector())[0]?.indexed_at).toBe(indexedAt);
+		await db(["--command", `UPDATE memories SET importance = 0.8 WHERE id = ${sqlText(id)}`]);
+		expect((await vector())[0]?.indexed_at).toBeNull();
 		await drain(true);
 		expect((await vector())[0]?.indexed_at).toEqual(expect.any(Number));
 		expect((await admin(`/memories/${id}`, "DELETE")).status).toBe(200);
