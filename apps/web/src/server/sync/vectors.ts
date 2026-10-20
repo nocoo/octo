@@ -151,7 +151,8 @@ export async function synchronizeVectors(
 			return;
 		}
 		await env.DB.prepare(`UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ?
-			AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND attempts = ?)`)
+			AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND attempts = ?
+			AND synced_generation IS NOT generation)`)
 			.bind(job.memory_id, job.memory_id, job.generation, failed.attempts)
 			.run();
 		if (failed.dead_at !== null)

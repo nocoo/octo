@@ -41,6 +41,11 @@ deadline because invalidation equated zero attempts with no backoff. The RED
 regression holds a newer throttled owner's deadline across an older completion.
 Invalidation now checks the explicit error state rather than the failure counter;
 uncharged retries are still retries, and source mutations alone reset that state.
+The reviewer also paused failure handling between lease release and clearing
+`indexed_at`. A newer owner could succeed with the same generation and zero
+attempts, after which the old clear erased its acknowledgement permanently.
+A RED interleaving regression now proves that clearing requires a still-pending
+generation, so completed newer work cannot match the delayed failure update.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 

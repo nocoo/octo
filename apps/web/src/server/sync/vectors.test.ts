@@ -41,6 +41,52 @@ function addVectors(sqlite: ReturnType<typeof fixture>["sqlite"], count: number)
 }
 
 describe("durable vector synchronization", () => {
+	it("does not clear a newer acknowledgement after releasing a throttled claim", async () => {
+		const { env, db, sqlite, store, indexed } = fixture();
+		vi.useFakeTimers();
+		vi.spyOn(Math, "random").mockReturnValue(0.5);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		store.upsert
+			.mockRejectedValueOnce({ status: 429 })
+			.mockRejectedValueOnce({ status: 429 })
+			.mockRejectedValueOnce({ status: 429 });
+		const prepare = db.prepare.bind(db);
+		vi.spyOn(db, "prepare").mockImplementation((sql) => {
+			const statement = prepare(sql);
+			if (
+				!sql.startsWith("UPDATE memory_vectors SET indexed_at = NULL") ||
+				!sql.includes("AND attempts = ?")
+			)
+				return statement;
+			return {
+				...statement,
+				bind: (...values: unknown[]) => {
+					const bound = statement.bind(...values);
+					return {
+						...bound,
+						run: async () => {
+							expect(await synchronizeVectors(env, { store, now: 90_100 })).toEqual({
+								synced: 1,
+								failed: 0,
+							});
+							expect(indexed()).toBe(90_100);
+							return bound.run();
+						},
+					};
+				},
+			} as D1PreparedStatement;
+		});
+		const work = synchronizeVectors(env, { store, now: 100 });
+		await vi.runAllTimersAsync();
+		expect(await work).toEqual({ synced: 0, failed: 1 });
+		expect(indexed()).toBe(90_100);
+		expect(
+			sqlite.prepare("SELECT generation = synced_generation AS synced FROM vector_sync_jobs").get()
+				?.synced,
+		).toBe(1);
+		expect(await synchronizeVectors(env, { store, now: 90_101 })).toEqual({ synced: 0, failed: 0 });
+	});
+
 	it("preserves a newer rate-limit deadline after an old upsert completes", async () => {
 		const { env, sqlite, store } = fixture();
 		vi.useFakeTimers();
