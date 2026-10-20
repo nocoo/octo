@@ -8,20 +8,26 @@
   deletion of the same ID immediately through the post-commit path.
 - Successful REST, admin and MCP memory writes pass their committed IDs into
   `ctx.waitUntil`. They do not compete with the first 50 global cron jobs. Cron
-  remains crash recovery, visibility verification and hourly anti-entropy.
+  retries pending work and verifies visibility without rewriting acknowledged
+  generations. Source mutations, active-profile changes and enabling backfill
+  explicitly requeue affected work; migration `0011_vector_profile_invalidation.sql`
+  supplies the profile and backfill invalidation triggers.
   Bulk trash actions retain the separate five-job post-commit work budget from
   migration 0009's release; the budget and committed-ID filter compose without
   freezing the live synchronization clock.
 - Ready vectors and deletions are selected ahead of embedding work within the
-  chosen due cohort. Each claimed concurrency-sized group finishes its bounded
-  generation-repair loop before the next group starts; a cron-owned client PUT
+  chosen due cohort. Ready vectors use upsert chunks of at most 100 records;
+  embedding preparation retains groups of at most four. A cron-owned client PUT
   must not wait behind unrelated successful embedding batches. Readiness is
   rechecked after claims because content can change during a drain.
 - The healthy-service target is **at most 10 seconds** from create-with-vector
   to `indexed=true` and vector-search discovery, and from body PATCH plus vector
   PUT to the new self-vector ranking first and the obsolete vector no longer
-  matching. External outages/timeouts cannot be guaranteed away: failures retain
-  the existing two-hour initial backoff and eight-failure dead-letter policy.
+  matching. External outages/timeouts cannot be guaranteed away. Vectorize rate
+  limits receive two in-run retries (100–200 ms, then 200–400 ms) before a jittered
+  60–120 second deferral without charging attempts. Other failures retain the
+  two-hour initial backoff and eight-failure dead-letter policy. Production
+  latency is not measured by this local-only change.
 - `indexed=true` specifically means **the current-generation upsert was accepted
   by Vectorize**. It does not claim Vectorize query visibility. No successful
   acknowledgement is synthesized while an upsert is still pending or failed.
