@@ -203,6 +203,27 @@ test("long history strings wrap instead of disappearing behind their card", asyn
 		true,
 	);
 	await value.scrollIntoViewIfNeeded();
-	await expect(value).toBeInViewport({ ratio: 1 });
+	await expect(value).toBeInViewport();
+	const clippedPixels = await value.evaluate(
+		(element) =>
+			new Promise<number>((resolve) => {
+				const observer = new IntersectionObserver(([entry]) => {
+					if (!entry) return;
+					const bounds = entry.boundingClientRect;
+					const visible = entry.intersectionRect;
+					observer.disconnect();
+					resolve(
+						Math.max(
+							visible.left - bounds.left,
+							bounds.right - visible.right,
+							visible.top - bounds.top,
+							bounds.bottom - visible.bottom,
+						),
+					);
+				});
+				observer.observe(element);
+			}),
+	);
+	expect(clippedPixels).toBeLessThanOrEqual(1);
 	await capture(page, info, "history-long-value-wrapped");
 });

@@ -60,12 +60,21 @@ test("memory view controls align and keep a required keyboard-operable selection
 
 test("pagination aligns labels and controls while date filters follow the native theme", async ({
 	page,
+	admin,
 }) => {
+	const memory = await admin.memory();
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await page.goto("/memories");
-	const size = await page.getByRole("combobox", { name: "每页条数", exact: true }).boundingBox();
-	const next = await page.getByRole("button", { name: "下一页", exact: true }).boundingBox();
-	expect(size?.y).toBeCloseTo(next?.y ?? -1, 0);
+	await expect(page.getByRole("link", { name: memory.title, exact: true })).toBeVisible();
+	await expect
+		.poll(async () => {
+			const size = await page
+				.getByRole("combobox", { name: "每页条数", exact: true })
+				.boundingBox();
+			const next = await page.getByRole("button", { name: "下一页", exact: true }).boundingBox();
+			return size && next ? size.y - next.y : Number.POSITIVE_INFINITY;
+		})
+		.toBeCloseTo(0, 0);
 	for (const colorScheme of ["light", "dark"] as const) {
 		await page.emulateMedia({ colorScheme });
 		await page.goto("/audit");
