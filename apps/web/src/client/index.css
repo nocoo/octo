@@ -146,17 +146,78 @@ a {
 .octo-table {
 	font-variant-numeric: tabular-nums;
 }
-.octo-table thead th {
-	background: hsl(var(--basalt-muted));
-	color: hsl(var(--basalt-foreground));
-	font-weight: 600;
+.octo-record-title {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	max-inline-size: 32ch;
+	min-inline-size: 0;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	white-space: normal;
+	font-weight: 500;
+}
+.octo-record-id {
+	display: block;
+	max-inline-size: 22ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono);
+	font-size: var(--basalt-text-xs);
+	color: hsl(var(--basalt-muted-foreground));
+}
+.octo-record-time {
+	display: inline-grid;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+	font-size: var(--basalt-text-sm);
+	line-height: var(--basalt-leading-body);
+}
+.octo-record-time > :last-child {
+	font-size: var(--basalt-text-xs);
+}
+.octo-record-preview {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+}
+.octo-record-preview mark {
+	color: var(--basalt-tag-amber-foreground);
+	background: var(--basalt-tag-amber);
+}
+.octo-memory-table {
+	table-layout: fixed;
+	min-inline-size: 44rem;
+}
+.octo-memory-table .octo-record-title {
+	max-inline-size: none;
+}
+.octo-memory-card-heading {
+	justify-content: start;
+}
+.octo-memory-card-heading > button {
+	flex-shrink: 0;
+}
+.octo-inline-choice {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: var(--basalt-space-control-gap);
+}
+.octo-inline-choice label {
 	white-space: nowrap;
 }
-.octo-table tbody td {
-	border-bottom: var(--basalt-border-width) solid hsl(var(--basalt-border));
+.octo-inline-choice [role="combobox"] {
+	width: var(--basalt-space-20);
 }
-.octo-table tbody tr:last-child td {
-	border-bottom: 0;
+html.dark {
+	color-scheme: dark;
+}
+html:not(.dark) {
+	color-scheme: light;
 }
 .octo-empty {
 	flex: 1;
@@ -183,6 +244,18 @@ a {
 }
 .octo-empty--page {
 	min-block-size: var(--basalt-space-80);
+}
+.octo-empty--compact {
+	min-block-size: unset;
+	padding: var(--basalt-space-panel-y) var(--basalt-space-panel-x);
+	gap: var(--basalt-space-content-gap);
+}
+.octo-empty--compact > :first-child:has(svg) svg {
+	inline-size: var(--basalt-size-icon-lg);
+	block-size: var(--basalt-size-icon-lg);
+}
+.octo-empty--compact > p:first-of-type {
+	font-size: var(--basalt-text-base);
 }
 /* Only the ancestor chain of a page empty state participates in vertical fill. */
 .octo-island:has(.octo-empty--page),

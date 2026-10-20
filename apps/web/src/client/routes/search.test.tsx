@@ -212,8 +212,8 @@ it("keeps long space metadata out of the result title row", () => {
 	for (const cell of cellTags.slice(0, 2)) expect(cell).toContain("whitespace-normal break-words");
 	expect(html.match(/aria-label="搜索结果 scroll area"/g)).toHaveLength(1);
 	expect(html).toMatch(/class="relative min-w-0 overflow-auto[^>]*>/);
-	expect(html).toContain("min-width:36ch");
-	expect(html).toContain("min-width:24ch");
+	expect(html).toContain("min-width:30ch");
+	expect(html).toContain("min-width:22ch");
 });
 
 it("preserves ranked results without local pagination and safely renders snippets and encoded links", () => {

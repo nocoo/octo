@@ -81,7 +81,7 @@ describe("library page installed-component boundaries", () => {
 			new RegExp(`<span[^>]*data-tag-color="${tagColorFor("notes")}"[^>]*>笔记</span>`),
 		);
 		expect(html).toContain('href="/memories?spaces=notes"');
-		expect(html).toMatch(/<td[^>]*class="[^"]*text-end[^>]*>12<\/td>/);
+		expect(html).toMatch(/<td[^>]*class="[^"]*text-end[^>]*><span[^>]*>12<\/span><\/td>/);
 	});
 	it.each([
 		[GraphPage, "/graph", "图谱节点"],

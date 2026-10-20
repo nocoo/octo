@@ -14,7 +14,7 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 	await admin.json(
 		`/memories/${memory.id}`,
 		"PATCH",
-		{ title },
+		{ title, event_time: "2026-10-20T04:05:06Z" },
 		{ "If-Match": String(memory.version) },
 	);
 	const trashed = await admin.memory("# 待整理资料\n\n稍后归档的阅读笔记。\n");
@@ -131,6 +131,11 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 				await expect(trend).toContainText(`${new Date().toISOString().slice(0, 10)}：1 次`);
 			}
 			await capture(page, info, `${variant}-${name}`);
+			if (name === "memories") {
+				await page.getByRole("radio", { name: "卡片", exact: true }).click();
+				await expect(page).toHaveURL(/view=cards/);
+				await capture(page, info, `${variant}-memory-cards`);
+			}
 			if (name === "search") {
 				await info.attach(`${variant}-search-top`, {
 					body: JSON.stringify(

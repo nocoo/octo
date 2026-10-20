@@ -1,4 +1,4 @@
-import { Badge, Button, LayerCard, StatStrip } from "@nocoo/basalt";
+import { Button, LayerCard, StatStrip } from "@nocoo/basalt";
 import { AreaChart } from "@nocoo/basalt/charts/area";
 import { type ChartSeriesDescriptor, getChartColor } from "@nocoo/basalt/charts/config";
 import { HeatmapCalendar } from "@nocoo/basalt/charts/heatmap-calendar";
@@ -20,6 +20,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@nocoo/basalt/components/table";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
 	Activity,
 	AlertCircle,
@@ -36,6 +37,8 @@ import {
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useModel } from "../components/layout/use-model";
+import { RecordTime } from "../components/record-display";
+import { formatNumber } from "../lib/format";
 import { activitySeries, OverviewModel } from "../viewmodels/overview";
 
 const changeLabels = new Map([
@@ -84,10 +87,12 @@ export function OverviewPage() {
 				{state.usage?.map((row) => (
 					<TableRow key={`${row.day}:${row.key_id}`}>
 						<TableCell>{row.day}</TableCell>
-						<TableCell>{row.key_id}</TableCell>
-						<TableCell textAlign="end">{row.calls}</TableCell>
-						<TableCell textAlign="end">{row.errors}</TableCell>
-						<TableCell textAlign="end">{row.writes}</TableCell>
+						<TableCell>
+							<TagBadge name={row.key_id} size="sm" />
+						</TableCell>
+						<TableCell textAlign="end">{formatNumber(row.calls)}</TableCell>
+						<TableCell textAlign="end">{formatNumber(row.errors)}</TableCell>
+						<TableCell textAlign="end">{formatNumber(row.writes)}</TableCell>
 					</TableRow>
 				))}
 			</TableBody>
@@ -137,7 +142,7 @@ export function OverviewPage() {
 								有效记忆数
 							</span>
 						),
-						value: state.memoryCount ?? "—",
+						value: formatNumber(state.memoryCount),
 					},
 					{
 						label: (
@@ -146,7 +151,7 @@ export function OverviewPage() {
 								今日写入次数 · UTC 小时汇总
 							</span>
 						),
-						value: state.writesToday ?? "—",
+						value: formatNumber(state.writesToday),
 					},
 					{
 						label: (
@@ -155,7 +160,7 @@ export function OverviewPage() {
 								今日调用密钥 · UTC 小时汇总
 							</span>
 						),
-						value: state.activeKeysToday ?? "—",
+						value: formatNumber(state.activeKeysToday),
 					},
 					{
 						label: (
@@ -164,7 +169,7 @@ export function OverviewPage() {
 								回收站记忆数
 							</span>
 						),
-						value: state.trashCount ?? "—",
+						value: formatNumber(state.trashCount),
 					},
 				]}
 			/>
@@ -287,6 +292,7 @@ export function OverviewPage() {
 			<SectionRule title="最近变更">
 				<LayerCard padding="none">
 					<DataTable
+						className="octo-table"
 						aria-label="最近变更"
 						data={state.changes}
 						getRowId={(change) => String(change.seq)}
@@ -301,11 +307,17 @@ export function OverviewPage() {
 								sortable: false,
 								accessor: (change) =>
 									change.entity === "memory" && !["trashed", "purged"].includes(change.op) ? (
-										<Link to={`/memories/${encodeURIComponent(change.entity_id)}`}>
+										<Link
+											to={`/memories/${encodeURIComponent(change.entity_id)}`}
+											className="octo-record-id"
+											title={change.entity_id}
+										>
 											{change.entity_id}
 										</Link>
 									) : (
-										change.entity_id
+										<span className="octo-record-id" title={change.entity_id}>
+											{change.entity_id}
+										</span>
 									),
 							},
 							{
@@ -314,7 +326,19 @@ export function OverviewPage() {
 								width: "12ch",
 								wrap: true,
 								sortable: false,
-								accessor: (change) => changeLabels.get(change.op) ?? "其他操作",
+								accessor: (change) => (
+									<TagBadge
+										name={changeLabels.get(change.op) ?? "其他操作"}
+										color={
+											["deleted", "trashed", "purged"].includes(change.op)
+												? "danger"
+												: ["created", "restored"].includes(change.op)
+													? "success"
+													: "info"
+										}
+										size="sm"
+									/>
+								),
 							},
 							{
 								id: "actor",
@@ -322,7 +346,7 @@ export function OverviewPage() {
 								width: "28ch",
 								wrap: true,
 								sortable: false,
-								accessor: (change) => change.actor ?? "未提供",
+								accessor: (change) => <TagBadge name={change.actor ?? "未提供"} size="sm" />,
 							},
 							{
 								id: "time",
@@ -330,7 +354,7 @@ export function OverviewPage() {
 								width: "28ch",
 								wrap: true,
 								sortable: false,
-								accessor: (change) => <time dateTime={change.at}>{change.at}</time>,
+								accessor: (change) => <RecordTime value={change.at} utc />,
 							},
 						]}
 					/>
@@ -344,6 +368,7 @@ export function OverviewPage() {
 			<SectionRule title="最近更新的记忆">
 				<LayerCard padding="none">
 					<DataTable
+						className="octo-table"
 						aria-label="最近更新的记忆"
 						data={state.recent}
 						getRowId={(memory) => memory.id}
@@ -357,7 +382,13 @@ export function OverviewPage() {
 								wrap: true,
 								sortable: false,
 								accessor: (memory) => (
-									<Link to={`/memories/${encodeURIComponent(memory.id)}`}>{memory.title}</Link>
+									<Link
+										to={`/memories/${encodeURIComponent(memory.id)}`}
+										className="octo-record-title"
+										title={memory.title}
+									>
+										{memory.title}
+									</Link>
 								),
 							},
 							{
@@ -366,15 +397,16 @@ export function OverviewPage() {
 								width: "24ch",
 								wrap: true,
 								sortable: false,
-								accessor: (memory) => <Badge variant="secondary">{memory.space}</Badge>,
+								accessor: (memory) => <TagBadge name={memory.space} size="sm" />,
 							},
 							{
 								id: "updated",
 								header: "更新时间",
-								width: "24ch",
+								width: "14ch",
+								textAlign: "end",
 								wrap: true,
 								sortable: false,
-								accessor: (memory) => new Date(memory.updated_at).toLocaleString("zh-CN"),
+								accessor: (memory) => <RecordTime value={memory.updated_at} />,
 							},
 						]}
 					/>

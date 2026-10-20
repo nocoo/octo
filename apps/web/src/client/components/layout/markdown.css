@@ -217,6 +217,10 @@
 	.octo-memory-mobile {
 		display: block;
 	}
+	.octo-memory-editor textarea {
+		height: 55dvh;
+		min-height: var(--basalt-space-48);
+	}
 	.octo-memory-editor[data-pane="write"] > :last-child {
 		display: none;
 	}

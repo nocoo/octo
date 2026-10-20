@@ -73,7 +73,7 @@ describe("profile read states", () => {
 			],
 		};
 		const html = render();
-		const widths = ["22ch", "28ch", "10ch", "16ch", "26ch", "12ch"];
+		const widths = ["22ch", "24ch", "10ch", "16ch", "14ch", "12ch"];
 		const headers = [...html.matchAll(/<th\b[^>]*>/g)].map((match) => match[0]);
 		const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
 		expect(headers).toHaveLength(widths.length);
@@ -111,9 +111,9 @@ describe("profile read states", () => {
 		};
 		fixture.sort = { id: "active", dir };
 		const html = render();
-		const ids = [...html.matchAll(/<td[^>]*>(profile-(?:active|inactive))<\/td>/g)].map(
-			(match) => match[1],
-		);
+		const ids = [
+			...html.matchAll(/<td[^>]*><span[^>]*>(profile-(?:active|inactive))<\/span><\/td>/g),
+		].map((match) => match[1]);
 		expect(ids).toEqual(
 			dir === "asc"
 				? ["profile-active", "profile-inactive"]
@@ -217,7 +217,7 @@ describe("M7 embedding test result SSR", () => {
 			expect(html).toContain("失败阶段");
 			expect(html).toContain(stageLabel);
 			expect(html).toContain("实际维度");
-			expect(html).toContain("12 毫秒");
+			expect(html).toContain("12 ms");
 			if (status === undefined) {
 				expect(html).not.toContain("上游状态码");
 			} else {
@@ -300,7 +300,7 @@ it("shows structured probe failures and technical details immediately after Test
 	expect(form).toContain('role="alert"');
 	expect(form).toContain("embedder_unavailable");
 	expect(form).toContain("上游状态码");
-	expect(form).toContain("12 毫秒");
+	expect(form).toContain("12 ms");
 	expect(form).toContain("grid gap-basalt-layout-sm");
 	expect(form).toContain("<dl");
 	expect(form.indexOf("测试连接")).toBeLessThan(form.indexOf("连接失败"));

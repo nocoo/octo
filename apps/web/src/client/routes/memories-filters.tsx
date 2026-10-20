@@ -35,6 +35,7 @@ export function Choice({
 	options,
 	optionLabels = choiceLabels,
 	onChange,
+	inline = false,
 }: {
 	label: string;
 	name?: string;
@@ -42,6 +43,7 @@ export function Choice({
 	options: readonly string[];
 	optionLabels?: Readonly<Record<string, string>>;
 	onChange?: (value: string) => void;
+	inline?: boolean;
 }) {
 	const [selected, setSelected] = useState(value);
 	return (
@@ -53,7 +55,11 @@ export function Choice({
 				onChange?.(next);
 			}}
 		>
-			<Field label={label} {...(name ? { htmlFor: name } : {})}>
+			<Field
+				label={label}
+				{...(inline ? { className: "octo-inline-choice" } : {})}
+				{...(name ? { htmlFor: name } : {})}
+			>
 				<SelectTrigger aria-label={label}>
 					<SelectValue>
 						{optionLabels[onChange ? value : selected] ?? (onChange ? value : selected)}

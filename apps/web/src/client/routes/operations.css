@@ -7,6 +7,18 @@
 	justify-self: start;
 }
 
+.ops-filter-fields > * {
+	flex: 1 1 var(--basalt-space-40);
+}
+
+.ops-filter-fields > .ops-date-range {
+	flex: 2 1 var(--basalt-space-80);
+}
+
+.ops-filter-fields > .ops-filter-actions {
+	flex: 0 1 auto;
+}
+
 .ops-plot {
 	inline-size: 100%;
 	block-size: clamp(14rem, 26vh, 20rem);

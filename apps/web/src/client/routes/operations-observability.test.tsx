@@ -60,7 +60,9 @@ const base: UsageDaily = {
 	bytes_out: 0,
 };
 const ids = (html: string) =>
-	[...html.matchAll(/<td[^>]*>(key-(?:ten|two|unknown))<\/td>/g)].map((m) => m[1]);
+	[...html.matchAll(/<td[^>]*><span[^>]*>(key-(?:ten|two|unknown))<\/span><\/td>/g)].map(
+		(m) => m[1],
+	);
 
 beforeEach(() => {
 	fixture.usage = {};
@@ -84,7 +86,7 @@ describe("usage table sorting", () => {
 	it("keeps readable minimum column widths inside the installed Basalt scroll region", () => {
 		fixture.usage = { loaded: true, items: [base] };
 		const html = render("usage");
-		const widths = ["16ch", "18ch", "14ch", "14ch", "12ch", "14ch", "14ch", "14ch"];
+		const widths = ["16ch", "18ch", "12ch", "12ch", "12ch", "12ch", "12ch", "12ch"];
 		const headers = [...html.matchAll(/<th\b[^>]*>/g)].map((match) => match[0]);
 		const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
 		expect(headers).toHaveLength(widths.length);
@@ -233,11 +235,11 @@ describe("observability read states", () => {
 it("renders only M7 daily writes and bytes, not fabricated infrastructure or percentiles", () => {
 	fixture.usage = { loaded: true, items: [{ ...base, writes: 9, bytes_in: 123, bytes_out: 456 }] };
 	const html = render("usage");
-	for (const label of ["写入次数", "输入字节", "输出字节"]) expect(html).toContain(label);
+	for (const label of ["写入次数", "输入流量", "输出流量"]) expect(html).toContain(label);
 	for (const fake of ["D1 占用", "待同步向量", "最近定时任务", "P50", "P95"])
 		expect(html).not.toContain(fake);
-	expect(html).toMatch(/<td[^>]*>123<\/td>/);
-	expect(html).toMatch(/<td[^>]*>456<\/td>/);
+	expect(html).toMatch(/<td[^>]*><span title="123 B">123 B<\/span><\/td>/);
+	expect(html).toMatch(/<td[^>]*><span title="456 B">456 B<\/span><\/td>/);
 });
 
 it.each(["usage", "audit"] as const)(

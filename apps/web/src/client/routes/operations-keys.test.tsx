@@ -5,6 +5,7 @@ import { Children, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, adminApi } from "../lib/api";
+import { formatDateTime } from "../lib/format";
 import type { KeyUsageModel } from "../viewmodels/operations-key-usage";
 import type { KeyMetadata, KeysModel } from "../viewmodels/operations-keys";
 import { KeysPage } from "./operations-keys";
@@ -111,7 +112,8 @@ const keys: KeyMetadata[] = [
 	},
 ];
 const render = () => renderToStaticMarkup(<KeysPage />);
-const names = (html: string) => [...html.matchAll(/<strong>([^<]+)<\/strong>/g)].map((m) => m[1]);
+const names = (html: string) =>
+	[...html.matchAll(/<strong\b[^>]*>([^<]+)<\/strong>/g)].map((m) => m[1]);
 
 beforeEach(() => {
 	fixture.state = { items: keys, loaded: true };
@@ -243,7 +245,7 @@ describe("key table sorting", () => {
 		expect(html).toContain("用量尚未加载");
 		expect(html).not.toContain("次调用");
 		expect(html).not.toContain("Invalid Date");
-		expect(html).toContain(new Date(base.last_used_at ?? "").toLocaleString("zh-CN"));
+		expect(html).toContain(formatDateTime(base.last_used_at));
 	});
 });
 

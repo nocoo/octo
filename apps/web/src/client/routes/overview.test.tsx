@@ -145,7 +145,7 @@ it.each([
 			</MemoryRouter>
 		</ThemeProvider>,
 	);
-	expect(html).toContain(`>${label}</td>`);
+	expect(html).toContain(`>${label}</span></td>`);
 	expect(html).not.toContain(`>${operation}</td>`);
 });
 
@@ -181,7 +181,7 @@ it("gives overview records readable wrapping columns inside package scroll regio
 	);
 	for (const [label, widths] of [
 		["最近变更", ["28ch", "12ch", "28ch", "28ch"]],
-		["最近更新的记忆", ["28ch", "24ch", "24ch"]],
+		["最近更新的记忆", ["28ch", "24ch", "14ch"]],
 	] as const) {
 		expect(html).toContain(`aria-label="${label} scroll area" tabindex="0"`);
 		const table = html.match(
@@ -194,7 +194,9 @@ it("gives overview records readable wrapping columns inside package scroll regio
 			expect(heads[index]).toContain(`style="width:${width};min-width:${width}"`);
 		expect(table).not.toContain("aria-sort");
 	}
-	expect(html).toMatch(/<td[^>]*class="[^"]*whitespace-normal break-words[^>]*>移入回收站<\/td>/);
+	expect(html).toMatch(
+		/<td[^>]*class="[^"]*whitespace-normal break-words[^>]*><span[^>]*data-tag-color="danger"[^>]*>移入回收站<\/span><\/td>/,
+	);
 	expect(html).toContain("知识工作台：检索与协作");
 });
 

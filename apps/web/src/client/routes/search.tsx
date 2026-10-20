@@ -13,7 +13,8 @@ import { CircleAlert, FilterX, Pencil, RotateCcw, Search, SlidersHorizontal } fr
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
-import { memoryTypeLabels } from "../viewmodels/memories";
+import { MemoryTypeBadge, RecordTime } from "../components/record-display";
+import { formatNumber } from "../lib/format";
 import {
 	type SearchItem,
 	SearchModel,
@@ -63,16 +64,21 @@ export function SearchPage() {
 		{
 			id: "title",
 			header: "记忆 / 摘要",
-			width: "36ch",
+			width: "30ch",
 			wrap: true,
 			sortable: false,
 			accessor: (item) => (
 				<Grid columns={1} style={{ gap: "var(--basalt-space-control-gap)" }}>
-					<MemoryLink memoryId={item.id} memoryTitle={item.title}>
+					<MemoryLink
+						memoryId={item.id}
+						memoryTitle={item.title}
+						className="octo-record-title"
+						title={item.title}
+					>
 						<strong>{item.title}</strong>
 					</MemoryLink>
 					{item.snippet !== undefined && (
-						<p className="text-basalt-muted-foreground">
+						<p className="octo-record-preview text-basalt-muted-foreground">
 							{snippetParts(item.snippet).map((part) =>
 								part.marked ? <mark key={part.offset}>{part.text}</mark> : part.text,
 							)}
@@ -84,7 +90,7 @@ export function SearchPage() {
 		{
 			id: "metadata",
 			header: "空间 / 标签",
-			width: "24ch",
+			width: "22ch",
 			wrap: true,
 			sortable: false,
 			accessor: (item) => (
@@ -100,7 +106,7 @@ export function SearchPage() {
 					}}
 				>
 					<TagBadge name={item.space} size="sm" />
-					<Badge variant="secondary">{memoryTypeLabels[item.type] ?? "未知类型"}</Badge>
+					<MemoryTypeBadge type={item.type} />
 					{item.tags.map((tag) => (
 						<TagBadge key={tag} name={tag} size="sm" />
 					))}
@@ -110,7 +116,7 @@ export function SearchPage() {
 		{
 			id: "score",
 			header: "综合得分",
-			width: "20ch",
+			width: "16ch",
 			wrap: true,
 			textAlign: "end",
 			sortable: false,
@@ -164,12 +170,10 @@ export function SearchPage() {
 		{
 			id: "updated",
 			header: "更新时间",
-			width: "24ch",
+			width: "14ch",
 			textAlign: "end",
 			sortable: false,
-			accessor: (item) => (
-				<time dateTime={item.updated_at}>{new Date(item.updated_at).toLocaleString("zh-CN")}</time>
-			),
+			accessor: (item) => <RecordTime value={item.updated_at} />,
 		},
 		{
 			id: "actions",
@@ -415,11 +419,17 @@ export function SearchPage() {
 						}}
 						role="status"
 					>
-						<span>{result.items.length} 条结果</span>
-						<Badge variant="outline">全文候选： {result.channels.fts.candidates}</Badge>
-						<Badge variant="outline">
-							向量候选： {result.channels.vector.candidates ?? "已跳过"}
-						</Badge>
+						<span>{formatNumber(result.items.length)} 条结果</span>
+						<TagBadge
+							color="blue"
+							name={`全文候选：${formatNumber(result.channels.fts.candidates)}`}
+							size="sm"
+						/>
+						<TagBadge
+							color="teal"
+							name={`向量候选：${result.channels.vector.candidates === undefined ? "已跳过" : formatNumber(result.channels.vector.candidates)}`}
+							size="sm"
+						/>
 						{result.channels.vector.profile && (
 							<Badge variant="secondary">{result.channels.vector.profile}</Badge>
 						)}

@@ -1,5 +1,4 @@
 import {
-	Badge,
 	Button,
 	Checkbox,
 	ConfirmDialog,
@@ -76,6 +75,8 @@ import {
 	navigateToMarkdownHeading,
 } from "../components/layout/markdown";
 import { useModel } from "../components/layout/use-model";
+import { MemoryTypeBadge, RecordTime, ViewSwitch } from "../components/record-display";
+import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
 import { selectedIds, setSelection } from "../viewmodels/library";
 import {
 	filterKeys,
@@ -142,7 +143,7 @@ function MemoryTags({ memory }: { memory: Pick<Memory, "tags" | "space" | "type"
 			}}
 		>
 			<TagBadge name={memory.space} size="sm" />
-			<Badge variant="secondary">{memoryTypeLabels[memory.type] ?? "未知类型"}</Badge>
+			<MemoryTypeBadge type={memory.type} />
 			{memory.tags.map((tag) => (
 				<TagBadge key={tag} name={tag} size="sm" />
 			))}
@@ -175,7 +176,13 @@ export function MemoriesPage() {
 					checked={selected.includes(memory.id)}
 					onCheckedChange={(checked) => select(memory.id, checked === true)}
 				/>
-				<MemoryLink memoryId={memory.id} memoryTitle={memory.title} data-memory-link={memory.id}>
+				<MemoryLink
+					memoryId={memory.id}
+					memoryTitle={memory.title}
+					data-memory-link={memory.id}
+					className="octo-record-title"
+					title={memory.title}
+				>
 					<strong>{memory.title}</strong>
 				</MemoryLink>
 			</>
@@ -221,14 +228,14 @@ export function MemoriesPage() {
 						actions={
 							<>
 								{filterTrigger}
-								<SegmentControl
-									legend="显示方式"
+								<ViewSwitch
+									label="显示方式"
 									value={cards ? "cards" : "list"}
 									options={[
 										{ value: "list", label: "列表" },
 										{ value: "cards", label: "卡片" },
 									]}
-									onValueChange={(value) => {
+									onChange={(value) => {
 										const next = new URLSearchParams(params);
 										next.set("view", value);
 										setParams(next);
@@ -289,13 +296,13 @@ export function MemoriesPage() {
 				>
 					{state.items.map((memory) => (
 						<LayerCard key={memory.id}>
-							<LayerCard.Header>{row(memory)}</LayerCard.Header>
+							<LayerCard.Header className="octo-memory-card-heading">
+								{row(memory)}
+							</LayerCard.Header>
 							<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 								<MemoryTags memory={memory} />
-								<p>{memory.body.slice(0, 180)}</p>
-								<time className="octo-muted" dateTime={memory.updated_at}>
-									{new Date(memory.updated_at).toLocaleString("zh-CN")}
-								</time>
+								<p className="octo-record-preview octo-muted">{memory.body.slice(0, 180)}</p>
+								<RecordTime value={memory.updated_at} />
 							</LayerCard.Body>
 						</LayerCard>
 					))}
@@ -304,13 +311,19 @@ export function MemoriesPage() {
 				state.items.length > 0 && (
 					<LayerCard padding="none">
 						<Grid columns={1} className="octo-memory-overflow">
-							<Table className="octo-table" aria-label="记忆">
+							<Table className="octo-table octo-memory-table" aria-label="记忆">
 								<TableHeader>
 									<TableRow>
-										<TableHead className="ps-basalt-table-edge">
+										<TableHead className="ps-basalt-table-edge" style={{ width: "3rem" }}>
 											<Checkbox
 												aria-label="选择当前页"
-												checked={state.items.every((item) => selected.includes(item.id))}
+												checked={
+													state.items.every((item) => selected.includes(item.id))
+														? true
+														: state.items.some((item) => selected.includes(item.id))
+															? "indeterminate"
+															: false
+												}
 												onCheckedChange={(checked) =>
 													setParams(
 														setSelection(
@@ -325,12 +338,12 @@ export function MemoriesPage() {
 												}
 											/>
 										</TableHead>
-										<TableHead style={{ minWidth: "28ch" }}>标题</TableHead>
-										<TableHead style={{ minWidth: "28ch" }}>空间 / 标签</TableHead>
+										<TableHead style={{ width: "40%" }}>标题</TableHead>
+										<TableHead>空间 / 标签</TableHead>
 										<TableHead
 											textAlign="end"
 											className="pe-basalt-table-edge"
-											style={{ minWidth: "24ch" }}
+											style={{ width: "10rem" }}
 										>
 											更新时间
 										</TableHead>
@@ -349,26 +362,26 @@ export function MemoriesPage() {
 													onCheckedChange={(checked) => select(memory.id, checked === true)}
 												/>
 											</TableCell>
-											<TableCell style={{ minWidth: "28ch" }}>
+											<TableCell>
 												<MemoryLink
 													memoryId={memory.id}
 													memoryTitle={memory.title}
 													data-memory-link={memory.id}
+													className="octo-record-title"
+													title={memory.title}
 												>
 													{memory.title}
 												</MemoryLink>
 											</TableCell>
-											<TableCell style={{ minWidth: "28ch" }}>
+											<TableCell>
 												<MemoryTags memory={memory} />
 											</TableCell>
 											<TableCell
 												textAlign="end"
 												className="pe-basalt-table-edge"
-												style={{ minWidth: "24ch" }}
+												style={{ width: "10rem" }}
 											>
-												<time dateTime={memory.updated_at}>
-													{new Date(memory.updated_at).toLocaleString("zh-CN")}
-												</time>
+												<RecordTime value={memory.updated_at} />
 											</TableCell>
 										</TableRow>
 									))}
@@ -382,13 +395,17 @@ export function MemoriesPage() {
 				columns={1}
 				gap="sm"
 				style={{
-					gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+					display: "flex",
+					flexWrap: "wrap",
 					alignItems: "center",
 				}}
 			>
-				<span className="octo-muted">本页 {state.items.length} 条</span>
+				<span className="octo-muted" style={{ marginInlineEnd: "auto" }}>
+					本页 {formatNumber(state.items.length)} 条
+				</span>
 				<Choice
 					label="每页条数"
+					inline
 					value={params.get("limit") ?? "50"}
 					options={["20", "50", "100", "200"]}
 					onChange={(limit) => {
@@ -579,13 +596,13 @@ export function MemoryPage() {
 								<DescriptionList columns={1}>
 									<DescriptionList.Item term="重要性">{memory.importance}</DescriptionList.Item>
 									<DescriptionList.Item term="创建时间">
-										{new Date(memory.created_at).toLocaleString("zh-CN")}
+										{formatDateTime(memory.created_at)}
 									</DescriptionList.Item>
 									<DescriptionList.Item term="更新时间">
-										{new Date(memory.updated_at).toLocaleString("zh-CN")}
+										{formatDateTime(memory.updated_at)}
 									</DescriptionList.Item>
 									<DescriptionList.Item term="事件时间">
-										{memory.event_time ?? "未设置"}
+										{memory.event_time ? formatDateTime(memory.event_time) : "未设置"}
 									</DescriptionList.Item>
 									<DescriptionList.Item term="来源">
 										{memory.source_key_id ?? "控制台"}
@@ -608,13 +625,16 @@ export function MemoryPage() {
 													.catch(() => toast.error("无法加载附件"));
 											}}
 										>
-											{attachment.filename} ({Math.ceil(attachment.size_bytes / 1024)} KB)
+											<span className="octo-record-title" title={attachment.filename}>
+												{attachment.filename}
+											</span>
+											<span className="octo-muted">{formatBytes(attachment.size_bytes)}</span>
 										</Button>
 									))}
 								</LayerCard.Body>
 							) : (
 								<LayerCard.Empty
-									className="octo-empty"
+									className="octo-empty octo-empty--compact"
 									icon={<Paperclip aria-hidden="true" />}
 									title="暂无附件"
 									description="添加图片或 PDF，补充这条记忆。"
@@ -642,7 +662,7 @@ export function MemoryPage() {
 											</Link>
 											<p className="octo-muted">
 												{version.actor === "admin" ? "管理员" : version.actor} /{" "}
-												{new Date(version.created_at).toLocaleString("zh-CN")}
+												{formatDateTime(version.created_at)}
 											</p>
 										</li>
 									))}
@@ -1110,19 +1130,21 @@ export function HistoryPage() {
 						setParams(next);
 					}}
 				/>
-				<SegmentControl
-					legend="差异显示方式"
-					value={params.get("diff") ?? "inline"}
-					options={[
-						{ value: "inline", label: "行内" },
-						{ value: "split", label: "并排" },
-					]}
-					onValueChange={(value) => {
-						const next = new URLSearchParams(params);
-						next.set("diff", value);
-						setParams(next, { replace: true });
-					}}
-				/>
+				<Field label="差异显示方式">
+					<ViewSwitch
+						label="差异显示方式"
+						value={params.get("diff") ?? "inline"}
+						options={[
+							{ value: "inline", label: "行内" },
+							{ value: "split", label: "并排" },
+						]}
+						onChange={(value) => {
+							const next = new URLSearchParams(params);
+							next.set("diff", value);
+							setParams(next, { replace: true });
+						}}
+					/>
+				</Field>
 			</Grid>
 			{state.diff && (
 				<LayerCard>
@@ -1163,49 +1185,61 @@ export function HistoryPage() {
 									</Grid>
 								</SectionRule>
 							))}
-						<Grid columns={1} className="octo-memory-overflow">
-							<Table className="octo-memory-diff" aria-label="正文差异">
-								<TableHeader>
-									<TableRow>
-										<TableHead>旧行号</TableHead>
-										<TableHead>新行号</TableHead>
-										{params.get("diff") === "split" ? (
-											<>
-												<TableHead>修改前</TableHead>
-												<TableHead>修改后</TableHead>
-											</>
-										) : (
-											<TableHead>变更</TableHead>
-										)}
-									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{diffLines(state.diff.body.hunks).map((line) => (
-										<TableRow key={line.key} data-change={line.kind}>
-											<TableCell>{line.oldLine}</TableCell>
-											<TableCell>{line.newLine}</TableCell>
+						{state.diff.body.hunks.length > 0 ? (
+							<Grid columns={1} className="octo-memory-overflow">
+								<Table className="octo-memory-diff" aria-label="正文差异">
+									<TableHeader>
+										<TableRow>
+											<TableHead textAlign="end" style={{ width: "7ch" }}>
+												旧行号
+											</TableHead>
+											<TableHead textAlign="end" style={{ width: "7ch" }}>
+												新行号
+											</TableHead>
 											{params.get("diff") === "split" ? (
 												<>
-													<TableCell>
-														<code>{line.kind === "added" ? "" : line.text}</code>
-													</TableCell>
-													<TableCell>
-														<code>{line.kind === "removed" ? "" : line.text}</code>
-													</TableCell>
+													<TableHead>修改前</TableHead>
+													<TableHead>修改后</TableHead>
 												</>
 											) : (
-												<TableCell>
-													<code>
-														{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}
-														{line.text}
-													</code>
-												</TableCell>
+												<TableHead>变更</TableHead>
 											)}
 										</TableRow>
-									))}
-								</TableBody>
-							</Table>
-						</Grid>
+									</TableHeader>
+									<TableBody>
+										{diffLines(state.diff.body.hunks).map((line) => (
+											<TableRow key={line.key} data-change={line.kind}>
+												<TableCell textAlign="end" className="octo-muted tabular-nums">
+													{line.oldLine}
+												</TableCell>
+												<TableCell textAlign="end" className="octo-muted tabular-nums">
+													{line.newLine}
+												</TableCell>
+												{params.get("diff") === "split" ? (
+													<>
+														<TableCell>
+															<code>{line.kind === "added" ? "" : line.text}</code>
+														</TableCell>
+														<TableCell>
+															<code>{line.kind === "removed" ? "" : line.text}</code>
+														</TableCell>
+													</>
+												) : (
+													<TableCell>
+														<code>
+															{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}
+															{line.text}
+														</code>
+													</TableCell>
+												)}
+											</TableRow>
+										))}
+									</TableBody>
+								</Table>
+							</Grid>
+						) : (
+							<p className="octo-muted">正文未变化</p>
+						)}
 						{!state.diff.fields.length && <p>这两个版本之间没有差异。</p>}
 					</LayerCard.Body>
 				</LayerCard>
@@ -1225,12 +1259,14 @@ export function HistoryPage() {
 						>
 							<strong>第 {version.version} 版</strong>
 							<span>
-								{memoryOperationLabels[version.op] ?? "其他操作"} /{" "}
+								<TagBadge
+									name={memoryOperationLabels[version.op] ?? "其他操作"}
+									color="info"
+									size="sm"
+								/>{" "}
 								{version.actor === "admin" ? "管理员" : version.actor}
 							</span>
-							<time dateTime={version.created_at}>
-								{new Date(version.created_at).toLocaleString("zh-CN")}
-							</time>
+							<time dateTime={version.created_at}>{formatDateTime(version.created_at)}</time>
 							<Button
 								variant="outline"
 								aria-label={`回滚到第 ${version.version} 版`}

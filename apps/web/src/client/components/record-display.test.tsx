@@ -1,0 +1,60 @@
+import type { ToggleGroupProps } from "@nocoo/basalt/components/toggle-group";
+import { renderToStaticMarkup } from "react-dom/server";
+import { expect, it, vi } from "vitest";
+import { MemoryTypeBadge, RecordTime, ViewSwitch } from "./record-display";
+
+const control = vi.hoisted(() => ({ change: (_value: string) => {} }));
+vi.mock("@nocoo/basalt/components/toggle-group", async (original) => {
+	const module = await original<typeof import("@nocoo/basalt/components/toggle-group")>();
+	return {
+		...module,
+		ToggleGroup: (props: ToggleGroupProps) => {
+			if (props.type === "single" && props.onValueChange) control.change = props.onValueChange;
+			return <module.ToggleGroup {...props} />;
+		},
+	};
+});
+
+it("retains the exact instant and visibly labels explicit UTC dates", () => {
+	const value = "2026-10-20T04:05:06Z";
+	const utc = renderToStaticMarkup(<RecordTime value={value} utc />);
+	expect(utc).toContain(`dateTime="${value}"`);
+	expect(utc).toContain("2026/10/20");
+	expect(utc).toContain("04:05:06 UTC");
+	expect(renderToStaticMarkup(<RecordTime value={value} />)).not.toContain(" UTC");
+});
+
+it("pairs semantic type colors with readable text, including unknown types", () => {
+	for (const [type, color, label] of [
+		["note", "info", "笔记"],
+		["decision", "amber", "决策"],
+		["missing", "slate", "未知类型"],
+	]) {
+		const html = renderToStaticMarkup(<MemoryTypeBadge type={type as string} />);
+		expect(html).toContain(`data-tag-color="${color}"`);
+		expect(html).toContain(label);
+	}
+});
+
+it("gives inline view controls a label and prevents deselecting the required value", () => {
+	const onChange = vi.fn();
+	const html = renderToStaticMarkup(
+		<ViewSwitch
+			id="view-choice"
+			label="View"
+			value="list"
+			options={[
+				{ value: "list", label: "List" },
+				{ value: "cards", label: "Cards" },
+			]}
+			onChange={onChange}
+		/>,
+	);
+	expect(html).toContain('aria-label="View"');
+	expect(html).toMatch(/<button[^>]*id="view-choice"/);
+	expect(html).not.toContain("<legend");
+	control.change("");
+	expect(onChange).not.toHaveBeenCalled();
+	control.change("cards");
+	expect(onChange).toHaveBeenCalledWith("cards");
+});

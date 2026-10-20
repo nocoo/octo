@@ -40,7 +40,7 @@ it("bounds long space names without losing their accessible text", () => {
 	};
 	const html = render(SpacesPage, "/spaces");
 	const link = html.match(/<a\b[^>]*href="\/memories\?spaces=work"[^>]*>[\s\S]*?<\/a>/)?.[0];
-	expect(link).toContain("block w-basalt-36 truncate");
+	expect(link).toContain("width:24ch");
 	expect(link).toContain(`title="${name}"`);
 	expect(link).toContain("data-tag-color=");
 	expect(link?.replace(/<[^>]*>/g, "")).toBe(name);
@@ -57,10 +57,10 @@ it("does not offer sorting for space actions", () => {
 
 it.each([
 	[TagsPage, "/tags", "标签", ["24ch", "10ch", "24ch"]],
-	[SpacesPage, "/spaces", "空间", ["24ch", "12ch", "36ch", "32ch", "24ch", "10ch"]],
+	[SpacesPage, "/spaces", "空间", ["24ch", "22ch", "26ch", "24ch", "10ch", "12ch"]],
 	[GraphPage, "/graph", "图谱节点", ["24ch", "12ch", "10ch"]],
 	[GraphPage, "/graph", "图谱关系", ["24ch", "24ch", "12ch"]],
-	[TimelinePage, "/timeline", "2026-10-17 的时间线数据", ["28ch", "24ch", "24ch"]],
+	[TimelinePage, "/timeline", "2026-10-17 的时间线数据", ["16ch", "24ch", "24ch"]],
 ] as const)(
 	"keeps %s record columns readable rather than squeezing them on mobile",
 	(Page, url, label, widths) => {

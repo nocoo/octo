@@ -12,7 +12,6 @@ import {
 	Input,
 	LayerCard,
 	Link,
-	SegmentControl,
 	toast,
 } from "@nocoo/basalt";
 import { Timeline } from "@nocoo/basalt/charts/timeline";
@@ -52,6 +51,8 @@ import {
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
+import { RecordTime, ViewSwitch } from "../components/record-display";
+import { formatNumber } from "../lib/format";
 import {
 	type LibraryKind,
 	type LibraryMemory,
@@ -172,7 +173,7 @@ function GraphTables({
 			width: "24ch",
 			accessor: (node) =>
 				node.href ? (
-					<Link href={node.href}>
+					<Link href={node.href} className="octo-record-title" title={node.label}>
 						{node.kind === "tag" ? <TagBadge name={node.label} size="sm" /> : node.label}
 					</Link>
 				) : (
@@ -186,9 +187,11 @@ function GraphTables({
 			header: "类型",
 			width: "12ch",
 			accessor: (node) => (
-				<Badge variant="secondary">
-					{{ tag: "标签", memory: "记忆", cluster: "聚合节点" }[node.kind]}
-				</Badge>
+				<TagBadge
+					name={{ tag: "标签", memory: "记忆", cluster: "聚合节点" }[node.kind]}
+					color={({ tag: "teal", memory: "blue", cluster: "amber" } as const)[node.kind]}
+					size="sm"
+				/>
 			),
 			sortValue: (node) => node.kind,
 		},
@@ -196,7 +199,7 @@ function GraphTables({
 			id: "count",
 			header: "数量",
 			width: "10ch",
-			accessor: (node) => node.count,
+			accessor: (node) => formatNumber(node.count),
 			sortValue: (node) => node.count,
 			textAlign: "end",
 			cellClassName: "tabular-nums",
@@ -238,7 +241,11 @@ function GraphTables({
 						id: "source",
 						header: "起点",
 						width: "24ch",
-						accessor: (link) => labels.get(link.source),
+						accessor: (link) => (
+							<span className="octo-record-title" title={labels.get(link.source)}>
+								{labels.get(link.source)}
+							</span>
+						),
 						sortValue: (link) => labels.get(link.source) ?? link.source,
 						wrap: true,
 					},
@@ -246,7 +253,11 @@ function GraphTables({
 						id: "target",
 						header: "终点",
 						width: "24ch",
-						accessor: (link) => labels.get(link.target),
+						accessor: (link) => (
+							<span className="octo-record-title" title={labels.get(link.target)}>
+								{labels.get(link.target)}
+							</span>
+						),
 						sortValue: (link) => labels.get(link.target) ?? link.target,
 						wrap: true,
 					},
@@ -254,7 +265,7 @@ function GraphTables({
 						id: "value",
 						header: "关联强度",
 						width: "12ch",
-						accessor: (link) => link.value,
+						accessor: (link) => formatNumber(link.value),
 						sortValue: (link) => link.value,
 						textAlign: "end",
 					},
@@ -316,7 +327,11 @@ export function TagsPage() {
 			id: "count",
 			header: "记忆数",
 			width: "10ch",
-			accessor: (tag) => tag.use_count,
+			accessor: (tag) => (
+				<span className="font-medium text-basalt-tag-blue-foreground">
+					{formatNumber(tag.use_count)}
+				</span>
+			),
 			sortValue: (tag) => tag.use_count,
 			textAlign: "end",
 			cellClassName: "tabular-nums",
@@ -428,7 +443,8 @@ export function TagsPage() {
 						<SectionRule title="标签共现" hint="每条连线表示同时包含这两个标签的记忆数。">
 							<LayerCard>
 								<LayerCard.Header>
-									标签之间的联系 <Link href="/graph?mode=cooccurrence">探索图谱</Link>
+									<span>标签之间的联系</span>
+									<Link href="/graph?mode=cooccurrence">探索图谱</Link>
 								</LayerCard.Header>
 								<LayerCard.Body>
 									<Grid columns={1}>
@@ -576,7 +592,8 @@ export function SpacesPage() {
 			accessor: (space) => (
 				<Link
 					href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}
-					className="block w-basalt-36 truncate"
+					className="block"
+					style={{ width: "24ch" }}
 					title={space.name}
 				>
 					<TagBadge
@@ -590,8 +607,59 @@ export function SpacesPage() {
 			sortValue: (space) => space.name,
 		},
 		{
+			id: "slug",
+			header: "标识",
+			width: "22ch",
+			sortValue: (space) => space.slug,
+			accessor: (space) => (
+				<span className="octo-record-id" title={space.slug}>
+					{space.slug}
+				</span>
+			),
+		},
+		{
+			id: "description",
+			header: "说明",
+			width: "26ch",
+			sortValue: (space) => space.description,
+			accessor: (space) => (
+				<span className="octo-record-title octo-muted" title={space.description}>
+					{space.description || "未填写"}
+				</span>
+			),
+			wrap: true,
+		},
+		{
+			id: "owner",
+			header: "所属密钥",
+			width: "24ch",
+			accessor: (space) =>
+				space.owner_key_id ? (
+					<Link href="/keys" className="octo-record-title">
+						{state.keys.find((key) => key.id === space.owner_key_id)?.name ?? space.owner_key_id}
+					</Link>
+				) : (
+					"未指定"
+				),
+			sortValue: (space) => space.owner_key_id ?? "",
+		},
+		{
+			id: "count",
+			header: "记忆数",
+			width: "10ch",
+			accessor: (space) => (
+				<span className="font-medium text-basalt-tag-blue-foreground">
+					{formatNumber(space.memory_count)}
+				</span>
+			),
+			sortValue: (space) => space.memory_count,
+			textAlign: "end",
+			cellClassName: "tabular-nums",
+		},
+		{
 			id: "actions",
 			header: "操作",
+			textAlign: "end",
 			width: "12ch",
 			sortable: false,
 			accessor: (space) => (
@@ -611,37 +679,6 @@ export function SpacesPage() {
 					重命名
 				</Button>
 			),
-		},
-		{ id: "slug", header: "标识", width: "36ch", accessor: (space) => space.slug },
-		{
-			id: "description",
-			header: "说明",
-			width: "32ch",
-			accessor: (space) => space.description,
-			wrap: true,
-		},
-		{
-			id: "owner",
-			header: "所属密钥",
-			width: "24ch",
-			accessor: (space) =>
-				space.owner_key_id ? (
-					<Link href="/keys">
-						{state.keys.find((key) => key.id === space.owner_key_id)?.name ?? space.owner_key_id}
-					</Link>
-				) : (
-					"未指定"
-				),
-			sortValue: (space) => space.owner_key_id ?? "",
-		},
-		{
-			id: "count",
-			header: "记忆数",
-			width: "10ch",
-			accessor: (space) => space.memory_count,
-			sortValue: (space) => space.memory_count,
-			textAlign: "end",
-			cellClassName: "tabular-nums",
 		},
 	];
 	return (
@@ -860,15 +897,17 @@ export function GraphPage() {
 							gap: "var(--basalt-space-layout-sm)",
 						}}
 					>
-						<SegmentControl
-							legend="关系类型"
-							value={options.mode}
-							onValueChange={(value) => setParams(updateLibraryUrl(params, "mode", value))}
-							options={[
-								{ value: "bipartite", label: "标签与记忆" },
-								{ value: "cooccurrence", label: "标签共现" },
-							]}
-						/>
+						<Field label="关系类型">
+							<ViewSwitch
+								label="关系类型"
+								value={options.mode}
+								onChange={(value) => setParams(updateLibraryUrl(params, "mode", value))}
+								options={[
+									{ value: "bipartite", label: "标签与记忆" },
+									{ value: "cooccurrence", label: "标签共现" },
+								]}
+							/>
+						</Field>
 						<SpaceFilter
 							memories={state.memories}
 							value={params.get("space") ?? ""}
@@ -953,8 +992,8 @@ export function TimelinePage() {
 		{
 			id: "time",
 			header: "时间（UTC）",
-			width: "28ch",
-			accessor: (item) => new Date(item.timestamp).toISOString(),
+			width: "16ch",
+			accessor: (item) => <RecordTime value={new Date(item.timestamp).toISOString()} utc />,
 			sortValue: (item) => item.timestamp,
 		},
 		{
@@ -962,7 +1001,13 @@ export function TimelinePage() {
 			header: "记忆",
 			width: "24ch",
 			accessor: (item) => (
-				<Link href={`/memories/${encodeURIComponent(item.id)}`}>{item.title}</Link>
+				<Link
+					href={`/memories/${encodeURIComponent(item.id)}`}
+					className="octo-record-title"
+					title={item.title}
+				>
+					{item.title}
+				</Link>
 			),
 			sortValue: (item) => item.title,
 			wrap: true,
@@ -1016,25 +1061,29 @@ export function TimelinePage() {
 									gap: "var(--basalt-space-layout-sm)",
 								}}
 							>
-								<SegmentControl
-									legend="时间依据"
-									value={options.field}
-									onValueChange={(value) => setParams(updateLibraryUrl(params, "field", value))}
-									options={[
-										{ value: "event_time", label: "事件时间" },
-										{ value: "created_at", label: "创建时间" },
-									]}
-								/>
-								<SegmentControl
-									legend="时间粒度"
-									value={options.zoom}
-									onValueChange={(value) => setParams(updateLibraryUrl(params, "zoom", value))}
-									options={[
-										{ value: "hour", label: "小时" },
-										{ value: "day", label: "天" },
-										{ value: "month", label: "月" },
-									]}
-								/>
+								<Field label="时间依据">
+									<ViewSwitch
+										label="时间依据"
+										value={options.field}
+										onChange={(value) => setParams(updateLibraryUrl(params, "field", value))}
+										options={[
+											{ value: "event_time", label: "事件时间" },
+											{ value: "created_at", label: "创建时间" },
+										]}
+									/>
+								</Field>
+								<Field label="时间粒度">
+									<ViewSwitch
+										label="时间粒度"
+										value={options.zoom}
+										onChange={(value) => setParams(updateLibraryUrl(params, "zoom", value))}
+										options={[
+											{ value: "hour", label: "小时" },
+											{ value: "day", label: "天" },
+											{ value: "month", label: "月" },
+										]}
+									/>
+								</Field>
 								<CollapsibleTrigger asChild>
 									<Button variant="outline">
 										<SlidersHorizontal size={16} aria-hidden="true" />

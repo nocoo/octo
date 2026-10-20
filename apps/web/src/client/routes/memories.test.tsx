@@ -55,6 +55,13 @@ function render(Page: () => React.JSX.Element, path: string) {
 }
 
 describe("memory pages use installed Basalt layouts and Chinese copy", () => {
+	it("does not render an empty body diff for a metadata-only revision", () => {
+		expect(render(HistoryPage, "/memories/m1/history")).not.toContain('aria-label="正文差异"');
+	});
+	it("announces a partially selected memory page", () => {
+		overrides.list = { items: [memory, { ...memory, id: "m2" }] };
+		expect(render(MemoriesPage, "/memories?selected=m1")).toMatch(/aria-checked="mixed"/);
+	});
 	it("uses the shared compact table treatment, title icon and stable metadata colors", () => {
 		overrides.list = { items: [{ ...memory, space: "notes", tags: ["work"] }] };
 		const html = render(MemoriesPage, "/memories?selected=m1");
@@ -180,8 +187,8 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 			],
 		};
 		const html = render(MemoriesPage, "/memories");
-		expect(html).toMatch(/<th[^>]*style="min-width:28ch"[^>]*>空间 \/ 标签<\/th>/);
-		expect(html).toMatch(/<td[^>]*style="min-width:28ch"[^>]*><div[^>]*><span[^>]*>s{64}<\/span>/);
+		expect(html).toMatch(/<th[^>]*>空间 \/ 标签<\/th>/);
+		expect(html).toMatch(/<td[^>]*><div[^>]*><span[^>]*>s{64}<\/span>/);
 	});
 	it.each(["/memories", "/memories?view=cards"])(
 		"wraps unbroken space and tag values inside their badges at %s",
@@ -199,7 +206,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		[MemoriesPage, "/memories?view=cards", ["记忆库", "卡片", "笔记"]],
 		[MemoryPage, "/memories/m1", ["本页目录", "详细信息", "附件", "版本时间线"]],
 		[EditorPage, "/memories/m1/edit", ["编辑记忆", "保存记忆", "实时预览", "选择文件"]],
-		[HistoryPage, "/memories/m1/history", ["版本历史", "版本快照", "更新", "回滚", "正文差异"]],
+		[HistoryPage, "/memories/m1/history", ["版本历史", "版本快照", "更新", "回滚", "正文未变化"]],
 	] as const)("renders %s without local layout wrappers", (Page, url, labels) => {
 		const html = render(Page, url);
 		for (const label of labels) expect(html).toContain(label);

@@ -35,14 +35,14 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useModel } from "../components/layout/use-model";
+import { RecordTime } from "../components/record-display";
+import { formatNumber } from "../lib/format";
 import { KeyUsageModel } from "../viewmodels/operations-key-usage";
 import { type KeyMetadata, KeysModel, keyStatus } from "../viewmodels/operations-keys";
 import { KeyForm, operationText, roleLabels, scopeLabels } from "./key-form";
 import "./operations.css";
 
 const statusLabels = { active: "有效", expired: "已过期", revoked: "已撤销" };
-const time = (value: string | null): string =>
-	value === null ? "从未" : new Date(value).toLocaleString("zh-CN");
 
 export function KeysPage() {
 	const [model] = useState(() => new KeysModel());
@@ -97,18 +97,25 @@ export function KeysPage() {
 		{
 			id: "name",
 			header: "代理",
+			width: "16ch",
+			wrap: true,
 			sortValue: (key) => key.name,
 			accessor: (key) => (
-				<span>
-					<strong>{key.name}</strong>
-					<br />
-					<span className="text-basalt-sm text-basalt-muted-foreground">{key.id}</span>
+				<span className="block" style={{ width: "16ch" }}>
+					<strong className="octo-record-title" title={key.name}>
+						{key.name}
+					</strong>
+					<span className="octo-record-id" title={key.id}>
+						{key.id}
+					</span>
 				</span>
 			),
 		},
 		{
 			id: "role",
 			header: "角色 / 范围",
+			width: "18ch",
+			wrap: true,
 			sortValue: (key) => roleLabels[key.role],
 			accessor: (key) => (
 				<span>
@@ -124,6 +131,7 @@ export function KeysPage() {
 		{
 			id: "status",
 			header: "状态",
+			width: "10ch",
 			sortValue: (key) => statusLabels[keyStatus(key)],
 			accessor: (key) => (
 				<Badge
@@ -149,20 +157,29 @@ export function KeysPage() {
 		{
 			id: "expiry",
 			header: "到期时间",
+			width: "12ch",
 			sortValue: (key) =>
 				key.expires_at === null ? Number.POSITIVE_INFINITY : Date.parse(key.expires_at),
-			accessor: (key) => (key.expires_at === null ? "永不过期" : time(key.expires_at)),
+			accessor: (key) =>
+				key.expires_at === null ? "永不过期" : <RecordTime value={key.expires_at} />,
 		},
 		{
 			id: "last",
 			header: "最近使用",
+			width: "12ch",
 			sortValue: (key) =>
 				key.last_used_at === null ? Number.POSITIVE_INFINITY : Date.parse(key.last_used_at),
-			accessor: (key) => time(key.last_used_at),
+			accessor: (key) =>
+				key.last_used_at === null ? (
+					<span className="octo-muted">从未</span>
+				) : (
+					<RecordTime value={key.last_used_at} />
+				),
 		},
 		{
 			id: "usage",
-			header: "近 30 天调用（UTC）",
+			header: "30 天调用 · UTC",
+			width: "16ch",
 			sortable: false,
 			accessor: (key) => {
 				const usage = usageModel.usage(key.id);
@@ -177,7 +194,7 @@ export function KeysPage() {
 						data={usage.data}
 						series={[{ key: "calls", label: "调用次数" }]}
 						ariaLabel={`${key.name} 近 30 天每日调用量`}
-						summary={`${usage.total} 次调用`}
+						summary={`${formatNumber(usage.total)} 次调用`}
 						dataAlternative={
 							<span className="sr-only">
 								{usageState.snapshot?.from} 至 {usageState.snapshot?.to}（UTC）：
@@ -191,6 +208,7 @@ export function KeysPage() {
 		{
 			id: "actions",
 			header: "操作",
+			width: "26ch",
 			sortable: false,
 			textAlign: "end",
 			accessor: (key) =>

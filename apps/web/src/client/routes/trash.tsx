@@ -42,6 +42,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
+import { RecordTime } from "../components/record-display";
+import { formatNumber } from "../lib/format";
 import { type LibraryMemory, setSelection } from "../viewmodels/library";
 import {
 	readTrashFilters,
@@ -169,7 +171,11 @@ export function TrashPage() {
 			id: "title",
 			header: "记忆",
 			width: "24ch",
-			accessor: (item) => item.title,
+			accessor: (item) => (
+				<span className="octo-record-title" title={item.title}>
+					{item.title}
+				</span>
+			),
 			wrap: true,
 			sortable: false,
 		},
@@ -183,10 +189,9 @@ export function TrashPage() {
 		{
 			id: "deleted",
 			header: "移入时间",
-			width: "24ch",
+			width: "14ch",
 			textAlign: "end",
-			accessor: (item) =>
-				item.deleted_at ? new Date(item.deleted_at).toLocaleString("zh-CN") : "未知",
+			accessor: (item) => (item.deleted_at ? <RecordTime value={item.deleted_at} /> : "未知"),
 			sortable: false,
 		},
 		{
@@ -435,7 +440,7 @@ export function TrashPage() {
 							}}
 						>
 							<Text className="text-basalt-sm text-basalt-muted-foreground" role="status">
-								共 {state.total} 条记忆 · 第 {state.page} 页 · 每页 25 条
+								共 {formatNumber(state.total)} 条记忆 · 第 {state.page} 页 · 每页 25 条
 							</Text>
 							<Grid columns={1} gap="sm" style={{ display: "flex" }}>
 								<Button

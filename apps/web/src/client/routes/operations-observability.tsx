@@ -1,5 +1,5 @@
 import { Button, Field, Input, LayerCard, ScrollArea, toast } from "@nocoo/basalt";
-import { LineChart } from "@nocoo/basalt/charts/line";
+import { BarChart } from "@nocoo/basalt/charts/bar";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
@@ -27,6 +27,8 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useModel } from "../components/layout/use-model";
+import { RecordTime } from "../components/record-display";
+import { formatBytes, formatNumber } from "../lib/format";
 import { operationsError } from "../viewmodels/operations-errors";
 import {
 	AuditModel,
@@ -58,22 +60,38 @@ export function UsagePage() {
 			sortValue: (row) => Date.parse(row.day),
 			accessor: (row) => row.day,
 		},
-		{ id: "key", header: "密钥", width: "18ch", accessor: (row) => row.key_id },
+		{
+			id: "key",
+			header: "密钥",
+			width: "18ch",
+			sortValue: (row) => row.key_id,
+			accessor: (row) => <TagBadge name={row.key_id} size="sm" />,
+		},
 		{
 			id: "calls",
 			header: "调用次数",
-			width: "14ch",
+			width: "12ch",
 			sortValue: (row) => row.calls,
 			textAlign: "end",
-			accessor: (row) => row.calls.toLocaleString("zh-CN"),
+			accessor: (row) => (
+				<span className="font-medium text-basalt-tag-blue-foreground">
+					{formatNumber(row.calls)}
+				</span>
+			),
 		},
 		{
 			id: "errors",
 			header: "错误次数",
-			width: "14ch",
+			width: "12ch",
 			sortValue: (row) => row.errors,
 			textAlign: "end",
-			accessor: (row) => row.errors.toLocaleString("zh-CN"),
+			accessor: (row) => (
+				<span
+					className={row.errors ? "text-basalt-tag-danger-foreground font-medium" : "octo-muted"}
+				>
+					{formatNumber(row.errors)}
+				</span>
+			),
 		},
 		{
 			id: "rate",
@@ -81,31 +99,41 @@ export function UsagePage() {
 			width: "12ch",
 			sortValue: (row) => row.error_rate,
 			textAlign: "end",
-			accessor: (row) => `${row.error_rate.toFixed(2)}%`,
+			accessor: (row) => (
+				<TagBadge
+					name={`${row.error_rate.toFixed(2)}%`}
+					color={row.errors ? "warning" : "success"}
+					size="sm"
+				/>
+			),
 		},
 		{
 			id: "writes",
 			header: "写入次数",
-			width: "14ch",
+			width: "12ch",
 			sortValue: (row) => row.writes,
 			textAlign: "end",
-			accessor: (row) => row.writes.toLocaleString("zh-CN"),
+			accessor: (row) => formatNumber(row.writes),
 		},
 		{
 			id: "bytes_in",
-			header: "输入字节",
-			width: "14ch",
+			header: "输入流量",
+			width: "12ch",
 			sortValue: (row) => row.bytes_in,
 			textAlign: "end",
-			accessor: (row) => row.bytes_in.toLocaleString("zh-CN"),
+			accessor: (row) => (
+				<span title={`${formatNumber(row.bytes_in)} B`}>{formatBytes(row.bytes_in)}</span>
+			),
 		},
 		{
 			id: "bytes_out",
-			header: "输出字节",
-			width: "14ch",
+			header: "输出流量",
+			width: "12ch",
 			sortValue: (row) => row.bytes_out,
 			textAlign: "end",
-			accessor: (row) => row.bytes_out.toLocaleString("zh-CN"),
+			accessor: (row) => (
+				<span title={`${formatNumber(row.bytes_out)} B`}>{formatBytes(row.bytes_out)}</span>
+			),
 		},
 	];
 	const alternative = (
@@ -154,8 +182,8 @@ export function UsagePage() {
 							gap="sm"
 							className="ops-filter-fields"
 							style={{
-								gridTemplateColumns:
-									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
+								display: "flex",
+								flexWrap: "wrap",
 								alignItems: "end",
 							}}
 						>
@@ -169,8 +197,7 @@ export function UsagePage() {
 								role="group"
 								aria-label="日期范围"
 								style={{
-									gridTemplateColumns:
-										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-40)), 1fr))",
+									gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
 									alignItems: "end",
 								}}
 							>
@@ -223,13 +250,13 @@ export function UsagePage() {
 						<LayerCard.Header>调用次数</LayerCard.Header>
 						<LayerCard.Body>
 							<Grid columns={1} gap="sm">
-								<LineChart
+								<BarChart
 									className="ops-plot"
 									showAxes
 									data={model.chart}
 									series={[{ key: "calls", label: "调用次数" }]}
 									ariaLabel="各密钥的每日调用次数"
-									summary="每个点代表一个密钥一天内的值，不跨密钥汇总。"
+									summary="每根柱代表一个密钥一天内的值，不跨密钥汇总。"
 									dataAlternative={alternative}
 								/>
 							</Grid>
@@ -239,7 +266,7 @@ export function UsagePage() {
 						<LayerCard.Header>错误率</LayerCard.Header>
 						<LayerCard.Body>
 							<Grid columns={1} gap="sm">
-								<LineChart
+								<BarChart
 									className="ops-plot"
 									showAxes
 									yDomain={[0, 100]}
@@ -413,8 +440,8 @@ export function AuditPage() {
 							gap="sm"
 							className="ops-filter-fields"
 							style={{
-								gridTemplateColumns:
-									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
+								display: "flex",
+								flexWrap: "wrap",
 								alignItems: "end",
 							}}
 						>
@@ -441,8 +468,7 @@ export function AuditPage() {
 								role="group"
 								aria-label="日期范围"
 								style={{
-									gridTemplateColumns:
-										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-40)), 1fr))",
+									gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
 									alignItems: "end",
 								}}
 							>
@@ -551,11 +577,29 @@ export function AuditPage() {
 								{state.items.slice(window.start, window.end).map((row, index) => (
 									<TableRow key={row.id} data-audit-row="" aria-rowindex={window.start + index + 2}>
 										<TableCell className="ps-basalt-table-edge">
-											{new Date(row.at).toLocaleString("zh-CN")}
+											<RecordTime value={row.at} />
 										</TableCell>
-										<TableCell>{row.actor}</TableCell>
-										<TableCell>{row.method}</TableCell>
-										<TableCell>{row.route}</TableCell>
+										<TableCell>
+											<span className="octo-record-id" title={row.actor}>
+												{row.actor}
+											</span>
+										</TableCell>
+										<TableCell>
+											<TagBadge
+												name={row.method}
+												color={
+													row.method === "GET"
+														? "blue"
+														: row.method === "DELETE"
+															? "danger"
+															: "amber"
+												}
+												size="sm"
+											/>
+										</TableCell>
+										<TableCell>
+											<code className="text-basalt-xs">{row.route}</code>
+										</TableCell>
 										<TableCell textAlign="end">
 											<TagBadge
 												name={String(row.status)}
@@ -571,8 +615,14 @@ export function AuditPage() {
 												</span>
 											)}
 										</TableCell>
-										<TableCell textAlign="end">{row.duration_ms} 毫秒</TableCell>
-										<TableCell className="pe-basalt-table-edge">{row.request_id}</TableCell>
+										<TableCell textAlign="end">
+											{formatNumber(row.duration_ms)} <span className="octo-muted">ms</span>
+										</TableCell>
+										<TableCell className="pe-basalt-table-edge">
+											<span className="octo-record-id" title={row.request_id}>
+												{row.request_id}
+											</span>
+										</TableCell>
 									</TableRow>
 								))}
 								{window.after > 0 && (

@@ -14,6 +14,7 @@ import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-t
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
+import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
 	CircleAlert,
 	CircleCheck,
@@ -26,6 +27,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useModel } from "../components/layout/use-model";
+import { RecordTime } from "../components/record-display";
+import { formatNumber } from "../lib/format";
 import {
 	type EmbeddingFields,
 	EmbeddingModel,
@@ -152,7 +155,8 @@ export function EmbeddingPage() {
 										gap="sm"
 										className="ops-embedding-key-actions"
 										style={{
-											gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+											display: "flex",
+											flexWrap: "wrap",
 											alignItems: "center",
 										}}
 									>
@@ -205,7 +209,8 @@ export function EmbeddingPage() {
 										gap="sm"
 										className="ops-embedding-test-actions"
 										style={{
-											gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+											display: "flex",
+											flexWrap: "wrap",
 											alignItems: "center",
 										}}
 									>
@@ -282,7 +287,7 @@ export function EmbeddingPage() {
 											/>
 											<DescriptionList>
 												<DescriptionList.Item term="延迟">
-													{state.testResult.latency_ms} 毫秒
+													{formatNumber(state.testResult.latency_ms)} ms
 												</DescriptionList.Item>
 												<DescriptionList.Item term="实际维度">
 													{state.testResult.dims ?? "暂无数据"}
@@ -345,14 +350,31 @@ export function SettingsPage() {
 		return () => model.dispose();
 	}, [model]);
 	const columns: DataTableColumn<EmbeddingProfile>[] = [
-		{ id: "id", header: "配置", width: "22ch", accessor: (profile) => profile.id },
-		{ id: "model", header: "模型", width: "28ch", accessor: (profile) => profile.model },
+		{
+			id: "id",
+			header: "配置",
+			width: "22ch",
+			sortValue: (profile) => profile.id,
+			accessor: (profile) => (
+				<span className="octo-record-id" title={profile.id}>
+					{profile.id}
+				</span>
+			),
+		},
+		{
+			id: "model",
+			header: "模型",
+			width: "24ch",
+			sortValue: (profile) => profile.model,
+			accessor: (profile) => <TagBadge name={profile.model} size="sm" />,
+		},
 		{
 			id: "dims",
 			header: "维度",
 			width: "10ch",
 			textAlign: "end",
-			accessor: (profile) => profile.dims,
+			sortValue: (profile) => profile.dims,
+			accessor: (profile) => formatNumber(profile.dims),
 		},
 		{
 			id: "metric",
@@ -365,9 +387,9 @@ export function SettingsPage() {
 		{
 			id: "created_at",
 			header: "创建时间",
-			width: "26ch",
+			width: "14ch",
 			sortValue: (profile) => Date.parse(profile.created_at),
-			accessor: (profile) => new Date(profile.created_at).toLocaleString("zh-CN"),
+			accessor: (profile) => <RecordTime value={profile.created_at} />,
 		},
 		{
 			id: "active",
@@ -434,6 +456,7 @@ export function SettingsPage() {
 						<LayerCard.Loading label="正在加载嵌入配置" />
 					) : (
 						<DataTable
+							className="octo-table"
 							aria-label="嵌入配置"
 							columns={columns}
 							data={state.profiles}
