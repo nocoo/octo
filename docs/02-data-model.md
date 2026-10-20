@@ -226,7 +226,7 @@ persistently failing prefix cannot starve later updates or purge tombstones.
 Claiming a lease also advances its queue position before the external call;
 an abandoned or hung call therefore cannot reclaim the queue head forever.
 The same claim covers embedding backfill before any gateway call. At most four
-jobs are claimed together; current client vectors and deletion tombstones bypass
+jobs are prepared concurrently; current client vectors and deletion tombstones bypass
 embedding preparation. Only missing/stale live vectors form an embedding batch;
 distinct missing content hashes share one gateway request and identical hashes
 share one input. Another drain skips their live leases. If preparation rejects,
@@ -235,12 +235,16 @@ charging already-ready vector writes or deletions. After backfill, synchronizati
 lease ownership and reads the current generation before reading the vector;
 an expired owner's completion cannot acknowledge a newer owner's work.
 Each actual claim and post-backfill refresh reads the current clock, rather than
-reusing the drain start time. A queued delete refreshes and checks its lease and
-generation immediately before joining the provider batch; superseded claims are
+reusing the drain start time. Queued mutations refresh and check their lease and
+generation immediately before each provider attempt, including rate-limit retries; superseded claims are
 not sent. Retry delays start from failure time.
 Completed rows and tombstones are intentionally retained; this is the durable
 recovery cost of a destination without conditional/fenced writes.
 
+Ready upserts are grouped into calls of at most 100 vectors, below the Workers
+binding limit of 1,000. Embedding groups retain at most four jobs so a large slow
+backfill does not hold completed vectors behind unrelated requests. Ready work
+flushes before entering a newly needed embedding batch, including repair rounds.
 Deletes are grouped into `deleteByIds` chunks of at most 100 IDs. A rejected
 chunk defers only its own jobs; other chunks acknowledge independently. Successful
 chunks acknowledge each generation separately, repairing concurrent restores

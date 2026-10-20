@@ -10,6 +10,10 @@ cause before treating its failure as TDD evidence.
 The pre-commit typecheck also caught a stale cron-test import after renaming the
 retry interval. Search all consumers, not just the implementation directory,
 before changing an exported identifier; keep hooks enabled to catch omissions.
+The first batching pass also held a repaired client vector behind newly stale
+embedding work. The existing priority regression caught the 15-second delay.
+Flush ready records before slow embedding preparation, not only at the end of
+the outer chunk, and retain latency assertions when changing queue grouping.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 

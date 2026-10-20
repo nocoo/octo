@@ -8,10 +8,11 @@ import { isVectorRateLimit, retryVectorMutation, vectorErrorDetails } from "./ve
 export const SYNC_LEASE_MS = 60_000;
 export const FAILURE_BACKOFF_MS = 60 * 60 * 1000;
 const MAX_FAILURES = 8;
-const DELETE_BATCH_SIZE = 100;
+const MUTATION_BATCH_SIZE = 100;
 
 type Job = { memory_id: string };
 type Claim = Job & { token: string; generation: number };
+type Upsert = Claim & { record: VectorizeVector };
 
 async function concurrent<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
 	const pending = items.values();
@@ -197,7 +198,13 @@ export async function synchronizeVectors(
 				.first<{ generation: number }>();
 		return claim ? { ...job, token, generation: claim.generation } : null;
 	};
-	const syncAttempt = async (job: Job, deletes: Claim[], retry: Job[], prepared?: Claim) => {
+	const syncAttempt = async (
+		job: Job,
+		upserts: Upsert[],
+		deletes: Claim[],
+		retry: Job[],
+		prepared?: Claim,
+	) => {
 		const claimed = prepared ?? (await claimJob(job));
 		if (!claimed) return;
 		const token = claimed.token;
@@ -223,26 +230,24 @@ export async function synchronizeVectors(
 					.bind(job.memory_id, profileId)
 					.first<SourceVector>();
 			if (source) {
-				stage = "upsert";
-				await retryVectorMutation(() =>
-					store.upsert([
-						{
-							id: source.id,
-							values: decodeFloat32Vector(source.vector, source.dim),
-							metadata: {
-								generation: claimed.generation,
-								content_hash: source.content_hash,
-								space: source.space,
-								type: source.type,
-								source: source.source,
-								importance: source.importance,
-								created: source.created,
-								updated: source.updated,
-								...(source.event === null ? {} : { event: source.event }),
-							},
+				upserts.push({
+					...claimed,
+					record: {
+						id: source.id,
+						values: decodeFloat32Vector(source.vector, source.dim),
+						metadata: {
+							generation: claimed.generation,
+							content_hash: source.content_hash,
+							space: source.space,
+							type: source.type,
+							source: source.source,
+							importance: source.importance,
+							created: source.created,
+							updated: source.updated,
+							...(source.event === null ? {} : { event: source.event }),
 						},
-					]),
-				);
+					},
+				});
 			} else {
 				if (options.deferMissingVectors && (await embeddingIds([job])).has(job.memory_id)) {
 					await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
@@ -254,8 +259,6 @@ export async function synchronizeVectors(
 				deletes.push(claimed);
 				return;
 			}
-			stage = "acknowledge";
-			await acknowledge(claimed, retry);
 		} catch (error) {
 			await fail(claimed, stage, error, retry);
 		}
@@ -271,25 +274,93 @@ export async function synchronizeVectors(
 			.all<{ id: string }>();
 		return new Set(needs.results.map((memory) => memory.id));
 	};
+	const flushMutations = async <Mutation extends Claim>(
+		claims: Mutation[],
+		stage: "upsert" | "delete",
+		write: (ready: Mutation[]) => Promise<void>,
+		retry: Job[],
+	) => {
+		let ready = claims;
+		try {
+			await retryVectorMutation(async () => {
+				const ownedClaims: Mutation[] = [];
+				await concurrent(ready, concurrency, async (job) => {
+					const refreshedAt = timestamp();
+					const owned =
+						await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_until = ?, due_at = ?
+						WHERE memory_id = ? AND generation = ? AND lease_token = ? RETURNING memory_id`)
+							.bind(
+								refreshedAt + SYNC_LEASE_MS,
+								refreshedAt,
+								job.memory_id,
+								job.generation,
+								job.token,
+							)
+							.first();
+					if (owned) {
+						ownedClaims.push(job);
+					} else {
+						const released = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
+							lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ? RETURNING memory_id`)
+							.bind(refreshedAt, job.memory_id, job.token)
+							.first();
+						if (released) retry.push(job);
+					}
+				});
+				ready = ownedClaims;
+				if (ready.length > 0) await write(ready);
+			});
+		} catch (error) {
+			await concurrent(ready, concurrency, (job) => fail(job, stage, error, retry));
+			return;
+		}
+		await concurrent(ready, concurrency, async (job) => {
+			try {
+				await acknowledge(job, retry);
+			} catch (error) {
+				await fail(job, "acknowledge", error, retry);
+			}
+		});
+	};
 	const needsEmbedding = options.beforeSyncBatch ? await embeddingIds(jobs.results) : new Set();
 	const groups = options.beforeSyncBatch
 		? [
-				jobs.results.filter((job) => !needsEmbedding.has(job.memory_id)),
-				jobs.results.filter((job) => needsEmbedding.has(job.memory_id)),
+				{
+					jobs: jobs.results.filter((job) => !needsEmbedding.has(job.memory_id)),
+					size: MUTATION_BATCH_SIZE,
+				},
+				{
+					jobs: jobs.results.filter((job) => needsEmbedding.has(job.memory_id)),
+					size: concurrency,
+				},
 			]
-		: [jobs.results];
-	const batchSize = options.beforeSyncBatch ? concurrency : DELETE_BATCH_SIZE;
+		: [{ jobs: jobs.results, size: MUTATION_BATCH_SIZE }];
 	const batches: Job[][] = [];
 	for (const group of groups) {
-		for (let offset = 0; offset < group.length; offset += batchSize) {
-			batches.push(group.slice(offset, offset + batchSize));
+		for (let offset = 0; offset < group.jobs.length; offset += group.size) {
+			batches.push(group.jobs.slice(offset, offset + group.size));
 		}
 	}
 	for (const batch of batches) {
 		let pending = batch;
 		for (let round = 0; round < 3 && pending.length > 0; round++) {
+			const upserts: Upsert[] = [];
 			const deletes: Claim[] = [];
 			const retry: Job[] = [];
+			const flushReady = async () => {
+				await flushMutations(
+					upserts.splice(0),
+					"upsert",
+					(ready) => store.upsert(ready.map((job) => job.record)),
+					retry,
+				);
+				await flushMutations(
+					deletes.splice(0),
+					"delete",
+					(ready) => store.delete(ready.map((job) => job.memory_id)),
+					retry,
+				);
+			};
 			if (options.beforeSyncBatch) {
 				for (let offset = 0; offset < pending.length; offset += concurrency) {
 					const claims = (
@@ -306,9 +377,10 @@ export async function synchronizeVectors(
 					}
 					const ready = claims.filter((claim) => !embeddingClaims.includes(claim));
 					await concurrent(ready, concurrency, (claim) =>
-						syncAttempt(claim, deletes, retry, claim),
+						syncAttempt(claim, upserts, deletes, retry, claim),
 					);
 					if (embeddingClaims.length === 0) continue;
+					await flushReady();
 					try {
 						await options.beforeSyncBatch(embeddingClaims.map((claim) => claim.memory_id));
 					} catch (error) {
@@ -318,45 +390,13 @@ export async function synchronizeVectors(
 						continue;
 					}
 					await concurrent(embeddingClaims, concurrency, (claim) =>
-						syncAttempt(claim, deletes, retry, claim),
+						syncAttempt(claim, upserts, deletes, retry, claim),
 					);
 				}
 			} else {
-				await concurrent(pending, concurrency, (job) => syncAttempt(job, deletes, retry));
+				await concurrent(pending, concurrency, (job) => syncAttempt(job, upserts, deletes, retry));
 			}
-			const ready: Claim[] = [];
-			await concurrent(deletes, concurrency, async (job) => {
-				const refreshedAt = timestamp();
-				const owned = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_until = ?, due_at = ?
-					WHERE memory_id = ? AND generation = ? AND lease_token = ? RETURNING memory_id`)
-					.bind(refreshedAt + SYNC_LEASE_MS, refreshedAt, job.memory_id, job.generation, job.token)
-					.first();
-				if (owned) {
-					ready.push(job);
-				} else {
-					const released = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
-						lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ? RETURNING memory_id`)
-						.bind(refreshedAt, job.memory_id, job.token)
-						.first();
-					if (released) retry.push(job);
-				}
-			});
-			if (ready.length > 0) {
-				try {
-					await retryVectorMutation(() => store.delete(ready.map((job) => job.memory_id)));
-				} catch (error) {
-					await concurrent(ready, concurrency, (job) => fail(job, "delete", error, retry));
-					pending = retry;
-					continue;
-				}
-				await concurrent(ready, concurrency, async (job) => {
-					try {
-						await acknowledge(job, retry);
-					} catch (error) {
-						await fail(job, "acknowledge", error, retry);
-					}
-				});
-			}
+			await flushReady();
 			pending = retry;
 		}
 	}

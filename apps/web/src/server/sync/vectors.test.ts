@@ -26,7 +26,149 @@ function fixture() {
 	return { db, sqlite, store, env, indexed };
 }
 
+function addVectors(sqlite: ReturnType<typeof fixture>["sqlite"], count: number) {
+	for (let index = 1; index < count; index++) {
+		const id = `memory-${String(index).padStart(3, "0")}`;
+		sqlite
+			.prepare(`INSERT INTO memories (id,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at)
+			SELECT ?,space_id,title,body,type,source_key_id,content_hash,created_at,updated_at FROM memories WHERE id = 'memory'`)
+			.run(id);
+		sqlite
+			.prepare(`INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
+			SELECT ?,profile_id,embedding_model,dim,vector,content_hash,updated_at FROM memory_vectors WHERE memory_id = 'memory'`)
+			.run(id);
+	}
+}
+
 describe("durable vector synchronization", () => {
+	it.each([false, true])(
+		"batches ready vectors into 100-record calls with backfill=%s",
+		async (backfill) => {
+			const { env, sqlite } = fixture();
+			addVectors(sqlite, 205);
+			const upsert = vi.fn(async (_records: VectorizeVector[]) => {});
+			const beforeSyncBatch = vi.fn(async () => {});
+			expect(
+				await synchronizeVectors(env, {
+					store: { upsert, delete: vi.fn() },
+					now: 100,
+					limit: 205,
+					...(backfill ? { beforeSyncBatch } : {}),
+				}),
+			).toEqual({ synced: 205, failed: 0 });
+			expect(upsert.mock.calls.map(([records]) => records.length)).toEqual([100, 100, 5]);
+			expect(beforeSyncBatch).not.toHaveBeenCalled();
+		},
+	);
+
+	it("charges only the rejected upsert chunk and leaves successful chunks acknowledged", async () => {
+		const { env, sqlite } = fixture();
+		addVectors(sqlite, 205);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const upsert = vi.fn(async (records: VectorizeVector[]) => {
+			if (records.some((record) => record.id === "memory-100"))
+				throw new Error("service unavailable");
+		});
+		expect(
+			await synchronizeVectors(env, { store: { upsert, delete: vi.fn() }, now: 100, limit: 205 }),
+		).toEqual({ synced: 105, failed: 100 });
+		expect(
+			sqlite.prepare("SELECT COUNT(*) AS count FROM vector_sync_jobs WHERE attempts = 1").get()
+				?.count,
+		).toBe(100);
+		expect(upsert).toHaveBeenCalledTimes(3);
+	});
+
+	it("rereads an upsert superseded while other records are prepared", async () => {
+		const { env, sqlite } = fixture();
+		addVectors(sqlite, 2);
+		env.OCTO_VECTOR_SYNC_CONCURRENCY = "1";
+		const upsert = vi.fn(async (_records: VectorizeVector[]) => {});
+		expect(
+			await synchronizeVectors(env, {
+				store: { upsert, delete: vi.fn() },
+				now: 100,
+				beforeSync: async (id) => {
+					if (id === "memory-001")
+						sqlite.exec("UPDATE memories SET importance = 0.8 WHERE id = 'memory'");
+				},
+			}),
+		).toEqual({ synced: 2, failed: 0 });
+		expect(
+			upsert.mock.calls.flatMap(([records]) => records).filter((record) => record.id === "memory"),
+		).toEqual([
+			expect.objectContaining({ metadata: expect.objectContaining({ importance: 0.8 }) }),
+		]);
+	});
+
+	it("releases every rate-limited batch member without penalizing other chunks", async () => {
+		const { env, sqlite } = fixture();
+		addVectors(sqlite, 205);
+		vi.useFakeTimers();
+		vi.spyOn(Math, "random").mockReturnValue(0.5);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const upsert = vi.fn(async (records: VectorizeVector[]) => {
+			if (records.some((record) => record.id === "memory-100")) throw { code: 40041 };
+		});
+		const work = synchronizeVectors(env, {
+			store: { upsert, delete: vi.fn() },
+			now: 100,
+			limit: 205,
+		});
+		await vi.runAllTimersAsync();
+		expect(await work).toEqual({ synced: 105, failed: 100 });
+		expect(upsert.mock.calls.map(([records]) => records.length)).toEqual([100, 100, 100, 100, 5]);
+		expect(
+			sqlite
+				.prepare(
+					"SELECT count(*) AS count FROM vector_sync_jobs WHERE attempts = 0 AND dead_at IS NULL AND due_at = 90100 AND lease_token IS NULL",
+				)
+				.get()?.count,
+		).toBe(100);
+	});
+
+	it("requeues only the unacknowledged member of a successful upsert batch", async () => {
+		const { env, db, sqlite } = fixture();
+		addVectors(sqlite, 2);
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.spyOn(db, "batch").mockRejectedValueOnce(new Error("private SQL"));
+		const upsert = vi.fn(async (_records: VectorizeVector[]) => {});
+		expect(await synchronizeVectors(env, { store: { upsert, delete: vi.fn() }, now: 100 })).toEqual(
+			{ synced: 1, failed: 1 },
+		);
+		expect(upsert).toHaveBeenCalledTimes(1);
+		expect(
+			sqlite.prepare("SELECT count(*) AS count FROM vector_sync_jobs WHERE attempts = 1").get()
+				?.count,
+		).toBe(1);
+		expect(
+			sqlite
+				.prepare(
+					"SELECT count(*) AS count FROM vector_sync_jobs WHERE generation = synced_generation",
+				)
+				.get()?.count,
+		).toBe(1);
+	});
+
+	it("revalidates a batch after rate-limit sleep before retrying the provider", async () => {
+		const { env, sqlite } = fixture();
+		addVectors(sqlite, 2);
+		vi.useFakeTimers();
+		const upsert = vi.fn(async (_records: VectorizeVector[]) => {});
+		upsert.mockImplementationOnce(async () => {
+			sqlite.exec("UPDATE memories SET importance = 0.8 WHERE id = 'memory'");
+			throw { status: 429 };
+		});
+		const work = synchronizeVectors(env, { store: { upsert, delete: vi.fn() }, now: 100 });
+		await vi.runAllTimersAsync();
+		expect(await work).toEqual({ synced: 2, failed: 0 });
+		expect(upsert.mock.calls.map(([records]) => records.map((record) => record.id))).toEqual([
+			["memory", "memory-001"],
+			["memory-001"],
+			["memory"],
+		]);
+	});
+
 	it("does not rewrite unchanged vectors even when legacy jobs become due", async () => {
 		const { env, sqlite, store, indexed } = fixture();
 		await synchronizeVectors(env, { store, now: 100 });
