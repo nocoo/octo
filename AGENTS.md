@@ -18,6 +18,7 @@ Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not re
 - D1 `octo-db` is the source of truth; Vectorize is a derived index rebuilt from vectors stored in D1; R2 `octo-files` holds attachments.
 - API keys are stored as HMAC hashes only; plaintext appears once at mint/rotate and never in logs, URLs, D1 or browser storage. No key or permission management through `/api/v1`.
 - Default deny; out-of-scope spaces are invisible (404, absent from lists/search/counts). Every call is audited without bodies or keys.
+- Space permissions always bind to immutable IDs. Slug renames retain 30-day aliases in `space_slug_aliases`; aliases resolve before ID authorization and return canonical slugs. Space GET/PATCH exposes an updated-at-millisecond ETag; optional If-Match conflicts return 412. See [the rename contract](docs/space-slug-renames.md).
 - Delete moves to trash and is never auto-purged; hard delete exists only in the dashboard.
 - Every memory write is one D1 batch: row, version snapshot, tags, FTS, change event (see docs/02 §3).
 - Tests never use remote Cloudflare resources or deploy `-test` resources; Vectorize is replaced locally by the D1 brute-force `VectorStore`.

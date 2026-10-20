@@ -10,6 +10,7 @@ Octo 保存私人记忆、标签、版本与附件，通过 REST API、MCP 和�
 ## 功能
 
 - 按空间组织记忆，维护标签、版本、附件与回收站。
+- Rename space slugs without changing key permissions; old slugs resolve for 30 days. See [examples and migration details](docs/space-slug-renames.md).
 - 全文与向量搜索；嵌入服务通过工作台配置。
 - REST API 与无会话 Streamable HTTP MCP，供工具和 bot 接入。
 - 工作台提供记忆编辑、搜索、图谱、时间线、密钥、审计和用量查看。

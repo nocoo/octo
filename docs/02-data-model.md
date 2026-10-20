@@ -4,6 +4,8 @@
 
 D1 `octo-db` 是唯一的权威数据源。迁移只做加法（additive）；回滚靠代码兼容和 D1 Time Travel。时间字段一律是 UTC 毫秒整数。
 
+Migration `0012_space_slug_aliases.sql` adds expiring slug aliases with transactional collision guards and `ON DELETE CASCADE`. Existing durable references already use space/memory/key IDs and require no data rewrite. Vectorize keeps its existing slug metadata index and resynchronizes after a rename. See the [reference audit and alias design](space-slug-renames.md).
+
 ## 1. 实体关系
 
 ```

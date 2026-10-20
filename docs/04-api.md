@@ -156,12 +156,14 @@ See [vector convergence and smoke usage](vector-convergence.md).
 | GET | `/spaces` | read | 只列出可见的 space |
 | GET | `/spaces/:slug` | read | 详情和计数 |
 | POST | `/spaces` | admin 角色 | `{slug,name,description?}`，201；不接受 owner 或权限字段 |
-| PATCH | `/spaces/:slug` | admin 角色 | `{name?,description?}` 至少一项，200；slug 不可变 |
+| PATCH | `/spaces/:slug` | admin role | `{slug?,name?,description?}`, at least one field; optional `If-Match`; 200 with canonical slug |
 | DELETE | `/spaces/:slug` | admin 角色 | 仅完全为空时删除，200 `{id,slug,deleted:true}` |
 
 标签是全局的，重命名 / 合并 / 删除要求 `scope=all` 和 `u`（不限定角色名称）。删除检查所有空间的 `memory_tags`，包括已删除 memory；因此 API 列表里不可见或 `use_count=0` 并不表示可删除。其他标签通过 `merged_into` 引用该标签也会阻止删除；先删除无引用的叶子别名，再删除目标，不级联删除、不改变历史版本中的名称。并发新增引用或修改目标使删除事务失败，不能绕过重验。所有请求记录审计，清理不用新增 MCP 工具；手动操作见 [清理手册](tag-cleanup.md)，本轮不执行生产清理。
 
-空间写接口只接受 `role=admin` 的 API key，而不是任意 `scope=all` 或全操作 key。无 key 为 401，其他角色一律为 403，且在读取正文和幂等重放之前检查。`slug` 为 1–64 字符的小写字母/数字及单个连字符分隔，`name` 去除首尾空白后为 1–256 字符，`description` 最长 10000，创建时默认空字符串。未知字段为 400。PATCH 只改显示名称/描述，不接受 slug 或 owner；重复 slug 为 409 `version_conflict`，删除含任何记忆（包括回收站）的空间为 409 `space_not_empty`。删除检查和写入原子执行，复用 dashboard 的服务与冲突处理。全部调用以 key 身份审计。
+Space writes require an `admin` role API key; other roles return 403 before body parsing or idempotent replay. Slugs are 1–64 characters matching `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`; names are trimmed, 1–256 characters, and descriptions are at most 10000 characters (default empty on creation). PATCH accepts slug, name and description, never ownership or permission fields. Invalid fields return 400 `validation_failed` with `details.issues[].path`; canonical/live-alias collisions return 409 `version_conflict` with path `slug`. Omitted fields are unchanged.
+
+GET/PATCH returns `ETag: "<updated_at milliseconds>"`. PATCH accepts that quoted or unquoted numeric value in `If-Match`; a stale value returns 412 `version_conflict` without writing. Missing headers remain allowed, following existing space-update behavior; malformed headers return 400. Renames keep the old slug as a 30-day alias, including for GET/PATCH/DELETE, memory operations and search/change filters; responses use the current slug. Renaming back to the same space's alias is allowed. Key bindings remain immutable IDs. Deletion requires an empty space including trash and cascades its aliases. See [curl/MCP examples and migration details](space-slug-renames.md).
 
 开了 `auto_own_space` 的 key 第一次写入时，仍可自动创建自己的 space（slug = key 名）。key 创建、轮换、授权与 owner 管理保持 dashboard-only，不新增对应 v1/MCP API。
 

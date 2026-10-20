@@ -33,7 +33,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 - 非浏览器 bot 不需要 `Origin`；如有 `Origin`，必须精确匹配生产域名，开发环境匹配开发域名。不反射 Origin，不启用跨域 CORS。
 - 每次工具调用从本次已验证的 principal 构造 v1 authz，使用原有服务及 `authorize()`。不可见 space / memory 是 `not_found`；列表、搜索、计数、batchGet 和变更流不暴露不可见对象。`own_entries_only` 和移动的源/目标权限保持不变。
 - 不增加 key 管理、embedding 设置、硬删除、附件或恢复工具。`delete_memory` 只移入回收站。
-- `create_space`、`update_space`、`delete_space` 仅允许 role 为 `admin` 的 API key；先解析 JSON-RPC 并校验工具参数，再检查角色。非法工具参数返回 `validation_failed`；参数合法时，即使 custom key 具备全部操作权限也返回 `forbidden`。这些工具错误均使用 HTTP 200 的 `result.isError=true` 信封，不等同于 REST 的角色前置检查。空间管理不提供 owner 字段，更新只允许 name / description，slug 不可变。重复 slug 为 `version_conflict`；不存在为 `not_found`；包含任何 memory（包括回收站）的空间不能删除，返回 `space_not_empty`。
+- `create_space`, `update_space` and `delete_space` require an `admin` role API key. Invalid arguments return `validation_failed`; other roles return `forbidden`. Tool errors retain HTTP 200 with `result.isError=true`. Updates accept slug, name and description, never owner or permission fields. Duplicate canonical/live-alias slugs return `version_conflict` with `details.issues[].path = "slug"`; unknown targets return `not_found`. Deletion requires an empty space including trash (`space_not_empty` otherwise).
 - 标签名称是 v1 的全局字典；`list_tags` 与同 key 的 REST 列表完全一致，只返回至少被一条可见 space 中未删除 memory 使用的标签，`use_count > 0` 且仅统计这些可见引用。仅在不可见 space 使用、仅被回收站引用或完全未使用的标签不返回；`all`、`spaces`、`own` 范围均遵守此规则。标签本身仍不是按 space 私有的资源。
 - 写工具复用 v1 的 staged `memoryService()`，并在返回成功前执行一次 D1 batch（memory、版本、tags、FTS、change event 等同批提交）。失败不提交残留 statements；成功后按 v1 的机制调度派生索引任务。
 - 空间写工具复用 v1 与 dashboard 共用的空间管理服务，由服务直接提交资源与 change event 的 D1 batch，不再经过 memory staged batch。空间创建、更新、删除成功后才标记为 MCP write；当前空间更新即使传入相同字段值也会提交更新并计为 write。空间调用失败不计 write。
@@ -57,7 +57,7 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 | `list_tags` | `{}` | v1 标签列表服务；`r`，只返回可见 space 中有未删除 memory 引用的标签及正数计数 |
 | `list_spaces` | `{}` | v1 space 列表服务；`r`，仅返回可见 space |
 | `create_space` | `{slug, name, description?}`；description 默认空字符串 | 共享空间管理服务；仅 admin-role key |
-| `update_space` | `{slug, name?, description?}`；name / description 至少一个 | 共享空间管理服务；仅 admin-role key；slug 是目标标识，不是可修改字段 |
+| `update_space` | `{space, slug?, name?, description?, if_match?}`; at least one changed field | `space` selects the current slug or live alias; `slug` is the new slug; admin role only |
 | `delete_space` | `{slug}` | 共享空间管理服务；仅 admin-role key；包括回收站在内必须为空 |
 
 `Vector`、`Filters`、`Fusion` 直接复用 `apps/web/src/lib/schema/{memory,filters,search}.ts`，不另设 MCP 方言。`space` 最长 64，`title` 1–500，tags 最多 100 个且各 1–64，importance 在 0–1；type 为 fact / preference / decision / procedure / event / log / note；event_time 是 UTC ISO 日期。更新允许清空 event_time / vector。向量维数由原有 profile 校验，最多 1536。
@@ -77,6 +77,8 @@ POST 必须带 `Content-Type: application/json`、`Accept: application/json, tex
 搜索 `filters.importance` 为 `{min?: number[0,1], max?: number[0,1]}`；创建、更新和过滤的 importance 都包含边界 0 和 1，不接受超出范围或非数字值。单条 REST PATCH 仍使用 flat body 的 `expected_version` 或 `If-Match`；REST rollback 仍为 `{to_version: positive integer}` 配合 `If-Match`，不是 update patch，也没有对应 MCP 工具。
 
 空间 slug 为 1–64 个小写字母/数字段，以单个连字符分隔；name 去除首尾空白后为 1–256 字符，description 最长 10000 字符。创建和更新均拒绝 `owner_key_id` 或其他未知字段；owner 管理只留在 dashboard。
+
+`update_space` now selects the target with `space`, not `slug`; callers must update their arguments (no compatibility alias). Optional `if_match` is the quoted/unquoted numeric millisecond value of the returned `updated_at`, equivalent to REST's ETag/If-Match. Stale tokens produce `version_conflict`; the equivalent REST status is 412. Old slugs resolve for 30 days across MCP space selectors and memory/search arguments, but outputs use the current canonical slug. Key permissions remain ID-bound. See [ready-to-use arguments and migration details](space-slug-renames.md).
 
 `move_memory` 只移动未删除的 memory，回收站条目返回 `not_found`。`expected_version` 可省略；提供后必须匹配当前版本，不匹配返回 `version_conflict`（包括合法的 0），检查先于同空间 no-op。同空间返回当前 Memory，不增加版本、不写 change event、不调度派生任务，也不计 MCP write。实际移动保持 id、历史、标签、附件引用及已存向量，新增版本与移动 change event；立即按目标空间判断可见性。移动后的派生任务明确跳过 embedding backfill，只用 D1 中已存向量同步索引元数据，不调用 embedding 模型。没有批量移动 MCP 工具；批量需求走 REST。
 

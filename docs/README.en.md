@@ -10,6 +10,7 @@ Octo stores private memories, tags, versions and attachments, accessed through a
 ## Features
 
 - Organize memories by space, with tags, versions, attachments and trash.
+- Rename space slugs without changing ID-bound key permissions; old slugs resolve for 30 days. See [examples and migration details](space-slug-renames.md).
 - Full-text and vector search; configure the embedding service through the dashboard.
 - REST API and sessionless Streamable HTTP MCP for tools and bots.
 - Dashboard views for editing, search, graphs, timelines, keys, audit and usage.

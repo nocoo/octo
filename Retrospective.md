@@ -1,5 +1,20 @@
 # Retrospective
 
+### 2026-10-20 — Distinguish fixture failures from feature RED
+
+The first slug-edit browser regression omitted the required memory `tags` field,
+so setup returned 400 before the form was exercised. That run was not counted as
+TDD evidence. After checking the shared schema and correcting the fixture, both
+setup writes returned 201 and the test failed on the missing slug input as
+intended. Inspect fixture contracts and the first failing assertion before
+accepting a RED run. A shell wrapper also used zsh's readonly `status` variable;
+use a normal variable such as `result` to preserve the test exit code.
+
+The new alias migration initially lacked the idempotent DDL used by the local
+migration runner, whose repeat-application regression caught the duplicate table.
+Check both the production migration sequence and local rerun behavior when adding
+a numbered migration; keep repeat runs harmless without resetting existing data.
+
 ### 2026-10-20 — Inspect shared fixtures before adding setup
 
 The vector invalidation regression initially inserted a destination space already
