@@ -3,7 +3,7 @@ import { ApiError } from "../lib/errors";
 import type { VectorStore } from "../ports/vector/types";
 import { decodeFloat32Vector } from "../search/math";
 import { createSearchVectorStore } from "../search/vector-store-factory";
-import { vectorErrorDetails } from "./vector-errors";
+import { isVectorRateLimit, retryVectorMutation, vectorErrorDetails } from "./vector-errors";
 
 export const SYNC_LEASE_MS = 60_000;
 export const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
@@ -102,30 +102,47 @@ export async function synchronizeVectors(
 	const fail = async (job: Claim, stage: string, error: unknown, retry: Job[]) => {
 		const failedAt = timestamp();
 		totals.failed++;
+		const rateLimited = (stage === "upsert" || stage === "delete") && isVectorRateLimit(error);
 		const details = vectorErrorDetails(error);
 		const entry = {
 			memory_id: job.memory_id,
 			...details,
 			message: `Vector synchronization failed during ${stage}`,
 		};
-		console.error({ event: "vector_sync_failed", ...entry });
-		const failed = await env.DB.prepare(`UPDATE vector_sync_jobs SET attempts = attempts + 1,
+		console.error({
+			event: rateLimited ? "vector_sync_rate_limited" : "vector_sync_failed",
+			...entry,
+		});
+		const failed = rateLimited
+			? await env.DB.prepare(`UPDATE vector_sync_jobs SET last_error = ?, due_at = ?,
+				lease_token = NULL, lease_until = 0, lease_dirty = 0
+				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND dead_at IS NULL
+				RETURNING attempts, dead_at`)
+					.bind(
+						details.error_message,
+						failedAt + 60_000 + Math.floor(Math.random() * 60_000),
+						job.memory_id,
+						job.generation,
+						job.token,
+					)
+					.first<{ attempts: number; dead_at: number | null }>()
+			: await env.DB.prepare(`UPDATE vector_sync_jobs SET attempts = attempts + 1,
 			last_error = ?, due_at = ? + min(1 << (attempts + 1), 24) * ?,
 			dead_at = CASE WHEN attempts + 1 >= ? THEN ? ELSE NULL END,
 			lease_token = NULL, lease_until = 0, lease_dirty = 0
 			WHERE memory_id = ? AND generation = ? AND lease_token = ? AND dead_at IS NULL
 			RETURNING attempts, dead_at`)
-			.bind(
-				details.error_message,
-				failedAt,
-				RECONCILE_INTERVAL_MS,
-				MAX_FAILURES,
-				failedAt,
-				job.memory_id,
-				job.generation,
-				job.token,
-			)
-			.first<{ attempts: number; dead_at: number | null }>();
+					.bind(
+						details.error_message,
+						failedAt,
+						RECONCILE_INTERVAL_MS,
+						MAX_FAILURES,
+						failedAt,
+						job.memory_id,
+						job.generation,
+						job.token,
+					)
+					.first<{ attempts: number; dead_at: number | null }>();
 		if (!failed) {
 			await invalidate(env.DB, job.memory_id, job.token, failedAt);
 			retry.push(job);
@@ -206,23 +223,25 @@ export async function synchronizeVectors(
 					.first<SourceVector>();
 			if (source) {
 				stage = "upsert";
-				await store.upsert([
-					{
-						id: source.id,
-						values: decodeFloat32Vector(source.vector, source.dim),
-						metadata: {
-							generation: claimed.generation,
-							content_hash: source.content_hash,
-							space: source.space,
-							type: source.type,
-							source: source.source,
-							importance: source.importance,
-							created: source.created,
-							updated: source.updated,
-							...(source.event === null ? {} : { event: source.event }),
+				await retryVectorMutation(() =>
+					store.upsert([
+						{
+							id: source.id,
+							values: decodeFloat32Vector(source.vector, source.dim),
+							metadata: {
+								generation: claimed.generation,
+								content_hash: source.content_hash,
+								space: source.space,
+								type: source.type,
+								source: source.source,
+								importance: source.importance,
+								created: source.created,
+								updated: source.updated,
+								...(source.event === null ? {} : { event: source.event }),
+							},
 						},
-					},
-				]);
+					]),
+				);
 			} else {
 				if (options.deferMissingVectors && (await embeddingIds([job])).has(job.memory_id)) {
 					await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
@@ -323,7 +342,7 @@ export async function synchronizeVectors(
 			});
 			if (ready.length > 0) {
 				try {
-					await store.delete(ready.map((job) => job.memory_id));
+					await retryVectorMutation(() => store.delete(ready.map((job) => job.memory_id)));
 				} catch (error) {
 					await concurrent(ready, concurrency, (job) => fail(job, "delete", error, retry));
 					pending = retry;

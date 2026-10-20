@@ -184,8 +184,12 @@ deletes missing/trashed/content-stale vectors. The Vectorize ID is exactly the
 memory ID (one vector per memory, no generation suffix or chunk IDs). Upserts
 include `generation` and `content_hash` metadata. Only the claimed generation may acknowledge
 `indexed_at`. A concurrent mutation can be reclaimed within the same drain,
-with at most three generation-repair rounds per selected job. Provider failures
-are never retried in-run: migration `0007_vector_sync_retries.sql` persists
+with at most three generation-repair rounds per selected job. Vectorize rate limits
+(40041, HTTP 429, or throttling messages) receive two in-run retries with jittered
+100–200 ms and 200–400 ms delays. Exhaustion releases the claim for retry after
+60–120 seconds without incrementing attempts or approaching the dead state, and
+emits `vector_sync_rate_limited` with the same redacted diagnostics. Other provider
+failures are not retried in-run: migration `0007_vector_sync_retries.sql` persists
 `attempts`, redacted `last_error`, and `dead_at`. Each failure increments attempts
 and sets `due_at = now + min(2^attempts, 24) hours` (first retry after two hours).
 The eighth consecutive failure parks the job with `dead_at`, excludes it from
