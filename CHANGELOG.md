@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.2 — 2026-10-20
+
+### Changed
+
+- Upgrade the dashboard to Basalt 3.2.0 and align toolbars, filters, pagination and responsive layouts with its examples.
+- Refine tables with consistent number, date and file-size formatting, semantic badges, bounded long labels and visible row actions.
+- Improve compact attachment empty states, mobile editor sizing, audit date filters and dark-theme controls.
+
+### Fixed
+
+- Format history event timestamps from their millisecond values and align graph table badges with canvas legend colors.
+- Use categorical bars for API-key activity and measure virtualized audit rows to preserve table alignment.
+
+### Validation
+
+- Update Chromium assertions for Basalt 3.2.0 and verify populated dashboard routes across desktop/mobile and light/dark themes.
+- No additional database migration or authentication change is introduced beyond 0.4.1.
+
 ## 0.4.1 — 2026-10-20
 
 ### Fixed
