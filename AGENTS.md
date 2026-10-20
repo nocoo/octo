@@ -22,7 +22,7 @@ Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not re
 - Every memory write is one D1 batch: row, version snapshot, tags, FTS, change event (see docs/02 §3).
 - Tests never use remote Cloudflare resources or deploy `-test` resources; Vectorize is replaced locally by the D1 brute-force `VectorStore`.
 - Embedding gateway settings (base URL, AES-GCM-encrypted API key under `OCTO_SETTINGS_KEY`, model, dims, backfill toggle default off) are dashboard/Access-only and never exposed via `/api/v1`; outbound embedding calls always send a User-Agent.
-- Dashboard uses only `@nocoo/basalt@3.1.0` controls; MVVM with the single `fetch` in `src/client/lib/api.ts`.
+- Dashboard uses only `@nocoo/basalt@3.2.0` controls; MVVM with the single `fetch` in `src/client/lib/api.ts`.
 
 ## Setup and commands
 
