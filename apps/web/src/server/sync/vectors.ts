@@ -163,7 +163,8 @@ export async function synchronizeVectors(
 			env.DB.prepare(`UPDATE memory_vectors SET indexed_at = ? WHERE memory_id = ? AND profile_id = ?
 				AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0)
 				AND EXISTS (SELECT 1 FROM memories WHERE id = ? AND deleted_at IS NULL AND content_hash = memory_vectors.content_hash)
-				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = memory_vectors.profile_id AND model = memory_vectors.embedding_model AND dims = memory_vectors.dim)`).bind(
+				AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
+				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = memory_vectors.profile_id AND active = 1 AND model = memory_vectors.embedding_model AND dims = memory_vectors.dim)`).bind(
 				completedAt,
 				job.memory_id,
 				profileId,
@@ -174,10 +175,13 @@ export async function synchronizeVectors(
 			),
 			env.DB.prepare(`UPDATE vector_sync_jobs SET synced_generation = generation, lease_token = NULL,
 				lease_until = 0, due_at = 0, attempts = 0, last_error = NULL, dead_at = NULL
-				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0`).bind(
+				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0
+				AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
+				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND active = 1)`).bind(
 				job.memory_id,
 				job.generation,
 				job.token,
+				profileId,
 			),
 		]);
 		if (results[1]?.meta.changes === 1) {
@@ -193,8 +197,18 @@ export async function synchronizeVectors(
 		const claim =
 			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?, lease_dirty = 0
 			WHERE memory_id = ? AND dead_at IS NULL AND lease_until <= ? AND due_at <= ?
-			AND generation IS NOT synced_generation RETURNING generation`)
-				.bind(token, claimedAt + SYNC_LEASE_MS, claimedAt, job.memory_id, claimedAt, claimedAt)
+			AND generation IS NOT synced_generation
+			AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
+			AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND active = 1) RETURNING generation`)
+				.bind(
+					token,
+					claimedAt + SYNC_LEASE_MS,
+					claimedAt,
+					job.memory_id,
+					claimedAt,
+					claimedAt,
+					profileId,
+				)
 				.first<{ generation: number }>();
 		return claim ? { ...job, token, generation: claim.generation } : null;
 	};

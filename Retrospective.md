@@ -14,6 +14,11 @@ The first batching pass also held a repaired client vector behind newly stale
 embedding work. The existing priority regression caught the 15-second delay.
 Flush ready records before slow embedding preparation, not only at the end of
 the outer chunk, and retain latency assertions when changing queue grouping.
+Removing periodic rewrites also exposed a profile-switch race: a drain could
+retry with its captured, now-inactive profile and acknowledge obsolete work.
+A failing regression now covers switching profiles during upsert. Claims and
+acknowledgements require the captured profile to remain the sole active profile,
+leaving switched work pending for a fresh drain.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 

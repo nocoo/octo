@@ -224,6 +224,31 @@ describe("durable vector synchronization", () => {
 		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
 	});
 
+	it("leaves a profile switch pending rather than acknowledging the old index", async () => {
+		const { env, sqlite, store, indexed } = fixture();
+		store.upsert.mockImplementationOnce(async () => {
+			sqlite.exec(
+				"UPDATE embedding_profiles SET active = 0; INSERT INTO embedding_profiles VALUES ('next','next',2,'cosine','next',1,1)",
+			);
+		});
+		expect(await synchronizeVectors(env, { store, now: 100 })).toEqual({ synced: 0, failed: 0 });
+		expect(indexed()).toBeNull();
+		expect(
+			sqlite
+				.prepare("SELECT generation IS NOT synced_generation AS pending FROM vector_sync_jobs")
+				.get()?.pending,
+		).toBe(1);
+		sqlite
+			.prepare(`INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
+			VALUES ('memory','next','next',2,?,'hash',101)`)
+			.run(encodeFloat32Vector([0, 1]));
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
+		expect(
+			sqlite.prepare("SELECT indexed_at FROM memory_vectors WHERE profile_id = 'next'").get()
+				?.indexed_at,
+		).toBe(101);
+	});
+
 	it.each(["upsert", "delete"] as const)(
 		"briefly retries a rate-limited %s before acknowledging",
 		async (operation) => {
