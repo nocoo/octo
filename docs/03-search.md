@@ -50,7 +50,8 @@
 Production index synchronization is owned by M7. The same post-commit queue
 handles explicit vectors, metadata edits, trash/restore, backfill and purge;
 see [the durable synchronization protocol](02-data-model.md#m7-derived-index-ownership-and-recovery).
-Hourly cron retries pending vectors and performs bounded anti-entropy passes.
+Hourly cron retries pending vectors and checks accepted vectors for visibility;
+it does not rewrite acknowledged generations without an invalidation.
 Backfill uses at most 16,000 characters of `title + "\n\n" + body`, then
 conditionally stores the vector against the observed content, version, active
 profile and complete settings snapshot. It preserves source ownership and

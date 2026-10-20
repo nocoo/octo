@@ -4,7 +4,7 @@ import type { Env } from "../env";
 import { CloudflareVectorStore } from "../ports/vector/cloudflare";
 import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import { encodeFloat32Vector } from "../search/math";
-import { RECONCILE_INTERVAL_MS, SYNC_LEASE_MS, synchronizeVectors } from "./vectors";
+import { FAILURE_BACKOFF_MS, SYNC_LEASE_MS, synchronizeVectors } from "./vectors";
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -27,6 +27,61 @@ function fixture() {
 }
 
 describe("durable vector synchronization", () => {
+	it("does not rewrite unchanged vectors even when legacy jobs become due", async () => {
+		const { env, sqlite, store, indexed } = fixture();
+		await synchronizeVectors(env, { store, now: 100 });
+		sqlite.exec("UPDATE vector_sync_jobs SET due_at = 3600100");
+		expect(await synchronizeVectors(env, { store, now: 3600100 })).toEqual({
+			synced: 0,
+			failed: 0,
+		});
+		expect(await synchronizeVectors(env, { store, now: 86400100 })).toEqual({
+			synced: 0,
+			failed: 0,
+		});
+		expect(store.upsert).toHaveBeenCalledTimes(1);
+		expect(indexed()).toBe(100);
+	});
+
+	it.each([
+		"UPDATE memories SET importance = 0.8",
+		"UPDATE memories SET deleted_at = 50; UPDATE memories SET deleted_at = NULL",
+		"UPDATE memories SET space_id = 'space:dest'",
+		"UPDATE spaces SET slug = 'renamed' WHERE id = 'space:kb'",
+		"UPDATE memory_vectors SET updated_at = 30",
+	])("reschedules acknowledged work on authoritative mutation: %s", async (mutation) => {
+		const { env, sqlite, store, indexed } = fixture();
+		await synchronizeVectors(env, { store, now: 100 });
+		sqlite.exec(mutation);
+		expect(indexed()).toBeNull();
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
+		expect(store.upsert).toHaveBeenCalledTimes(2);
+		if (mutation.includes("space_id"))
+			expect(store.upsert).toHaveBeenLastCalledWith([
+				expect.objectContaining({ metadata: expect.objectContaining({ space: "dest" }) }),
+			]);
+	});
+
+	it.each([
+		"UPDATE embedding_profiles SET model = 'changed' WHERE active = 1",
+		"UPDATE embedding_profiles SET dims = 3 WHERE active = 1",
+		"UPDATE embedding_profiles SET vectorize_index = 'rebuilt' WHERE active = 1",
+		"UPDATE embedding_profiles SET active = 0; INSERT INTO embedding_profiles VALUES ('next','next',2,'cosine','next',1,1)",
+	])("invalidates completed vectors on profile change: %s", async (mutation) => {
+		const { env, sqlite, store, indexed } = fixture();
+		await synchronizeVectors(env, { store, now: 100 });
+		sqlite.exec(mutation);
+		expect(indexed()).toBeNull();
+		expect(
+			sqlite
+				.prepare(
+					"SELECT generation IS NOT synced_generation AS pending, due_at FROM vector_sync_jobs",
+				)
+				.get(),
+		).toEqual({ pending: 1, due_at: 0 });
+		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 1, failed: 0 });
+	});
+
 	it.each(["upsert", "delete"] as const)(
 		"briefly retries a rate-limited %s before acknowledging",
 		async (operation) => {
@@ -197,7 +252,7 @@ describe("durable vector synchronization", () => {
 		expect(
 			sqlite.prepare("SELECT due_at FROM vector_sync_jobs WHERE memory_id = 'z-missing'").get()
 				?.due_at,
-		).toBe(Date.now() + 2 * RECONCILE_INTERVAL_MS);
+		).toBe(Date.now() + 2 * FAILURE_BACKOFF_MS);
 		clock.mockRestore();
 		log.mockRestore();
 	});
@@ -286,7 +341,7 @@ describe("durable vector synchronization", () => {
 				sqlite.prepare("SELECT attempts, due_at, dead_at FROM vector_sync_jobs").get(),
 			).toEqual({
 				attempts: prior + 1,
-				due_at: 101 + SYNC_LEASE_MS + Math.min(2 ** (prior + 1), 24) * RECONCILE_INTERVAL_MS,
+				due_at: 101 + SYNC_LEASE_MS + Math.min(2 ** (prior + 1), 24) * FAILURE_BACKOFF_MS,
 				dead_at: prior === 7 ? 101 + SYNC_LEASE_MS : null,
 			});
 			expect(log.mock.calls.filter(([entry]) => entry.event === "vector_sync_dead")).toHaveLength(
@@ -362,7 +417,7 @@ describe("durable vector synchronization", () => {
 			).toEqual({
 				attempts: prior + 1,
 				last_error: "service unavailable",
-				due_at: 101 + SYNC_LEASE_MS + Math.min(2 ** (prior + 1), 24) * RECONCILE_INTERVAL_MS,
+				due_at: 101 + SYNC_LEASE_MS + Math.min(2 ** (prior + 1), 24) * FAILURE_BACKOFF_MS,
 				dead_at: prior === 7 ? 101 + SYNC_LEASE_MS : null,
 			});
 			expect(await synchronizeVectors(env, { store, now: 102 + SYNC_LEASE_MS })).toEqual({
@@ -437,7 +492,7 @@ describe("durable vector synchronization", () => {
 		let now = 100;
 		for (let attempts = 1; attempts <= 8; attempts++) {
 			expect(await synchronizeVectors(env, { store, now })).toEqual({ synced: 0, failed: 1 });
-			const due = now + Math.min(2 ** attempts, 24) * RECONCILE_INTERVAL_MS;
+			const due = now + Math.min(2 ** attempts, 24) * FAILURE_BACKOFF_MS;
 			expect(
 				sqlite.prepare("SELECT attempts, due_at, dead_at, last_error FROM vector_sync_jobs").get(),
 			).toEqual({
@@ -490,7 +545,7 @@ describe("durable vector synchronization", () => {
 		deleteByIds.mockResolvedValue({ mutationId: "recovered" });
 		sqlite.exec("UPDATE vector_sync_jobs SET due_at = 999999999 WHERE attempts = 0");
 		expect(
-			await synchronizeVectors(env, { store, now: 100 + 2 * RECONCILE_INTERVAL_MS, limit: 205 }),
+			await synchronizeVectors(env, { store, now: 100 + 2 * FAILURE_BACKOFF_MS, limit: 205 }),
 		).toEqual({ synced: 100, failed: 0 });
 		expect(deleteByIds.mock.lastCall?.[0]).toEqual(
 			Array.from({ length: 100 }, (_, index) => `deleted-${100 + index}`),
@@ -615,10 +670,10 @@ describe("durable vector synchronization", () => {
 		).toEqual({
 			attempts: 1,
 			last_error: "[redacted]",
-			due_at: 100 + 2 * RECONCILE_INTERVAL_MS,
+			due_at: 100 + 2 * FAILURE_BACKOFF_MS,
 		});
 		expect(await synchronizeVectors(env, { store, now: 101 })).toEqual({ synced: 0, failed: 0 });
-		expect(await synchronizeVectors(env, { store, now: 100 + 2 * RECONCILE_INTERVAL_MS })).toEqual({
+		expect(await synchronizeVectors(env, { store, now: 100 + 2 * FAILURE_BACKOFF_MS })).toEqual({
 			synced: 1,
 			failed: 0,
 		});
@@ -639,13 +694,13 @@ describe("durable vector synchronization", () => {
 		expect(indexed()).toBeNull();
 		expect(
 			sqlite.prepare("SELECT due_at, lease_until, lease_token FROM vector_sync_jobs").get(),
-		).toEqual({ due_at: 100 + 2 * RECONCILE_INTERVAL_MS, lease_until: 0, lease_token: null });
+		).toEqual({ due_at: 100 + 2 * FAILURE_BACKOFF_MS, lease_until: 0, lease_token: null });
 		store.upsert.mockResolvedValue(undefined);
-		expect(await synchronizeVectors(env, { store, now: 100 + 2 * RECONCILE_INTERVAL_MS })).toEqual({
+		expect(await synchronizeVectors(env, { store, now: 100 + 2 * FAILURE_BACKOFF_MS })).toEqual({
 			synced: 1,
 			failed: 0,
 		});
-		expect(indexed()).toBe(100 + 2 * RECONCILE_INTERVAL_MS);
+		expect(indexed()).toBe(100 + 2 * FAILURE_BACKOFF_MS);
 		log.mockRestore();
 	});
 
@@ -726,8 +781,8 @@ describe("durable vector synchronization", () => {
 		sqlite.exec("DELETE FROM memory_vectors; DELETE FROM memories");
 		await synchronizeVectors(env, { store, now: 102 });
 		expect(store.delete).toHaveBeenCalledTimes(2);
-		await synchronizeVectors(env, { store, now: 103 + RECONCILE_INTERVAL_MS });
-		expect(store.delete).toHaveBeenCalledTimes(3);
+		await synchronizeVectors(env, { store, now: 103 + FAILURE_BACKOFF_MS });
+		expect(store.delete).toHaveBeenCalledTimes(2);
 	});
 
 	it.each([undefined, "1"])(
@@ -848,10 +903,7 @@ describe("durable vector synchronization", () => {
 		await synchronizeVectors(env, { now: 100 });
 		expect(indexed()).toBe(100);
 		await expect(
-			synchronizeVectors(
-				{ ...env, RESOURCE_ENV: "production" },
-				{ now: 100 + RECONCILE_INTERVAL_MS },
-			),
+			synchronizeVectors({ ...env, RESOURCE_ENV: "production" }, { now: 100 + FAILURE_BACKOFF_MS }),
 		).rejects.toThrow("VEC binding");
 	});
 

@@ -209,13 +209,19 @@ error prefixes, numeric provider codes, and standard transport/status phrases;
 all other text is replaced with `[redacted]`. Unknown codes/names, response bodies,
 credentials and stacks are never logged. This deliberately favors privacy over
 free-form provider detail.
-Completed jobs and purge tombstones remain available
-for periodic anti-entropy reconciliation: a lease alone cannot fence an old
-Vectorize call after a process pauses or crashes in the non-transactional gap.
-Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.
+Completed jobs and purge tombstones retain their acknowledged generation but
+are excluded from selection and claims until generation invalidation. Existing
+rows with legacy hourly deadlines are also excluded. Migration
+`0011_vector_profile_invalidation.sql` invalidates vectors and requeues memories
+when an active profile is inserted, removed, or changes model, dimensions,
+activation or index. Memory/vector/space triggers cover writes, moves, restores
+and slug changes; stale completions explicitly invalidate their destinations.
+A provider mutation followed by a process crash still has a non-transactional
+recovery gap: periodic rewriting is intentionally removed, not a fencing guarantee.
+D1 visibility checks remain mandatory and continue independently of pending jobs.
 Cron selects 50 jobs by default (explicit limits are capped at 500); write drains
-select their supplied memory IDs, without bypassing backoff or live leases. Both use a 60-second lease and a one-hour
-anti-entropy interval. Failed work is moved behind untouched due work, so a
+select their supplied memory IDs, without bypassing backoff or live leases. Both use a 60-second lease.
+Failed work is moved behind untouched due work, so a
 persistently failing prefix cannot starve later updates or purge tombstones.
 Claiming a lease also advances its queue position before the external call;
 an abandoned or hung call therefore cannot reclaim the queue head forever.
@@ -231,7 +237,7 @@ an expired owner's completion cannot acknowledge a newer owner's work.
 Each actual claim and post-backfill refresh reads the current clock, rather than
 reusing the drain start time. A queued delete refreshes and checks its lease and
 generation immediately before joining the provider batch; superseded claims are
-not sent. Retry and anti-entropy delays start from failure/completion time.
+not sent. Retry delays start from failure time.
 Completed rows and tombstones are intentionally retained; this is the durable
 recovery cost of a destination without conditional/fenced writes.
 

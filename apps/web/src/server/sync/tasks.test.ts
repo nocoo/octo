@@ -339,7 +339,7 @@ describe("derived work coordination", () => {
 			expect(await runDerivedTasks(env, 100)).toEqual({ synced: 1, failed: 0 });
 			expect(gateway).not.toHaveBeenCalled();
 			expect(raw.prepare("SELECT indexed_at FROM memory_vectors").get()?.indexed_at).toBe(100);
-			expect(await runDerivedTasks(env)).toEqual({ synced: 1, failed: 0 });
+			expect(await runDerivedTasks(env)).toEqual({ synced: 0, failed: 0 });
 			expect(raw.prepare("SELECT source_key_id FROM memories").get()?.source_key_id).toBe("client");
 		} finally {
 			raw.close();

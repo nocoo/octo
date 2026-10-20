@@ -6,7 +6,7 @@ import { createSearchVectorStore } from "../search/vector-store-factory";
 import { isVectorRateLimit, retryVectorMutation, vectorErrorDetails } from "./vector-errors";
 
 export const SYNC_LEASE_MS = 60_000;
-export const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+export const FAILURE_BACKOFF_MS = 60 * 60 * 1000;
 const MAX_FAILURES = 8;
 const DELETE_BATCH_SIZE = 100;
 
@@ -95,6 +95,7 @@ export async function synchronizeVectors(
 		options.memoryIds === undefined ? null : JSON.stringify([...new Set(options.memoryIds)]);
 	const jobs = await env.DB.prepare(`SELECT memory_id FROM vector_sync_jobs
 		WHERE dead_at IS NULL AND due_at <= ? AND lease_until <= ?
+		AND generation IS NOT synced_generation
 		AND (? IS NULL OR memory_id IN (SELECT value FROM json_each(?)))
 		ORDER BY due_at, memory_id LIMIT ?`)
 		.bind(now, now, target, target, limit)
@@ -135,7 +136,7 @@ export async function synchronizeVectors(
 					.bind(
 						details.error_message,
 						failedAt,
-						RECONCILE_INTERVAL_MS,
+						FAILURE_BACKOFF_MS,
 						MAX_FAILURES,
 						failedAt,
 						job.memory_id,
@@ -171,9 +172,8 @@ export async function synchronizeVectors(
 				job.memory_id,
 			),
 			env.DB.prepare(`UPDATE vector_sync_jobs SET synced_generation = generation, lease_token = NULL,
-				lease_until = 0, due_at = ?, attempts = 0, last_error = NULL, dead_at = NULL
+				lease_until = 0, due_at = 0, attempts = 0, last_error = NULL, dead_at = NULL
 				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0`).bind(
-				completedAt + RECONCILE_INTERVAL_MS,
 				job.memory_id,
 				job.generation,
 				job.token,
@@ -191,7 +191,8 @@ export async function synchronizeVectors(
 		const claimedAt = timestamp();
 		const claim =
 			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?, lease_dirty = 0
-			WHERE memory_id = ? AND dead_at IS NULL AND lease_until <= ? AND due_at <= ? RETURNING generation`)
+			WHERE memory_id = ? AND dead_at IS NULL AND lease_until <= ? AND due_at <= ?
+			AND generation IS NOT synced_generation RETURNING generation`)
 				.bind(token, claimedAt + SYNC_LEASE_MS, claimedAt, job.memory_id, claimedAt, claimedAt)
 				.first<{ generation: number }>();
 		return claim ? { ...job, token, generation: claim.generation } : null;

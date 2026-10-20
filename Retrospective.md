@@ -1,5 +1,16 @@
 # Retrospective
 
+### 2026-10-20 — Inspect shared fixtures before adding setup
+
+The vector invalidation regression initially inserted a destination space already
+provided by the shared SQLite fixture, producing a uniqueness error rather than
+the intended behavioral failure. Reusing the fixture restored a meaningful RED
+run. Inspect shared seed data before adding setup, and check each failing test's
+cause before treating its failure as TDD evidence.
+The pre-commit typecheck also caught a stale cron-test import after renaming the
+retry interval. Search all consumers, not just the implementation directory,
+before changing an exported identifier; keep hooks enabled to catch omissions.
+
 ## 2026-10-19 — Assert backing data behind an accessible modal
 
 The first dashboard v2 Chromium run failed in the new deletion retry test:

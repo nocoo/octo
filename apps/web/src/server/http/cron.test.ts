@@ -3,7 +3,7 @@ import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import type { Env } from "../env";
 import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import { encodeFloat32Vector } from "../search/math";
-import { RECONCILE_INTERVAL_MS, SYNC_LEASE_MS } from "../sync/vectors";
+import { FAILURE_BACKOFF_MS, SYNC_LEASE_MS } from "../sync/vectors";
 import { IDEMPOTENCY_RETENTION_MS, runScheduledTasks } from "./cron";
 
 afterEach(() => vi.restoreAllMocks());
@@ -54,7 +54,7 @@ describe("runScheduledTasks", () => {
 		expect(
 			sqlite.prepare("SELECT due_at FROM vector_sync_jobs WHERE memory_id = 'z-deleted'").get()
 				?.due_at,
-		).toBe(Date.now() + 2 * RECONCILE_INTERVAL_MS);
+		).toBe(Date.now() + 2 * FAILURE_BACKOFF_MS);
 	});
 
 	it("rolls up usage and retries durable derived cleanup", async () => {
