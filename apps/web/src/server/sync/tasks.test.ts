@@ -26,6 +26,48 @@ afterEach(() => {
 });
 
 describe("derived work coordination", () => {
+	it.each(["disabled", "unset"])(
+		"requeues only missing or stale vectors when backfill was %s",
+		async (mode) => {
+			const { env, raw } = await setup(3);
+			await saveEmbeddingSettings(env, { backfill_enabled: false }, "admin:local");
+			if (mode === "unset")
+				raw.exec("DELETE FROM settings WHERE key = 'embedding.backfill_enabled'");
+			for (const [id, hash] of [
+				["memory-01", "hash"],
+				["memory-02", "stale"],
+			]) {
+				raw
+					.prepare(`INSERT INTO memory_vectors (memory_id,profile_id,embedding_model,dim,vector,content_hash,updated_at)
+				VALUES (?,'tiny','tiny',3,?,?,1)`)
+					.run(id as string, encodeFloat32Vector([0, 1, 0]), hash as string);
+			}
+			const fetcher = vi.fn(async () =>
+				Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] }),
+			);
+			vi.stubGlobal("fetch", fetcher);
+			try {
+				expect(await runDerivedTasks(env, 100)).toEqual({ synced: 3, failed: 0 });
+				expect(fetcher).not.toHaveBeenCalled();
+				await saveEmbeddingSettings(env, { backfill_enabled: true }, "admin:local");
+				expect(await runDerivedTasks(env, 101)).toEqual({ synced: 2, failed: 0 });
+				expect(fetcher).toHaveBeenCalledTimes(1);
+				expect(
+					raw.prepare("SELECT indexed_at FROM memory_vectors WHERE memory_id = 'memory-01'").get()
+						?.indexed_at,
+				).toBe(100);
+				expect(
+					raw.prepare("SELECT count(*) AS count FROM memory_vectors WHERE indexed_at = 101").get()
+						?.count,
+				).toBe(2);
+				await saveEmbeddingSettings(env, { backfill_enabled: true }, "admin:local");
+				expect(await runDerivedTasks(env, 102)).toEqual({ synced: 0, failed: 0 });
+			} finally {
+				raw.close();
+			}
+		},
+	);
+
 	it("still acknowledges deleted and purged vector jobs in a metadata-only drain", async () => {
 		const { env, raw } = await setup(2);
 		const fetcher = vi.fn();

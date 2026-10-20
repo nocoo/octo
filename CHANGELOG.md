@@ -8,10 +8,11 @@
 - Retry rate-limited upserts and deletes twice with bounded exponential jitter. Persistent throttling reschedules jobs after 60–120 seconds without spending the failure budget or moving jobs toward the dead state.
 - Stop hourly rewrites of acknowledged generations while continuing visibility checks and invalidation-driven synchronization for writes, moves, restores and profile changes.
 - Fence claims and acknowledgements against an in-flight switch of the active embedding profile.
+- Requeue missing or stale vectors when backfill is enabled, without rewriting already current client vectors.
 
 ### Migration
 
-- Apply `0011_vector_profile_invalidation.sql` before deploying: active embedding profile changes now invalidate vector acknowledgements and requeue affected memories. No remote migration or deployment is performed by this change.
+- Apply `0011_vector_profile_invalidation.sql` before deploying: active embedding profile changes and enabling backfill now requeue affected memories atomically. No remote migration or deployment is performed by this change.
 
 ## 0.4.0 — 2026-10-19
 

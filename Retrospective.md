@@ -24,6 +24,13 @@ only `due_at`, which exercised the retired periodic rewrite path. It now verifie
 that a legacy deadline does not rewrite an acknowledged vector, then mutates
 authoritative metadata and proves the trigger-driven cron repair. Update
 integration fixtures alongside changed scheduling contracts, not just unit tests.
+Independent MAX review found another invalidation boundary: enabling backfill
+did not revive live memories whose missing vectors had previously been handled
+as acknowledged deletions while backfill was off. Two RED regressions cover an
+explicitly disabled setting and an absent default setting. Transactional settings
+triggers now requeue only missing or stale active-profile vectors on enablement.
+When removing periodic repair, audit configuration transitions as well as source
+row mutations, including work that completed without producing a derived row.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 

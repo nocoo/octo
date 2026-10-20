@@ -216,6 +216,9 @@ rows with legacy hourly deadlines are also excluded. Migration
 when an active profile is inserted, removed, or changes model, dimensions,
 activation or index. Memory/vector/space triggers cover writes, moves, restores
 and slug changes; stale completions explicitly invalidate their destinations.
+Enabling backfill atomically requeues live memories with missing or stale
+active-profile vectors, including previously acknowledged deletions. Re-saving
+an already enabled setting leaves current generations untouched.
 A provider mutation followed by a process crash still has a non-transactional
 recovery gap: periodic rewriting is intentionally removed, not a fencing guarantee.
 D1 visibility checks remain mandatory and continue independently of pending jobs.
