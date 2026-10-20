@@ -41,6 +41,60 @@ function addVectors(sqlite: ReturnType<typeof fixture>["sqlite"], count: number)
 }
 
 describe("durable vector synchronization", () => {
+	it("confirms local visibility without repeated nearest-neighbor scans", async () => {
+		const { env, sqlite } = fixture();
+		addVectors(sqlite, 65);
+		env.OCTO_VECTOR_SYNC_CONCURRENCY = "1";
+		const query = vi.spyOn(D1BruteForceVectorStore.prototype, "query");
+		try {
+			expect(await synchronizeVectors(env, { now: 100 })).toEqual({ synced: 50, failed: 0 });
+			expect(await synchronizeVectors(env, { now: 101 })).toEqual({ synced: 15, failed: 0 });
+			expect(
+				sqlite
+					.prepare(
+						"SELECT count(*) AS count FROM vector_sync_jobs WHERE visible_generation = generation",
+					)
+					.get(),
+			).toEqual({ count: 65 });
+			expect(await synchronizeVectors(env, { now: 3_600_100 })).toEqual({ synced: 0, failed: 0 });
+			expect(query).not.toHaveBeenCalled();
+		} finally {
+			sqlite.close();
+		}
+	});
+
+	it("only confirms current acknowledged local vectors within the requested scope", async () => {
+		const { env, sqlite } = fixture();
+		addVectors(sqlite, 9);
+		sqlite.exec(`UPDATE memory_vectors SET content_hash = 'old' WHERE memory_id = 'memory-001';
+			UPDATE memory_vectors SET embedding_model = 'old' WHERE memory_id = 'memory-002';
+			UPDATE memory_vectors SET dim = 1 WHERE memory_id = 'memory-003';
+			UPDATE memories SET deleted_at = 1 WHERE id = 'memory-004';
+			UPDATE memory_vectors SET indexed_at = 100;
+			UPDATE vector_sync_jobs SET synced_generation = generation, due_at = 999999;
+			UPDATE vector_sync_jobs SET lease_token = 'other', lease_until = 999999 WHERE memory_id = 'memory-005';
+			UPDATE vector_sync_jobs SET dead_at = 1 WHERE memory_id = 'memory-006';
+			UPDATE vector_sync_jobs SET synced_generation = 0 WHERE memory_id = 'memory-007'`);
+		try {
+			expect(
+				await synchronizeVectors(env, {
+					now: 100,
+					memoryIds: [
+						"memory",
+						...Array.from({ length: 7 }, (_, index) => `memory-00${index + 1}`),
+					],
+				}),
+			).toEqual({ synced: 0, failed: 0 });
+			expect(
+				sqlite
+					.prepare("SELECT memory_id FROM vector_sync_jobs WHERE visible_generation = generation")
+					.all(),
+			).toEqual([{ memory_id: "memory" }]);
+		} finally {
+			sqlite.close();
+		}
+	});
+
 	it("does not clear a newer acknowledgement after releasing a throttled claim", async () => {
 		const { env, db, sqlite, store, indexed } = fixture();
 		vi.useFakeTimers();

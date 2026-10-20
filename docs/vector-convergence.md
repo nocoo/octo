@@ -31,12 +31,15 @@
 - `indexed=true` specifically means **the current-generation upsert was accepted
   by Vectorize**. It does not claim Vectorize query visibility. No successful
   acknowledgement is synthesized while an upsert is still pending or failed.
-- Upsert metadata includes D1's generation and content hash. A self-vector query
+- Upsert metadata includes D1's generation and content hash. An external self-vector query
   must observe both before `visible_generation` is acknowledged with a generation
   CAS. Until then, the authorized current D1 vectors supplement external search,
   using 100-row ID-cursor pages and only top-K candidates retained in memory.
   There is no time-based overlay expiry. Large pending backlogs therefore increase
   read work; storage, backoff and observability must not silently truncate recall.
+  The local D1 brute-force store has no separate index: current, acknowledged D1
+  rows establish visibility directly with the same generation CAS, without
+  nearest-neighbor scans or a top-K tie limit.
 - Every external candidate is checked against current D1 generation/content,
   active profile/model/dimensions and all authorization/content filters. Its
   score is recomputed from D1, and nonpositive cosine scores are omitted. An old

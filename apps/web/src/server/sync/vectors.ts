@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { ApiError } from "../lib/errors";
+import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import type { VectorStore } from "../ports/vector/types";
 import { decodeFloat32Vector } from "../search/math";
 import { createSearchVectorStore } from "../search/vector-store-factory";
@@ -434,9 +435,11 @@ export async function synchronizeVectors(
 			await env.DB.prepare(`SELECT job.memory_id, job.generation, mv.content_hash, mv.vector, mv.dim
 			FROM vector_sync_jobs job JOIN memory_vectors mv ON mv.memory_id = job.memory_id
 			JOIN memories memory ON memory.id = job.memory_id
+			JOIN embedding_profiles profile ON profile.id = mv.profile_id
 			WHERE job.synced_generation = job.generation AND job.lease_token IS NULL AND job.dead_at IS NULL
 			AND (job.visible_generation IS NULL OR job.visible_generation != job.generation)
 			AND mv.profile_id = ? AND mv.indexed_at IS NOT NULL AND mv.content_hash = memory.content_hash
+			AND profile.active = 1 AND mv.embedding_model = profile.model AND mv.dim = profile.dims
 			AND memory.deleted_at IS NULL AND (? IS NULL OR job.memory_id IN (SELECT value FROM json_each(?)))
 			ORDER BY mv.indexed_at, job.memory_id LIMIT ?`)
 				.bind(profileId, target, target, limit)
@@ -449,20 +452,22 @@ export async function synchronizeVectors(
 				}>();
 		await concurrent(candidates.results, concurrency, async (candidate) => {
 			try {
-				const hits = await store.query?.({
-					vector: decodeFloat32Vector(candidate.vector, candidate.dim),
-					topK: 50,
-					returnMetadata: true,
-				});
-				if (
-					!hits?.some(
-						(hit) =>
-							hit.id === candidate.memory_id &&
-							hit.generation === candidate.generation &&
-							hit.content_hash === candidate.content_hash,
+				if (!(store instanceof D1BruteForceVectorStore)) {
+					const hits = await store.query?.({
+						vector: decodeFloat32Vector(candidate.vector, candidate.dim),
+						topK: 50,
+						returnMetadata: true,
+					});
+					if (
+						!hits?.some(
+							(hit) =>
+								hit.id === candidate.memory_id &&
+								hit.generation === candidate.generation &&
+								hit.content_hash === candidate.content_hash,
+						)
 					)
-				)
-					return;
+						return;
+				}
 				await env.DB.prepare(`UPDATE vector_sync_jobs SET visible_generation = ?
 					WHERE memory_id = ? AND generation = ? AND synced_generation = ? AND lease_token IS NULL`)
 					.bind(
