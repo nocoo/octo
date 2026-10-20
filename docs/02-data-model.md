@@ -184,8 +184,12 @@ deletes missing/trashed/content-stale vectors. The Vectorize ID is exactly the
 memory ID (one vector per memory, no generation suffix or chunk IDs). Upserts
 include `generation` and `content_hash` metadata. Only the claimed generation may acknowledge
 `indexed_at`. A concurrent mutation can be reclaimed within the same drain,
-with at most three generation-repair rounds per selected job. Provider failures
-are never retried in-run: migration `0007_vector_sync_retries.sql` persists
+with at most three generation-repair rounds per selected job. Vectorize rate limits
+(40041, HTTP 429, or throttling messages) receive two in-run retries with jittered
+100–200 ms and 200–400 ms delays. Exhaustion releases the claim for retry after
+60–120 seconds without incrementing attempts or approaching the dead state, and
+emits `vector_sync_rate_limited` with the same redacted diagnostics. Other provider
+failures are not retried in-run: migration `0007_vector_sync_retries.sql` persists
 `attempts`, redacted `last_error`, and `dead_at`. Each failure increments attempts
 and sets `due_at = now + min(2^attempts, 24) hours` (first retry after two hours).
 The eighth consecutive failure parks the job with `dead_at`, excludes it from
@@ -205,18 +209,32 @@ error prefixes, numeric provider codes, and standard transport/status phrases;
 all other text is replaced with `[redacted]`. Unknown codes/names, response bodies,
 credentials and stacks are never logged. This deliberately favors privacy over
 free-form provider detail.
-Completed jobs and purge tombstones remain available
-for periodic anti-entropy reconciliation: a lease alone cannot fence an old
-Vectorize call after a process pauses or crashes in the non-transactional gap.
-Repeated upserts/deletes are idempotent. D1 visibility checks remain mandatory.
+Completed jobs and purge tombstones retain their acknowledged generation but
+are excluded from selection and claims until generation invalidation. Existing
+rows with legacy hourly deadlines are also excluded. Migration
+`0011_vector_profile_invalidation.sql` invalidates vectors and requeues memories
+when an active profile is inserted, removed, or changes model, dimensions,
+activation or index. Memory/vector/space triggers cover writes, moves, restores
+and slug changes; stale completions explicitly invalidate their destinations.
+Enabling backfill atomically requeues live memories with missing or stale
+active-profile vectors, including previously acknowledged deletions. Re-saving
+an already enabled setting leaves current generations untouched.
+Acknowledgement atomically refuses to complete a live job while backfill is enabled
+and its current-profile vector remains missing or stale. This preserves enablement
+and content changes that arrive during preparation, even when preparation refreshes
+to their newer generation. Such work enters the bounded repair loop and remains
+pending if the three-round budget is exhausted.
+A provider mutation followed by a process crash still has a non-transactional
+recovery gap: periodic rewriting is intentionally removed, not a fencing guarantee.
+D1 visibility checks remain mandatory and continue independently of pending jobs.
 Cron selects 50 jobs by default (explicit limits are capped at 500); write drains
-select their supplied memory IDs, without bypassing backoff or live leases. Both use a 60-second lease and a one-hour
-anti-entropy interval. Failed work is moved behind untouched due work, so a
+select their supplied memory IDs, without bypassing backoff or live leases. Both use a 60-second lease.
+Failed work is moved behind untouched due work, so a
 persistently failing prefix cannot starve later updates or purge tombstones.
 Claiming a lease also advances its queue position before the external call;
 an abandoned or hung call therefore cannot reclaim the queue head forever.
 The same claim covers embedding backfill before any gateway call. At most four
-jobs are claimed together; current client vectors and deletion tombstones bypass
+jobs are prepared concurrently; current client vectors and deletion tombstones bypass
 embedding preparation. Only missing/stale live vectors form an embedding batch;
 distinct missing content hashes share one gateway request and identical hashes
 share one input. Another drain skips their live leases. If preparation rejects,
@@ -225,12 +243,19 @@ charging already-ready vector writes or deletions. After backfill, synchronizati
 lease ownership and reads the current generation before reading the vector;
 an expired owner's completion cannot acknowledge a newer owner's work.
 Each actual claim and post-backfill refresh reads the current clock, rather than
-reusing the drain start time. A queued delete refreshes and checks its lease and
-generation immediately before joining the provider batch; superseded claims are
-not sent. Retry and anti-entropy delays start from failure/completion time.
+reusing the drain start time. Queued mutations refresh and check their lease and
+generation immediately before each provider attempt, including rate-limit retries; superseded claims are
+not sent. Retry delays start from failure time.
 Completed rows and tombstones are intentionally retained; this is the durable
 recovery cost of a destination without conditional/fenced writes.
 
+Ready upserts are grouped into calls of at most 100 vectors, below the Workers
+binding limit of 1,000. Embedding groups retain at most four jobs so a large slow
+backfill does not hold completed vectors behind unrelated requests. Ready work
+flushes before entering a newly needed embedding batch, including repair rounds.
+If that flush creates generation repairs, unstarted embedding claims are released
+and queued behind those repairs before any slow gateway call. The same three-round
+bound still applies; unfinished jobs remain durably pending without a live lease.
 Deletes are grouped into `deleteByIds` chunks of at most 100 IDs. A rejected
 chunk defers only its own jobs; other chunks acknowledge independently. Successful
 chunks acknowledge each generation separately, repairing concurrent restores

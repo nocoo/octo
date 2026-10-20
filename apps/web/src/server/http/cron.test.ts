@@ -3,13 +3,13 @@ import { sqliteD1 } from "../../../../../tests/fixtures/sqlite-d1";
 import type { Env } from "../env";
 import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import { encodeFloat32Vector } from "../search/math";
-import { RECONCILE_INTERVAL_MS, SYNC_LEASE_MS } from "../sync/vectors";
+import { FAILURE_BACKOFF_MS, SYNC_LEASE_MS } from "../sync/vectors";
 import { IDEMPOTENCY_RETENTION_MS, runScheduledTasks } from "./cron";
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("runScheduledTasks", () => {
-	it("uses the live clock for queued vector leases and failure backoff", async () => {
+	it("refreshes a queued deletion lease after a slow upsert and backs off from failure", async () => {
 		const { db, sqlite } = sqliteD1();
 		const clock = vi.spyOn(Date, "now").mockReturnValue(100);
 		vi.spyOn(console, "error").mockImplementation(() => {});
@@ -28,20 +28,16 @@ describe("runScheduledTasks", () => {
 		sqlite.exec("INSERT INTO vector_sync_jobs (memory_id) VALUES ('z-deleted')");
 		const entered = Promise.withResolvers<void>();
 		const release = Promise.withResolvers<void>();
-		let calls = 0;
-		let fifthLease: unknown;
-		vi.spyOn(D1BruteForceVectorStore.prototype, "upsert").mockImplementation(async () => {
-			calls++;
-			if (calls <= 4) {
-				if (calls === 4) entered.resolve();
-				await release.promise;
-			} else {
-				fifthLease = sqlite
-					.prepare("SELECT lease_until FROM vector_sync_jobs WHERE memory_id = 'job-4'")
-					.get()?.lease_until;
-			}
+		let deletionLease: unknown;
+		vi.spyOn(D1BruteForceVectorStore.prototype, "upsert").mockImplementation(async (records) => {
+			expect(records).toHaveLength(5);
+			entered.resolve();
+			await release.promise;
 		});
 		vi.spyOn(D1BruteForceVectorStore.prototype, "delete").mockImplementation(async () => {
+			deletionLease = sqlite
+				.prepare("SELECT lease_until FROM vector_sync_jobs WHERE memory_id = 'z-deleted'")
+				.get()?.lease_until;
 			clock.mockReturnValue(101 + 2 * SYNC_LEASE_MS);
 			throw new Error("service unavailable");
 		});
@@ -50,11 +46,11 @@ describe("runScheduledTasks", () => {
 		clock.mockReturnValue(101 + SYNC_LEASE_MS);
 		release.resolve();
 		await scheduled;
-		expect(fifthLease).toBe(101 + 2 * SYNC_LEASE_MS);
+		expect(deletionLease).toBe(101 + 2 * SYNC_LEASE_MS);
 		expect(
 			sqlite.prepare("SELECT due_at FROM vector_sync_jobs WHERE memory_id = 'z-deleted'").get()
 				?.due_at,
-		).toBe(Date.now() + 2 * RECONCILE_INTERVAL_MS);
+		).toBe(Date.now() + 2 * FAILURE_BACKOFF_MS);
 	});
 
 	it("rolls up usage and retries durable derived cleanup", async () => {

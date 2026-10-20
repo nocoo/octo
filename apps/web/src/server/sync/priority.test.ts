@@ -111,3 +111,35 @@ it("does not let readiness changes in later groups delay a leased client repair"
 		raw.close();
 	}
 });
+
+it("repairs a mid-chunk flush before entering newly stale embedding groups", async () => {
+	const { env, raw, ids, put, process, indexed, store, clock } = await setup(21);
+	for (const id of ids) put(id, [1, 0, 0]);
+	let changed = false;
+	let putAt: number | undefined;
+	store.upsert.mockImplementationOnce(async () => {
+		putAt = clock();
+		put("memory-00", [0, 1, 0]);
+		expect(await process(["memory-00"])).toEqual({ synced: 0, failed: 0 });
+	});
+	try {
+		expect(
+			await synchronizeVectors(env, {
+				store,
+				beforeSync: async (id) => {
+					if (id === "memory-00" && !changed) {
+						changed = true;
+						raw.exec("UPDATE memories SET content_hash = 'changed' WHERE id > 'memory-03'");
+					}
+				},
+				beforeSyncBatch: (batch) => backfillMemories(env, batch),
+			}),
+		).toEqual({ synced: 21, failed: 0 });
+		expect(indexed("memory-00")).toBe(putAt);
+		expect(store.upsert.mock.calls[1]?.[0]).toEqual([
+			expect.objectContaining({ id: "memory-00", values: [0, 1, 0] }),
+		]);
+	} finally {
+		raw.close();
+	}
+});

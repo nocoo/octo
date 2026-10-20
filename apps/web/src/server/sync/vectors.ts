@@ -1,17 +1,19 @@
 import type { Env } from "../env";
 import { ApiError } from "../lib/errors";
+import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import type { VectorStore } from "../ports/vector/types";
 import { decodeFloat32Vector } from "../search/math";
 import { createSearchVectorStore } from "../search/vector-store-factory";
-import { vectorErrorDetails } from "./vector-errors";
+import { isVectorRateLimit, retryVectorMutation, vectorErrorDetails } from "./vector-errors";
 
 export const SYNC_LEASE_MS = 60_000;
-export const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+export const FAILURE_BACKOFF_MS = 60 * 60 * 1000;
 const MAX_FAILURES = 8;
-const DELETE_BATCH_SIZE = 100;
+const MUTATION_BATCH_SIZE = 100;
 
 type Job = { memory_id: string };
 type Claim = Job & { token: string; generation: number };
+type Upsert = Claim & { record: VectorizeVector };
 
 async function concurrent<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
 	const pending = items.values();
@@ -58,7 +60,7 @@ async function invalidate(
 			.prepare(`UPDATE vector_sync_jobs SET
 			generation = generation + CASE WHEN lease_token IS NULL OR lease_token = ? THEN 1 ELSE 0 END,
 			lease_dirty = CASE WHEN lease_token IS NOT NULL AND lease_token != ? THEN 1 ELSE 0 END,
-			due_at = CASE WHEN lease_token = ? OR (attempts = 0 AND dead_at IS NULL) THEN ? ELSE due_at END,
+			due_at = CASE WHEN lease_token = ? OR (last_error IS NULL AND dead_at IS NULL) THEN ? ELSE due_at END,
 			lease_until = CASE WHEN lease_token = ? THEN 0 ELSE lease_until END,
 			lease_token = CASE WHEN lease_token = ? THEN NULL ELSE lease_token END WHERE memory_id = ?`)
 			.bind(token, token, token, now, token, token, memoryId),
@@ -95,6 +97,7 @@ export async function synchronizeVectors(
 		options.memoryIds === undefined ? null : JSON.stringify([...new Set(options.memoryIds)]);
 	const jobs = await env.DB.prepare(`SELECT memory_id FROM vector_sync_jobs
 		WHERE dead_at IS NULL AND due_at <= ? AND lease_until <= ?
+		AND generation IS NOT synced_generation
 		AND (? IS NULL OR memory_id IN (SELECT value FROM json_each(?)))
 		ORDER BY due_at, memory_id LIMIT ?`)
 		.bind(now, now, target, target, limit)
@@ -102,37 +105,55 @@ export async function synchronizeVectors(
 	const fail = async (job: Claim, stage: string, error: unknown, retry: Job[]) => {
 		const failedAt = timestamp();
 		totals.failed++;
+		const rateLimited = (stage === "upsert" || stage === "delete") && isVectorRateLimit(error);
 		const details = vectorErrorDetails(error);
 		const entry = {
 			memory_id: job.memory_id,
 			...details,
 			message: `Vector synchronization failed during ${stage}`,
 		};
-		console.error({ event: "vector_sync_failed", ...entry });
-		const failed = await env.DB.prepare(`UPDATE vector_sync_jobs SET attempts = attempts + 1,
+		console.error({
+			event: rateLimited ? "vector_sync_rate_limited" : "vector_sync_failed",
+			...entry,
+		});
+		const failed = rateLimited
+			? await env.DB.prepare(`UPDATE vector_sync_jobs SET last_error = ?, due_at = ?,
+				lease_token = NULL, lease_until = 0, lease_dirty = 0
+				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND dead_at IS NULL
+				RETURNING attempts, dead_at`)
+					.bind(
+						details.error_message,
+						failedAt + 60_000 + Math.floor(Math.random() * 60_000),
+						job.memory_id,
+						job.generation,
+						job.token,
+					)
+					.first<{ attempts: number; dead_at: number | null }>()
+			: await env.DB.prepare(`UPDATE vector_sync_jobs SET attempts = attempts + 1,
 			last_error = ?, due_at = ? + min(1 << (attempts + 1), 24) * ?,
 			dead_at = CASE WHEN attempts + 1 >= ? THEN ? ELSE NULL END,
 			lease_token = NULL, lease_until = 0, lease_dirty = 0
 			WHERE memory_id = ? AND generation = ? AND lease_token = ? AND dead_at IS NULL
 			RETURNING attempts, dead_at`)
-			.bind(
-				details.error_message,
-				failedAt,
-				RECONCILE_INTERVAL_MS,
-				MAX_FAILURES,
-				failedAt,
-				job.memory_id,
-				job.generation,
-				job.token,
-			)
-			.first<{ attempts: number; dead_at: number | null }>();
+					.bind(
+						details.error_message,
+						failedAt,
+						FAILURE_BACKOFF_MS,
+						MAX_FAILURES,
+						failedAt,
+						job.memory_id,
+						job.generation,
+						job.token,
+					)
+					.first<{ attempts: number; dead_at: number | null }>();
 		if (!failed) {
 			await invalidate(env.DB, job.memory_id, job.token, failedAt);
 			retry.push(job);
 			return;
 		}
 		await env.DB.prepare(`UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ?
-			AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND attempts = ?)`)
+			AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND attempts = ?
+			AND synced_generation IS NOT generation)`)
 			.bind(job.memory_id, job.memory_id, job.generation, failed.attempts)
 			.run();
 		if (failed.dead_at !== null)
@@ -144,7 +165,8 @@ export async function synchronizeVectors(
 			env.DB.prepare(`UPDATE memory_vectors SET indexed_at = ? WHERE memory_id = ? AND profile_id = ?
 				AND EXISTS (SELECT 1 FROM vector_sync_jobs WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0)
 				AND EXISTS (SELECT 1 FROM memories WHERE id = ? AND deleted_at IS NULL AND content_hash = memory_vectors.content_hash)
-				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = memory_vectors.profile_id AND model = memory_vectors.embedding_model AND dims = memory_vectors.dim)`).bind(
+				AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
+				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = memory_vectors.profile_id AND active = 1 AND model = memory_vectors.embedding_model AND dims = memory_vectors.dim)`).bind(
 				completedAt,
 				job.memory_id,
 				profileId,
@@ -154,13 +176,18 @@ export async function synchronizeVectors(
 				job.memory_id,
 			),
 			env.DB.prepare(`UPDATE vector_sync_jobs SET synced_generation = generation, lease_token = NULL,
-				lease_until = 0, due_at = ?, attempts = 0, last_error = NULL, dead_at = NULL
-				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0`).bind(
-				completedAt + RECONCILE_INTERVAL_MS,
-				job.memory_id,
-				job.generation,
-				job.token,
-			),
+				lease_until = 0, due_at = 0, attempts = 0, last_error = NULL, dead_at = NULL
+				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0
+				AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
+				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND active = 1)
+				AND NOT EXISTS (
+					SELECT 1 FROM memories memory JOIN embedding_profiles profile ON profile.id = ?
+					JOIN settings setting ON setting.key = 'embedding.backfill_enabled' AND setting.value = 'true'
+					LEFT JOIN memory_vectors vector ON vector.memory_id = memory.id AND vector.profile_id = profile.id
+					WHERE memory.id = vector_sync_jobs.memory_id AND memory.deleted_at IS NULL
+					AND (vector.memory_id IS NULL OR vector.content_hash != memory.content_hash
+					OR vector.embedding_model != profile.model OR vector.dim != profile.dims)
+				)`).bind(job.memory_id, job.generation, job.token, profileId, profileId),
 		]);
 		if (results[1]?.meta.changes === 1) {
 			totals.synced++;
@@ -174,12 +201,29 @@ export async function synchronizeVectors(
 		const claimedAt = timestamp();
 		const claim =
 			await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = ?, lease_until = ?, due_at = ?, lease_dirty = 0
-			WHERE memory_id = ? AND dead_at IS NULL AND lease_until <= ? AND due_at <= ? RETURNING generation`)
-				.bind(token, claimedAt + SYNC_LEASE_MS, claimedAt, job.memory_id, claimedAt, claimedAt)
+			WHERE memory_id = ? AND dead_at IS NULL AND lease_until <= ? AND due_at <= ?
+			AND generation IS NOT synced_generation
+			AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
+			AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND active = 1) RETURNING generation`)
+				.bind(
+					token,
+					claimedAt + SYNC_LEASE_MS,
+					claimedAt,
+					job.memory_id,
+					claimedAt,
+					claimedAt,
+					profileId,
+				)
 				.first<{ generation: number }>();
 		return claim ? { ...job, token, generation: claim.generation } : null;
 	};
-	const syncAttempt = async (job: Job, deletes: Claim[], retry: Job[], prepared?: Claim) => {
+	const syncAttempt = async (
+		job: Job,
+		upserts: Upsert[],
+		deletes: Claim[],
+		retry: Job[],
+		prepared?: Claim,
+	) => {
 		const claimed = prepared ?? (await claimJob(job));
 		if (!claimed) return;
 		const token = claimed.token;
@@ -205,9 +249,9 @@ export async function synchronizeVectors(
 					.bind(job.memory_id, profileId)
 					.first<SourceVector>();
 			if (source) {
-				stage = "upsert";
-				await store.upsert([
-					{
+				upserts.push({
+					...claimed,
+					record: {
 						id: source.id,
 						values: decodeFloat32Vector(source.vector, source.dim),
 						metadata: {
@@ -222,7 +266,7 @@ export async function synchronizeVectors(
 							...(source.event === null ? {} : { event: source.event }),
 						},
 					},
-				]);
+				});
 			} else {
 				if (options.deferMissingVectors && (await embeddingIds([job])).has(job.memory_id)) {
 					await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
@@ -234,8 +278,6 @@ export async function synchronizeVectors(
 				deletes.push(claimed);
 				return;
 			}
-			stage = "acknowledge";
-			await acknowledge(claimed, retry);
 		} catch (error) {
 			await fail(claimed, stage, error, retry);
 		}
@@ -251,25 +293,93 @@ export async function synchronizeVectors(
 			.all<{ id: string }>();
 		return new Set(needs.results.map((memory) => memory.id));
 	};
+	const flushMutations = async <Mutation extends Claim>(
+		claims: Mutation[],
+		stage: "upsert" | "delete",
+		write: (ready: Mutation[]) => Promise<void>,
+		retry: Job[],
+	) => {
+		let ready = claims;
+		try {
+			await retryVectorMutation(async () => {
+				const ownedClaims: Mutation[] = [];
+				await concurrent(ready, concurrency, async (job) => {
+					const refreshedAt = timestamp();
+					const owned =
+						await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_until = ?, due_at = ?
+						WHERE memory_id = ? AND generation = ? AND lease_token = ? RETURNING memory_id`)
+							.bind(
+								refreshedAt + SYNC_LEASE_MS,
+								refreshedAt,
+								job.memory_id,
+								job.generation,
+								job.token,
+							)
+							.first();
+					if (owned) {
+						ownedClaims.push(job);
+					} else {
+						const released = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
+							lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ? RETURNING memory_id`)
+							.bind(refreshedAt, job.memory_id, job.token)
+							.first();
+						if (released) retry.push(job);
+					}
+				});
+				ready = ownedClaims;
+				if (ready.length > 0) await write(ready);
+			});
+		} catch (error) {
+			await concurrent(ready, concurrency, (job) => fail(job, stage, error, retry));
+			return;
+		}
+		await concurrent(ready, concurrency, async (job) => {
+			try {
+				await acknowledge(job, retry);
+			} catch (error) {
+				await fail(job, "acknowledge", error, retry);
+			}
+		});
+	};
 	const needsEmbedding = options.beforeSyncBatch ? await embeddingIds(jobs.results) : new Set();
 	const groups = options.beforeSyncBatch
 		? [
-				jobs.results.filter((job) => !needsEmbedding.has(job.memory_id)),
-				jobs.results.filter((job) => needsEmbedding.has(job.memory_id)),
+				{
+					jobs: jobs.results.filter((job) => !needsEmbedding.has(job.memory_id)),
+					size: MUTATION_BATCH_SIZE,
+				},
+				{
+					jobs: jobs.results.filter((job) => needsEmbedding.has(job.memory_id)),
+					size: concurrency,
+				},
 			]
-		: [jobs.results];
-	const batchSize = options.beforeSyncBatch ? concurrency : DELETE_BATCH_SIZE;
+		: [{ jobs: jobs.results, size: MUTATION_BATCH_SIZE }];
 	const batches: Job[][] = [];
 	for (const group of groups) {
-		for (let offset = 0; offset < group.length; offset += batchSize) {
-			batches.push(group.slice(offset, offset + batchSize));
+		for (let offset = 0; offset < group.jobs.length; offset += group.size) {
+			batches.push(group.jobs.slice(offset, offset + group.size));
 		}
 	}
 	for (const batch of batches) {
 		let pending = batch;
 		for (let round = 0; round < 3 && pending.length > 0; round++) {
+			const upserts: Upsert[] = [];
 			const deletes: Claim[] = [];
 			const retry: Job[] = [];
+			const flushReady = async () => {
+				await flushMutations(
+					upserts.splice(0),
+					"upsert",
+					(ready) => store.upsert(ready.map((job) => job.record)),
+					retry,
+				);
+				await flushMutations(
+					deletes.splice(0),
+					"delete",
+					(ready) => store.delete(ready.map((job) => job.memory_id)),
+					retry,
+				);
+			};
 			if (options.beforeSyncBatch) {
 				for (let offset = 0; offset < pending.length; offset += concurrency) {
 					const claims = (
@@ -286,9 +396,21 @@ export async function synchronizeVectors(
 					}
 					const ready = claims.filter((claim) => !embeddingClaims.includes(claim));
 					await concurrent(ready, concurrency, (claim) =>
-						syncAttempt(claim, deletes, retry, claim),
+						syncAttempt(claim, upserts, deletes, retry, claim),
 					);
 					if (embeddingClaims.length === 0) continue;
+					await flushReady();
+					if (retry.length > 0) {
+						await concurrent(embeddingClaims, concurrency, async (claim) => {
+							const released = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
+								lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ? RETURNING memory_id`)
+								.bind(timestamp(), claim.memory_id, claim.token)
+								.first();
+							if (released) retry.push(claim);
+						});
+						retry.push(...pending.slice(offset + concurrency));
+						break;
+					}
 					try {
 						await options.beforeSyncBatch(embeddingClaims.map((claim) => claim.memory_id));
 					} catch (error) {
@@ -298,45 +420,13 @@ export async function synchronizeVectors(
 						continue;
 					}
 					await concurrent(embeddingClaims, concurrency, (claim) =>
-						syncAttempt(claim, deletes, retry, claim),
+						syncAttempt(claim, upserts, deletes, retry, claim),
 					);
 				}
 			} else {
-				await concurrent(pending, concurrency, (job) => syncAttempt(job, deletes, retry));
+				await concurrent(pending, concurrency, (job) => syncAttempt(job, upserts, deletes, retry));
 			}
-			const ready: Claim[] = [];
-			await concurrent(deletes, concurrency, async (job) => {
-				const refreshedAt = timestamp();
-				const owned = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_until = ?, due_at = ?
-					WHERE memory_id = ? AND generation = ? AND lease_token = ? RETURNING memory_id`)
-					.bind(refreshedAt + SYNC_LEASE_MS, refreshedAt, job.memory_id, job.generation, job.token)
-					.first();
-				if (owned) {
-					ready.push(job);
-				} else {
-					const released = await env.DB.prepare(`UPDATE vector_sync_jobs SET lease_token = NULL,
-						lease_until = 0, due_at = ? WHERE memory_id = ? AND lease_token = ? RETURNING memory_id`)
-						.bind(refreshedAt, job.memory_id, job.token)
-						.first();
-					if (released) retry.push(job);
-				}
-			});
-			if (ready.length > 0) {
-				try {
-					await store.delete(ready.map((job) => job.memory_id));
-				} catch (error) {
-					await concurrent(ready, concurrency, (job) => fail(job, "delete", error, retry));
-					pending = retry;
-					continue;
-				}
-				await concurrent(ready, concurrency, async (job) => {
-					try {
-						await acknowledge(job, retry);
-					} catch (error) {
-						await fail(job, "acknowledge", error, retry);
-					}
-				});
-			}
+			await flushReady();
 			pending = retry;
 		}
 	}
@@ -345,9 +435,11 @@ export async function synchronizeVectors(
 			await env.DB.prepare(`SELECT job.memory_id, job.generation, mv.content_hash, mv.vector, mv.dim
 			FROM vector_sync_jobs job JOIN memory_vectors mv ON mv.memory_id = job.memory_id
 			JOIN memories memory ON memory.id = job.memory_id
+			JOIN embedding_profiles profile ON profile.id = mv.profile_id
 			WHERE job.synced_generation = job.generation AND job.lease_token IS NULL AND job.dead_at IS NULL
 			AND (job.visible_generation IS NULL OR job.visible_generation != job.generation)
 			AND mv.profile_id = ? AND mv.indexed_at IS NOT NULL AND mv.content_hash = memory.content_hash
+			AND profile.active = 1 AND mv.embedding_model = profile.model AND mv.dim = profile.dims
 			AND memory.deleted_at IS NULL AND (? IS NULL OR job.memory_id IN (SELECT value FROM json_each(?)))
 			ORDER BY mv.indexed_at, job.memory_id LIMIT ?`)
 				.bind(profileId, target, target, limit)
@@ -360,20 +452,22 @@ export async function synchronizeVectors(
 				}>();
 		await concurrent(candidates.results, concurrency, async (candidate) => {
 			try {
-				const hits = await store.query?.({
-					vector: decodeFloat32Vector(candidate.vector, candidate.dim),
-					topK: 50,
-					returnMetadata: true,
-				});
-				if (
-					!hits?.some(
-						(hit) =>
-							hit.id === candidate.memory_id &&
-							hit.generation === candidate.generation &&
-							hit.content_hash === candidate.content_hash,
+				if (!(store instanceof D1BruteForceVectorStore)) {
+					const hits = await store.query?.({
+						vector: decodeFloat32Vector(candidate.vector, candidate.dim),
+						topK: 50,
+						returnMetadata: true,
+					});
+					if (
+						!hits?.some(
+							(hit) =>
+								hit.id === candidate.memory_id &&
+								hit.generation === candidate.generation &&
+								hit.content_hash === candidate.content_hash,
+						)
 					)
-				)
-					return;
+						return;
+				}
 				await env.DB.prepare(`UPDATE vector_sync_jobs SET visible_generation = ?
 					WHERE memory_id = ? AND generation = ? AND synced_generation = ? AND lease_token IS NULL`)
 					.bind(

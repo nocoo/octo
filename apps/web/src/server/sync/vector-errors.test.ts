@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { vectorErrorDetails } from "./vector-errors";
+import { isVectorRateLimit, vectorErrorDetails } from "./vector-errors";
+
+describe("vector rate limits", () => {
+	it.each([
+		{ code: 40041 },
+		{ code: "40041" },
+		{ status: 429 },
+		{ statusCode: 429 },
+		new Error("VECTOR_UPSERT_ERROR (code = 40041): Too Many Requests"),
+		new Error("VECTOR_DELETE_ERROR: HTTP 429"),
+		new Error("Rate limit exceeded"),
+		"too many requests",
+	])("recognizes provider throttling: %j", (error) => {
+		expect(isVectorRateLimit(error)).toBe(true);
+	});
+
+	it.each([null, undefined, {}, { message: 429 }, new Error("service unavailable")])(
+		"does not retry unrelated errors: %j",
+		(error) => expect(isVectorRateLimit(error)).toBe(false),
+	);
+});
 
 describe("vector error redaction", () => {
 	it.each([null, undefined, "private body", {}, { message: 42 }, new Error()])(

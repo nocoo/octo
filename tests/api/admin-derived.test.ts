@@ -88,10 +88,15 @@ describe("admin profiles and durable derived work over HTTP", () => {
 		expect((await admin(`/trash/${id}/restore`, "POST", {})).status).toBe(200);
 		await drain();
 		expect((await vector())[0]?.indexed_at).toEqual(expect.any(Number));
+		const indexedAt = (await vector())[0]?.indexed_at;
 		await db([
 			"--command",
-			`UPDATE memory_vectors SET indexed_at = NULL WHERE memory_id = ${sqlText(id)}; UPDATE vector_sync_jobs SET due_at = 0 WHERE memory_id = ${sqlText(id)}`,
+			`UPDATE vector_sync_jobs SET due_at = 0 WHERE memory_id = ${sqlText(id)}`,
 		]);
+		await drain(true);
+		expect((await vector())[0]?.indexed_at).toBe(indexedAt);
+		await db(["--command", `UPDATE memories SET importance = 0.8 WHERE id = ${sqlText(id)}`]);
+		expect((await vector())[0]?.indexed_at).toBeNull();
 		await drain(true);
 		expect((await vector())[0]?.indexed_at).toEqual(expect.any(Number));
 		expect((await admin(`/memories/${id}`, "DELETE")).status).toBe(200);
@@ -118,20 +123,19 @@ describe("admin profiles and durable derived work over HTTP", () => {
 		const server = createServer(async (request, response) => {
 			let text = "";
 			for await (const chunk of request) text += chunk;
+			const input = (JSON.parse(text) as { input: string[] }).input;
 			requests.push({
-				input: (JSON.parse(text) as { input: string[] }).input,
+				input,
 				userAgent: request.headers["user-agent"],
 				authorization: request.headers.authorization,
 			});
 			response.setHeader("Content-Type", "application/json");
 			response.end(
 				JSON.stringify({
-					data: [
-						{
-							index: 0,
-							embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)),
-						},
-					],
+					data: input.map((_, index) => ({
+						index,
+						embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)),
+					})),
 				}),
 			);
 		});

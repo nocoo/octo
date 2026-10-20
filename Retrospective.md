@@ -1,5 +1,66 @@
 # Retrospective
 
+### 2026-10-20 — Inspect shared fixtures before adding setup
+
+The vector invalidation regression initially inserted a destination space already
+provided by the shared SQLite fixture, producing a uniqueness error rather than
+the intended behavioral failure. Reusing the fixture restored a meaningful RED
+run. Inspect shared seed data before adding setup, and check each failing test's
+cause before treating its failure as TDD evidence.
+The pre-commit typecheck also caught a stale cron-test import after renaming the
+retry interval. Search all consumers, not just the implementation directory,
+before changing an exported identifier; keep hooks enabled to catch omissions.
+The first batching pass also held a repaired client vector behind newly stale
+embedding work. The existing priority regression caught the 15-second delay.
+Flush ready records before slow embedding preparation, not only at the end of
+the outer chunk, and retain latency assertions when changing queue grouping.
+Removing periodic rewrites also exposed a profile-switch race: a drain could
+retry with its captured, now-inactive profile and acknowledge obsolete work.
+A failing regression now covers switching profiles during upsert. Claims and
+acknowledgements require the captured profile to remain the sole active profile,
+leaving switched work pending for a fresh drain.
+The full L2 run still modeled invalidation by clearing `indexed_at` and changing
+only `due_at`, which exercised the retired periodic rewrite path. It now verifies
+that a legacy deadline does not rewrite an acknowledged vector, then mutates
+authoritative metadata and proves the trigger-driven cron repair. Update
+integration fixtures alongside changed scheduling contracts, not just unit tests.
+Independent MAX review found another invalidation boundary: enabling backfill
+did not revive live memories whose missing vectors had previously been handled
+as acknowledged deletions while backfill was off. Two RED regressions cover an
+explicitly disabled setting and an absent default setting. Transactional settings
+triggers now requeue only missing or stale active-profile vectors on enablement.
+When removing periodic repair, audit configuration transitions as well as source
+row mutations, including work that completed without producing a derived row.
+The subsequent L2 run exposed an obsolete gateway stub that accepted connection
+tests only; legitimate newly requeued backfill requests failed its assertions and
+timed out. Gateway fixtures now distinguish connection tests from background
+embedding requests and return one vector per input, preserving connection-test
+failure modes rather than suppressing the production backfill behavior.
+MAX review then reproduced stale completions cancelling a newer rate-limit
+deadline because invalidation equated zero attempts with no backoff. The RED
+regression holds a newer throttled owner's deadline across an older completion.
+Invalidation now checks the explicit error state rather than the failure counter;
+uncharged retries are still retries, and source mutations alone reset that state.
+The reviewer also paused failure handling between lease release and clearing
+`indexed_at`. A newer owner could succeed with the same generation and zero
+attempts, after which the old clear erased its acknowledgement permanently.
+A RED interleaving regression now proves that clearing requires a still-pending
+generation, so completed newer work cannot match the delayed failure update.
+MAX review found a second priority boundary inside a large ready chunk: if later
+records became stale before the first flush, a PUT arriving during that flush
+still waited behind 15 seconds of newly required embeddings. A timing regression
+reproduced the delay. Mid-chunk repairs now yield embedding claims back to the
+durable queue and run first in the next bounded repair round. Test transitions
+before and during a flush, not just mutations after a fully prepared batch.
+Final MAX review reproduced preparation absorbing a newer generation without
+producing its vector: backfill could be enabled after disabled preparation, or a
+body PATCH could invalidate an in-flight embedding CAS. Removing hourly rewrites
+made the subsequent deletion acknowledgement permanent. Three RED regressions
+now cover both races and repeated invalidation at the repair limit. The atomic
+acknowledgement predicate rejects live missing/stale vectors while backfill is
+enabled, preserving the signal through bounded retries instead of treating a
+refreshed generation number as evidence that preparation completed its work.
+
 ## 2026-10-19 — Assert backing data behind an accessible modal
 
 The first dashboard v2 Chromium run failed in the new deletion retry test:
@@ -822,3 +883,9 @@ The first full-height empty-state pass looked centered on desktop, but table col
 Giraffe's header links declare a 32px width but Basalt's minimum control size makes them 34px in Chrome. Copying the utility width alone would preserve Octo's mismatch. During shell alignment, a Basalt Grid wrapper also initially used its default two columns, halving the sidebar search width and wrapping its label. The wrapper now explicitly declares one column, and browser regressions assert the full 244px by 38px search and actual header-control dimensions. Check library defaults and computed geometry before treating similar markup as visual parity.
 
 Independent review then found that relocating rail controls unmounted the focused button, while removing compact header density also removed Basalt's coarse-pointer touch sizing. A Chrome reproduction confirmed body focus, 34px touch targets and a stale desktop-derived expanded state in the mobile drawer. Rail toggles now focus their replacement, header controls retain 44px coarse-pointer targets, and drawer ARIA state uses the rendered rail. Visual parity must preserve keyboard focus and input-device behavior, not only desktop dimensions.
+
+### 2026-10-20 — Avoid external visibility probes against the local D1 index
+
+PR #20 failed two Linux L2 cases with ECONNRESET after the new backfill trigger populated historical vectors. A fresh local full suite passed, but that did not establish data-size or test-order independence. The local brute-force adapter returns id/score without external generation/hash metadata, so the external visibility loop could never confirm its candidates. Every subsequent global drain repeated up to 50 full D1 vector scans, including synchronous test-mode drains after unrelated tag writes. A deterministic 65-identical-vector unit regression found zero visible generations. With 200 acknowledged 1536-dimensional vectors, the original usage test exceeded its unchanged 120-second timeout; the old-code pressure run was then stopped. The initial pressure seed accidentally left indexed_at null because insertion triggers clear it; correcting that fixture was necessary to exercise the visibility path.
+
+The local store has no asynchronous external index. It now confirms current acknowledged D1 rows directly, retaining profile/model/dimension, content, scope and generation fences; external stores still require matching query metadata. The same pressure fixture then completed the original three cases in 3.1 seconds, with the usage case in 600 ms. The permanent usage regression seeds 64 acknowledged identical vectors and verifies their visibility alongside exact accounting. No fetch retries, socket tuning, larger timeouts or rate-limit changes hide failures. A separate transport probe accepted complete requests with 20-second response delays; its approximately 15-second timeout applied to incomplete request headers, not response work. The local timeout reproduces the nonconverging workload, not the exact Linux reset, whose final validation requires the PR CI run.

@@ -65,20 +65,32 @@ describe("Access-only embedding settings", () => {
 			backfill_enabled: false,
 		});
 		const secret = "settings-e2e-private-key-ABCD";
+		let expectedSecret = secret;
 		let mode: "ok" | "wrong-dims" | "failure" | "redirect" | "parse" = "ok";
 		let calls = 0;
 		const server = createServer(async (req, res) => {
-			calls++;
 			expect(req.url).toBe("/v1/embeddings");
-			expect(req.headers.authorization).toBe(`Bearer ${secret}`);
+			expect(req.headers.authorization).toBe(`Bearer ${expectedSecret}`);
 			expect(req.headers["user-agent"]).toMatch(/^octo\//);
 			let body = "";
 			for await (const chunk of req) body += chunk;
-			expect(JSON.parse(body)).toEqual({
-				model: profile.model,
-				input: ["Octo embedding connection test."],
-			});
+			const request = JSON.parse(body) as { model: string; input: string[] };
+			expect(request.model).toBe(profile.model);
 			res.setHeader("Content-Type", "application/json");
+			if (request.input.length !== 1 || request.input[0] !== "Octo embedding connection test.") {
+				res.end(
+					JSON.stringify({
+						data: request.input.map((_, index) => ({
+							index,
+							embedding: Array.from({ length: profile.dims }, (_, dimension) =>
+								dimension === 0 ? 1 : 0,
+							),
+						})),
+					}),
+				);
+				return;
+			}
+			calls++;
 			if (mode === "redirect") {
 				res.statusCode = 302;
 				res.setHeader("Location", "/private-redirect-target");
@@ -207,7 +219,8 @@ describe("Access-only embedding settings", () => {
 					(await fetch(`${base}${path}${suffix}`, { method, headers, body: "{" })).status,
 				).toBe(400);
 			}
-			await put({ api_key: "replacement-EFGH" });
+			expectedSecret = "replacement-EFGH";
+			await put({ api_key: expectedSecret });
 			expect(await (await fetch(`${base}${path}`, { headers })).json()).toMatchObject({
 				api_key_mask: "****EFGH",
 			});
