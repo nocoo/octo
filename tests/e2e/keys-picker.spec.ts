@@ -33,10 +33,10 @@ test("space picker portals retain Basalt resets and keyboard feedback", async ({
 	await expect(list).toHaveAttribute("data-hover-visible", "true");
 	const highlight = await list.evaluate((element) => {
 		const style = getComputedStyle(element, "::before");
-		return { opacity: style.opacity, background: style.backgroundImage, height: style.height };
+		return { opacity: style.opacity, background: style.backgroundColor, height: style.height };
 	});
 	expect(highlight.opacity).toBe("1");
-	expect(highlight.background).not.toBe("none");
+	expect(highlight.background).not.toBe("rgba(0, 0, 0, 0)");
 	expect(Number.parseFloat(highlight.height)).toBeGreaterThan(0);
 	await capture(page, info, "keys-form-picker-keyboard");
 	await search.press("Enter");

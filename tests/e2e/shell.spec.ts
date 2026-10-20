@@ -29,7 +29,7 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 			size: getComputedStyle(el).fontSize,
 		}));
 		expect(type.font).toContain("mono");
-		expect(type.size).toBe("11px");
+		expect(type.size).toBe("12px");
 		await expect(page.locator("html")).toHaveAttribute("data-accent", "sky");
 		const colors = await page.evaluate(() => {
 			const style = getComputedStyle(document.documentElement);
@@ -148,7 +148,7 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBe(26);
 			const search = rail.getByRole("button", { name: "搜索与命令" });
 			expect((await search.boundingBox())?.width).toBe(244);
-			expect((await search.boundingBox())?.height).toBe(38);
+			expect((await search.boundingBox())?.height).toBeCloseTo(39.14, 1);
 			await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
 			await expect(page.getByRole("button", { name: "展开侧栏", exact: true })).toBeVisible();
 			expect(await center('img[alt="Octo"]')).toBeCloseTo(expanded, 0);

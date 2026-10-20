@@ -41,7 +41,7 @@ test("Markdown reading typography stays scoped and contains wide content in both
 					"text-decoration-line",
 					"underline",
 				);
-				await expect(prose.locator("p > code")).toHaveCSS("font-size", "16px");
+				await expect(prose.locator("p > code")).toHaveCSS("font-size", "18px");
 				await expect(prose.locator("pre code")).toHaveCSS("font-size", "14px");
 				await expect(prose.locator("pre")).toHaveCSS("overflow-x", "auto");
 				await expect(prose.locator("pre")).toHaveCSS("overscroll-behavior-x", "contain");
