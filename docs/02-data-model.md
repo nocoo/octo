@@ -219,6 +219,11 @@ and slug changes; stale completions explicitly invalidate their destinations.
 Enabling backfill atomically requeues live memories with missing or stale
 active-profile vectors, including previously acknowledged deletions. Re-saving
 an already enabled setting leaves current generations untouched.
+Acknowledgement atomically refuses to complete a live job while backfill is enabled
+and its current-profile vector remains missing or stale. This preserves enablement
+and content changes that arrive during preparation, even when preparation refreshes
+to their newer generation. Such work enters the bounded repair loop and remains
+pending if the three-round budget is exhausted.
 A provider mutation followed by a process crash still has a non-transactional
 recovery gap: periodic rewriting is intentionally removed, not a fencing guarantee.
 D1 visibility checks remain mandatory and continue independently of pending jobs.

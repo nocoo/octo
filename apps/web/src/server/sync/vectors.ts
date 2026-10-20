@@ -178,12 +178,15 @@ export async function synchronizeVectors(
 				lease_until = 0, due_at = 0, attempts = 0, last_error = NULL, dead_at = NULL
 				WHERE memory_id = ? AND generation = ? AND lease_token = ? AND lease_dirty = 0
 				AND (SELECT COUNT(*) FROM embedding_profiles WHERE active = 1) = 1
-				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND active = 1)`).bind(
-				job.memory_id,
-				job.generation,
-				job.token,
-				profileId,
-			),
+				AND EXISTS (SELECT 1 FROM embedding_profiles WHERE id = ? AND active = 1)
+				AND NOT EXISTS (
+					SELECT 1 FROM memories memory JOIN embedding_profiles profile ON profile.id = ?
+					JOIN settings setting ON setting.key = 'embedding.backfill_enabled' AND setting.value = 'true'
+					LEFT JOIN memory_vectors vector ON vector.memory_id = memory.id AND vector.profile_id = profile.id
+					WHERE memory.id = vector_sync_jobs.memory_id AND memory.deleted_at IS NULL
+					AND (vector.memory_id IS NULL OR vector.content_hash != memory.content_hash
+					OR vector.embedding_model != profile.model OR vector.dim != profile.dims)
+				)`).bind(job.memory_id, job.generation, job.token, profileId, profileId),
 		]);
 		if (results[1]?.meta.changes === 1) {
 			totals.synced++;

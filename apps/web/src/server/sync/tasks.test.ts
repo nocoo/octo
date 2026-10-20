@@ -3,9 +3,10 @@ import { D1BruteForceVectorStore } from "../ports/vector/d1-brute-force";
 import { encodeFloat32Vector } from "../search/math";
 import { authzFrom, MemoryService } from "../services/memories";
 import { fixture, SETTINGS } from "../settings/__tests__/fixture";
+import { backfillMemories } from "../settings/backfill";
 import { saveEmbeddingSettings } from "../settings/config";
 import { runDerivedTasks } from "./tasks";
-import { SYNC_LEASE_MS } from "./vectors";
+import { SYNC_LEASE_MS, synchronizeVectors } from "./vectors";
 
 async function setup(count: number) {
 	const { env, raw } = fixture();
@@ -26,6 +27,85 @@ afterEach(() => {
 });
 
 describe("derived work coordination", () => {
+	it("leaves repeatedly invalidated backfill pending after the repair bound", async () => {
+		const { env, raw } = await setup(1);
+		let changes = 0;
+		const fetcher = vi.fn(async () => {
+			changes++;
+			raw
+				.prepare("UPDATE memories SET body = ?, content_hash = ?, version = version + 1")
+				.run(`Body ${changes}`, `hash-${changes}`);
+			return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] });
+		});
+		vi.stubGlobal("fetch", fetcher);
+		try {
+			expect(await runDerivedTasks(env, 100)).toEqual({ synced: 0, failed: 0 });
+			expect(fetcher).toHaveBeenCalledTimes(3);
+			expect(
+				raw
+					.prepare(
+						"SELECT generation IS NOT synced_generation AS pending, lease_token, attempts, dead_at FROM vector_sync_jobs",
+					)
+					.get(),
+			).toEqual({ pending: 1, lease_token: null, attempts: 0, dead_at: null });
+		} finally {
+			raw.close();
+		}
+	});
+
+	it("does not consume enablement that arrives after disabled preparation", async () => {
+		const { env, raw } = await setup(1);
+		await saveEmbeddingSettings(env, { backfill_enabled: false }, "admin:local");
+		const fetcher = vi.fn(async () =>
+			Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] }),
+		);
+		vi.stubGlobal("fetch", fetcher);
+		let enabled = false;
+		try {
+			expect(
+				await synchronizeVectors(env, {
+					now: 100,
+					beforeSyncBatch: async (ids) => {
+						const result = await backfillMemories(env, ids);
+						if (!enabled) {
+							enabled = true;
+							await saveEmbeddingSettings(env, { backfill_enabled: true }, "admin:local");
+						}
+						return result;
+					},
+				}),
+			).toEqual({ synced: 1, failed: 0 });
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			expect(raw.prepare("SELECT indexed_at FROM memory_vectors").get()?.indexed_at).toBe(100);
+			expect(await runDerivedTasks(env, 3_600_100)).toEqual({ synced: 0, failed: 0 });
+		} finally {
+			raw.close();
+		}
+	});
+
+	it("retries a body patch rejected by the in-flight embedding CAS", async () => {
+		const { env, raw } = await setup(1);
+		const fetcher = vi.fn(async () =>
+			Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }] }),
+		);
+		fetcher.mockImplementationOnce(async () => {
+			raw.exec("UPDATE memories SET body = 'Changed body', content_hash = 'new-hash', version = 2");
+			return Response.json({ data: [{ index: 0, embedding: [0, 1, 0] }] });
+		});
+		vi.stubGlobal("fetch", fetcher);
+		try {
+			expect(await runDerivedTasks(env, 100)).toEqual({ synced: 1, failed: 0 });
+			expect(fetcher).toHaveBeenCalledTimes(2);
+			expect(raw.prepare("SELECT content_hash, indexed_at FROM memory_vectors").get()).toEqual({
+				content_hash: "new-hash",
+				indexed_at: 100,
+			});
+			expect(await runDerivedTasks(env, 3_600_100)).toEqual({ synced: 0, failed: 0 });
+		} finally {
+			raw.close();
+		}
+	});
+
 	it.each(["disabled", "unset"])(
 		"requeues only missing or stale vectors when backfill was %s",
 		async (mode) => {

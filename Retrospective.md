@@ -52,6 +52,14 @@ still waited behind 15 seconds of newly required embeddings. A timing regression
 reproduced the delay. Mid-chunk repairs now yield embedding claims back to the
 durable queue and run first in the next bounded repair round. Test transitions
 before and during a flush, not just mutations after a fully prepared batch.
+Final MAX review reproduced preparation absorbing a newer generation without
+producing its vector: backfill could be enabled after disabled preparation, or a
+body PATCH could invalidate an in-flight embedding CAS. Removing hourly rewrites
+made the subsequent deletion acknowledgement permanent. Three RED regressions
+now cover both races and repeated invalidation at the repair limit. The atomic
+acknowledgement predicate rejects live missing/stale vectors while backfill is
+enabled, preserving the signal through bounded retries instead of treating a
+refreshed generation number as evidence that preparation completed its work.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 
