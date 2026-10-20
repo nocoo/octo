@@ -31,6 +31,11 @@ explicitly disabled setting and an absent default setting. Transactional setting
 triggers now requeue only missing or stale active-profile vectors on enablement.
 When removing periodic repair, audit configuration transitions as well as source
 row mutations, including work that completed without producing a derived row.
+The subsequent L2 run exposed an obsolete gateway stub that accepted connection
+tests only; legitimate newly requeued backfill requests failed its assertions and
+timed out. Gateway fixtures now distinguish connection tests from background
+embedding requests and return one vector per input, preserving connection-test
+failure modes rather than suppressing the production backfill behavior.
 
 ## 2026-10-19 — Assert backing data behind an accessible modal
 

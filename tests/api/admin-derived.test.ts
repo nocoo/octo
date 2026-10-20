@@ -123,20 +123,19 @@ describe("admin profiles and durable derived work over HTTP", () => {
 		const server = createServer(async (request, response) => {
 			let text = "";
 			for await (const chunk of request) text += chunk;
+			const input = (JSON.parse(text) as { input: string[] }).input;
 			requests.push({
-				input: (JSON.parse(text) as { input: string[] }).input,
+				input,
 				userAgent: request.headers["user-agent"],
 				authorization: request.headers.authorization,
 			});
 			response.setHeader("Content-Type", "application/json");
 			response.end(
 				JSON.stringify({
-					data: [
-						{
-							index: 0,
-							embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)),
-						},
-					],
+					data: input.map((_, index) => ({
+						index,
+						embedding: Array.from({ length: 1536 }, (_, index) => (index === 0 ? 1 : 0)),
+					})),
 				}),
 			);
 		});
