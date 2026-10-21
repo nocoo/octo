@@ -66,7 +66,7 @@ export function EmbeddingPage() {
 			(!state.error && !state.testResult)
 		)
 			return;
-		document.getElementById("embedding-test-feedback")?.scrollIntoView({ block: "nearest" });
+		document.getElementById("embedding-test-feedback")?.scrollIntoView({ block: "center" });
 		testFeedbackRequested.current = false;
 	}, [testAttempt, state.error, state.pending, state.testResult]);
 	function takeSecret(): string | undefined {

@@ -145,7 +145,7 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 		for (const width of [1440, 768]) {
 			await page.setViewportSize({ width, height: 900 });
 			const expanded = await center('img[alt="Octo"]');
-			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBe(26);
+			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBe(34);
 			const search = rail.getByRole("button", { name: "搜索与命令" });
 			expect((await search.boundingBox())?.width).toBe(244);
 			expect((await search.boundingBox())?.height).toBeCloseTo(39.14, 1);

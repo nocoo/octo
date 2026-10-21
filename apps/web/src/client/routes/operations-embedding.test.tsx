@@ -338,7 +338,7 @@ it("shows the current action error instead of a stale probe result", () => {
 it("scrolls only explicit connection-test feedback into view without moving focus", () => {
 	const source = readFileSync(new URL("./operations-embedding.tsx", import.meta.url), "utf8");
 	expect(source).toContain("testFeedbackRequested.current = true");
-	expect(source).toContain('scrollIntoView({ block: "nearest" })');
+	expect(source).toContain('scrollIntoView({ block: "center" })');
 	expect(source).toContain('id="embedding-test-feedback"');
 	expect(source).toContain("!clearing");
 	expect(source).not.toContain("focus()");

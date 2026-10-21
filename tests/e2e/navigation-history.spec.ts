@@ -87,6 +87,8 @@ test("keyboard skip navigation retains history and unsaved editor protection", a
 	const memory = await admin.memory();
 	await page.goto(`/memories?spaces=${memory.space}&limit=50`);
 	await page.locator(`[data-memory-link="${memory.id}"]`).click();
+	await expect(page).toHaveURL(new RegExp(`/memories/${memory.id}$`));
+	await expect.poll(() => page.evaluate(() => history.state?.idx)).toBe(1);
 	const before = await page.evaluate(() => history.state);
 	await page.getByRole("link", { name: "跳到主内容", exact: true }).focus();
 	await page.keyboard.press("Enter");
