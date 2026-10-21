@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.0 — 2026-10-21
+
+### Added
+
+- Add a checked-in, local-only demo catalogue with 90 synthetic memories across six spaces: 84 active records in pages of 50 and 34, plus six trashed records, varied tags, Markdown, attachments and version history.
+- Provide a non-destructive demo importer that refuses remote resources and enabled embedding backfill, preserves existing records and never configures gateway credentials.
+
+### Changed
+
+- Upgrade the dashboard to Basalt 3.2.1, use monochrome sidebar icons and normalize page, section and card headings across all dashboard routes.
+- Keep filters and actions in the page header, preserve a single content island and use native package card, table and sidebar geometry.
+
+### Fixed
+
+- Add a header-left Back action with real parent navigation on direct entry, nested settings breadcrumbs and filter restoration through browser history.
+- Preserve router history state and unsaved-editor protection through TOC, Markdown, usage-table and keyboard skip navigation.
+- Restore asynchronous chapter targets on reload and Back/Forward, including repeated Chinese fragments without duplicate history entries or modified-click scrolling.
+- Keep embedding connection feedback fully visible on compact mobile viewports.
+
+### Validation
+
+- Expand unit and Chromium coverage for page hierarchy, URL state, keyboard navigation, chapter restoration and responsive feedback.
+- No database migration or authentication change is introduced. Demo data remains local and contains no generated embeddings.
+
 ## 0.4.2 — 2026-10-20
 
 ### Changed
