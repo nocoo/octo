@@ -143,7 +143,8 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 		expect(html).toContain(text);
 	expect(html).toMatch(/<table[^>]*class="[^"]*octo-table[^>]*aria-label="搜索结果"/);
 	expect(html).toContain('data-basalt-data-table=""');
-	expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+	expect(html).not.toContain("octo-title-icon");
+	expect(html).toMatch(/<h2\b[^>]*>搜索结果<\/h2>/);
 	expect(html).toContain('href="/memories/m1"');
 	expect(html).toContain('href="/memories/m1/edit"');
 	expect(html).toContain('aria-label="编辑 User title"');
@@ -211,7 +212,7 @@ it("keeps long space metadata out of the result title row", () => {
 	const cellTags = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
 	for (const cell of cellTags.slice(0, 2)) expect(cell).toContain("whitespace-normal break-words");
 	expect(html.match(/aria-label="搜索结果 scroll area"/g)).toHaveLength(1);
-	expect(html).toMatch(/class="relative min-w-0 overflow-auto[^>]*>/);
+	expect(html).toMatch(/class="[^"]*relative[^">]*min-w-0 overflow-auto[^>]*>/);
 	expect(html).toContain("min-width:30ch");
 	expect(html).toContain("min-width:22ch");
 });

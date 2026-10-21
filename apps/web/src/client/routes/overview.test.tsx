@@ -49,7 +49,8 @@ it("uses an accessible Basalt disclosure for the chart table alternative", () =>
 	expect(html).toContain("空间");
 	expect(html).not.toContain(">Space<");
 	expect(html).not.toContain("Agent");
-	expect(html).toContain("lucide-layout-dashboard");
+	expect(html).not.toContain("octo-title-icon");
+	expect(html.match(/<h1\b/g)).toHaveLength(1);
 	expect(html.match(/octo-stat-label/g)).toHaveLength(4);
 	expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>[\s\S]*?查看活动数据表/);
 });

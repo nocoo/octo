@@ -21,10 +21,9 @@ a {
 .octo-island {
 	display: grid;
 	align-content: start;
-	gap: var(--basalt-space-layout);
+	gap: var(--basalt-space-layout-lg);
 	margin-inline: var(--basalt-space-layout-sm);
 	margin-bottom: var(--basalt-space-layout-sm);
-	overflow: auto;
 }
 .octo-mobile-rail {
 	padding: unset;
@@ -94,35 +93,15 @@ a {
 .octo-muted {
 	color: hsl(var(--basalt-muted-foreground));
 }
-.octo-page-title,
 .octo-stat-label {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--basalt-space-lg);
 }
-.octo-title-icon {
-	width: var(--basalt-size-icon-display);
-	height: var(--basalt-size-icon-display);
-	flex-shrink: 0;
-	color: hsl(var(--basalt-primary));
-	stroke-width: 1.5;
-}
 .octo-stat-label svg {
 	width: var(--basalt-size-icon-lg);
 	height: var(--basalt-size-icon-lg);
 	stroke-width: 1.5;
-}
-.octo-nav-icon {
-	color: var(--basalt-tag-blue-foreground);
-}
-.octo-nav-icon[data-tone="探索"] {
-	color: var(--basalt-tag-violet-foreground);
-}
-.octo-nav-icon[data-tone="管理"] {
-	color: var(--basalt-tag-teal-foreground);
-}
-.octo-nav-icon[data-tone="系统"] {
-	color: var(--basalt-tag-amber-foreground);
 }
 .octo-header-link {
 	inline-size: var(--basalt-space-8);

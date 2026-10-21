@@ -33,8 +33,8 @@ test("Markdown reading typography stays scoped and contains wide content in both
 				expect(fonts.reader).toContain("Charter");
 				expect(fonts.reader).toContain('"Songti SC"');
 				expect(fonts.body).not.toContain("Charter");
-				await expect(prose.locator("h1")).toHaveCSS("margin-block-start", "0px");
-				await expect(prose.locator("h2")).toHaveCSS("margin-block-start", "12px");
+				await expect(prose.locator("h3")).toHaveCSS("margin-block-start", "0px");
+				await expect(prose.locator("h4")).toHaveCSS("margin-block-start", "12px");
 				await expect(prose.locator("blockquote > p + p")).toHaveCSS("margin-block-start", "12px");
 				await expect(prose.locator("li > ul")).toHaveCSS("margin-block-start", "12px");
 				await expect(prose.getByRole("link", { name: "参考链接" })).toHaveCSS(

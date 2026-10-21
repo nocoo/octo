@@ -27,7 +27,6 @@ import {
 	ArrowUpRight,
 	BookOpen,
 	KeyRound,
-	LayoutDashboard,
 	Network,
 	PenLine,
 	RefreshCw,
@@ -101,12 +100,7 @@ export function OverviewPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<LayoutDashboard className="octo-title-icon" aria-hidden="true" />
-						总览
-					</span>
-				}
+				title="总览"
 				actions={
 					<Button variant="secondary" disabled={state.loading} onClick={() => void model.load()}>
 						<RefreshCw size={16} />
@@ -289,7 +283,7 @@ export function OverviewPage() {
 					</Grid>
 				</LayerCard.Well>
 			</LayerCard>
-			<SectionRule title="最近变更">
+			<SectionRule variant="heading" title="最近变更">
 				<LayerCard padding="none">
 					<DataTable
 						className="octo-table"
@@ -365,7 +359,7 @@ export function OverviewPage() {
 					)}
 				</LayerCard>
 			</SectionRule>
-			<SectionRule title="最近更新的记忆">
+			<SectionRule variant="heading" title="最近更新的记忆">
 				<LayerCard padding="none">
 					<DataTable
 						className="octo-table"

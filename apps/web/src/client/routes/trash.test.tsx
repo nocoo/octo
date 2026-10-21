@@ -86,7 +86,8 @@ it("uses a colored space badge, decorated title and aligned compact trash action
 	snapshot.state = { ...new TrashModel().state, ready: true, memories: items, total: 2 };
 	const html = render();
 	expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
-	expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+	expect(html).not.toContain("octo-title-icon");
+	expect(html).toMatch(/<h2\b[^>]*>已删除的记忆<\/h2>/);
 	expect(html).toMatch(
 		new RegExp(`<span[^>]*data-tag-color="${tagColorFor("work")}"[^>]*>work</span>`),
 	);

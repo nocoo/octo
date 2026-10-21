@@ -13,7 +13,7 @@ import {
 	SelectValue,
 } from "@nocoo/basalt/components/select";
 import { Check, Filter, FilterX } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { filterKeys, memoryTypeLabels } from "../viewmodels/memories";
 import "../components/layout/markdown.css";
 
@@ -87,6 +87,13 @@ export function MemoryFilters({
 	children?: (trigger: ReactNode) => ReactNode;
 }) {
 	const [open, setOpen] = useState(filterKeys.some((key) => params.has(key)));
+	const activeFilters = filterKeys
+		.filter((key) => params.has(key))
+		.map((key) => `${key}=${params.get(key)}`)
+		.join("&");
+	useEffect(() => {
+		if (activeFilters) setOpen(true);
+	}, [activeFilters]);
 	const valuesHint = useId();
 	const trigger = (
 		<CollapsibleTrigger asChild>
@@ -100,7 +107,7 @@ export function MemoryFilters({
 		<Collapsible
 			open={open}
 			onOpenChange={setOpen}
-			style={{ display: "grid", gap: "var(--basalt-space-layout)" }}
+			style={{ display: "grid", gap: "var(--basalt-space-layout-lg)" }}
 		>
 			{children ? children(trigger) : trigger}
 			<CollapsibleContent unstyled>

@@ -8,6 +8,7 @@ import {
 	Link,
 	Route,
 	RouterProvider,
+	useLocation,
 } from "react-router";
 import { AppShell } from "./components/layout/app-shell";
 import { notificationViewport } from "./components/layout/notifications";
@@ -68,12 +69,17 @@ function RouterLink({
 	children,
 	...props
 }: { href: string; children?: ReactNode } & Record<string, unknown>) {
+	const location = useLocation();
 	return /^(https?:|mailto:|tel:)/.test(href) ? (
 		<a href={href} {...props}>
 			{children}
 		</a>
 	) : (
-		<Link to={href} {...props}>
+		<Link
+			to={href.startsWith("#") ? `${location.pathname}${location.search}${href}` : href}
+			state={href.startsWith("#") ? location.state : undefined}
+			{...props}
+		>
 			{children}
 		</Link>
 	);

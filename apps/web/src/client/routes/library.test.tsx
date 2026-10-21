@@ -35,7 +35,9 @@ describe("library page installed-component boundaries", () => {
 	] as const)("renders %s using the actual Basalt package", (Page, url, title) => {
 		const html = render(Page, url);
 		expect(html).toContain(title);
-		expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+		expect(html).not.toContain("octo-title-icon");
+		expect(html.match(/<h1\b/g)).toHaveLength(1);
+		expect(html).toMatch(/<h2\b/);
 		expect(html).toContain('class="grid gap-basalt-layout-lg"');
 		expect(html).not.toMatch(/class="library-(?:page|stack|actions|fields|search)/);
 		expect(html).toContain("正在加载资料库");

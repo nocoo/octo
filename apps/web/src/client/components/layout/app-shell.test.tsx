@@ -53,10 +53,11 @@ it("leaves the single page heading to PageHeader", () => {
 	expect(html).toContain("总览");
 });
 
-it("uses compact header chrome and colorful navigation without mixed-language labels", () => {
+it("uses compact header chrome and monochrome navigation without mixed-language labels", () => {
 	const html = renderShell();
 	expect(html).toContain("octo-header");
 	expect(html).toContain("octo-nav-icon");
+	expect(html).not.toContain("data-tone");
 	expect(html).toContain("Octo 项目主页");
 	expect(html).not.toContain("Octo on Hexly");
 });
@@ -73,7 +74,8 @@ it("separates the brand home link from the visible collapse control", () => {
 	const collapse = html.match(/<button\b[^>]*aria-label="收起侧栏"[^>]*>[\s\S]*?<\/button>/)?.[0];
 	expect(collapse).toBeDefined();
 	expect(collapse).not.toContain("logo-24.png");
-	expect(html).not.toContain("data-basalt-header-leading");
+	expect(html).toContain("data-basalt-header-leading");
+	expect(html).toContain('aria-label="返回上一页"');
 	expect(html.indexOf('aria-label="收起侧栏"')).toBeLessThan(
 		html.indexOf('data-slot="sidebar-nav"'),
 	);

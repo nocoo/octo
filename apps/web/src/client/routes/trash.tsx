@@ -18,6 +18,7 @@ import { Banner } from "@nocoo/basalt/components/banner";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Select,
 	SelectContent,
@@ -219,14 +220,9 @@ export function TrashPage() {
 		},
 	];
 	return (
-		<Grid columns={1} gap="sm" {...{ ref: region }} tabIndex={-1}>
+		<Grid columns={1} gap="lg" {...{ ref: region }} tabIndex={-1}>
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<Trash2 className="octo-title-icon" aria-hidden="true" />
-						回收站
-					</span>
-				}
+				title="回收站"
 				description="不会自动清空。表头仅选择当前页，全部匹配项需单独选择。"
 				actions={
 					<>
@@ -293,6 +289,7 @@ export function TrashPage() {
 					</Grid>
 				}
 			/>
+			<SectionRule variant="heading" title="已删除的记忆" />
 			{!state.ready && !state.error && <Text role="status">正在加载回收站…</Text>}
 			{state.error && confirmation?.kind !== "single" && (
 				<Banner

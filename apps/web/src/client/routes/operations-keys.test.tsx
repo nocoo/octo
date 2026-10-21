@@ -140,14 +140,13 @@ describe("revoked key deletion", () => {
 			expect(html).not.toContain(`aria-label="${action} Beta"`);
 	});
 
-	it("uses native tag colors, semantic statuses, decorated title and aligned table actions", () => {
+	it("uses native tag colors, semantic statuses, plain title and aligned table actions", () => {
 		const html = render();
 		expect(html).toContain(`data-tag-color="${tagColorFor("管理员")}"`);
 		expect(html).toContain(`data-tag-color="${tagColorFor("全部空间")}"`);
 		expect(html).toContain("text-basalt-warning");
 		expect(html).toContain("text-basalt-danger");
-		expect(html).toContain("octo-page-title");
-		expect(html).toContain("octo-title-icon");
+		expect(html).not.toContain("octo-title-icon");
 		expect(html).toContain("octo-table");
 		expect(fixture.table?.columns.find((column) => column.id === "actions")).toMatchObject({
 			textAlign: "end",

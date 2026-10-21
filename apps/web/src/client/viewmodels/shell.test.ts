@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { AdminClient } from "../lib/api";
-import { headerCrumbs, initials, navigation, pageTitle, ShellModel, shortcut } from "./shell";
+import {
+	backTarget,
+	headerCrumbs,
+	initials,
+	navigation,
+	pageTitle,
+	ShellModel,
+	shortcut,
+} from "./shell";
 
 describe("shell navigation and identity", () => {
 	it("matches descendants and unknown routes", () => {
@@ -29,9 +37,18 @@ describe("shell navigation and identity", () => {
 		]);
 		expect(headerCrumbs("/settings/embedding")).toEqual([
 			{ href: "/", label: "工作台" },
+			{ href: "/settings", label: "设置" },
 			{ label: "向量模型" },
 		]);
 		expect(headerCrumbs("/missing").at(-1)).toEqual({ label: "页面不存在" });
+	});
+	it("returns through browser history or a real parent on direct entry", () => {
+		expect(backTarget("/memories/one/edit", 2)).toBe(-1);
+		expect(backTarget("/memories/one/history", 0)).toBe("/memories/one");
+		expect(backTarget("/memories/one", undefined)).toBe("/memories");
+		expect(backTarget("/settings/embedding", null)).toBe("/settings");
+		expect(backTarget("/spaces", -1)).toBe("/");
+		expect(backTarget("/", "2")).toBe("/");
 	});
 	it("uses short identity initials when an avatar cannot load", () => {
 		expect(initials("Li Zheng")).toBe("LZ");

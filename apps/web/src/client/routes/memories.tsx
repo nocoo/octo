@@ -69,11 +69,11 @@ import {
 	useSearchParams,
 } from "react-router";
 import { MEMORY_TYPES } from "../../lib/schema/memory";
+import { Markdown, MarkdownContents } from "../components/layout/markdown";
 import {
-	Markdown,
-	MarkdownContents,
+	isCurrentMarkdownFragment,
 	navigateToMarkdownHeading,
-} from "../components/layout/markdown";
+} from "../components/layout/markdown-navigation";
 import { useModel } from "../components/layout/use-model";
 import { MemoryTypeBadge, RecordTime, ViewSwitch } from "../components/record-display";
 import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
@@ -168,7 +168,18 @@ export function MemoriesPage() {
 			setSelection(params, checked ? [...selected, id] : selected.filter((item) => item !== id)),
 		);
 	}
-	function row(memory: Memory) {
+	function row(memory: Memory, heading = false) {
+		const title = (
+			<MemoryLink
+				memoryId={memory.id}
+				memoryTitle={memory.title}
+				data-memory-link={memory.id}
+				className="octo-record-title"
+				title={memory.title}
+			>
+				<strong>{memory.title}</strong>
+			</MemoryLink>
+		);
 		return (
 			<>
 				<Checkbox
@@ -176,15 +187,7 @@ export function MemoriesPage() {
 					checked={selected.includes(memory.id)}
 					onCheckedChange={(checked) => select(memory.id, checked === true)}
 				/>
-				<MemoryLink
-					memoryId={memory.id}
-					memoryTitle={memory.title}
-					data-memory-link={memory.id}
-					className="octo-record-title"
-					title={memory.title}
-				>
-					<strong>{memory.title}</strong>
-				</MemoryLink>
+				{heading ? <h3>{title}</h3> : title}
 			</>
 		);
 	}
@@ -215,16 +218,11 @@ export function MemoriesPage() {
 		return () => document.removeEventListener("keydown", key);
 	}, [params, setParams, state.items]);
 	return (
-		<Grid columns={1}>
+		<Grid columns={1} gap="lg">
 			<MemoryFilters params={params} onChange={setParams}>
 				{(filterTrigger) => (
 					<PageHeader
-						title={
-							<span className="octo-page-title">
-								<BookOpen className="octo-title-icon" aria-hidden="true" />
-								记忆库
-							</span>
-						}
+						title="记忆库"
 						actions={
 							<>
 								{filterTrigger}
@@ -246,6 +244,7 @@ export function MemoriesPage() {
 					/>
 				)}
 			</MemoryFilters>
+			<SectionRule variant="heading" title={cards ? "记忆卡片" : "记忆列表"} />
 			<LibraryBulkActions
 				memories={state.items}
 				selected={selected}
@@ -297,7 +296,7 @@ export function MemoriesPage() {
 					{state.items.map((memory) => (
 						<LayerCard key={memory.id}>
 							<LayerCard.Header className="octo-memory-card-heading">
-								{row(memory)}
+								{row(memory, true)}
 							</LayerCard.Header>
 							<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 								<MemoryTags memory={memory} />
@@ -484,74 +483,40 @@ export function MemoryPage() {
 	}, [id, navigate]);
 	const memory = state.memory;
 	return (
-		<Grid columns={1} className="octo-memory-reader">
-			<PageHeader
-				size="xl"
-				title={
-					<span style={{ viewTransitionName: memoryTransition(id) }}>
-						{memory?.title ?? cachedTitle ?? "记忆"}
-					</span>
-				}
-			/>
+		<Grid columns={1} gap="lg" className="octo-memory-reader">
 			<Sheet open={tocOpen} onOpenChange={setTocOpen}>
-				<Grid
-					columns={1}
-					className="octo-memory-toolbar"
-					style={{
-						display: "flex",
-						flexWrap: "wrap",
-						gap: "var(--basalt-space-content-gap)",
-						alignItems: "center",
-						justifyContent: "space-between",
-					}}
-				>
-					{memory && (
-						<Grid
-							columns={1}
-							style={{
-								display: "flex",
-								flexWrap: "wrap",
-								gap: "var(--basalt-space-content-gap)",
-								alignItems: "center",
-								flex: "1 1 18rem",
-								minWidth: 0,
-							}}
-						>
-							<span className="octo-muted">第 {memory.version} 版</span>
-							<MemoryTags memory={memory} />
-						</Grid>
-					)}
-					<Grid
-						columns={1}
-						style={{
-							display: "flex",
-							flexWrap: "wrap",
-							gap: "var(--basalt-space-content-gap)",
-							alignItems: "center",
-						}}
-					>
-						{memory && (
-							<SheetTrigger asChild>
-								<Button variant="outline" className="octo-memory-reader-compact">
-									<ListTree aria-hidden="true" />
-									本页目录
-								</Button>
-							</SheetTrigger>
-						)}
-						<Button asChild variant="outline">
-							<Link to={`/memories/${id}/history`}>
-								<History aria-hidden="true" />
-								版本历史
-							</Link>
-						</Button>
-						<Button asChild>
-							<Link to={`/memories/${id}/edit`}>
-								<Pencil aria-hidden="true" />
-								编辑记忆
-							</Link>
-						</Button>
-					</Grid>
-				</Grid>
+				<PageHeader
+					title={
+						<span style={{ viewTransitionName: memoryTransition(id) }}>
+							{memory?.title ?? cachedTitle ?? "记忆"}
+						</span>
+					}
+					description={memory ? `第 ${memory.version} 版` : undefined}
+					actions={
+						<>
+							{memory && (
+								<SheetTrigger asChild>
+									<Button variant="outline" className="octo-memory-reader-compact">
+										<ListTree aria-hidden="true" />
+										本页目录
+									</Button>
+								</SheetTrigger>
+							)}
+							<Button asChild variant="outline">
+								<Link to={`/memories/${id}/history`}>
+									<History aria-hidden="true" />
+									版本历史
+								</Link>
+							</Button>
+							<Button asChild>
+								<Link to={`/memories/${id}/edit`}>
+									<Pencil aria-hidden="true" />
+									编辑记忆
+								</Link>
+							</Button>
+						</>
+					}
+				/>
 				<SheetContent
 					onCloseAutoFocus={(event) => {
 						const target = tocTarget.current;
@@ -566,10 +531,16 @@ export function MemoryPage() {
 						onNavigate={(target) => {
 							tocTarget.current = target;
 							setTocOpen(false);
+							if (isCurrentMarkdownFragment(`#${target}`)) return;
+							navigate(
+								{ pathname: location.pathname, search: location.search, hash: `#${target}` },
+								{ state: location.state },
+							);
 						}}
 					/>
 				</SheetContent>
 			</Sheet>
+			{memory && <MemoryTags memory={memory} />}
 			<Feedback error={state.error} loading={state.loading} retry={() => void model.load()} />
 			{memory && (
 				<Grid
@@ -578,9 +549,13 @@ export function MemoryPage() {
 					style={{ gridTemplateColumns: "var(--octo-memory-columns)", alignItems: "start" }}
 				>
 					<LayerCard>
+						<LayerCard.Header asChild>
+							<h2>正文</h2>
+						</LayerCard.Header>
 						<LayerCard.Body>
 							<Markdown
 								source={memory.body}
+								hash={location.hash}
 								urls={state.urls}
 								onAttachment={(attachment) => model.attachmentUrl(attachment)}
 							/>
@@ -591,7 +566,9 @@ export function MemoryPage() {
 							<MarkdownContents entries={entries} />
 						</Grid>
 						<LayerCard>
-							<LayerCard.Header>详细信息</LayerCard.Header>
+							<LayerCard.Header asChild>
+								<h2>详细信息</h2>
+							</LayerCard.Header>
 							<LayerCard.Body>
 								<DescriptionList columns={1}>
 									<DescriptionList.Item term="重要性">{memory.importance}</DescriptionList.Item>
@@ -611,7 +588,9 @@ export function MemoryPage() {
 							</LayerCard.Body>
 						</LayerCard>
 						<LayerCard>
-							<LayerCard.Header>附件</LayerCard.Header>
+							<LayerCard.Header asChild>
+								<h2>附件</h2>
+							</LayerCard.Header>
 							{memory.attachments?.length ? (
 								<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 									{(memory.attachments ?? []).map((attachment) => (
@@ -650,7 +629,9 @@ export function MemoryPage() {
 							)}
 						</LayerCard>
 						<LayerCard>
-							<LayerCard.Header>版本时间线</LayerCard.Header>
+							<LayerCard.Header asChild>
+								<h2>版本时间线</h2>
+							</LayerCard.Header>
 							<LayerCard.Body>
 								<ol>
 									{[...state.versions].reverse().map((version) => (
@@ -788,6 +769,7 @@ function ConflictDialog({
 }
 
 export function EditorPage() {
+	const location = useLocation();
 	const { id = "" } = useParams();
 	const [params, setParams] = useSearchParams();
 	const model = useMemo(() => new EditorModel(id), [id]);
@@ -842,7 +824,7 @@ export function EditorPage() {
 		await reader.load();
 	}
 	return (
-		<Grid columns={1}>
+		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="编辑记忆"
 				description={
@@ -974,7 +956,9 @@ export function EditorPage() {
 					>
 						<LayerCard>
 							<LayerCard.Header asChild>
-								<Label htmlFor="memory-body">Markdown 正文</Label>
+								<h2>
+									<Label htmlFor="memory-body">Markdown 正文</Label>
+								</h2>
 							</LayerCard.Header>
 							<LayerCard.Body>
 								<InputArea
@@ -1004,10 +988,13 @@ export function EditorPage() {
 							</LayerCard.Body>
 						</LayerCard>
 						<LayerCard>
-							<LayerCard.Header>实时预览</LayerCard.Header>
+							<LayerCard.Header asChild>
+								<h2>实时预览</h2>
+							</LayerCard.Header>
 							<LayerCard.Body>
 								<Markdown
 									source={draft.body}
+									hash={location.hash}
 									urls={attachments.urls}
 									onAttachment={(attachment) => reader.attachmentUrl(attachment)}
 								/>
@@ -1082,7 +1069,7 @@ export function HistoryPage() {
 		if (state.notice) toast.success(state.notice);
 	}, [state.notice]);
 	return (
-		<Grid columns={1}>
+		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="版本历史"
 				description={state.current?.title ?? "每次写入都会保留可恢复的版本快照。"}
@@ -1094,62 +1081,66 @@ export function HistoryPage() {
 						</Link>
 					</Button>
 				}
+				filters={
+					<Grid
+						columns={1}
+						gap="sm"
+						style={{
+							gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+							alignItems: "center",
+						}}
+					>
+						<Choice
+							label="起始版本"
+							value={String(from || state.versions[0]?.version || 1)}
+							options={state.versions.map((version) => String(version.version))}
+							onChange={(value) => {
+								const next = new URLSearchParams(params);
+								next.set("from", value);
+								if (!to) next.set("to", String(state.current?.version ?? 1));
+								setParams(next);
+							}}
+						/>
+						<Choice
+							label="目标版本"
+							value={String(to || state.current?.version || 1)}
+							options={state.versions.map((version) => String(version.version))}
+							onChange={(value) => {
+								const next = new URLSearchParams(params);
+								next.set("to", value);
+								if (!from) next.set("from", String(state.versions[0]?.version ?? 1));
+								setParams(next);
+							}}
+						/>
+						<Field label="差异显示方式">
+							<ViewSwitch
+								label="差异显示方式"
+								value={params.get("diff") ?? "inline"}
+								options={[
+									{ value: "inline", label: "行内" },
+									{ value: "split", label: "并排" },
+								]}
+								onChange={(value) => {
+									const next = new URLSearchParams(params);
+									next.set("diff", value);
+									setParams(next);
+								}}
+							/>
+						</Field>
+					</Grid>
+				}
 			/>
 			<Feedback
 				error={state.error}
 				loading={state.loading}
 				retry={() => void model.loadFromUrl(params)}
 			/>
-			<Grid
-				columns={1}
-				gap="sm"
-				style={{
-					gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
-					alignItems: "center",
-				}}
-			>
-				<Choice
-					label="起始版本"
-					value={String(from || state.versions[0]?.version || 1)}
-					options={state.versions.map((version) => String(version.version))}
-					onChange={(value) => {
-						const next = new URLSearchParams(params);
-						next.set("from", value);
-						if (!to) next.set("to", String(state.current?.version ?? 1));
-						setParams(next);
-					}}
-				/>
-				<Choice
-					label="目标版本"
-					value={String(to || state.current?.version || 1)}
-					options={state.versions.map((version) => String(version.version))}
-					onChange={(value) => {
-						const next = new URLSearchParams(params);
-						next.set("to", value);
-						if (!from) next.set("from", String(state.versions[0]?.version ?? 1));
-						setParams(next);
-					}}
-				/>
-				<Field label="差异显示方式">
-					<ViewSwitch
-						label="差异显示方式"
-						value={params.get("diff") ?? "inline"}
-						options={[
-							{ value: "inline", label: "行内" },
-							{ value: "split", label: "并排" },
-						]}
-						onChange={(value) => {
-							const next = new URLSearchParams(params);
-							next.set("diff", value);
-							setParams(next, { replace: true });
-						}}
-					/>
-				</Field>
-			</Grid>
 			{state.diff && (
 				<LayerCard>
-					<LayerCard.Header>
-						变更 / 第 {state.diff.from} 版至第 {state.diff.to} 版
+					<LayerCard.Header asChild>
+						<h2>
+							变更 / 第 {state.diff.from} 版至第 {state.diff.to} 版
+						</h2>
 					</LayerCard.Header>
 					<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 						{state.diff.fields
@@ -1247,7 +1238,9 @@ export function HistoryPage() {
 				</LayerCard>
 			)}
 			<LayerCard>
-				<LayerCard.Header>版本快照</LayerCard.Header>
+				<LayerCard.Header asChild>
+					<h2>版本快照</h2>
+				</LayerCard.Header>
 				<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
 					{[...state.versions].reverse().map((version) => (
 						<Grid

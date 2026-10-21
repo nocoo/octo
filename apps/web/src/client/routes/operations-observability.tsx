@@ -1,4 +1,4 @@
-import { Button, Field, Input, LayerCard, ScrollArea, toast } from "@nocoo/basalt";
+import { Button, Field, Input, LayerCard, Link, ScrollArea, toast } from "@nocoo/basalt";
 import { BarChart } from "@nocoo/basalt/charts/bar";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
@@ -138,18 +138,13 @@ export function UsagePage() {
 	];
 	const alternative = (
 		<p className="text-basalt-sm text-basalt-muted-foreground">
-			精确数值请查看<a href="#usage-daily-table">每日用量表</a>。
+			精确数值请查看<Link href="#usage-daily-table">每日用量表</Link>。
 		</p>
 	);
 	return (
-		<Grid columns={1} gap="md" className="min-w-0">
+		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<ChartNoAxesCombined className="octo-title-icon" aria-hidden="true" />
-						每日用量
-					</span>
-				}
+				title="每日用量"
 				description="按 UTC 日期与密钥展示已汇总数据；不是实时请求统计。"
 				actions={
 					<Button
@@ -247,7 +242,9 @@ export function UsagePage() {
 					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))" }}
 				>
 					<LayerCard>
-						<LayerCard.Header>调用次数</LayerCard.Header>
+						<LayerCard.Header asChild>
+							<h2>调用次数</h2>
+						</LayerCard.Header>
 						<LayerCard.Body>
 							<Grid columns={1} gap="sm">
 								<BarChart
@@ -263,7 +260,9 @@ export function UsagePage() {
 						</LayerCard.Body>
 					</LayerCard>
 					<LayerCard>
-						<LayerCard.Header>错误率</LayerCard.Header>
+						<LayerCard.Header asChild>
+							<h2>错误率</h2>
+						</LayerCard.Header>
 						<LayerCard.Body>
 							<Grid columns={1} gap="sm">
 								<BarChart
@@ -283,7 +282,9 @@ export function UsagePage() {
 				</Grid>
 			) : null}
 			<LayerCard id="usage-daily-table" padding="none">
-				<LayerCard.Header>每日用量与图表数据</LayerCard.Header>
+				<LayerCard.Header asChild>
+					<h2>每日用量与图表数据</h2>
+				</LayerCard.Header>
 				{state.loading && state.items.length === 0 ? (
 					<LayerCard.Loading label="正在加载每日用量" />
 				) : (
@@ -375,14 +376,9 @@ export function AuditPage() {
 		return () => observer.disconnect();
 	}, [state.items.length]);
 	return (
-		<Grid columns={1} gap="md" className="min-w-0">
+		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<ScrollText className="octo-title-icon" aria-hidden="true" />
-						审计日志
-					</span>
-				}
+				title="审计日志"
 				description="包含被拒绝的请求；不记录请求正文和凭据。"
 				actions={
 					<>
@@ -513,6 +509,7 @@ export function AuditPage() {
 			)}
 			{state.loading && <p role="status">正在刷新审计日志……</p>}
 			<SectionRule
+				variant="heading"
 				title="请求记录"
 				actions={
 					<span className="text-basalt-sm text-basalt-muted-foreground">

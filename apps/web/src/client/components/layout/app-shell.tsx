@@ -36,6 +36,7 @@ import { Grid } from "@nocoo/basalt/components/grid";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import {
 	Activity,
+	ArrowLeft,
 	BookOpen,
 	Boxes,
 	Clock3,
@@ -57,6 +58,7 @@ import { flushSync } from "react-dom";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
 import {
+	backTarget,
 	headerCrumbs,
 	initials,
 	navigation,
@@ -64,6 +66,11 @@ import {
 	ShellModel,
 	shortcut,
 } from "../../viewmodels/shell";
+import {
+	isPlainLinkClick,
+	navigateToMarkdownHeading,
+	restoreMarkdownHeading,
+} from "./markdown-navigation";
 import { useModel } from "./use-model";
 
 const icons = {
@@ -254,7 +261,6 @@ export function AppShell() {
 									<Icon
 										key={item.href}
 										className="octo-nav-icon"
-										data-tone={item.group}
 										size={16}
 										strokeWidth={1.5}
 										aria-hidden="true"
@@ -312,7 +318,15 @@ export function AppShell() {
 	}
 	return (
 		<Frame layout="responsive" className="basalt-ui">
-			<AppSkipLink>跳到主内容</AppSkipLink>
+			<AppSkipLink
+				onClick={(event) => {
+					if (!isPlainLinkClick(event)) return;
+					event.preventDefault();
+					navigateToMarkdownHeading("main-content");
+				}}
+			>
+				跳到主内容
+			</AppSkipLink>
 			{mobile ? (
 				<Sheet open={drawer} onOpenChange={setDrawer}>
 					<SheetContent
@@ -338,20 +352,36 @@ export function AppShell() {
 						mobile ? headerCrumbs(location.pathname).slice(-1) : headerCrumbs(location.pathname)
 					}
 					leading={
-						mobile ? (
-							<Button
-								ref={menuButton}
-								variant="ghost"
-								size="icon"
-								aria-label="打开导航"
-								onClick={(event) => {
-									event.currentTarget.focus();
-									setDrawer(true);
-								}}
-							>
-								<Menu aria-hidden="true" />
-							</Button>
-						) : null
+						<>
+							{mobile && (
+								<Button
+									ref={menuButton}
+									variant="ghost"
+									size="icon"
+									aria-label="打开导航"
+									onClick={(event) => {
+										event.currentTarget.focus();
+										setDrawer(true);
+									}}
+								>
+									<Menu aria-hidden="true" />
+								</Button>
+							)}
+							<HeaderHint label="返回上一页">
+								<Button
+									variant="ghost"
+									size="icon"
+									aria-label="返回上一页"
+									onClick={() => {
+										const target = backTarget(location.pathname, window.history.state?.idx);
+										if (target === -1) void navigate(-1);
+										else void navigate(target, { replace: true });
+									}}
+								>
+									<ArrowLeft strokeWidth={1.5} aria-hidden="true" />
+								</Button>
+							</HeaderHint>
+						</>
 					}
 					actions={
 						<>
@@ -430,7 +460,7 @@ export function AppShell() {
 						/>
 					)}
 					<Suspense fallback={<LayerCard.Loading label="正在加载页面…" />}>
-						<Outlet />
+						<RouteContent />
 					</Suspense>
 				</ContentIsland>
 			</AppMain>
@@ -474,4 +504,25 @@ export function AppShell() {
 			</CommandPalette>
 		</Frame>
 	);
+}
+
+function RouteContent() {
+	const { pathname, hash } = useLocation();
+	const previousPath = useRef<string | null>(null);
+	useEffect(() => {
+		const previous = window.history.scrollRestoration;
+		window.history.scrollRestoration = "manual";
+		return () => {
+			window.history.scrollRestoration = previous;
+		};
+	}, []);
+	useEffect(() => {
+		const target = `${pathname}${hash}`;
+		if (previousPath.current === target) return;
+		previousPath.current = target;
+		if (restoreMarkdownHeading(hash)) return;
+		document.querySelector("[data-basalt-island]")?.scrollTo(0, 0);
+		window.scrollTo(0, 0);
+	}, [pathname, hash]);
+	return <Outlet />;
 }

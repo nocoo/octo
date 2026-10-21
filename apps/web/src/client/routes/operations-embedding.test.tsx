@@ -84,7 +84,7 @@ describe("profile read states", () => {
 			expect(cells[index]).toContain("whitespace-nowrap");
 		}
 		expect(html.match(/aria-label="嵌入配置 scroll area"/g)).toHaveLength(1);
-		expect(html).toContain("relative min-w-0 overflow-auto");
+		expect(html).toContain("relative isolate min-w-0 overflow-auto");
 	});
 
 	it.each(["asc", "desc"] as const)("sorts active profile status %s through Basalt", (dir) => {

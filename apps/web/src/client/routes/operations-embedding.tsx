@@ -75,7 +75,7 @@ export function EmbeddingPage() {
 		return value;
 	}
 	return (
-		<Grid columns={1} gap="md" className="min-w-0">
+		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="向量模型"
 				actions={
@@ -95,7 +95,7 @@ export function EmbeddingPage() {
 					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}
 				</p>
 			)}
-			<SectionRule title="网关配置">
+			<SectionRule variant="heading" title="网关配置">
 				<LayerCard>
 					<LayerCard.Body>
 						{state.loaded ? (
@@ -404,7 +404,7 @@ export function SettingsPage() {
 		},
 	];
 	return (
-		<Grid columns={1} gap="md" className="min-w-0">
+		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="设置"
 				actions={
@@ -427,7 +427,9 @@ export function SettingsPage() {
 				}
 			/>
 			<LayerCard>
-				<LayerCard.Header>应用信息</LayerCard.Header>
+				<LayerCard.Header asChild>
+					<h2>应用信息</h2>
+				</LayerCard.Header>
 				<LayerCard.Body>
 					<DescriptionList>
 						<DescriptionList.Item term="应用">Octo</DescriptionList.Item>
@@ -450,7 +452,7 @@ export function SettingsPage() {
 					</Button>
 				</p>
 			)}
-			<SectionRule title="嵌入配置">
+			<SectionRule variant="heading" title="嵌入配置">
 				<LayerCard padding="none">
 					{state.loading && state.profiles.length === 0 ? (
 						<LayerCard.Loading label="正在加载嵌入配置" />

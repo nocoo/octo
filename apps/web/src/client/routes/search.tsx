@@ -8,6 +8,7 @@ import {
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { PageHeader } from "@nocoo/basalt/components/page-header";
+import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import { CircleAlert, FilterX, Pencil, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -195,16 +196,11 @@ export function SearchPage() {
 		},
 	];
 	return (
-		<Grid columns={1}>
+		<Grid columns={1} gap="lg">
 			<MemoryFilters params={params} onChange={setParams}>
 				{(filterTrigger) => (
 					<PageHeader
-						title={
-							<span className="octo-page-title">
-								<Search className="octo-title-icon" aria-hidden="true" />
-								搜索
-							</span>
-						}
+						title="搜索"
 						actions={
 							<>
 								{filterTrigger}
@@ -344,6 +340,7 @@ export function SearchPage() {
 					</Field>
 				</Grid>
 			</form>
+			<SectionRule variant="heading" title="搜索结果" />
 			{state.error && (
 				<Banner
 					role="alert"

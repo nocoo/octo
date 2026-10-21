@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import { markdownContents } from "../../viewmodels/memories-markdown";
-import { Markdown, MarkdownContents, navigateToMarkdownHeading } from "./markdown";
+import { Markdown, MarkdownContents } from "./markdown";
+import {
+	isCurrentMarkdownFragment,
+	isPlainLinkClick,
+	navigateToMarkdownHeading,
+	restoreMarkdownHeading,
+} from "./markdown-navigation";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -21,25 +27,62 @@ it("requests explicit TOC navigation on every unmodified click, including repeat
 	link.props.onClick({ ...event, metaKey: true });
 	expect(onNavigate).toHaveBeenCalledTimes(2);
 	const native = MarkdownContents({ entries: [entry] }).props.children[0].props.children;
+	vi.stubGlobal("document", { getElementById: vi.fn().mockReturnValue(null) });
+	vi.stubGlobal("window", { location: { hash: `#${entry.id}` } });
 	native.props.onClick(event);
-	expect(preventDefault).toHaveBeenCalledTimes(2);
+	expect(preventDefault).toHaveBeenCalledTimes(3);
 });
 
-it("focuses and scrolls to the actual heading after sheet dismissal even for the same hash", () => {
+it("recognizes equivalent encoded fragments for repeated chapter navigation", () => {
+	vi.stubGlobal("window", { location: { hash: "#heading-%E4%B8%AD%E6%96%87" } });
+	expect(isCurrentMarkdownFragment("#heading-中文")).toBe(true);
+	expect(isCurrentMarkdownFragment("#heading-%E4%B8%AD%E6%96%87")).toBe(true);
+	expect(isCurrentMarkdownFragment("#heading-other")).toBe(false);
+	expect(isCurrentMarkdownFragment("#%invalid")).toBe(false);
+});
+
+it("ignores modified, secondary and prevented link clicks", () => {
+	const event = {
+		defaultPrevented: false,
+		button: 0,
+		metaKey: false,
+		ctrlKey: false,
+		shiftKey: false,
+		altKey: false,
+	};
+	expect(isPlainLinkClick(event)).toBe(true);
+	for (const modifier of ["defaultPrevented", "metaKey", "ctrlKey", "shiftKey", "altKey"])
+		expect(isPlainLinkClick({ ...event, [modifier]: true })).toBe(false);
+	expect(isPlainLinkClick({ ...event, button: 1 })).toBe(false);
+});
+
+it("focuses and scrolls without mutating router-owned history", () => {
 	const heading = { focus: vi.fn(), scrollIntoView: vi.fn() };
 	const getElementById = vi.fn().mockReturnValue(heading);
-	const location = { hash: "heading-follow-up" };
+	const location = { hash: "#previous" };
 	vi.stubGlobal("document", { getElementById });
 	vi.stubGlobal("window", { location });
 	expect(navigateToMarkdownHeading("heading-follow-up")).toBe(true);
 	expect(navigateToMarkdownHeading("heading-follow-up")).toBe(true);
-	expect(location.hash).toBe("heading-follow-up");
+	expect(location.hash).toBe("#previous");
 	expect(heading.focus.mock.calls).toEqual([[{ preventScroll: true }], [{ preventScroll: true }]]);
 	expect(heading.scrollIntoView.mock.calls).toEqual([[{ block: "start" }], [{ block: "start" }]]);
 	getElementById.mockReturnValue(null);
 	expect(navigateToMarkdownHeading("heading-missing")).toBe(false);
 	expect(heading.focus).toHaveBeenCalledTimes(2);
-	expect(location.hash).toBe("heading-follow-up");
+	expect(location.hash).toBe("#previous");
+});
+
+it("restores encoded fragments and ignores absent, malformed or unknown headings", () => {
+	const heading = { focus: vi.fn(), scrollIntoView: vi.fn() };
+	const getElementById = vi.fn().mockReturnValue(heading);
+	vi.stubGlobal("document", { getElementById });
+	expect(restoreMarkdownHeading("#heading-%E4%B8%AD%E6%96%87")).toBe(true);
+	expect(getElementById).toHaveBeenCalledWith("heading-中文");
+	expect(restoreMarkdownHeading("")).toBe(false);
+	expect(restoreMarkdownHeading("#%invalid")).toBe(false);
+	getElementById.mockReturnValue(null);
+	expect(restoreMarkdownHeading("#missing")).toBe(false);
 });
 
 it("renders installed Basalt TOC items directly under the list with indentation inside each item", () => {
@@ -69,7 +112,8 @@ it("localizes prose controls without translating user content", () => {
 	expect(html).toContain('aria-label="未完成任务"');
 	expect(html).toContain("正在加载附件");
 	expect(html).toContain("User title");
-	expect(html).toMatch(/<h1\b[^>]*tabindex="-1"/);
+	expect(html).toMatch(/<h3\b[^>]*tabindex="-1"/);
+	expect(html).not.toMatch(/<h[12]\b/);
 	expect(renderToStaticMarkup(<MarkdownContents entries={[]} />)).toContain("本页目录");
 });
 

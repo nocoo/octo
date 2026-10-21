@@ -31,8 +31,14 @@ export function headerCrumbs(path: string): { href?: string; label: string }[] {
 	}
 	return [
 		...(path === "/" ? [] : [{ href: "/", label: "工作台" }]),
+		...(path === "/settings/embedding" ? [{ href: "/settings", label: "设置" }] : []),
 		{ label: navigation.find((item) => path === item.href)?.label ?? "页面不存在" },
 	];
+}
+
+export function backTarget(path: string, historyIndex: unknown): string | -1 {
+	if (typeof historyIndex === "number" && historyIndex > 0) return -1;
+	return headerCrumbs(path).at(-2)?.href ?? "/";
 }
 
 export function pageTitle(path: string): string {

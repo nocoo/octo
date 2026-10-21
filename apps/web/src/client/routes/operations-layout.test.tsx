@@ -66,7 +66,9 @@ describe("installed Basalt operations composition", () => {
 				<Page />
 			</MemoryRouter>,
 		);
-		expect(html).toMatch(/^<div class="grid gap-basalt-layout /);
+		expect(html).toMatch(/^<div class="grid gap-basalt-layout-lg /);
+		expect(html.match(/<h1\b/g)).toHaveLength(1);
+		expect(html).toMatch(new RegExp(`<h2\\b[^>]*>${region}</h2>`));
 		expect(html).toContain("grid-template-columns:repeat(1, minmax(0, 1fr))");
 		expect(html).toContain(title);
 		expect(html).toContain(region);

@@ -220,6 +220,9 @@ for (const [path, heading, endpoints] of pages) {
 				`${path}: ${new URL(response.url()).pathname} HTTP ${response.status()}`,
 			).toBe(true);
 		await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+		await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+		expect(await page.getByRole("heading", { level: 2 }).count()).toBeGreaterThan(0);
+		await expect(page.getByRole("button", { name: "返回上一页", exact: true })).toBeVisible();
 		await expect(page.getByRole("main")).toBeVisible();
 		await expect(page.getByText("l3@local", { exact: true })).toBeVisible();
 		await expect(page.getByRole("alert")).toHaveCount(0);

@@ -39,6 +39,12 @@ Actual glyphs and metrics vary with the operating system and installed fonts.
   and table headers without changing Markdown parsing or stored content.
 - Preserve GFM, heading IDs/TOC, disabled task controls, safe URL transforms,
   signed attachment resolution, lazy images and syntax highlighting.
+- Render source headings below the page h1 and card h2 as h3–h6 (capped at h6),
+  without rewriting stored Markdown or changing TOC anchor IDs.
+- Route TOC and prose fragments through the application router. Preserve query
+  parameters, router history indexes and unsaved-edit protection. Reload and
+  Back/Forward restore the target after asynchronous content loading; modified
+  clicks retain the browser's new-tab behavior without moving the current page.
 - Keep wide code/tables horizontally scrollable with X-only overscroll
   containment; do not intercept wheel/touch input or trap vertical scrolling.
 

@@ -76,12 +76,12 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		overrides.list = { items: [memory, { ...memory, id: "m2" }] };
 		expect(render(MemoriesPage, "/memories?selected=m1")).toMatch(/aria-checked="mixed"/);
 	});
-	it("uses the shared compact table treatment, title icon and stable metadata colors", () => {
+	it("uses the shared compact table treatment, plain title and stable metadata colors", () => {
 		overrides.list = { items: [{ ...memory, space: "notes", tags: ["work"] }] };
 		const html = render(MemoriesPage, "/memories?selected=m1");
 		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
-		expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
-		expect(html).toContain("lucide-book-open");
+		expect(html).not.toContain("octo-title-icon");
+		expect(html).toMatch(/<h2\b[^>]*>记忆列表<\/h2>/);
 		for (const label of ["notes", "work"])
 			expect(html).toMatch(
 				new RegExp(`<span[^>]*data-tag-color="${tagColorFor(label)}"[^>]*>${label}</span>`),
@@ -90,6 +90,11 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		expect(html).toMatch(/<td[^>]*class="[^"]*text-end[^>]*><time/);
 		expect(html).toContain('aria-selected="true"');
 		expect(html).toContain('data-memory-link="m1"');
+	});
+	it("gives memory reader side cards semantic section headings", () => {
+		const html = render(MemoryPage, "/memories/m1");
+		for (const title of ["正文", "详细信息", "附件", "版本时间线"])
+			expect(html).toMatch(new RegExp(`<h2\\b[^>]*>${title}</h2>`));
 	});
 	it("reveals one full-width filter form below the header for active URL filters", () => {
 		const html = render(MemoriesPage, "/memories?spaces=notes&selected=m1&view=cards");
@@ -101,13 +106,13 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		expect(html.match(/aria-label="记忆筛选"/g)).toHaveLength(1);
 		expect(html.indexOf('aria-label="记忆筛选"')).toBeGreaterThan(html.indexOf("</header>"));
 	});
-	it("keeps the reader heading full-width and groups metadata with its single compact action toolbar", () => {
+	it("keeps reader actions in the page header and metadata below it", () => {
 		const html = render(MemoryPage, "/memories/m1");
 		const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
 		expect(html.match(/<header\b/g)).toHaveLength(1);
-		expect(header).not.toContain("版本历史");
-		expect(header).not.toContain("编辑记忆");
-		expect(html.indexOf("octo-memory-toolbar")).toBeGreaterThan(html.indexOf("</header>"));
+		expect(header).toContain("版本历史");
+		expect(header).toContain("编辑记忆");
+		expect(html).not.toContain("octo-memory-toolbar");
 		expect(html.match(/>本页目录<\/button>/g)).toHaveLength(1);
 		const source = readFileSync(new URL("memories.tsx", import.meta.url), "utf8");
 		expect(source).toContain("<SheetDescription>");

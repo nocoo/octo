@@ -39,7 +39,6 @@ import {
 	ArrowUpRight,
 	CalendarDays,
 	Check,
-	FolderOpen,
 	FolderPlus,
 	Network,
 	Pencil,
@@ -378,12 +377,7 @@ export function TagsPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<Tags className="octo-title-icon" aria-hidden="true" />
-						标签
-					</span>
-				}
+				title="标签"
 				actions={
 					<>
 						<Input
@@ -402,6 +396,7 @@ export function TagsPage() {
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} hideError={confirming} />
+			<SectionRule variant="heading" title="标签列表" />
 			{state.ready && (
 				<>
 					<LayerCard padding="none">
@@ -440,10 +435,14 @@ export function TagsPage() {
 						/>
 					</LayerCard>
 					{graph.nodes.length > 0 && (
-						<SectionRule title="标签共现" hint="每条连线表示同时包含这两个标签的记忆数。">
+						<SectionRule
+							variant="heading"
+							title="标签共现"
+							hint="每条连线表示同时包含这两个标签的记忆数。"
+						>
 							<LayerCard>
 								<LayerCard.Header>
-									<span>标签之间的联系</span>
+									<h3>标签之间的联系</h3>
 									<Link href="/graph?mode=cooccurrence">探索图谱</Link>
 								</LayerCard.Header>
 								<LayerCard.Body>
@@ -684,12 +683,7 @@ export function SpacesPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<FolderOpen className="octo-title-icon" aria-hidden="true" />
-						空间
-					</span>
-				}
+				title="空间"
 				actions={
 					<>
 						<Input
@@ -716,6 +710,7 @@ export function SpacesPage() {
 				onRetry={() => void model.load()}
 				hideError={creating || renaming !== null}
 			/>
+			<SectionRule variant="heading" title="空间列表" />
 			{state.ready && (
 				<LayerCard padding="none">
 					<DataTable
@@ -875,12 +870,7 @@ export function GraphPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<Network className="octo-title-icon" aria-hidden="true" />
-						关系图
-					</span>
-				}
+				title="关系图"
 				actions={
 					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 						<RefreshCw size={16} aria-hidden="true" />
@@ -926,6 +916,7 @@ export function GraphPage() {
 					</Grid>
 				}
 			/>
+			<SectionRule variant="heading" title="知识关联" />
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
 			{state.ready && graph.nodes.length === 0 && (
 				<LayerCard>
@@ -949,9 +940,9 @@ export function GraphPage() {
 				<>
 					<LayerCard>
 						<LayerCard.Header>
-							<span>
+							<h3>
 								{graph.nodes.length} 个节点 · {graph.links.length} 条关联
-							</span>
+							</h3>
 							{graph.clustered > 0 && (
 								<Badge variant="secondary">已聚合 {graph.clustered} 个节点</Badge>
 							)}
@@ -964,7 +955,11 @@ export function GraphPage() {
 							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
-					<SectionRule title="图谱数据表" hint="可在表格或图谱中选择节点，所选节点会保存在网址中。">
+					<SectionRule
+						variant="heading"
+						title="图谱数据表"
+						hint="可在表格或图谱中选择节点，所选节点会保存在网址中。"
+					>
 						<LayerCard>
 							<LayerCard.Body>
 								<Grid columns={1}>
@@ -1037,14 +1032,9 @@ export function TimelinePage() {
 				asChild
 				defaultOpen={Boolean(params.get("space") || params.get("from") || params.get("to"))}
 			>
-				<Grid columns={1} gap="sm">
+				<Grid columns={1} gap="lg">
 					<PageHeader
-						title={
-							<span className="octo-page-title">
-								<CalendarDays className="octo-title-icon" aria-hidden="true" />
-								时间线
-							</span>
-						}
+						title="时间线"
 						actions={
 							<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 								<RefreshCw size={16} aria-hidden="true" />
@@ -1114,6 +1104,7 @@ export function TimelinePage() {
 				</Grid>
 			</Collapsible>
 
+			<SectionRule variant="heading" title="时间分组" />
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
 			{state.ready && timeline.undated > 0 && (
 				<p className="text-basalt-sm text-basalt-muted-foreground">
@@ -1143,7 +1134,7 @@ export function TimelinePage() {
 				timeline.groups.map((group) => (
 					<LayerCard key={group.label}>
 						<LayerCard.Header>
-							{group.label} <Badge variant="secondary">{group.items.length} 条记忆</Badge>
+							<h3>{group.label}</h3> <Badge variant="secondary">{group.items.length} 条记忆</Badge>
 						</LayerCard.Header>
 						<LayerCard.Body>
 							<Grid columns={1}>

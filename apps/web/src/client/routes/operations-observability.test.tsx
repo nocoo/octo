@@ -76,7 +76,7 @@ describe("usage table sorting", () => {
 		fixture.usage = { loaded: true, items: [base] };
 		const html = render("usage");
 		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
-		expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+		expect(html).not.toContain("octo-title-icon");
 		const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);
 		for (const cell of cells.slice(2)) {
 			expect(cell).toContain("text-end");
@@ -97,7 +97,7 @@ describe("usage table sorting", () => {
 			expect(cells[index]).toContain("whitespace-nowrap");
 		}
 		expect(html.match(/aria-label="每日用量表 scroll area"/g)).toHaveLength(1);
-		expect(html).toContain("relative min-w-0 overflow-auto");
+		expect(html).toContain("relative isolate min-w-0 overflow-auto");
 	});
 
 	it.each([
@@ -163,7 +163,7 @@ describe("observability read states", () => {
 		};
 		const html = render("audit");
 		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
-		expect(html).toMatch(/<span class="octo-page-title"><svg[^>]*class="[^"]*octo-title-icon/);
+		expect(html).not.toContain("octo-title-icon");
 		for (const [status, color] of [
 			[200, "success"],
 			[403, "warning"],

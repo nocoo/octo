@@ -1,21 +1,18 @@
-import { Checkbox } from "@nocoo/basalt";
+import { Checkbox, Link } from "@nocoo/basalt";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { TableOfContents, TableOfContentsItem } from "@nocoo/basalt/components/table-of-contents";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import ReactMarkdown, { type Components, defaultUrlTransform } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { type ContentsEntry, markdownContents } from "../../viewmodels/memories-markdown";
+import {
+	isCurrentMarkdownFragment,
+	isPlainLinkClick,
+	navigateToMarkdownHeading,
+	restoreMarkdownHeading,
+} from "./markdown-navigation";
 import "./markdown.css";
-
-export function navigateToMarkdownHeading(id: string): boolean {
-	const heading = document.getElementById(id);
-	if (!heading) return false;
-	window.location.hash = id;
-	heading.focus({ preventScroll: true });
-	heading.scrollIntoView({ block: "start" });
-	return true;
-}
 
 export function MarkdownContents({
 	entries,
@@ -28,27 +25,23 @@ export function MarkdownContents({
 		<TableOfContents title="本页目录">
 			{entries.map((entry) => (
 				<TableOfContentsItem key={entry.id}>
-					<a
+					<Link
 						href={`#${entry.id}`}
 						onClick={(event) => {
-							if (
-								!onNavigate ||
-								event.defaultPrevented ||
-								event.button !== 0 ||
-								event.metaKey ||
-								event.ctrlKey ||
-								event.shiftKey ||
-								event.altKey
-							)
-								return;
-							event.preventDefault();
-							onNavigate(entry.id);
+							if (!isPlainLinkClick(event)) return;
+							if (onNavigate) {
+								event.preventDefault();
+								onNavigate(entry.id);
+							} else if (isCurrentMarkdownFragment(`#${entry.id}`)) {
+								event.preventDefault();
+								navigateToMarkdownHeading(entry.id);
+							}
 						}}
 					>
 						<span className="octo-memory-toc-indent" data-depth={entry.depth}>
 							{entry.text || "未命名章节"}
 						</span>
-					</a>
+					</Link>
 				</TableOfContentsItem>
 			))}
 		</TableOfContents>
@@ -57,14 +50,22 @@ export function MarkdownContents({
 
 export function Markdown({
 	source,
+	hash,
 	urls = {},
 	onAttachment,
 }: {
 	source: string;
+	hash?: string;
 	urls?: Record<string, string>;
 	onAttachment?: (id: string) => Promise<string>;
 }) {
 	const entries = useMemo(() => markdownContents(source), [source]);
+	const restoredHash = useRef<string | undefined>(undefined);
+	useEffect(() => {
+		if (!hash) restoredHash.current = undefined;
+		else if (hash !== restoredHash.current && entries.length && restoreMarkdownHeading(hash))
+			restoredHash.current = hash;
+	}, [hash, entries]);
 	const components = useMemo<Components>(() => {
 		const result: Components = {
 			input: ({ checked }) => (
@@ -76,6 +77,22 @@ export function Markdown({
 			),
 			a: ({ node: _node, href, children, ...props }) => {
 				const attachment = href?.match(/^octo:\/\/att\/([A-Za-z0-9_-]+)$/)?.[1];
+				if (href?.startsWith("#")) {
+					return (
+						<Link
+							{...props}
+							href={href}
+							onClick={(event) => {
+								if (isPlainLinkClick(event) && isCurrentMarkdownFragment(href)) {
+									event.preventDefault();
+									restoreMarkdownHeading(href);
+								}
+							}}
+						>
+							{children}
+						</Link>
+					);
+				}
 				return (
 					<a
 						{...props}
@@ -121,7 +138,7 @@ export function Markdown({
 			},
 		};
 		for (const tag of ["h1", "h2", "h3", "h4", "h5", "h6"] as const) {
-			const Tag = tag;
+			const Tag = ({ h1: "h3", h2: "h4", h3: "h5", h4: "h6", h5: "h6", h6: "h6" } as const)[tag];
 			result[tag] = ({ node, children, ...props }) => (
 				<Tag
 					{...props}

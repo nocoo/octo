@@ -1,9 +1,13 @@
 # Shell reference alignment
 
-The reference is Giraffe revision
-`7724f57377e10e257bbdcf2d520154da5eda1a7b`, using Basalt 3.1.0, the same
-version installed by Octo. Octo keeps the standalone CSS contract; it does not
-copy Giraffe's Tailwind configuration or repository-specific controls.
+Octo uses the published `@nocoo/basalt@3.2.1` artifact, tag reference
+`857b5a238ff8595c9998c2de7dad6144cd839c72`. The package's `ai/INTEGRATION.md`,
+`ai/RECIPES.md`, declarations and compiled components define the current contract.
+Octo keeps standalone CSS and app-owned routing, data and identity.
+
+The original geometry comparison used Giraffe revision
+`7724f57377e10e257bbdcf2d520154da5eda1a7b` with Basalt 3.1.0. It is historical
+evidence, not a reason to override released component geometry.
 
 Chrome computed-style comparison at 1440px established these shared dimensions:
 
@@ -34,13 +38,42 @@ SidebarUser's native avatar placement rather than a custom rail-slot wrapper.
 The logo keeps its center when the rail collapses; the expanded avatar follows
 the reference's native inset and centers in the collapsed rail.
 
-Octo preserves its own navigation, colorful icons, command palette, Access
+Octo preserves its own navigation, monochrome icons, command palette, Access
 identity/error handling, breadcrumb semantics and all four mobile header actions.
 It retains its content grid and full-height empty-state layout rather than
 copying Giraffe's page-specific containers. Markdown typography has a separate
 [reading contract](markdown-reading.md).
 
+## Page hierarchy and navigation
+
+- One `ContentIsland` owns the content surface and scroll behavior. Page grids
+  only arrange content; they use the package's large layout gap without extra padding.
+- Each page has one plain `PageHeader` title. The released standalone `3xl`
+  token renders at 24px; guide prose mentioning 30px does not override the artifact.
+- `SectionRule` heading variants identify page regions. Card headings use
+  `LayerCard.Header` with semantic headings, retaining compact card typography.
+  Bodies stay on their card surface; wells raise only nested content.
+- Framework breadcrumbs show real ancestors and the current page once.
+  Embedding settings include `/settings`; memory edit/history include their detail route.
+- The header's left Back action follows browser history. Direct entry without
+  an in-app history index falls back to the nearest real parent, never an external referrer.
+  Editor navigation still passes through the unsaved-change guard.
+- Filters, list/card view and pagination remain URL state. Applied filters push
+  history, and Back/Forward restores the corresponding filter controls. Large filter
+  panels reopen for restored active filters. Version comparisons live in header filters.
+- Page actions belong in `PageHeader.actions`; Markdown content uses h3–h6 below
+  the page h1 and card h2, preserving text and stable TOC IDs.
+- Fragment links preserve router-owned history state and URL filters. The skip
+  link moves focus without creating a history entry. The application owns scroll
+  restoration: path changes reset to the top unless a fragment identifies a target;
+  asynchronously loaded Markdown restores its chapter after rendering.
+
 `tests/e2e/shell.spec.ts` checks geometry, disclosure, collapsed search, mobile
 focus return, theme changes and responsive insets against the isolated Worker.
 `tests/e2e/empty-layout.spec.ts` checks that shell changes preserve empty-state
 centering, viewport containment and actions.
+`tests/e2e/navigation-history.spec.ts` exercises URL round trips, direct-entry
+parents, filter restoration and unsaved-editor Back behavior against the local Worker.
+It also covers chapter reload/Back/Forward on desktop and mobile and keyboard skip
+navigation before editing. Trusted Caddy/Chrome checks cover all 13 primary routes
+at 390px/1440px in light/dark themes without disabling TLS verification.

@@ -278,16 +278,9 @@ export function KeysPage() {
 		},
 	];
 	return (
-		<Grid columns={1} gap="md" className="min-w-0">
+		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
-				title={
-					<span className="octo-page-title">
-						<span className="octo-title-icon">
-							<KeyRound aria-hidden="true" />
-						</span>
-						接口密钥
-					</span>
-				}
+				title="接口密钥"
 				description="明文仅展示一次，绝不持久化。"
 				actions={
 					<>
@@ -335,7 +328,7 @@ export function KeysPage() {
 			{usageState.loading && usageState.snapshot && (
 				<p role="status">用量刷新中；当前图表为上次成功数据。</p>
 			)}
-			<SectionRule title="密钥列表">
+			<SectionRule variant="heading" title="密钥列表">
 				<p className="text-basalt-sm text-basalt-muted-foreground">
 					用量统计最近 30 个 UTC 日期（含今日）；今日数据尚未结束。
 				</p>
