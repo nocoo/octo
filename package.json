@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "bun run scripts/dev.ts",
 		"dev:server": "bun run scripts/dev-server.ts",
+		"seed:demo": "bun run scripts/seed-demo.ts",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.scripts.json",
 		"build": "bun run gate:production && vite build",
 		"lint": "biome check --error-on-warnings .",

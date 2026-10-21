@@ -54,6 +54,10 @@ test-only adapter.
 - `bun run dev` 同时启动 Vite 和 wrangler sidecar，跑在 herdr 同一个 space 里名为 `dev server` 的 tab 中（机器规则：不在后台跑）。
 - Dev server 的 `allowedHosts` 只放行 `octo.dev.hexly.ai`；admin 写请求的 origin 检查在开发环境接受这个域名。
 
+For a checked-in local catalogue with 84 active memories and 6 trash entries,
+run `bun run seed:demo` after starting the dev server. See
+[Local demo seed](local-demo-seed.md) for coverage, safeguards, and repeat-run behavior.
+
 ## 4. Hooks
 
 | Hook | 内容 |

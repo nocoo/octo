@@ -911,3 +911,14 @@ The final graph review also caught newly assigned table type colors contradictin
 The v0.4.2 release CI caught two browser assertions that passed on macOS. Pagination sampled the size control before the memory response rendered and the next-page button afterward, comparing y=165.984375 with y=1496 from different layouts. The test now creates its own record, waits for that record to render and retries the unchanged half-pixel alignment assertion instead of relying on earlier tests to populate the page.
 
 The long-history check required an exact IntersectionObserver ratio of 1; Linux reported 0.998088777 despite the wrapped value. The assertion now measures clipping at each edge in CSS pixels, allowing at most one pixel for fractional scroll rounding rather than accepting a broad percentage tolerance. Text equality, internal horizontal overflow, visible intersection and screenshot checks remain. No application styles, suite retries or test timeouts changed. Cross-platform CI must pass before deployment; local screenshot acceptance alone does not establish it.
+
+### 2026-10-21 - Verify mounted routes before sharing list parameters
+
+The first local demo import assumed the admin trash list accepted the memory list's
+`spaces` filter. Its mock transport accepted that request, but the mounted admin
+purge route uses a different strict query schema and returned 400. Preflight ran
+before all writes, so no local data changed. A RED regression now reproduces the
+rejection; the importer instead uses the existing memory list's `include=trashed`
+option to identify both active and deleted records through one documented contract.
+Trace the actual mounted route, not a similarly named parity handler, and verify
+the real local HTTP path before treating mocked importer tests as integration proof.

@@ -30,6 +30,7 @@ Bun 1.4, TypeScript 7 strict, Hono, Vite 8, Biome 2.5, Vitest 5 + V8 coverage, H
 
 ```
 bun run dev              # Vite 127.0.0.1:7059 + wrangler sidecar 37059
+bun run seed:demo        # Local-only: 84 active memories + 6 trash; docs/local-demo-seed.md
 bun run typecheck
 bun run lint             # biome check --error-on-warnings
 bun run test:coverage    # L1, four metrics ≥95%
