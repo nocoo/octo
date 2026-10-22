@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { checkClientDesign, main, runGateClientDesign } from "./gate-client-design";
 
 describe("Basalt client layout boundary", () => {
-	it.each(["div", "section", "article", "aside", "main", "nav", "header", "footer"])(
+	it.each(["div", "section", "article", "aside", "main", "nav", "header", "footer", "h2"])(
 		"rejects handwritten %s containers",
 		(tag) => expect(checkClientDesign("page.tsx", `const page = <${tag} />`)).toHaveLength(1),
 	);

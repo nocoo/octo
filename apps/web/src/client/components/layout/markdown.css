@@ -198,6 +198,14 @@
 	resize: vertical;
 	font-family: var(--font-mono);
 }
+.octo-memory-editor > section {
+	display: flex;
+	flex-direction: column;
+	min-inline-size: 0;
+}
+.octo-memory-editor > section > [data-basalt-surface] {
+	flex: 1;
+}
 .octo-memory-conflict-grid pre {
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;

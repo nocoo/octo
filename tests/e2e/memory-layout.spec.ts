@@ -10,7 +10,8 @@ test("short memory bodies fill the desktop rail beside a wider information sideb
 	for (const height of [900, 1400]) {
 		await page.setViewportSize({ width: 1440, height });
 		await page.goto(`/memories/${memory.id}`);
-		await expect(page.getByRole("heading", { name: "正文", exact: true })).toBeVisible();
+		await expect(page.locator(".octo-memory-body")).toBeVisible();
+		await expect(page.getByRole("heading", { name: "正文", exact: true })).toHaveCount(0);
 		const metadata = page.locator(".octo-memory-reader > .octo-memory-meta");
 		await expect(metadata.getByRole("group", { name: "类型", exact: true })).toHaveText("类型笔记");
 		await expect(metadata.getByRole("group", { name: "标签", exact: true })).toContainText(

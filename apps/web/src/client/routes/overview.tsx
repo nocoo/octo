@@ -171,118 +171,115 @@ export function OverviewPage() {
 				调用与写入次数来自本年度 UTC 小时汇总，非实时数据，也不等同于新增记忆数。
 				当前接口未提供向量同步积压、D1 体积和定时任务最近运行时间。
 			</p>
-			<LayerCard>
-				<LayerCard.Header>
-					<h2>知识入口</h2>
-				</LayerCard.Header>
-				<LayerCard.Body>
-					<Grid columns={1} gap="sm">
-						<Grid
-							gap="sm"
-							style={{
-								gridTemplateColumns:
-									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), max-content))",
-								justifyContent: "start",
-							}}
-						>
-							<Button asChild>
-								<Link to="/memories">
-									浏览记忆 <ArrowUpRight size={16} />
-								</Link>
-							</Button>
-							<Button variant="secondary" asChild>
-								<Link to="/search">
-									<Search size={16} aria-hidden="true" />
-									混合搜索
-								</Link>
-							</Button>
-							<Button variant="secondary" asChild>
-								<Link to="/graph">
-									<Network size={16} aria-hidden="true" />
-									探索关系
-								</Link>
-							</Button>
-						</Grid>
-						<p className="text-basalt-sm text-basalt-muted-foreground">
-							⌘ K 快速跳转，/ 开始搜索。
-						</p>
-					</Grid>
-				</LayerCard.Body>
-			</LayerCard>
-			<LayerCard>
-				<LayerCard.Header>
-					<h2>智能体活动 · 按密钥小时汇总</h2>
-				</LayerCard.Header>
-				<LayerCard.Well>
-					<Grid columns={1}>
-						{state.usage && !activity.heatmap.length ? (
-							<LayerCard.Empty
-								className="octo-empty"
-								icon={<Activity aria-hidden="true" />}
-								title="暂无调用记录"
-								description="智能体开始使用后，这里会显示每日活动。"
-								action={
-									<Button asChild>
-										<Link to="/keys">
-											<KeyRound size={16} aria-hidden="true" />
-											管理密钥
-										</Link>
-									</Button>
-								}
-							/>
-						) : state.usage ? (
-							<HeatmapCalendar
-								data={activity.heatmap}
-								year={new Date().getUTCFullYear()}
-								locale="zh-CN"
-								ariaLabel="全年智能体调用活动"
-								metricLabel="次调用"
-								lessLabel="少"
-								moreLabel="多"
-							/>
-						) : (
-							<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
-								{state.loading ? "正在读取活动记录…" : "活动数据尚未加载"}
-							</p>
-						)}
-					</Grid>
-				</LayerCard.Well>
-			</LayerCard>
-			<LayerCard>
-				<LayerCard.Header>
-					<h2>调用趋势</h2>
-				</LayerCard.Header>
-				<LayerCard.Well>
-					<Grid columns={1}>
-						{activity.rows.length ? (
-							<AreaChart
-								data={activity.rows}
-								series={activityChartSeries(activity)}
-								stacked
-								showAxes
-								showLegend
-								className="h-basalt-80 w-full"
-								ariaLabel="按智能体堆叠的每日调用量"
-								summary="每日接口调用次数，纵轴从零开始。"
-							/>
-						) : state.usage ? (
-							<LayerCard.Empty
-								className="octo-empty"
-								icon={<Activity aria-hidden="true" />}
-								title="暂无调用趋势"
-							/>
-						) : (
+			<SectionRule variant="heading" title="知识入口">
+				<LayerCard>
+					<LayerCard.Body>
+						<Grid columns={1} gap="sm">
+							<Grid
+								gap="sm"
+								style={{
+									gridTemplateColumns:
+										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), max-content))",
+									justifyContent: "start",
+								}}
+							>
+								<Button asChild>
+									<Link to="/memories">
+										浏览记忆 <ArrowUpRight size={16} />
+									</Link>
+								</Button>
+								<Button variant="secondary" asChild>
+									<Link to="/search">
+										<Search size={16} aria-hidden="true" />
+										混合搜索
+									</Link>
+								</Button>
+								<Button variant="secondary" asChild>
+									<Link to="/graph">
+										<Network size={16} aria-hidden="true" />
+										探索关系
+									</Link>
+								</Button>
+							</Grid>
 							<p className="text-basalt-sm text-basalt-muted-foreground">
-								{state.loading ? "正在读取调用记录…" : "调用数据尚未加载"}
+								⌘ K 快速跳转，/ 开始搜索。
 							</p>
-						)}
-						<Collapsible>
-							<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
-							<CollapsibleContent unstyled>{table}</CollapsibleContent>
-						</Collapsible>
-					</Grid>
-				</LayerCard.Well>
-			</LayerCard>
+						</Grid>
+					</LayerCard.Body>
+				</LayerCard>
+			</SectionRule>
+			<SectionRule variant="heading" title="智能体活动 · 按密钥小时汇总">
+				<LayerCard>
+					<LayerCard.Body>
+						<Grid columns={1}>
+							{state.usage && !activity.heatmap.length ? (
+								<LayerCard.Empty
+									className="octo-empty"
+									icon={<Activity aria-hidden="true" />}
+									title="暂无调用记录"
+									description="智能体开始使用后，这里会显示每日活动。"
+									action={
+										<Button asChild>
+											<Link to="/keys">
+												<KeyRound size={16} aria-hidden="true" />
+												管理密钥
+											</Link>
+										</Button>
+									}
+								/>
+							) : state.usage ? (
+								<HeatmapCalendar
+									data={activity.heatmap}
+									year={new Date().getUTCFullYear()}
+									locale="zh-CN"
+									ariaLabel="全年智能体调用活动"
+									metricLabel="次调用"
+									lessLabel="少"
+									moreLabel="多"
+								/>
+							) : (
+								<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
+									{state.loading ? "正在读取活动记录…" : "活动数据尚未加载"}
+								</p>
+							)}
+						</Grid>
+					</LayerCard.Body>
+				</LayerCard>
+			</SectionRule>
+			<SectionRule variant="heading" title="调用趋势">
+				<LayerCard>
+					<LayerCard.Body>
+						<Grid columns={1}>
+							{activity.rows.length ? (
+								<AreaChart
+									data={activity.rows}
+									series={activityChartSeries(activity)}
+									stacked
+									showAxes
+									showLegend
+									className="h-basalt-80 w-full"
+									ariaLabel="按智能体堆叠的每日调用量"
+									summary="每日接口调用次数，纵轴从零开始。"
+								/>
+							) : state.usage ? (
+								<LayerCard.Empty
+									className="octo-empty"
+									icon={<Activity aria-hidden="true" />}
+									title="暂无调用趋势"
+								/>
+							) : (
+								<p className="text-basalt-sm text-basalt-muted-foreground">
+									{state.loading ? "正在读取调用记录…" : "调用数据尚未加载"}
+								</p>
+							)}
+							<Collapsible>
+								<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
+								<CollapsibleContent unstyled>{table}</CollapsibleContent>
+							</Collapsible>
+						</Grid>
+					</LayerCard.Body>
+				</LayerCard>
+			</SectionRule>
 			<SectionRule variant="heading" title="最近变更">
 				<LayerCard padding="none">
 					<DataTable

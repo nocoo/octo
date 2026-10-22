@@ -1,5 +1,9 @@
 # Retrospective
 
+### 2026-10-22 - Verify the selected browser test inventory
+
+The first section-title regression command included a nonexistent `library.spec.ts` while the real file was `library-layout.spec.ts`. Playwright still ran the other matching files, so a successful exit alone could not establish the requested library coverage. The missing library suite was run separately before commit. Resolve test paths from the repository and compare the executed inventory with the intended scope instead of trusting a multi-pattern command's exit status.
+
 ### 2026-10-22 - Preserve filter drafts across collapsed sections
 
 Moving Apply into an always-visible filter bar made hidden numeric fields reachable by submission. A Chromium regression reproduced native validation blocking submission without revealing the invalid field. The form now checks validity, synchronously opens the advanced section, and then asks the browser to report and focus the invalid control. Advanced controls remain mounted so collapsing them never discards their submitted values. Applied chips come from URL state, not unsaved controls, and removing one chip does not reopen an already-collapsed panel while other advanced conditions remain.

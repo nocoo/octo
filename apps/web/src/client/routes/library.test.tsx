@@ -42,6 +42,86 @@ describe("library page installed-component boundaries", () => {
 		expect(html).not.toMatch(/class="library-(?:page|stack|actions|fields|search)/);
 		expect(html).toContain("正在加载资料库");
 	});
+	it("keeps one cooccurrence heading and moves its explore action before the card", () => {
+		overrides.state = {
+			ready: true,
+			memories: [
+				{
+					id: "m1",
+					title: "记忆",
+					space: "notes",
+					tags: ["work", "notes"],
+					version: 1,
+					created_at: "2026-10-17T00:00:00Z",
+					event_time: null,
+				},
+			],
+		};
+		const html = render(TagsPage, "/tags");
+		const section =
+			html.match(
+				/<section[^>]*><div[^>]*><div[^>]*><h2[^>]*>标签共现<\/h2>[\s\S]*?<\/section>/,
+			)?.[0] ?? "";
+		expect(section).toContain("text-basalt-xl");
+		expect(section).toContain('href="/graph?mode=cooccurrence"');
+		expect(section.indexOf("探索图谱")).toBeLessThan(section.indexOf('data-basalt-surface=""'));
+		expect(section).toContain('aria-label="图谱关系"');
+		expect(html).not.toContain("标签之间的联系");
+	});
+	it("moves graph counts and clustering information into the outer heading actions", () => {
+		overrides.state = {
+			ready: true,
+			memories: Array.from({ length: 12 }, (_, index) => ({
+				id: `m${index}`,
+				title: `记忆 ${index}`,
+				space: "notes",
+				tags: ["work"],
+				version: 1,
+				created_at: "2026-10-17T00:00:00Z",
+				event_time: null,
+			})),
+		};
+		const html = render(GraphPage, "/graph?cap=10");
+		const section =
+			html.match(
+				/<section[^>]*><div[^>]*><div[^>]*><h2[^>]*>知识关联<\/h2>[\s\S]*?<\/section>/,
+			)?.[0] ?? "";
+		expect(section).toContain("text-basalt-xl");
+		expect(section).toContain("9 个节点 · 8 条关联");
+		expect(section).toContain("已聚合 5 个节点");
+		expect(section.indexOf("已聚合 5 个节点")).toBeLessThan(
+			section.indexOf('data-basalt-surface=""'),
+		);
+		expect(html).not.toMatch(/<h3[^>]*>\d+ 个节点/);
+	});
+	it.each([
+		["day", "2026-10-17"],
+		["hour", "2026-10-17T03:00Z"],
+		["month", "2026-10"],
+	] as const)("places %s timeline group headings and counts outside their cards", (zoom, label) => {
+		overrides.state = {
+			ready: true,
+			memories: [
+				{
+					id: "m1",
+					title: "记忆",
+					space: "notes",
+					tags: [],
+					version: 1,
+					created_at: "2026-10-17T03:15:00Z",
+					event_time: "2026-10-17T03:15:00Z",
+				},
+			],
+		};
+		const html = render(TimelinePage, `/timeline?zoom=${zoom}`);
+		expect(html).toMatch(
+			new RegExp(
+				`<section[^>]*space-y-basalt-layout"[^>]*><div[^>]*><div[^>]*><h2[^>]*text-basalt-xl[^>]*>${label}</h2></div><div[^>]*ml-auto[^>]*><span[^>]*>1 条记忆</span></div></div><div[^>]*data-basalt-surface=""`,
+			),
+		);
+		expect(html).toContain(`aria-label="${label} 的记忆"`);
+		expect(html).toContain(`aria-label="${label} 的时间线数据"`);
+	});
 	it("uses stable native tag colors without losing canonical-name filtering or aligned actions", () => {
 		overrides.state = {
 			ready: true,

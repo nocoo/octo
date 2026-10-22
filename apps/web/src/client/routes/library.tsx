@@ -439,12 +439,9 @@ export function TagsPage() {
 							variant="heading"
 							title="标签共现"
 							hint="每条连线表示同时包含这两个标签的记忆数。"
+							actions={<Link href="/graph?mode=cooccurrence">探索图谱</Link>}
 						>
 							<LayerCard>
-								<LayerCard.Header>
-									<h3>标签之间的联系</h3>
-									<Link href="/graph?mode=cooccurrence">探索图谱</Link>
-								</LayerCard.Header>
 								<LayerCard.Body>
 									<Grid columns={1}>
 										<Suspense fallback={<p role="status">正在加载图谱…</p>}>
@@ -916,37 +913,43 @@ export function GraphPage() {
 					</Grid>
 				}
 			/>
-			<SectionRule variant="heading" title="知识关联" />
-			<LibraryStatus state={state} onRetry={() => void model.load()} />
-			{state.ready && graph.nodes.length === 0 && (
-				<LayerCard>
-					<LayerCard.Empty
-						className="octo-empty octo-empty--page"
-						icon={<Network aria-hidden="true" />}
-						title="暂无关系数据"
-						description="添加记忆和标签后，可在这里查看关联。"
-						action={
-							<Button asChild>
-								<Link href="/memories">
-									<ArrowUpRight size={16} aria-hidden="true" />
-									浏览记忆
-								</Link>
-							</Button>
-						}
-					/>
-				</LayerCard>
-			)}
-			{state.ready && graph.nodes.length > 0 && (
-				<>
-					<LayerCard>
-						<LayerCard.Header>
-							<h3>
+			<SectionRule
+				variant="heading"
+				title="知识关联"
+				actions={
+					state.ready && graph.nodes.length > 0 ? (
+						<>
+							<span className="text-basalt-sm text-basalt-muted-foreground">
 								{graph.nodes.length} 个节点 · {graph.links.length} 条关联
-							</h3>
+							</span>
 							{graph.clustered > 0 && (
 								<Badge variant="secondary">已聚合 {graph.clustered} 个节点</Badge>
 							)}
-						</LayerCard.Header>
+						</>
+					) : undefined
+				}
+			>
+				<LibraryStatus state={state} onRetry={() => void model.load()} />
+				{state.ready && graph.nodes.length === 0 && (
+					<LayerCard>
+						<LayerCard.Empty
+							className="octo-empty octo-empty--page"
+							icon={<Network aria-hidden="true" />}
+							title="暂无关系数据"
+							description="添加记忆和标签后，可在这里查看关联。"
+							action={
+								<Button asChild>
+									<Link href="/memories">
+										<ArrowUpRight size={16} aria-hidden="true" />
+										浏览记忆
+									</Link>
+								</Button>
+							}
+						/>
+					</LayerCard>
+				)}
+				{state.ready && graph.nodes.length > 0 && (
+					<LayerCard>
 						<LayerCard.Body>
 							<Grid columns={1}>
 								<Suspense fallback={<p role="status">正在加载图谱…</p>}>
@@ -955,24 +958,26 @@ export function GraphPage() {
 							</Grid>
 						</LayerCard.Body>
 					</LayerCard>
-					<SectionRule
-						variant="heading"
-						title="图谱数据表"
-						hint="可在表格或图谱中选择节点，所选节点会保存在网址中。"
-					>
-						<LayerCard>
-							<LayerCard.Body>
-								<Grid columns={1}>
-									<GraphTables
-										graph={graph}
-										selected={params.get("node") ? [params.get("node") as string] : []}
-										onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
-									/>
-								</Grid>
-							</LayerCard.Body>
-						</LayerCard>
-					</SectionRule>
-				</>
+				)}
+			</SectionRule>
+			{state.ready && graph.nodes.length > 0 && (
+				<SectionRule
+					variant="heading"
+					title="图谱数据表"
+					hint="可在表格或图谱中选择节点，所选节点会保存在网址中。"
+				>
+					<LayerCard>
+						<LayerCard.Body>
+							<Grid columns={1}>
+								<GraphTables
+									graph={graph}
+									selected={params.get("node") ? [params.get("node") as string] : []}
+									onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
+								/>
+							</Grid>
+						</LayerCard.Body>
+					</LayerCard>
+				</SectionRule>
 			)}
 		</Grid>
 	);
@@ -1132,39 +1137,43 @@ export function TimelinePage() {
 			)}
 			{state.ready &&
 				timeline.groups.map((group) => (
-					<LayerCard key={group.label}>
-						<LayerCard.Header>
-							<h3>{group.label}</h3> <Badge variant="secondary">{group.items.length} 条记忆</Badge>
-						</LayerCard.Header>
-						<LayerCard.Body>
-							<Grid columns={1}>
-								<Timeline
-									ariaLabel={`${group.label} 的记忆`}
-									items={group.items.map((item) => {
-										const timestamp = new Date(item.timestamp).toISOString();
-										return {
-											id: item.id,
-											title: item.title,
-											at:
-												options.zoom === "month"
-													? `${timestamp.slice(5, 10)} ${timestamp.slice(11, 16)} UTC`
-													: `${timestamp.slice(11, 16)} UTC`,
-										};
-									})}
-								/>
-								<DataTable
-									className="octo-table"
-									aria-label={`${group.label} 的时间线数据`}
-									data={group.items}
-									columns={columns}
-									getRowId={(item) => item.id}
-									selected={selectedIds(params)}
-									onSelectedChange={(ids) => setParams(setSelection(params, ids))}
-									pageSize={20}
-								/>
-							</Grid>
-						</LayerCard.Body>
-					</LayerCard>
+					<SectionRule
+						key={group.label}
+						variant="heading"
+						title={group.label}
+						actions={<Badge variant="secondary">{group.items.length} 条记忆</Badge>}
+					>
+						<LayerCard>
+							<LayerCard.Body>
+								<Grid columns={1}>
+									<Timeline
+										ariaLabel={`${group.label} 的记忆`}
+										items={group.items.map((item) => {
+											const timestamp = new Date(item.timestamp).toISOString();
+											return {
+												id: item.id,
+												title: item.title,
+												at:
+													options.zoom === "month"
+														? `${timestamp.slice(5, 10)} ${timestamp.slice(11, 16)} UTC`
+														: `${timestamp.slice(11, 16)} UTC`,
+											};
+										})}
+									/>
+									<DataTable
+										className="octo-table"
+										aria-label={`${group.label} 的时间线数据`}
+										data={group.items}
+										columns={columns}
+										getRowId={(item) => item.id}
+										selected={selectedIds(params)}
+										onSelectedChange={(ids) => setParams(setSelection(params, ids))}
+										pageSize={20}
+									/>
+								</Grid>
+							</LayerCard.Body>
+						</LayerCard>
+					</SectionRule>
 				))}
 		</Grid>
 	);

@@ -567,9 +567,6 @@ export function MemoryPage() {
 					style={{ gridTemplateColumns: "var(--octo-memory-columns)", alignItems: "start" }}
 				>
 					<LayerCard className="octo-memory-body">
-						<LayerCard.Header asChild>
-							<h2>正文</h2>
-						</LayerCard.Header>
 						<LayerCard.Body>
 							<Markdown
 								source={memory.body}
@@ -583,91 +580,89 @@ export function MemoryPage() {
 						<Grid columns={1} className="octo-memory-reader-wide octo-memory-toc">
 							<MarkdownContents entries={entries} />
 						</Grid>
-						<LayerCard>
-							<LayerCard.Header asChild>
-								<h2>详细信息</h2>
-							</LayerCard.Header>
-							<LayerCard.Body>
-								<DescriptionList columns={1}>
-									<DescriptionList.Item term="重要性">{memory.importance}</DescriptionList.Item>
-									<DescriptionList.Item term="创建时间">
-										{formatDateTime(memory.created_at)}
-									</DescriptionList.Item>
-									<DescriptionList.Item term="更新时间">
-										{formatDateTime(memory.updated_at)}
-									</DescriptionList.Item>
-									<DescriptionList.Item term="事件时间">
-										{memory.event_time ? formatDateTime(memory.event_time) : "未设置"}
-									</DescriptionList.Item>
-									<DescriptionList.Item term="来源">
-										{memory.source_key_id ?? "控制台"}
-									</DescriptionList.Item>
-								</DescriptionList>
-							</LayerCard.Body>
-						</LayerCard>
-						<LayerCard>
-							<LayerCard.Header asChild>
-								<h2>附件</h2>
-							</LayerCard.Header>
-							{memory.attachments?.length ? (
-								<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
-									{(memory.attachments ?? []).map((attachment) => (
-										<Button
-											key={attachment.id}
-											variant="link"
-											onClick={() => {
-												void model
-													.attachmentUrl(attachment.id)
-													.then((url) => window.location.assign(url))
-													.catch(() => toast.error("无法加载附件"));
-											}}
-										>
-											<span className="octo-record-title" title={attachment.filename}>
-												{attachment.filename}
-											</span>
-											<span className="octo-muted">{formatBytes(attachment.size_bytes)}</span>
-										</Button>
-									))}
+						<SectionRule variant="heading" title="详细信息">
+							<LayerCard>
+								<LayerCard.Body>
+									<DescriptionList columns={1}>
+										<DescriptionList.Item term="重要性">{memory.importance}</DescriptionList.Item>
+										<DescriptionList.Item term="创建时间">
+											{formatDateTime(memory.created_at)}
+										</DescriptionList.Item>
+										<DescriptionList.Item term="更新时间">
+											{formatDateTime(memory.updated_at)}
+										</DescriptionList.Item>
+										<DescriptionList.Item term="事件时间">
+											{memory.event_time ? formatDateTime(memory.event_time) : "未设置"}
+										</DescriptionList.Item>
+										<DescriptionList.Item term="来源">
+											{memory.source_key_id ?? "控制台"}
+										</DescriptionList.Item>
+									</DescriptionList>
 								</LayerCard.Body>
-							) : (
-								<LayerCard.Empty
-									className="octo-empty octo-empty--compact"
-									icon={<Paperclip aria-hidden="true" />}
-									title="暂无附件"
-									description="添加图片或 PDF，补充这条记忆。"
-									action={
-										<Button asChild>
-											<Link to={`/memories/${id}/edit`}>
-												<Paperclip aria-hidden="true" />
-												添加附件
-											</Link>
-										</Button>
-									}
-								/>
-							)}
-						</LayerCard>
-						<LayerCard>
-							<LayerCard.Header asChild>
-								<h2>版本时间线</h2>
-							</LayerCard.Header>
-							<LayerCard.Body>
-								<ol>
-									{[...state.versions].reverse().map((version) => (
-										<li key={version.version}>
-											<Link
-												to={`/memories/${id}/history?from=${Math.max(1, version.version - 1)}&to=${version.version}`}
+							</LayerCard>
+						</SectionRule>
+						<SectionRule variant="heading" title="附件">
+							<LayerCard>
+								{memory.attachments?.length ? (
+									<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
+										{(memory.attachments ?? []).map((attachment) => (
+											<Button
+												key={attachment.id}
+												variant="link"
+												onClick={() => {
+													void model
+														.attachmentUrl(attachment.id)
+														.then((url) => window.location.assign(url))
+														.catch(() => toast.error("无法加载附件"));
+												}}
 											>
-												第 {version.version} 版 / {memoryOperationLabels[version.op] ?? "其他操作"}
-											</Link>
-											<p className="octo-muted">
-												{version.actor === "admin" ? "管理员" : version.actor} /{" "}
-												{formatDateTime(version.created_at)}
-											</p>
-										</li>
-									))}
-								</ol>
-							</LayerCard.Body>
-						</LayerCard>
+												<span className="octo-record-title" title={attachment.filename}>
+													{attachment.filename}
+												</span>
+												<span className="octo-muted">{formatBytes(attachment.size_bytes)}</span>
+											</Button>
+										))}
+									</LayerCard.Body>
+								) : (
+									<LayerCard.Empty
+										className="octo-empty octo-empty--compact"
+										icon={<Paperclip aria-hidden="true" />}
+										title="暂无附件"
+										description="添加图片或 PDF，补充这条记忆。"
+										action={
+											<Button asChild>
+												<Link to={`/memories/${id}/edit`}>
+													<Paperclip aria-hidden="true" />
+													添加附件
+												</Link>
+											</Button>
+										}
+									/>
+								)}
+							</LayerCard>
+						</SectionRule>
+						<SectionRule variant="heading" title="版本时间线">
+							<LayerCard>
+								<LayerCard.Body>
+									<ol>
+										{[...state.versions].reverse().map((version) => (
+											<li key={version.version}>
+												<Link
+													to={`/memories/${id}/history?from=${Math.max(1, version.version - 1)}&to=${version.version}`}
+												>
+													第 {version.version} 版 /{" "}
+													{memoryOperationLabels[version.op] ?? "其他操作"}
+												</Link>
+												<p className="octo-muted">
+													{version.actor === "admin" ? "管理员" : version.actor} /{" "}
+													{formatDateTime(version.created_at)}
+												</p>
+											</li>
+										))}
+									</ol>
+								</LayerCard.Body>
+							</LayerCard>
+						</SectionRule>
 					</Grid>
 				</Grid>
 			)}
@@ -708,71 +703,79 @@ function ConflictDialog({
 				{conflict && (
 					<Grid columns={1}>
 						{conflict.fields.map((field) => (
-							<LayerCard key={field}>
-								<LayerCard.Header>
-									{memoryFieldLabels[field]}
-									{conflict.unresolved.includes(field) ? " / 待处理" : " / 已解决"}
-								</LayerCard.Header>
-								<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
-									<Grid
-										columns={1}
-										className="octo-memory-conflict-grid"
-										style={{
-											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
-										}}
-									>
-										{(["base", "mine", "theirs"] as const).map((side) => (
-											<SectionRule
-												key={side}
-												title={{ base: "原始版本", mine: "我的修改", theirs: "最新版本" }[side]}
+							<SectionRule
+								variant="heading"
+								title={
+									<>
+										{memoryFieldLabels[field]}
+										{conflict.unresolved.includes(field) ? " / 待处理" : " / 已解决"}
+									</>
+								}
+								key={field}
+							>
+								<LayerCard>
+									<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
+										<Grid
+											columns={1}
+											className="octo-memory-conflict-grid"
+											style={{
+												gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
+											}}
+										>
+											{(["base", "mine", "theirs"] as const).map((side) => (
+												<SectionRule
+													key={side}
+													title={{ base: "原始版本", mine: "我的修改", theirs: "最新版本" }[side]}
+												>
+													<LayerCard.Well>
+														<pre>
+															{field === "type"
+																? (memoryTypeLabels[conflict[side].type] ?? "未知类型")
+																: typeof conflict[side][field] === "string"
+																	? conflict[side][field]
+																	: JSON.stringify(conflict[side][field], null, 2)}
+														</pre>
+													</LayerCard.Well>
+												</SectionRule>
+											))}
+										</Grid>
+										<Grid
+											columns={1}
+											gap="sm"
+											style={{
+												gridTemplateColumns:
+													"repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+												alignItems: "center",
+											}}
+										>
+											<Button
+												variant="outline"
+												aria-label={`使用我的修改：${memoryFieldLabels[field]}`}
+												onClick={() => model.resolveField(field, conflict.mine[field])}
 											>
-												<LayerCard.Well>
-													<pre>
-														{field === "type"
-															? (memoryTypeLabels[conflict[side].type] ?? "未知类型")
-															: typeof conflict[side][field] === "string"
-																? conflict[side][field]
-																: JSON.stringify(conflict[side][field], null, 2)}
-													</pre>
-												</LayerCard.Well>
-											</SectionRule>
-										))}
-									</Grid>
-									<Grid
-										columns={1}
-										gap="sm"
-										style={{
-											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
-											alignItems: "center",
-										}}
-									>
-										<Button
-											variant="outline"
-											aria-label={`使用我的修改：${memoryFieldLabels[field]}`}
-											onClick={() => model.resolveField(field, conflict.mine[field])}
-										>
-											使用我的修改
-										</Button>
-										<Button
-											variant="outline"
-											aria-label={`使用最新版本：${memoryFieldLabels[field]}`}
-											onClick={() => model.resolveField(field, conflict.theirs[field])}
-										>
-											使用最新版本
-										</Button>
-									</Grid>
-									{field === "body" && (
-										<Field label="合并后的正文" htmlFor="merged-body">
-											<InputArea
-												id="merged-body"
-												value={conflict.merged.body}
-												rows={8}
-												onChange={(event) => model.resolveField("body", event.target.value)}
-											/>
-										</Field>
-									)}
-								</LayerCard.Body>
-							</LayerCard>
+												使用我的修改
+											</Button>
+											<Button
+												variant="outline"
+												aria-label={`使用最新版本：${memoryFieldLabels[field]}`}
+												onClick={() => model.resolveField(field, conflict.theirs[field])}
+											>
+												使用最新版本
+											</Button>
+										</Grid>
+										{field === "body" && (
+											<Field label="合并后的正文" htmlFor="merged-body">
+												<InputArea
+													id="merged-body"
+													value={conflict.merged.body}
+													rows={8}
+													onChange={(event) => model.resolveField("body", event.target.value)}
+												/>
+											</Field>
+										)}
+									</LayerCard.Body>
+								</LayerCard>
+							</SectionRule>
 						))}
 						{!conflict.fields.length && <p>所有修改均可自动合并。应用合并后，请检查内容并保存。</p>}
 						<Button disabled={conflict.unresolved.length > 0} onClick={() => model.finishMerge()}>
@@ -972,52 +975,55 @@ export function EditorPage() {
 						style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 24rem), 1fr))" }}
 						data-pane={params.get("pane") ?? "write"}
 					>
-						<LayerCard>
-							<LayerCard.Header asChild>
-								<h2>
-									<Label htmlFor="memory-body">Markdown 正文</Label>
-								</h2>
-							</LayerCard.Header>
-							<LayerCard.Body>
-								<InputArea
-									required
-									id="memory-body"
-									value={draft.body}
-									rows={24}
-									onChange={(event) => model.update({ body: event.target.value })}
-									onPaste={(event) => {
-										const files = [...event.clipboardData.files];
-										if (files.length) {
-											event.preventDefault();
-											void upload(files);
-										}
-									}}
-									onDragOver={(event) => {
-										if (event.dataTransfer.types.includes("Files")) event.preventDefault();
-									}}
-									onDrop={(event) => {
-										const files = [...event.dataTransfer.files];
-										if (files.length) {
-											event.preventDefault();
-											void upload(files);
-										}
-									}}
-								/>
-							</LayerCard.Body>
-						</LayerCard>
-						<LayerCard>
-							<LayerCard.Header asChild>
-								<h2>实时预览</h2>
-							</LayerCard.Header>
-							<LayerCard.Body>
-								<Markdown
-									source={draft.body}
-									hash={location.hash}
-									urls={attachments.urls}
-									onAttachment={(attachment) => reader.attachmentUrl(attachment)}
-								/>
-							</LayerCard.Body>
-						</LayerCard>
+						<SectionRule
+							variant="heading"
+							title={
+								<Label htmlFor="memory-body" style={{ font: "inherit" }}>
+									Markdown 正文
+								</Label>
+							}
+						>
+							<LayerCard>
+								<LayerCard.Body>
+									<InputArea
+										required
+										id="memory-body"
+										value={draft.body}
+										rows={24}
+										onChange={(event) => model.update({ body: event.target.value })}
+										onPaste={(event) => {
+											const files = [...event.clipboardData.files];
+											if (files.length) {
+												event.preventDefault();
+												void upload(files);
+											}
+										}}
+										onDragOver={(event) => {
+											if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+										}}
+										onDrop={(event) => {
+											const files = [...event.dataTransfer.files];
+											if (files.length) {
+												event.preventDefault();
+												void upload(files);
+											}
+										}}
+									/>
+								</LayerCard.Body>
+							</LayerCard>
+						</SectionRule>
+						<SectionRule variant="heading" title="实时预览">
+							<LayerCard>
+								<LayerCard.Body>
+									<Markdown
+										source={draft.body}
+										hash={location.hash}
+										urls={attachments.urls}
+										onAttachment={(attachment) => reader.attachmentUrl(attachment)}
+									/>
+								</LayerCard.Body>
+							</LayerCard>
+						</SectionRule>
 					</Grid>
 					<FileDropzone
 						label="上传附件"
@@ -1159,148 +1165,158 @@ export function HistoryPage() {
 				retry={() => void model.loadFromUrl(params)}
 			/>
 			{state.diff && (
-				<LayerCard>
-					<LayerCard.Header asChild>
-						<h2>
+				<SectionRule
+					variant="heading"
+					title={
+						<>
 							变更 / 第 {state.diff.from} 版至第 {state.diff.to} 版
-						</h2>
-					</LayerCard.Header>
-					<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
-						{state.diff.fields
-							.filter((field) => field.field !== "body")
-							.map((field) => (
-								<SectionRule key={field.field} title={memoryFieldLabels[field.field] ?? "其他字段"}>
-									<Grid
-										columns={1}
-										className="octo-memory-editor"
-										style={{
-											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 24rem), 1fr))",
-										}}
+						</>
+					}
+				>
+					<LayerCard>
+						<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
+							{state.diff.fields
+								.filter((field) => field.field !== "body")
+								.map((field) => (
+									<SectionRule
+										key={field.field}
+										title={memoryFieldLabels[field.field] ?? "其他字段"}
 									>
-										{(["from", "to"] as const).map((side) =>
-											field[side] !== null && typeof field[side] === "object" ? (
-												<CodeBlock
-													key={side}
-													title={side === "from" ? "修改前" : "修改后"}
-													copyable={false}
-												>
-													{JSON.stringify(field[side], null, 2)}
-												</CodeBlock>
-											) : (
-												<LayerCard.Well key={side}>
-													<p className="octo-memory-value">
-														{field.field === "type"
-															? (memoryTypeLabels[String(field[side])] ?? "未知类型")
-															: field.field === "event_time" && field[side] !== null
-																? `${formatDateTime(typeof field[side] === "number" ? field[side] : String(field[side]), "UTC")} UTC`
-																: String(field[side] ?? "未设置")}
-													</p>
-												</LayerCard.Well>
-											),
-										)}
-									</Grid>
-								</SectionRule>
-							))}
-						{state.diff.body.hunks.length > 0 ? (
-							<Grid columns={1} className="octo-memory-overflow">
-								<Table className="octo-memory-diff" aria-label="正文差异">
-									<TableHeader>
-										<TableRow>
-											<TableHead textAlign="end" style={{ width: "7ch" }}>
-												旧行号
-											</TableHead>
-											<TableHead textAlign="end" style={{ width: "7ch" }}>
-												新行号
-											</TableHead>
-											{params.get("diff") === "split" ? (
-												<>
-													<TableHead>修改前</TableHead>
-													<TableHead>修改后</TableHead>
-												</>
-											) : (
-												<TableHead>变更</TableHead>
+										<Grid
+											columns={1}
+											className="octo-memory-editor"
+											style={{
+												gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 24rem), 1fr))",
+											}}
+										>
+											{(["from", "to"] as const).map((side) =>
+												field[side] !== null && typeof field[side] === "object" ? (
+													<CodeBlock
+														key={side}
+														title={side === "from" ? "修改前" : "修改后"}
+														copyable={false}
+													>
+														{JSON.stringify(field[side], null, 2)}
+													</CodeBlock>
+												) : (
+													<LayerCard.Well key={side}>
+														<p className="octo-memory-value">
+															{field.field === "type"
+																? (memoryTypeLabels[String(field[side])] ?? "未知类型")
+																: field.field === "event_time" && field[side] !== null
+																	? `${formatDateTime(typeof field[side] === "number" ? field[side] : String(field[side]), "UTC")} UTC`
+																	: String(field[side] ?? "未设置")}
+														</p>
+													</LayerCard.Well>
+												),
 											)}
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{diffLines(state.diff.body.hunks).map((line) => (
-											<TableRow key={line.key} data-change={line.kind}>
-												<TableCell textAlign="end" className="octo-muted tabular-nums">
-													{line.oldLine}
-												</TableCell>
-												<TableCell textAlign="end" className="octo-muted tabular-nums">
-													{line.newLine}
-												</TableCell>
+										</Grid>
+									</SectionRule>
+								))}
+							{state.diff.body.hunks.length > 0 ? (
+								<Grid columns={1} className="octo-memory-overflow">
+									<Table className="octo-memory-diff" aria-label="正文差异">
+										<TableHeader>
+											<TableRow>
+												<TableHead textAlign="end" style={{ width: "7ch" }}>
+													旧行号
+												</TableHead>
+												<TableHead textAlign="end" style={{ width: "7ch" }}>
+													新行号
+												</TableHead>
 												{params.get("diff") === "split" ? (
 													<>
-														<TableCell>
-															<code>{line.kind === "added" ? "" : line.text}</code>
-														</TableCell>
-														<TableCell>
-															<code>{line.kind === "removed" ? "" : line.text}</code>
-														</TableCell>
+														<TableHead>修改前</TableHead>
+														<TableHead>修改后</TableHead>
 													</>
 												) : (
-													<TableCell>
-														<code>
-															{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}
-															{line.text}
-														</code>
-													</TableCell>
+													<TableHead>变更</TableHead>
 												)}
 											</TableRow>
-										))}
-									</TableBody>
-								</Table>
+										</TableHeader>
+										<TableBody>
+											{diffLines(state.diff.body.hunks).map((line) => (
+												<TableRow key={line.key} data-change={line.kind}>
+													<TableCell textAlign="end" className="octo-muted tabular-nums">
+														{line.oldLine}
+													</TableCell>
+													<TableCell textAlign="end" className="octo-muted tabular-nums">
+														{line.newLine}
+													</TableCell>
+													{params.get("diff") === "split" ? (
+														<>
+															<TableCell>
+																<code>{line.kind === "added" ? "" : line.text}</code>
+															</TableCell>
+															<TableCell>
+																<code>{line.kind === "removed" ? "" : line.text}</code>
+															</TableCell>
+														</>
+													) : (
+														<TableCell>
+															<code>
+																{line.kind === "added"
+																	? "+ "
+																	: line.kind === "removed"
+																		? "- "
+																		: "  "}
+																{line.text}
+															</code>
+														</TableCell>
+													)}
+												</TableRow>
+											))}
+										</TableBody>
+									</Table>
+								</Grid>
+							) : (
+								<p className="octo-muted">正文未变化</p>
+							)}
+							{!state.diff.fields.length && <p>这两个版本之间没有差异。</p>}
+						</LayerCard.Body>
+					</LayerCard>
+				</SectionRule>
+			)}
+			<SectionRule variant="heading" title="版本快照">
+				<LayerCard>
+					<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
+						{[...state.versions].reverse().map((version) => (
+							<Grid
+								columns={1}
+								gap="sm"
+								style={{
+									gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
+									alignItems: "center",
+								}}
+								key={version.version}
+							>
+								<strong>第 {version.version} 版</strong>
+								<span>
+									<TagBadge
+										name={memoryOperationLabels[version.op] ?? "其他操作"}
+										color="info"
+										size="sm"
+									/>{" "}
+									{version.actor === "admin" ? "管理员" : version.actor}
+								</span>
+								<time dateTime={version.created_at}>{formatDateTime(version.created_at)}</time>
+								<Button
+									variant="outline"
+									aria-label={`回滚到第 ${version.version} 版`}
+									disabled={version.version === state.current?.version || state.saving}
+									onClick={(event) => {
+										rollbackOpener.current = event.currentTarget;
+										model.requestRollback(version.version);
+									}}
+								>
+									<RotateCcw aria-hidden="true" />
+									回滚
+								</Button>
 							</Grid>
-						) : (
-							<p className="octo-muted">正文未变化</p>
-						)}
-						{!state.diff.fields.length && <p>这两个版本之间没有差异。</p>}
+						))}
 					</LayerCard.Body>
 				</LayerCard>
-			)}
-			<LayerCard>
-				<LayerCard.Header asChild>
-					<h2>版本快照</h2>
-				</LayerCard.Header>
-				<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
-					{[...state.versions].reverse().map((version) => (
-						<Grid
-							columns={1}
-							gap="sm"
-							style={{
-								gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
-								alignItems: "center",
-							}}
-							key={version.version}
-						>
-							<strong>第 {version.version} 版</strong>
-							<span>
-								<TagBadge
-									name={memoryOperationLabels[version.op] ?? "其他操作"}
-									color="info"
-									size="sm"
-								/>{" "}
-								{version.actor === "admin" ? "管理员" : version.actor}
-							</span>
-							<time dateTime={version.created_at}>{formatDateTime(version.created_at)}</time>
-							<Button
-								variant="outline"
-								aria-label={`回滚到第 ${version.version} 版`}
-								disabled={version.version === state.current?.version || state.saving}
-								onClick={(event) => {
-									rollbackOpener.current = event.currentTarget;
-									model.requestRollback(version.version);
-								}}
-							>
-								<RotateCcw aria-hidden="true" />
-								回滚
-							</Button>
-						</Grid>
-					))}
-				</LayerCard.Body>
-			</LayerCard>
+			</SectionRule>
 			<AlertDialog
 				open={state.rollbackTarget !== null}
 				onOpenChange={(open) => {

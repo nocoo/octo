@@ -96,10 +96,12 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		expect(html).toContain('aria-selected="true"');
 		expect(html).toContain('data-memory-link="m1"');
 	});
-	it("gives memory reader side cards semantic section headings", () => {
+	it("uses external section headings and omits the redundant reader body heading", () => {
 		const html = render(MemoryPage, "/memories/m1");
-		for (const title of ["正文", "详细信息", "附件", "版本时间线"])
+		for (const title of ["详细信息", "附件", "版本时间线"])
 			expect(html).toMatch(new RegExp(`<h2\\b[^>]*>${title}</h2>`));
+		expect(html).not.toMatch(/<h2\b[^>]*>正文<\/h2>/);
+		expect(html).not.toContain('data-slot="card-header"');
 	});
 	it.each([
 		{ Page: MemoryPage, path: "/memories/m1" },
@@ -185,7 +187,8 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		const html = render(EditorPage, "/memories/m1/edit");
 		expect(html).toContain("octo-memory-metadata");
 		expect(html).toContain("grid-column:1 / -1");
-		expect(html.match(/data-slot="card-header"/g)).toHaveLength(2);
+		expect(html).not.toContain('data-slot="card-header"');
+		expect(html.match(/<h2\b/g)).toHaveLength(2);
 	});
 	it("wraps ordinary history values without nested preformatted padding", () => {
 		const long = "unbroken".repeat(120);

@@ -12,6 +12,7 @@ const containers = new Set([
 	"nav",
 	"header",
 	"footer",
+	"h2",
 ]);
 const controls = new Set(["button", "input", "select", "textarea", "details", "summary"]);
 const spacing = /^(?:padding|margin|gap|rowGap|columnGap)/;

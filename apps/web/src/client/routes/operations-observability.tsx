@@ -265,101 +265,98 @@ export function UsagePage() {
 					gap="sm"
 					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))" }}
 				>
-					<LayerCard>
-						<LayerCard.Header asChild>
-							<h2>调用次数</h2>
-						</LayerCard.Header>
-						<LayerCard.Body>
-							<Grid columns={1} gap="sm">
-								<BarChart
-									className="ops-plot"
-									showAxes
-									data={model.chart}
-									series={[{ key: "calls", label: "调用次数" }]}
-									ariaLabel="各密钥的每日调用次数"
-									summary="每根柱代表一个密钥一天内的值，不跨密钥汇总。"
-									dataAlternative={alternative}
-								/>
-							</Grid>
-						</LayerCard.Body>
-					</LayerCard>
-					<LayerCard>
-						<LayerCard.Header asChild>
-							<h2>错误率</h2>
-						</LayerCard.Header>
-						<LayerCard.Body>
-							<Grid columns={1} gap="sm">
-								<BarChart
-									className="ops-plot"
-									showAxes
-									yDomain={[0, 100]}
-									data={model.chart}
-									series={[{ key: "error_rate", label: "错误率（%）" }]}
-									ariaLabel="各密钥的每日错误率"
-									valueFormatter={(value) => `${value.toFixed(1)}%`}
-									summary="各密钥每天错误调用所占比例。"
-									dataAlternative={alternative}
-								/>
-							</Grid>
-						</LayerCard.Body>
-					</LayerCard>
+					<SectionRule variant="heading" title="调用次数">
+						<LayerCard>
+							<LayerCard.Body>
+								<Grid columns={1} gap="sm">
+									<BarChart
+										className="ops-plot"
+										showAxes
+										data={model.chart}
+										series={[{ key: "calls", label: "调用次数" }]}
+										ariaLabel="各密钥的每日调用次数"
+										summary="每根柱代表一个密钥一天内的值，不跨密钥汇总。"
+										dataAlternative={alternative}
+									/>
+								</Grid>
+							</LayerCard.Body>
+						</LayerCard>
+					</SectionRule>
+					<SectionRule variant="heading" title="错误率">
+						<LayerCard>
+							<LayerCard.Body>
+								<Grid columns={1} gap="sm">
+									<BarChart
+										className="ops-plot"
+										showAxes
+										yDomain={[0, 100]}
+										data={model.chart}
+										series={[{ key: "error_rate", label: "错误率（%）" }]}
+										ariaLabel="各密钥的每日错误率"
+										valueFormatter={(value) => `${value.toFixed(1)}%`}
+										summary="各密钥每天错误调用所占比例。"
+										dataAlternative={alternative}
+									/>
+								</Grid>
+							</LayerCard.Body>
+						</LayerCard>
+					</SectionRule>
 				</Grid>
 			) : null}
-			<LayerCard id="usage-daily-table" padding="none">
-				<LayerCard.Header asChild>
-					<h2>每日用量与图表数据</h2>
-				</LayerCard.Header>
-				{state.loading && state.items.length === 0 ? (
-					<LayerCard.Loading label="正在加载每日用量" />
-				) : (
-					<DataTable
-						className="octo-table"
-						aria-label="每日用量表"
-						data={model.rows}
-						columns={columns}
-						getRowId={(row) => `${row.key_id}/${row.day}`}
-						edge="attached"
-						error={state.items.length === 0 ? state.error : null}
-						retryLabel="重试"
-						onRetry={() => void model.load(search)}
-						empty={
-							state.loaded ? (
-								<LayerCard.Empty
-									className="octo-empty octo-empty--page"
-									icon={<ChartNoAxesCombined aria-hidden="true" />}
-									title="此范围内暂无用量"
-									description="暂无每日用量记录。请调整筛选或发起接口请求。"
-									action={
-										<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
-											清除筛选
-										</Button>
-									}
-								/>
-							) : (
-								"每日用量尚未加载，请刷新。"
-							)
-						}
-					/>
-				)}
-				<LayerCard.Footer>
-					<Button
-						icon={<ArrowDown aria-hidden="true" />}
-						variant="outline"
-						disabled={!state.nextCursor || state.loading}
-						loading={state.loadingMore}
-						onClick={() => void model.loadMore()}
-					>
-						加载更多
-					</Button>
-					<span className="text-basalt-sm text-basalt-muted-foreground">
-						{state.nextCursor
-							? "还有更多记录"
-							: state.loaded && !state.loading && !state.error
-								? "已加载全部查询结果"
-								: "查询是否完成尚不确定"}
-					</span>
-				</LayerCard.Footer>
-			</LayerCard>
+			<SectionRule variant="heading" title="每日用量与图表数据">
+				<LayerCard id="usage-daily-table" padding="none">
+					{state.loading && state.items.length === 0 ? (
+						<LayerCard.Loading label="正在加载每日用量" />
+					) : (
+						<DataTable
+							className="octo-table"
+							aria-label="每日用量表"
+							data={model.rows}
+							columns={columns}
+							getRowId={(row) => `${row.key_id}/${row.day}`}
+							edge="attached"
+							error={state.items.length === 0 ? state.error : null}
+							retryLabel="重试"
+							onRetry={() => void model.load(search)}
+							empty={
+								state.loaded ? (
+									<LayerCard.Empty
+										className="octo-empty octo-empty--page"
+										icon={<ChartNoAxesCombined aria-hidden="true" />}
+										title="此范围内暂无用量"
+										description="暂无每日用量记录。请调整筛选或发起接口请求。"
+										action={
+											<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
+												清除筛选
+											</Button>
+										}
+									/>
+								) : (
+									"每日用量尚未加载，请刷新。"
+								)
+							}
+						/>
+					)}
+					<LayerCard.Footer>
+						<Button
+							icon={<ArrowDown aria-hidden="true" />}
+							variant="outline"
+							disabled={!state.nextCursor || state.loading}
+							loading={state.loadingMore}
+							onClick={() => void model.loadMore()}
+						>
+							加载更多
+						</Button>
+						<span className="text-basalt-sm text-basalt-muted-foreground">
+							{state.nextCursor
+								? "还有更多记录"
+								: state.loaded && !state.loading && !state.error
+									? "已加载全部查询结果"
+									: "查询是否完成尚不确定"}
+						</span>
+					</LayerCard.Footer>
+				</LayerCard>
+			</SectionRule>
 		</Grid>
 	);
 }

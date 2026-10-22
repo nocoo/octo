@@ -58,6 +58,17 @@ describe("profile read states", () => {
 			</MemoryRouter>,
 		);
 	}
+	it("places application information and profile headings outside their cards", () => {
+		const html = render();
+		for (const title of ["应用信息", "嵌入配置"]) {
+			expect(html).toMatch(
+				new RegExp(
+					`<section[^>]*space-y-basalt-layout"[^>]*><div[^>]*><div[^>]*><h2[^>]*text-basalt-xl[^>]*>${title}</h2></div></div><div[^>]*data-basalt-surface=""`,
+				),
+			);
+		}
+	});
+
 	it("gives profile columns minimum readable widths without a second scroll container", () => {
 		fixture.settings = {
 			loaded: true,

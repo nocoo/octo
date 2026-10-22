@@ -118,6 +118,19 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+it("places usage chart and table headings outside their cards and preserves the table anchor", () => {
+	fixture.usage = { loaded: true, items: [base] };
+	const html = render("usage");
+	for (const title of ["调用次数", "错误率", "每日用量与图表数据"]) {
+		expect(html).toMatch(
+			new RegExp(
+				`<section[^>]*space-y-basalt-layout"[^>]*><div[^>]*><div[^>]*><h2[^>]*text-basalt-xl[^>]*>${title}</h2></div></div><div[^>]*data-basalt-surface=""`,
+			),
+		);
+	}
+	expect(html).toMatch(/<div[^>]*data-basalt-surface=""[^>]*id="usage-daily-table"/);
+});
+
 describe("usage table sorting", () => {
 	it("decorates the usage heading and keeps all numeric columns tabular and end-aligned", () => {
 		fixture.usage = { loaded: true, items: [base] };

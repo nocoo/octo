@@ -55,6 +55,30 @@ it("uses an accessible Basalt disclosure for the chart table alternative", () =>
 	expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>[\s\S]*?查看活动数据表/);
 });
 
+it("places every functional heading outside its card on the same-level surface", () => {
+	const html = renderToStaticMarkup(
+		<ThemeProvider persist={false}>
+			<MemoryRouter>
+				<OverviewPage />
+			</MemoryRouter>
+		</ThemeProvider>,
+	);
+	for (const title of [
+		"知识入口",
+		"智能体活动 · 按密钥小时汇总",
+		"调用趋势",
+		"最近变更",
+		"最近更新的记忆",
+	]) {
+		expect(html).toMatch(
+			new RegExp(
+				`<section[^>]*space-y-basalt-layout"[^>]*><div[^>]*><div[^>]*><h2[^>]*text-basalt-xl[^>]*>${title}</h2></div></div><div[^>]*data-basalt-surface=""`,
+			),
+		);
+	}
+	expect(html.slice(html.indexOf("<section")).match(/data-basalt-surface=""/g)).toHaveLength(5);
+});
+
 it("passes stable colors through the installed chart descriptor contract", () => {
 	const one = activityChartSeries(activitySeries([{ day: "2026-10-17", key_id: "b", calls: 3 }]));
 	const many = activityChartSeries(

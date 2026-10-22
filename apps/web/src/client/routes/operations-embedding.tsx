@@ -426,19 +426,18 @@ export function SettingsPage() {
 					</>
 				}
 			/>
-			<LayerCard>
-				<LayerCard.Header asChild>
-					<h2>应用信息</h2>
-				</LayerCard.Header>
-				<LayerCard.Body>
-					<DescriptionList>
-						<DescriptionList.Item term="应用">Octo</DescriptionList.Item>
-						<DescriptionList.Item term="活跃嵌入配置">
-							{state.loaded ? (state.activeProfile ?? "尚无活跃配置") : "尚未加载"}
-						</DescriptionList.Item>
-					</DescriptionList>
-				</LayerCard.Body>
-			</LayerCard>
+			<SectionRule variant="heading" title="应用信息">
+				<LayerCard>
+					<LayerCard.Body>
+						<DescriptionList>
+							<DescriptionList.Item term="应用">Octo</DescriptionList.Item>
+							<DescriptionList.Item term="活跃嵌入配置">
+								{state.loaded ? (state.activeProfile ?? "尚无活跃配置") : "尚未加载"}
+							</DescriptionList.Item>
+						</DescriptionList>
+					</LayerCard.Body>
+				</LayerCard>
+			</SectionRule>
 			{state.error && (
 				<p role="alert">
 					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}{" "}
