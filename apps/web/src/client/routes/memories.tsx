@@ -1052,7 +1052,9 @@ export function HistoryPage() {
 	const from = Number(params.get("from"));
 	const to = Number(params.get("to"));
 	useEffect(() => {
+		let active = true;
 		void model.loadFromUrl(params).then(() => {
+			if (!active) return;
 			if (!model.state.error && model.state.current && (!params.has("from") || !params.has("to"))) {
 				const next = new URLSearchParams(params);
 				if (!params.has("from"))
@@ -1064,6 +1066,9 @@ export function HistoryPage() {
 				setParams(next, { replace: true });
 			}
 		});
+		return () => {
+			active = false;
+		};
 	}, [model, params, setParams]);
 	useEffect(() => {
 		if (state.notice) toast.success(state.notice);
