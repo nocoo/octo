@@ -134,9 +134,31 @@
 .octo-markdown :is(.hljs-number, .hljs-built_in, .hljs-type) {
 	color: hsl(var(--basalt-warning));
 }
+.octo-island:has(> .octo-memory-reader) {
+	display: flex;
+	flex-direction: column;
+}
 .octo-memory-reader {
 	container-name: memory-reader;
 	container-type: inline-size;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+}
+.octo-memory-meta,
+.octo-memory-meta-group {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	min-inline-size: 0;
+	gap: var(--basalt-space-content-gap);
+}
+.octo-memory-meta {
+	gap: var(--basalt-space-layout-lg);
+}
+.octo-memory-meta [data-tag-color] {
+	display: inline-block;
+	overflow-wrap: anywhere;
 }
 .octo-memory-layout {
 	--octo-memory-columns: minmax(0, 1fr);
@@ -155,7 +177,11 @@
 }
 @container memory-reader (min-width: 60rem) {
 	.octo-memory-layout {
-		--octo-memory-columns: minmax(0, 1fr) minmax(13rem, 18rem);
+		--octo-memory-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+		flex: 1;
+	}
+	.octo-memory-body {
+		align-self: stretch;
 	}
 	.octo-memory-aside {
 		position: sticky;

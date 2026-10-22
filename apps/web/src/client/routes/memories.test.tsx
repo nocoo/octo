@@ -101,6 +101,27 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		for (const title of ["正文", "详细信息", "附件", "版本时间线"])
 			expect(html).toMatch(new RegExp(`<h2\\b[^>]*>${title}</h2>`));
 	});
+	it.each([
+		{ Page: MemoryPage, path: "/memories/m1" },
+		{ Page: MemoriesPage, path: "/memories?view=cards" },
+	])("labels space, type and tags as separate groups at $path", ({ Page, path }) => {
+		const html = render(Page, path);
+		for (const [label, value] of [
+			["空间", "notes"],
+			["类型", "笔记"],
+			["标签", "work"],
+		]) {
+			expect(html).toMatch(
+				new RegExp(`role="group" aria-label="${label}"[^>]*>[\\s\\S]*?${value}`),
+			);
+		}
+	});
+	it("explicitly distinguishes an empty tag collection from the memory type", () => {
+		overrides.list = { items: [{ ...memory, tags: [] }] };
+		const html = render(MemoriesPage, "/memories?view=cards");
+		expect(html).toContain("无标签");
+		expect(html).toContain("笔记");
+	});
 	it("reveals one full-width filter form below the header for active URL filters", () => {
 		const html = render(
 			MemoriesPage,
@@ -225,8 +246,19 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		(path) => {
 			overrides.list = { items: [{ ...memory, space: "s".repeat(64), tags: ["t".repeat(64)] }] };
 			const html = render(MemoriesPage, path);
-			const gridStyle = html.match(/<div[^>]*style="([^"]*)"[^>]*><span[^>]*>s{64}<\/span>/)?.[1];
-			expect(gridStyle).toContain("overflow-wrap:anywhere");
+			if (path.endsWith("cards")) {
+				expect(html).toContain("octo-memory-meta");
+				const css = readFileSync(
+					new URL("../components/layout/markdown.css", import.meta.url),
+					"utf8",
+				);
+				expect(css).toMatch(
+					/\.octo-memory-meta \[data-tag-color\][^{]*\{[^}]*overflow-wrap: anywhere/,
+				);
+			} else {
+				const gridStyle = html.match(/<div[^>]*style="([^"]*)"[^>]*><span[^>]*>s{64}<\/span>/)?.[1];
+				expect(gridStyle).toContain("overflow-wrap:anywhere");
+			}
 			expect(html).toContain("s".repeat(64));
 			expect(html).toContain("t".repeat(64));
 		},

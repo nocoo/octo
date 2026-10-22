@@ -129,24 +129,31 @@ function Feedback({
 	);
 }
 
-function MemoryTags({ memory }: { memory: Pick<Memory, "tags" | "space" | "type"> }) {
+function MemoryMetadata({ memory }: { memory: Pick<Memory, "tags" | "space" | "type"> }) {
 	return (
-		<Grid
-			columns={1}
-			gap="sm"
-			style={{
-				display: "flex",
-				flexWrap: "wrap",
-				gap: "var(--basalt-space-content-gap)",
-				alignItems: "center",
-				overflowWrap: "anywhere",
-			}}
-		>
-			<TagBadge name={memory.space} size="sm" />
-			<MemoryTypeBadge type={memory.type} />
-			{memory.tags.map((tag) => (
-				<TagBadge key={tag} name={tag} size="sm" />
-			))}
+		<Grid columns={1} className="octo-memory-meta">
+			<Grid columns={1} role="group" aria-label="空间" className="octo-memory-meta-group">
+				<span className="octo-muted" aria-hidden="true">
+					空间
+				</span>
+				<TagBadge name={memory.space} size="sm" />
+			</Grid>
+			<Grid columns={1} role="group" aria-label="类型" className="octo-memory-meta-group">
+				<span className="octo-muted" aria-hidden="true">
+					类型
+				</span>
+				<MemoryTypeBadge type={memory.type} />
+			</Grid>
+			<Grid columns={1} role="group" aria-label="标签" className="octo-memory-meta-group">
+				<span className="octo-muted" aria-hidden="true">
+					标签
+				</span>
+				{memory.tags.length ? (
+					memory.tags.map((tag) => <TagBadge key={tag} name={tag} size="sm" />)
+				) : (
+					<span className="octo-muted">无标签</span>
+				)}
+			</Grid>
 		</Grid>
 	);
 }
@@ -294,7 +301,7 @@ export function MemoriesPage() {
 								{row(memory, true)}
 							</LayerCard.Header>
 							<LayerCard.Body style={{ display: "grid", gap: "var(--basalt-space-layout)" }}>
-								<MemoryTags memory={memory} />
+								<MemoryMetadata memory={memory} />
 								<p className="octo-record-preview octo-muted">{memory.body.slice(0, 180)}</p>
 								<RecordTime value={memory.updated_at} />
 							</LayerCard.Body>
@@ -551,7 +558,7 @@ export function MemoryPage() {
 					/>
 				</SheetContent>
 			</Sheet>
-			{memory && <MemoryTags memory={memory} />}
+			{memory && <MemoryMetadata memory={memory} />}
 			<Feedback error={state.error} loading={state.loading} retry={() => void model.load()} />
 			{memory && (
 				<Grid
@@ -559,7 +566,7 @@ export function MemoryPage() {
 					className="octo-memory-layout"
 					style={{ gridTemplateColumns: "var(--octo-memory-columns)", alignItems: "start" }}
 				>
-					<LayerCard>
+					<LayerCard className="octo-memory-body">
 						<LayerCard.Header asChild>
 							<h2>正文</h2>
 						</LayerCard.Header>

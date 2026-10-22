@@ -1,5 +1,51 @@
 import { capture, expect, test } from "./fixtures";
 
+test("short memory bodies fill the desktop rail beside a wider information sidebar", async ({
+	page,
+	admin,
+}, info) => {
+	const memory = await admin.memory(
+		"# Short note\n\nA short body should not leave an empty column.",
+	);
+	for (const height of [900, 1400]) {
+		await page.setViewportSize({ width: 1440, height });
+		await page.goto(`/memories/${memory.id}`);
+		await expect(page.getByRole("heading", { name: "正文", exact: true })).toBeVisible();
+		const metadata = page.locator(".octo-memory-reader > .octo-memory-meta");
+		await expect(metadata.getByRole("group", { name: "类型", exact: true })).toHaveText("类型笔记");
+		await expect(metadata.getByRole("group", { name: "标签", exact: true })).toContainText(
+			"field-notes",
+		);
+		await expect(metadata.getByRole("group", { name: "标签", exact: true })).not.toContainText(
+			"笔记",
+		);
+		const geometry = await page.locator(".octo-memory-layout").evaluate((layout) => {
+			const body = layout.firstElementChild;
+			const aside = layout.querySelector(".octo-memory-aside");
+			const island = layout.closest(".octo-island");
+			if (!body || !aside || !island) throw new Error("Missing reader columns");
+			return {
+				body: body.getBoundingClientRect().toJSON(),
+				aside: aside.getBoundingClientRect().toJSON(),
+				bottom:
+					island.getBoundingClientRect().bottom -
+					Number.parseFloat(getComputedStyle(island).paddingBottom),
+			};
+		});
+		expect(geometry.aside.width).toBe(384);
+		expect(geometry.body.width).toBeGreaterThan(400);
+		expect(geometry.body.bottom).toBeGreaterThanOrEqual(geometry.aside.bottom - 1);
+		expect(geometry.body.bottom).toBeGreaterThanOrEqual(geometry.bottom - 1);
+		await capture(page, info, `reader-fill-${height}`);
+	}
+	await page.setViewportSize({ width: 390, height: 844 });
+	const body = await page.locator(".octo-memory-layout > :first-child").boundingBox();
+	const aside = await page.locator(".octo-memory-aside").boundingBox();
+	if (!body || !aside) throw new Error("Missing mobile reader columns");
+	expect(aside.x).toBeCloseTo(body.x, 0);
+	expect(aside.y).toBeGreaterThanOrEqual(body.y + body.height);
+});
+
 test("reader protects the title and prose at intermediate widths and navigates its TOC", async ({
 	page,
 	admin,
