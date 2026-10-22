@@ -1,5 +1,13 @@
 # Retrospective
 
+### 2026-10-22 - Preserve filter drafts across collapsed sections
+
+Moving Apply into an always-visible filter bar made hidden numeric fields reachable by submission. A Chromium regression reproduced native validation blocking submission without revealing the invalid field. The form now checks validity, synchronously opens the advanced section, and then asks the browser to report and focus the invalid control. Advanced controls remain mounted so collapsing them never discards their submitted values. Applied chips come from URL state, not unsaved controls, and removing one chip does not reopen an already-collapsed panel while other advanced conditions remain.
+
+Freeform multiselect options also initially duplicated a known display name as a new identifier. A failing unit test established the ambiguity; matching known labels now suppresses that extra candidate while unknown URL selections remain editable. Several browser assertions still assumed a text input for spaces or a direct child header after earlier composition changes; update those selectors to the real controls while retaining value, visibility, focus and history assertions. Typecheck also rejected an assumed Banner variant; inspect installed component declarations instead of guessing variant names.
+
+Screenshot inspection then found long space identifiers painting outside their inline-flex badges after separating the metadata columns. Table and badge scroll widths alone did not detect the painted text overflow. A failing Chromium check now measures text Range rectangles against the badge bounds; the affected record tables use wrapping inline-block badges without truncating their values.
+
 ### 2026-10-22 - Verify shared navigation in its real host
 
 Moving Back into the shared page header introduced router hooks into two SSR test suites that previously rendered their pages without a router. The initial unit run failed until those fixtures supplied MemoryRouter, matching the application host. Keep the existing PageHeader filter slot intact when composing navigation; moving filters outside it also broke the search-header contract. Browser checks now cover title/subtitle alignment, direct-entry fallback, guarded history navigation and command-dialog focus restoration.

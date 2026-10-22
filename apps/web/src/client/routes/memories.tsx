@@ -220,29 +220,24 @@ export function MemoriesPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<MemoryFilters params={params} onChange={setParams}>
-				{(filterTrigger) => (
-					<PageHeader
-						title="记忆库"
-						actions={
-							<>
-								{filterTrigger}
-								<ViewSwitch
-									label="显示方式"
-									value={cards ? "cards" : "list"}
-									options={[
-										{ value: "list", label: "列表" },
-										{ value: "cards", label: "卡片" },
-									]}
-									onChange={(value) => {
-										const next = new URLSearchParams(params);
-										next.set("view", value);
-										setParams(next);
-									}}
-								/>
-							</>
-						}
-					/>
-				)}
+				<PageHeader
+					title="记忆库"
+					actions={
+						<ViewSwitch
+							label="显示方式"
+							value={cards ? "cards" : "list"}
+							options={[
+								{ value: "list", label: "列表" },
+								{ value: "cards", label: "卡片" },
+							]}
+							onChange={(value) => {
+								const next = new URLSearchParams(params);
+								next.set("view", value);
+								setParams(next);
+							}}
+						/>
+					}
+				/>
 			</MemoryFilters>
 			<SectionRule variant="heading" title={cards ? "记忆卡片" : "记忆列表"} />
 			<LibraryBulkActions
@@ -337,8 +332,9 @@ export function MemoriesPage() {
 												}
 											/>
 										</TableHead>
-										<TableHead style={{ width: "40%" }}>标题</TableHead>
-										<TableHead>空间 / 标签</TableHead>
+										<TableHead style={{ width: "35%" }}>标题 / 类型</TableHead>
+										<TableHead style={{ width: "10rem" }}>空间</TableHead>
+										<TableHead>标签</TableHead>
 										<TableHead
 											textAlign="end"
 											className="pe-basalt-table-edge"
@@ -371,9 +367,24 @@ export function MemoriesPage() {
 												>
 													{memory.title}
 												</MemoryLink>
+												<Grid columns={1} className="octo-memory-type">
+													<MemoryTypeBadge type={memory.type} />
+												</Grid>
 											</TableCell>
 											<TableCell>
-												<MemoryTags memory={memory} />
+												<Grid
+													columns={1}
+													style={{ overflowWrap: "anywhere", justifyItems: "start" }}
+												>
+													<TagBadge name={memory.space} size="sm" />
+												</Grid>
+											</TableCell>
+											<TableCell>
+												<Grid columns={1} className="octo-memory-tags">
+													{memory.tags.map((tag) => (
+														<TagBadge key={tag} name={tag} size="sm" />
+													))}
+												</Grid>
 											</TableCell>
 											<TableCell
 												textAlign="end"

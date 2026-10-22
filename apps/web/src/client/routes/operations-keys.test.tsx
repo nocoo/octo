@@ -208,6 +208,26 @@ describe("revoked key deletion", () => {
 });
 
 describe("key table sorting", () => {
+	it("prioritizes identity, status and authorization before activity and expiry without hiding actions", () => {
+		const html = render();
+		expect(fixture.table?.columns.map((column) => column.id)).toEqual([
+			"name",
+			"status",
+			"role",
+			"last",
+			"usage",
+			"expiry",
+			"actions",
+		]);
+		const actions = fixture.table?.columns.find((column) => column.id === "actions");
+		expect(actions).toMatchObject({ width: "1%", sortable: false, textAlign: "end" });
+		for (const name of ["Zulu", "Alpha"]) {
+			for (const action of ["编辑", "轮换", "撤销"])
+				expect(html).toContain(`aria-label="${action} ${name}"`);
+		}
+		expect(html).toContain('aria-label="永久删除 Beta"');
+		expect(html).toContain("ops-key-actions");
+	});
 	it("localizes role, scope, operation and status displays without changing user names", () => {
 		const html = render();
 		for (const text of [

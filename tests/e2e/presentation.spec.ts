@@ -30,18 +30,30 @@ test("record tables keep long names and all key columns inside the desktop rail"
 			rail: element.parentElement?.clientWidth ?? 0,
 		}));
 		expect(geometry.width).toBeLessThanOrEqual(geometry.rail);
+		if (path === "/memories") {
+			const badgesFit = await table.locator("[data-tag-color]").evaluateAll((badges) =>
+				badges.every((badge) => {
+					const range = document.createRange();
+					range.selectNodeContents(badge);
+					return [...range.getClientRects()].every(
+						(rect) => rect.right <= badge.getBoundingClientRect().right + 1,
+					);
+				}),
+			);
+			expect(badgesFit).toBe(true);
+		}
 		await capture(page, info, path === "/keys" ? "keys-long-name" : "memories-long-title");
 	}
 });
 
-test("memory view controls align and keep a required keyboard-operable selection", async ({
+test("memory filter actions align and view controls keep keyboard-operable selection", async ({
 	page,
 }) => {
 	await page.goto("/memories");
 	const filter = page.getByRole("button", { name: "展开或收起记忆筛选", exact: true });
 	const modes = page.getByRole("radiogroup", { name: "显示方式", exact: true });
 	const filterBox = await filter.boundingBox();
-	const modeBox = await modes.getByRole("radio", { name: "列表", exact: true }).boundingBox();
+	const modeBox = await page.getByRole("button", { name: "应用筛选", exact: true }).boundingBox();
 	expect(filterBox).not.toBeNull();
 	expect(modeBox).not.toBeNull();
 	expect((filterBox?.y ?? 0) + (filterBox?.height ?? 0) / 2).toBeCloseTo(

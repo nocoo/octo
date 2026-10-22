@@ -112,23 +112,6 @@ export function KeysPage() {
 			),
 		},
 		{
-			id: "role",
-			header: "角色 / 范围",
-			width: "18ch",
-			wrap: true,
-			sortValue: (key) => roleLabels[key.role],
-			accessor: (key) => (
-				<span>
-					<TagBadge name={roleLabels[key.role]} size="sm" />{" "}
-					<TagBadge name={scopeLabels[key.scope]} size="sm" />
-					<br />
-					<span className="text-basalt-sm text-basalt-muted-foreground">
-						{operationText(key.ops)}
-					</span>
-				</span>
-			),
-		},
-		{
 			id: "status",
 			header: "状态",
 			width: "10ch",
@@ -155,13 +138,21 @@ export function KeysPage() {
 			),
 		},
 		{
-			id: "expiry",
-			header: "到期时间",
-			width: "12ch",
-			sortValue: (key) =>
-				key.expires_at === null ? Number.POSITIVE_INFINITY : Date.parse(key.expires_at),
-			accessor: (key) =>
-				key.expires_at === null ? "永不过期" : <RecordTime value={key.expires_at} />,
+			id: "role",
+			header: "角色 / 范围",
+			width: "18ch",
+			wrap: true,
+			sortValue: (key) => roleLabels[key.role],
+			accessor: (key) => (
+				<span>
+					<TagBadge name={roleLabels[key.role]} size="sm" />{" "}
+					<TagBadge name={scopeLabels[key.scope]} size="sm" />
+					<br />
+					<span className="text-basalt-sm text-basalt-muted-foreground">
+						{operationText(key.ops)}
+					</span>
+				</span>
+			),
 		},
 		{
 			id: "last",
@@ -206,9 +197,18 @@ export function KeysPage() {
 			},
 		},
 		{
+			id: "expiry",
+			header: "到期时间",
+			width: "12ch",
+			sortValue: (key) =>
+				key.expires_at === null ? Number.POSITIVE_INFINITY : Date.parse(key.expires_at),
+			accessor: (key) =>
+				key.expires_at === null ? "永不过期" : <RecordTime value={key.expires_at} />,
+		},
+		{
 			id: "actions",
 			header: "操作",
-			width: "26ch",
+			width: "1%",
 			sortable: false,
 			textAlign: "end",
 			accessor: (key) =>
@@ -227,15 +227,7 @@ export function KeysPage() {
 						删除
 					</Button>
 				) : (
-					<Grid
-						columns={3}
-						gap="sm"
-						style={{
-							gridTemplateColumns: "repeat(3, max-content)",
-							alignItems: "center",
-							justifyContent: "end",
-						}}
-					>
+					<Grid columns={3} gap="sm" className="ops-key-actions">
 						<Button
 							icon={<Pencil aria-hidden="true" />}
 							size="sm"

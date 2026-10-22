@@ -71,7 +71,9 @@ test("retains filter and view URLs through details, browser history and reload",
 	await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 	await page.getByRole("button", { name: "返回上一页", exact: true }).click();
 	await expect(page).toHaveURL(new RegExp(`${library.replaceAll("?", "\\?")}$`));
-	await expect(page.getByLabel("空间", { exact: true })).toHaveValue(memory.space);
+	await expect(
+		page.getByRole("form", { name: "记忆筛选" }).locator('input[name="spaces"]'),
+	).toHaveValue(memory.space);
 	await page.goForward();
 	await expect(page).toHaveURL(new RegExp(`/memories/${memory.id}$`));
 	await page.reload();
@@ -146,16 +148,23 @@ test("history restores the active filter panel without losing the result view", 
 	const memory = await admin.memory();
 	await page.goto("/memories?view=cards");
 	const trigger = page.getByRole("button", { name: "展开或收起记忆筛选" });
+	const space = page
+		.getByRole("form", { name: "记忆筛选" })
+		.getByRole("button", { name: "空间", exact: true });
 	await trigger.click();
-	await page.getByLabel("空间", { exact: true }).fill(memory.space);
+	await page.getByLabel("包含全部标签", { exact: true }).fill("l3");
+	await space.click();
+	await page.getByPlaceholder("搜索或输入标识", { exact: true }).fill(memory.space);
+	await page.getByRole("option").filter({ hasText: memory.space }).click();
+	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "应用筛选", exact: true }).click();
 	await expect(page).toHaveURL(new RegExp(`spaces=${memory.space}`));
 	await trigger.click();
-	await expect(page.getByRole("form", { name: "记忆筛选" })).not.toBeVisible();
+	await expect(page.getByRole("group", { name: "更多记忆筛选", exact: true })).not.toBeVisible();
 	await page.goBack();
 	await expect(page).toHaveURL(/\/memories\?view=cards$/);
 	await page.goForward();
-	await expect(page.getByRole("form", { name: "记忆筛选" })).toBeVisible();
-	await expect(page.getByLabel("空间", { exact: true })).toHaveValue(memory.space);
+	await expect(page.getByRole("group", { name: "更多记忆筛选", exact: true })).toBeVisible();
+	await expect(space).toContainText("已选 1 项");
 	await expect(page.getByRole("heading", { name: "记忆卡片", exact: true })).toBeVisible();
 });

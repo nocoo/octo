@@ -31,7 +31,7 @@ test("reader protects the title and prose at intermediate widths and navigates i
 		expect(await heading.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
 			true,
 		);
-		const header = page.locator(".octo-memory-reader > header");
+		const header = page.locator(".octo-memory-reader .octo-page-header");
 		await expect(header.getByRole("link", { name: "版本历史", exact: true })).toBeVisible();
 		await expect(header.getByRole("link", { name: "编辑记忆", exact: true })).toBeVisible();
 		if (width === 768) await capture(page, info, "reader-intermediate-width");

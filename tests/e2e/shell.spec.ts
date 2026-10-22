@@ -20,6 +20,10 @@ test("back navigation sits left of the page title and subtitle", async ({ page }
 		expect(b.x + b.width).toBeLessThan(t.x);
 		expect(b.x + b.width).toBeLessThan(s.x);
 		expect(Math.abs(b.y - t.y)).toBeLessThan(2);
+		const filters = await section.locator("form").boundingBox();
+		const whole = await section.boundingBox();
+		expect(filters?.x).toBeCloseTo(whole?.x ?? -1, 0);
+		expect(filters?.width).toBeCloseTo(whole?.width ?? -1, 0);
 		await expect(section.getByRole("button", { name: "应用筛选" })).toBeInViewport({ ratio: 1 });
 		await capture(page, info, `page-back-${width}`);
 	}

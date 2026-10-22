@@ -53,7 +53,9 @@ it("exposes URL fusion options without losing form values and keeps filters belo
 	expect(html).toContain('aria-label="搜索选项"');
 	const heading = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
 	expect(heading).toContain("data-search-input");
-	expect(heading).toContain("展开或收起记忆筛选");
+	expect(heading).not.toContain("展开或收起记忆筛选");
+	expect(heading).toContain('aria-label="搜索模式"');
+	expect(html).toContain('aria-label="常用记忆筛选"');
 	expect(heading).toContain('aria-label="高级融合选项"');
 	expect(heading).toContain('aria-controls="search-options"');
 	expect(heading).not.toContain("结合全文与语义检索");
@@ -213,7 +215,7 @@ it("keeps long space metadata out of the result title row", () => {
 	for (const cell of cellTags.slice(0, 2)) expect(cell).toContain("whitespace-normal break-words");
 	expect(html.match(/aria-label="搜索结果 scroll area"/g)).toHaveLength(1);
 	expect(html).toMatch(/class="[^"]*relative[^">]*min-w-0 overflow-auto[^>]*>/);
-	expect(html).toContain("min-width:30ch");
+	expect(html).toContain("min-width:40ch");
 	expect(html).toContain("min-width:22ch");
 });
 

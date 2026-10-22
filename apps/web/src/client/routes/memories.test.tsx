@@ -55,6 +55,11 @@ function render(Page: () => React.JSX.Element, path: string) {
 }
 
 describe("memory pages use installed Basalt layouts and Chinese copy", () => {
+	it("separates memory identity, space and tags into distinct visible table columns", () => {
+		const html = render(MemoriesPage, "/memories");
+		const labels = [...html.matchAll(/<th\b[^>]*>([^<]+)<\/th>/g)].map((match) => match[1]);
+		expect(labels).toEqual(["标题 / 类型", "空间", "标签", "更新时间"]);
+	});
 	it("does not render an empty body diff for a metadata-only revision", () => {
 		expect(render(HistoryPage, "/memories/m1/history")).not.toContain('aria-label="正文差异"');
 	});
@@ -97,10 +102,15 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 			expect(html).toMatch(new RegExp(`<h2\\b[^>]*>${title}</h2>`));
 	});
 	it("reveals one full-width filter form below the header for active URL filters", () => {
-		const html = render(MemoriesPage, "/memories?spaces=notes&selected=m1&view=cards");
+		const html = render(
+			MemoriesPage,
+			"/memories?spaces=notes&tags_all=work&selected=m1&view=cards",
+		);
 		const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
-		expect(header).toContain("展开或收起记忆筛选");
-		expect(header).toContain('aria-expanded="true"');
+		expect(header).not.toContain("展开或收起记忆筛选");
+		expect(html).toMatch(/<button[^>]*aria-label="展开或收起记忆筛选"[^>]*aria-expanded="true"/);
+		expect(html).toContain('aria-label="常用记忆筛选"');
+		expect(html).toContain('aria-label="清除空间筛选"');
 		expect(header).not.toContain('aria-label="记忆筛选"');
 		expect(header).not.toContain("应用筛选");
 		expect(html.match(/aria-label="记忆筛选"/g)).toHaveLength(1);
@@ -129,7 +139,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		expect(form.match(/多个值用英文逗号分隔/g)).toHaveLength(1);
 		const hintId = form.match(/<p[^>]*id="([^"]+)"[^>]*>多个值用英文逗号分隔/)?.[1];
 		expect(hintId).toBeTruthy();
-		for (const name of ["spaces", "tags_all", "tags_any", "types", "sources"]) {
+		for (const name of ["tags_all", "tags_any", "sources"]) {
 			const input = form.match(new RegExp(`<input[^>]*name="${name}"[^>]*>`))?.[0];
 			expect(input).toContain(`aria-describedby="${hintId}"`);
 		}
@@ -206,7 +216,8 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 			],
 		};
 		const html = render(MemoriesPage, "/memories");
-		expect(html).toMatch(/<th[^>]*>空间 \/ 标签<\/th>/);
+		expect(html).toMatch(/<th[^>]*>空间<\/th>/);
+		expect(html).toMatch(/<th[^>]*>标签<\/th>/);
 		expect(html).toMatch(/<td[^>]*><div[^>]*><span[^>]*>s{64}<\/span>/);
 	});
 	it.each(["/memories", "/memories?view=cards"])(
@@ -221,7 +232,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		},
 	);
 	it.each([
-		[MemoriesPage, "/memories", ["记忆库", "标题", "空间 / 标签", "下一页"]],
+		[MemoriesPage, "/memories", ["记忆库", "标题 / 类型", "空间", "标签", "下一页"]],
 		[MemoriesPage, "/memories?view=cards", ["记忆库", "卡片", "笔记"]],
 		[MemoryPage, "/memories/m1", ["本页目录", "详细信息", "附件", "版本时间线"]],
 		[EditorPage, "/memories/m1/edit", ["编辑记忆", "保存记忆", "实时预览", "选择文件"]],

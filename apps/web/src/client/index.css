@@ -193,10 +193,15 @@ a {
 	stroke-width: 1.5;
 }
 .octo-page-header {
-	align-items: start;
-	column-gap: var(--basalt-space-layout-sm);
+	position: relative;
+}
+.octo-page-header > header > :has(h1) {
+	padding-inline-start: var(--basalt-space-12);
 }
 .octo-page-back {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-start: 0;
 	color: hsl(var(--basalt-muted-foreground));
 }
 .octo-page-back svg {
@@ -204,6 +209,9 @@ a {
 	block-size: var(--basalt-space-5);
 }
 @media (pointer: coarse) {
+	.octo-page-header > header > :has(h1) {
+		padding-inline-start: var(--basalt-space-16);
+	}
 	.octo-header :is(button, a):has(svg),
 	.octo-page-back,
 	.octo-command-list [cmdk-item] {
@@ -258,10 +266,43 @@ a {
 }
 .octo-memory-table {
 	table-layout: fixed;
-	min-inline-size: 44rem;
+	min-inline-size: 52rem;
 }
-.octo-memory-table .octo-record-title {
+.octo-memory-type {
+	justify-items: start;
+	margin-block-start: var(--basalt-space-sm);
+}
+.octo-memory-tags {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--basalt-space-content-gap);
+	overflow-wrap: anywhere;
+}
+.octo-memory-filters {
+	display: grid;
+	gap: var(--basalt-space-layout);
+}
+.octo-filter-choice {
+	flex: 1 1 var(--basalt-space-40);
+	max-inline-size: var(--basalt-space-80);
+	gap: var(--basalt-space-field-gap);
+}
+.octo-search-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+}
+.octo-search-controls > input {
+	flex: 1 1 var(--basalt-space-64);
+}
+.octo-memory-table .octo-record-title,
+.octo-search-results .octo-record-title {
 	max-inline-size: none;
+}
+:is(.octo-memory-table, .octo-search-results) [data-tag-color] {
+	display: inline-block;
+	overflow-wrap: anywhere;
 }
 .octo-memory-card-heading {
 	justify-content: start;

@@ -33,7 +33,7 @@ export function SearchPage() {
 	const focusIntent = location.state as { focusSearch?: boolean } | null;
 	const queryInput = useRef<HTMLInputElement>(null);
 	const [advancedOpen, setAdvancedOpen] = useState(
-		["mode", "fusion", "k", "fts_weight", "vector_weight", "limit"].some((key) => params.has(key)),
+		["fusion", "k", "fts_weight", "vector_weight", "limit"].some((key) => params.has(key)),
 	);
 	const optionsForm = useRef<HTMLFormElement>(null);
 	const [fieldErrors, setFieldErrors] = useState<Partial<Record<SearchOptionField, string>>>({});
@@ -65,7 +65,7 @@ export function SearchPage() {
 		{
 			id: "title",
 			header: "记忆 / 摘要",
-			width: "30ch",
+			width: "40ch",
 			wrap: true,
 			sortable: false,
 			accessor: (item) => (
@@ -90,7 +90,7 @@ export function SearchPage() {
 		},
 		{
 			id: "metadata",
-			header: "空间 / 标签",
+			header: "空间 / 类型 / 标签",
 			width: "22ch",
 			wrap: true,
 			sortable: false,
@@ -198,52 +198,51 @@ export function SearchPage() {
 	return (
 		<Grid columns={1} gap="lg">
 			<MemoryFilters params={params} onChange={setParams}>
-				{(filterTrigger) => (
-					<PageHeader
-						title="搜索"
-						actions={
-							<>
-								{filterTrigger}
-								<Button
-									type="button"
-									variant="outline"
-									aria-label="高级融合选项"
-									aria-expanded={advancedOpen}
-									aria-controls="search-options"
-									onClick={() => setAdvancedOpen((open) => !open)}
-								>
-									<SlidersHorizontal aria-hidden="true" />
-									融合选项
-								</Button>
-							</>
-						}
-						filters={
-							<Grid
-								columns={1}
-								gap="sm"
-								className="w-full"
-								style={{ gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center" }}
-							>
-								<Input
-									ref={queryInput}
-									key={query}
-									id="search-query"
-									name="q"
-									form="search-options"
-									aria-label="搜索记忆"
-									data-search-input
-									defaultValue={params.get("q") ?? ""}
-									placeholder="输入关键词"
-									required
-								/>
-								<Button type="submit" form="search-options" loading={state.loading}>
-									<Search aria-hidden="true" />
-									搜索
-								</Button>
-							</Grid>
-						}
-					/>
-				)}
+				<PageHeader
+					title="搜索"
+					actions={
+						<Button
+							type="button"
+							variant="outline"
+							aria-label="高级融合选项"
+							aria-expanded={advancedOpen}
+							aria-controls="search-options"
+							onClick={() => setAdvancedOpen((open) => !open)}
+						>
+							<SlidersHorizontal aria-hidden="true" />
+							融合选项
+						</Button>
+					}
+					filters={
+						<Grid columns={1} gap="sm" className="octo-search-controls w-full">
+							<Input
+								ref={queryInput}
+								key={query}
+								id="search-query"
+								name="q"
+								form="search-options"
+								aria-label="搜索记忆"
+								data-search-input
+								defaultValue={params.get("q") ?? ""}
+								placeholder="输入关键词"
+								required
+							/>
+							<Choice
+								key={`mode-${query}`}
+								label="搜索模式"
+								name="mode"
+								form="search-options"
+								value={params.get("mode") ?? "hybrid"}
+								options={["hybrid", "fts", "vector"]}
+								inline
+							/>
+							<Button type="submit" form="search-options" loading={state.loading}>
+								<Search aria-hidden="true" />
+								搜索
+							</Button>
+						</Grid>
+					}
+				/>
 			</MemoryFilters>
 			<form
 				ref={optionsForm}
@@ -276,12 +275,6 @@ export function SearchPage() {
 						alignItems: "start",
 					}}
 				>
-					<Choice
-						label="搜索模式"
-						name="mode"
-						value={params.get("mode") ?? "hybrid"}
-						options={["hybrid", "fts", "vector"]}
-					/>
 					<Choice
 						label="融合方式"
 						name="fusion"
@@ -456,7 +449,7 @@ export function SearchPage() {
 					{result.items.length > 0 && (
 						<LayerCard padding="none">
 							<DataTable
-								className="octo-table"
+								className="octo-table octo-search-results"
 								aria-label="搜索结果"
 								data={result.items}
 								columns={columns}

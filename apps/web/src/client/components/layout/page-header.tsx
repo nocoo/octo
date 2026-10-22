@@ -12,7 +12,7 @@ export function PageHeader(props: PageHeaderProps) {
 	const { pathname } = useLocation();
 	const navigate = useNavigate();
 	return (
-		<Grid className="octo-page-header" style={{ gridTemplateColumns: "auto minmax(0, 1fr)" }}>
+		<Grid columns={1} className="octo-page-header">
 			<Button
 				variant="ghost"
 				size="icon"
