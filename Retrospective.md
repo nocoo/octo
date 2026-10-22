@@ -1,5 +1,11 @@
 # Retrospective
 
+### 2026-10-22 - Verify shared navigation in its real host
+
+Moving Back into the shared page header introduced router hooks into two SSR test suites that previously rendered their pages without a router. The initial unit run failed until those fixtures supplied MemoryRouter, matching the application host. Keep the existing PageHeader filter slot intact when composing navigation; moving filters outside it also broke the search-header contract. Browser checks now cover title/subtitle alignment, direct-entry fallback, guarded history navigation and command-dialog focus restoration.
+
+The first command-layout test matched the close-label text separately even though its rendered hint includes the Escape key in the same element. Match the complete hint rather than weakening visibility assertions. Running full coverage alongside browser startup also repeated the existing resource-contention timeout problem; run the final heavy suites serially without increasing deadlines. A temporary registry install expanded mirror URLs throughout the lockfile; remove only those generated URLs and confirm the dependency change remains limited to the already-resolved cmdk version. The commit hook caught descending CSS specificity after enlarging icons; use low-specificity scoping and place base selectors before modifiers, then rerun visual checks.
+
 ### 2026-10-20 — Inspect shared fixtures before adding setup
 
 The vector invalidation regression initially inserted a destination space already

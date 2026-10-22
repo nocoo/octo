@@ -3,6 +3,7 @@ import type { DataTableProps, DataTableSort } from "@nocoo/basalt/components/dat
 import { tagColorFor } from "@nocoo/basalt/components/tag-badge";
 import { Children, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, adminApi } from "../lib/api";
 import { formatDateTime } from "../lib/format";
@@ -111,7 +112,12 @@ const keys: KeyMetadata[] = [
 		last_used_at: null,
 	},
 ];
-const render = () => renderToStaticMarkup(<KeysPage />);
+const render = () =>
+	renderToStaticMarkup(
+		<MemoryRouter>
+			<KeysPage />
+		</MemoryRouter>,
+	);
 const names = (html: string) =>
 	[...html.matchAll(/<strong\b[^>]*>([^<]+)<\/strong>/g)].map((m) => m[1]);
 

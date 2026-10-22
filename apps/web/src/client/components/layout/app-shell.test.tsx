@@ -1,9 +1,9 @@
 import { ThemeProvider, TooltipProvider } from "@nocoo/basalt";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
+import { PageHeader } from "./page-header";
 
 const identity = vi.hoisted(() => ({
 	email: null as string | null,
@@ -74,7 +74,6 @@ it("separates the brand home link from the visible collapse control", () => {
 	const collapse = html.match(/<button\b[^>]*aria-label="收起侧栏"[^>]*>[\s\S]*?<\/button>/)?.[0];
 	expect(collapse).toBeDefined();
 	expect(collapse).not.toContain("logo-24.png");
-	expect(html).toContain("data-basalt-header-leading");
 	expect(html).toContain('aria-label="返回上一页"');
 	expect(html.indexOf('aria-label="收起侧栏"')).toBeLessThan(
 		html.indexOf('data-slot="sidebar-nav"'),
@@ -85,6 +84,15 @@ it("separates the brand home link from the visible collapse control", () => {
 	expect(html.indexOf('aria-label="GitHub 仓库"')).toBeLessThan(
 		html.indexOf('aria-label="切换深色或浅色主题"'),
 	);
+});
+
+it("keeps back navigation beside the page title, not in the breadcrumb header", () => {
+	const html = renderShell();
+	const header = html.match(/<header\b[^>]*data-basalt-header[^>]*>[\s\S]*?<\/header>/)?.[0];
+	expect(header).toBeDefined();
+	expect(header).not.toContain('aria-label="返回上一页"');
+	expect(html).toContain('class="grid gap-basalt-layout octo-page-header"');
+	expect(html).not.toContain(">搜索</span></button>");
 });
 
 it("shows the person supplied by the author service rather than a workspace identity", () => {

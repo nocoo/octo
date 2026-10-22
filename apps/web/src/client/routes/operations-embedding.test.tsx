@@ -160,7 +160,11 @@ describe("embedding configuration visibility", () => {
 		"keeps unknown settings out of the editor with error %s",
 		(error) => {
 			fixture.state = { loaded: false, error };
-			const html = renderToStaticMarkup(<EmbeddingPage />);
+			const html = renderToStaticMarkup(
+				<MemoryRouter>
+					<EmbeddingPage />
+				</MemoryRouter>,
+			);
 			expect(html).not.toContain("尚未配置接口密钥");
 			expect(html).not.toContain("text-embedding-3-small");
 			expect(html).not.toContain("<form");
@@ -184,7 +188,11 @@ describe("embedding configuration visibility", () => {
 				api_key_mask: "****abcd",
 			},
 		};
-		const html = renderToStaticMarkup(<EmbeddingPage />);
+		const html = renderToStaticMarkup(
+			<MemoryRouter>
+				<EmbeddingPage />
+			</MemoryRouter>,
+		);
 		expect(html).toContain("无法加载嵌入设置。");
 		expect(html).toContain('value="active-model"');
 		expect(html).toContain("****abcd");
@@ -211,7 +219,11 @@ describe("M7 embedding test result SSR", () => {
 					reason: status === undefined ? { stage } : { stage, upstream_status: status },
 				},
 			};
-			const html = renderToStaticMarkup(<EmbeddingPage />);
+			const html = renderToStaticMarkup(
+				<MemoryRouter>
+					<EmbeddingPage />
+				</MemoryRouter>,
+			);
 			expect(html).toContain(message);
 			expect(html).toContain(code);
 			expect(html).toContain("失败阶段");
@@ -247,7 +259,11 @@ describe("M7 embedding test result SSR", () => {
 				reason: { stage },
 			},
 		};
-		const html = renderToStaticMarkup(<EmbeddingPage />);
+		const html = renderToStaticMarkup(
+			<MemoryRouter>
+				<EmbeddingPage />
+			</MemoryRouter>,
+		);
 		const well = html.slice(html.indexOf("embedder_unavailable"));
 		expect(well).toContain(label);
 		expect(well).toContain("失败阶段");
@@ -266,7 +282,11 @@ describe("M7 embedding test result SSR", () => {
 				reason: null,
 			},
 		};
-		const html = renderToStaticMarkup(<EmbeddingPage />);
+		const html = renderToStaticMarkup(
+			<MemoryRouter>
+				<EmbeddingPage />
+			</MemoryRouter>,
+		);
 		expect(html).toContain("连接成功");
 		expect(html).not.toContain("失败阶段");
 		expect(html).not.toContain("上游状态码");
@@ -294,7 +314,11 @@ it("shows structured probe failures and technical details immediately after Test
 			reason: { stage: "status", upstream_status: 503 },
 		},
 	};
-	const html = renderToStaticMarkup(<EmbeddingPage />);
+	const html = renderToStaticMarkup(
+		<MemoryRouter>
+			<EmbeddingPage />
+		</MemoryRouter>,
+	);
 	const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
 	expect(form).not.toContain("连接结果");
 	expect(form).toContain('role="alert"');
@@ -309,7 +333,11 @@ it("shows structured probe failures and technical details immediately after Test
 
 it("keeps transport failures beside the test action and keeps key clearing compact", () => {
 	fixture.state = { loaded: true, error: "无法测试嵌入连接。" };
-	const html = renderToStaticMarkup(<EmbeddingPage />);
+	const html = renderToStaticMarkup(
+		<MemoryRouter>
+			<EmbeddingPage />
+		</MemoryRouter>,
+	);
 	const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
 	expect(form).toContain("无法测试嵌入连接。");
 	expect(form).toContain("ops-embedding-key-actions");
@@ -328,7 +356,11 @@ it("shows the current action error instead of a stale probe result", () => {
 			reason: null,
 		},
 	};
-	const html = renderToStaticMarkup(<EmbeddingPage />);
+	const html = renderToStaticMarkup(
+		<MemoryRouter>
+			<EmbeddingPage />
+		</MemoryRouter>,
+	);
 	const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
 	expect(form).toContain("无法测试嵌入连接。");
 	expect(form).not.toContain("向量维度与当前配置匹配。");

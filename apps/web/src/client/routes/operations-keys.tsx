@@ -16,7 +16,6 @@ import {
 import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
@@ -34,6 +33,7 @@ import {
 	X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { RecordTime } from "../components/record-display";
 import { formatNumber } from "../lib/format";

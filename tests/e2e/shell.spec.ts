@@ -1,5 +1,30 @@
 import { capture, expect, test } from "./fixtures";
 
+test("back navigation sits left of the page title and subtitle", async ({ page }, info) => {
+	for (const width of [1440, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		await page.goto("/audit");
+		const header = page.locator("[data-basalt-header]");
+		await expect(header.getByRole("button", { name: "返回上一页" })).toHaveCount(0);
+		const section = page.locator(".octo-page-header");
+		const back = section.getByRole("button", { name: "返回上一页" });
+		const title = section.getByRole("heading", { level: 1 });
+		const subtitle = section.getByText("包含被拒绝的请求；不记录请求正文和凭据。");
+		await expect(back).toBeInViewport({ ratio: 1 });
+		await expect(back.locator("svg")).toHaveCSS("width", "20px");
+		const b = await back.boundingBox();
+		const t = await title.boundingBox();
+		const s = await subtitle.boundingBox();
+		expect(b && t && s).toBeTruthy();
+		if (!b || !t || !s) throw new Error("Missing page header geometry");
+		expect(b.x + b.width).toBeLessThan(t.x);
+		expect(b.x + b.width).toBeLessThan(s.x);
+		expect(Math.abs(b.y - t.y)).toBeLessThan(2);
+		await expect(section.getByRole("button", { name: "应用筛选" })).toBeInViewport({ ratio: 1 });
+		await capture(page, info, `page-back-${width}`);
+	}
+});
+
 test("header actions match Giraffe geometry and logo accent in both themes", async ({ page }) => {
 	for (const colorScheme of ["light", "dark"] as const) {
 		await page.emulateMedia({ colorScheme });
@@ -117,6 +142,7 @@ test.describe("touch shell", () => {
 		expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
 		for (const name of [
 			"打开导航",
+			"返回上一页",
 			"搜索与命令",
 			"GitHub 仓库",
 			"Octo 项目主页",

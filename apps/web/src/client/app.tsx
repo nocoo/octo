@@ -1,5 +1,4 @@
 import { LinkProvider, ThemeProvider, TooltipProvider } from "@nocoo/basalt";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { AccentProvider } from "@nocoo/basalt/providers/accent";
 import { lazy, type ReactNode } from "react";
 import {
@@ -12,6 +11,7 @@ import {
 } from "react-router";
 import { AppShell } from "./components/layout/app-shell";
 import { notificationViewport } from "./components/layout/notifications";
+import { PageHeader } from "./components/layout/page-header";
 import { logoAccent } from "./lib/brand";
 
 const OverviewPage = lazy(() =>

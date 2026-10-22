@@ -23,7 +23,6 @@ import {
 } from "@nocoo/basalt/components/collapsible";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Select,
@@ -49,6 +48,7 @@ import {
 } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { RecordTime, ViewSwitch } from "../components/record-display";
 import { formatNumber } from "../lib/format";

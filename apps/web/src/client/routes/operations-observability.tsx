@@ -2,7 +2,6 @@ import { Button, Field, Input, LayerCard, Link, ScrollArea, toast } from "@nocoo
 import { BarChart } from "@nocoo/basalt/charts/bar";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Table,
@@ -26,6 +25,7 @@ import {
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { RecordTime } from "../components/record-display";
 import { formatBytes, formatNumber } from "../lib/format";

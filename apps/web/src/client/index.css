@@ -82,6 +82,82 @@ a {
 .octo-search-inset {
 	padding-inline: var(--basalt-space-nav-inset);
 }
+.octo-command-dialog[role="dialog"] {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	padding: unset;
+	max-block-size: calc(100dvh - var(--basalt-space-layout-xl));
+	background: hsl(var(--basalt-card));
+}
+.octo-command-root {
+	display: flex;
+	flex-direction: column;
+	min-block-size: 0;
+}
+.octo-command-root [cmdk-input-wrapper] {
+	padding-inline: var(--basalt-space-layout);
+}
+.octo-command-root [cmdk-input] {
+	min-block-size: var(--basalt-space-12);
+}
+.octo-command-list {
+	max-block-size: var(--basalt-space-96);
+	overscroll-behavior: contain;
+	scroll-padding-block: var(--basalt-space-lg);
+}
+.octo-command-list [cmdk-item] {
+	gap: var(--basalt-space-lg);
+	min-block-size: var(--basalt-size-control);
+}
+.octo-command-enter {
+	visibility: hidden;
+}
+.octo-command-list svg,
+.octo-command-footer svg,
+.octo-command-root :where([cmdk-input-wrapper]) svg {
+	flex-shrink: 0;
+	inline-size: var(--basalt-space-5);
+	block-size: var(--basalt-space-5);
+	stroke-width: 1.5;
+}
+.octo-command-footer svg,
+.octo-command-list .octo-command-enter {
+	inline-size: var(--basalt-size-icon);
+	block-size: var(--basalt-size-icon);
+}
+.octo-nav-icon,
+.octo-search-inset svg {
+	inline-size: var(--basalt-text-xl);
+	block-size: var(--basalt-text-xl);
+}
+.octo-command-label {
+	min-inline-size: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+[data-selected="true"] > .octo-command-enter {
+	visibility: visible;
+}
+.octo-command-footer {
+	display: flex;
+	flex-shrink: 0;
+	gap: var(--basalt-space-layout);
+	padding: var(--basalt-space-lg) var(--basalt-space-layout);
+	border-top: 1px solid hsl(var(--basalt-border));
+	color: hsl(var(--basalt-muted-foreground));
+	font-size: var(--basalt-text-xs);
+}
+.octo-command-footer > span {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--basalt-space-sm);
+}
+.octo-command-footer > :last-child {
+	margin-inline-start: auto;
+}
 .octo-avatar {
 	width: var(--basalt-space-9);
 	height: var(--basalt-space-9);
@@ -116,8 +192,21 @@ a {
 	height: var(--basalt-text-xl);
 	stroke-width: 1.5;
 }
+.octo-page-header {
+	align-items: start;
+	column-gap: var(--basalt-space-layout-sm);
+}
+.octo-page-back {
+	color: hsl(var(--basalt-muted-foreground));
+}
+.octo-page-back svg {
+	inline-size: var(--basalt-space-5);
+	block-size: var(--basalt-space-5);
+}
 @media (pointer: coarse) {
-	.octo-header :is(button, a):has(svg) {
+	.octo-header :is(button, a):has(svg),
+	.octo-page-back,
+	.octo-command-list [cmdk-item] {
 		min-inline-size: var(--basalt-size-touch);
 		min-block-size: var(--basalt-size-touch);
 	}

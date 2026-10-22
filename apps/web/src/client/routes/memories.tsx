@@ -34,7 +34,6 @@ import { CodeBlock } from "@nocoo/basalt/components/code";
 import { FileDropzone } from "@nocoo/basalt/components/file-dropzone";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { InputArea } from "@nocoo/basalt/components/input-area";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Table,
@@ -74,6 +73,7 @@ import {
 	isCurrentMarkdownFragment,
 	navigateToMarkdownHeading,
 } from "../components/layout/markdown-navigation";
+import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { MemoryTypeBadge, RecordTime, ViewSwitch } from "../components/record-display";
 import { formatBytes, formatDateTime, formatNumber } from "../lib/format";

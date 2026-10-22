@@ -7,12 +7,12 @@ import {
 } from "@nocoo/basalt/components/collapsible";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import { CircleAlert, FilterX, Pencil, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
+import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { MemoryTypeBadge, RecordTime } from "../components/record-display";
 import { formatNumber } from "../lib/format";

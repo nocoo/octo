@@ -10,7 +10,6 @@ import {
 } from "@nocoo/basalt/components/collapsible";
 import { DataTable } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { PageHeader } from "@nocoo/basalt/components/page-header";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Table,
@@ -35,6 +34,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
+import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { RecordTime } from "../components/record-display";
 import { formatNumber } from "../lib/format";

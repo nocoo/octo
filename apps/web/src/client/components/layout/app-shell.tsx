@@ -3,13 +3,14 @@ import {
 	AvatarFallback,
 	AvatarImage,
 	Button,
-	CommandEmpty,
 	CommandGroup,
 	CommandInput,
 	CommandItem,
 	CommandList,
-	CommandPalette,
 	ContentIsland,
+	Dialog,
+	DialogContent,
+	DialogTitle,
 	Link,
 	Sheet,
 	SheetContent,
@@ -34,12 +35,14 @@ import { AppMain, AppSkipLink, AppShell as Frame } from "@nocoo/basalt/component
 import { Banner } from "@nocoo/basalt/components/banner";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
+import { Command } from "cmdk";
 import {
 	Activity,
-	ArrowLeft,
+	ArrowUpDown,
 	BookOpen,
 	Boxes,
 	Clock3,
+	CornerDownLeft,
 	Database,
 	KeyRound,
 	LayoutDashboard,
@@ -58,7 +61,6 @@ import { flushSync } from "react-dom";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
 import {
-	backTarget,
 	headerCrumbs,
 	initials,
 	navigation,
@@ -89,6 +91,9 @@ const icons = {
 	settings: Settings,
 };
 
+const sidebarNavigation = navigation.filter((item) => item.href !== "/search");
+const navigationGroups = [...new Set(navigation.map((item) => item.group))];
+
 function HeaderHint({ label, children }: { label: string; children: ReactElement }) {
 	return (
 		<Tooltip>
@@ -113,6 +118,7 @@ export function AppShell() {
 	const [query, setQuery] = useState("");
 	const menuButton = useRef<HTMLButtonElement>(null);
 	const railToggle = useRef<HTMLButtonElement>(null);
+	const paletteOpener = useRef<HTMLElement | null>(null);
 	useEffect(() => {
 		void model.load();
 	}, [model]);
@@ -246,14 +252,19 @@ export function AppShell() {
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<SidebarIconItem aria-label="搜索命令 (⌘K)" onClick={() => setPalette(true)}>
-									<Search size={16} strokeWidth={1.5} aria-hidden="true" />
+									<Search
+										className="octo-nav-icon"
+										size={18}
+										strokeWidth={1.5}
+										aria-hidden="true"
+									/>
 								</SidebarIconItem>
 							</TooltipTrigger>
 							<TooltipContent side="right">搜索与命令 · ⌘ K</TooltipContent>
 						</Tooltip>
 					)}
-					{Array.from(new Set(navigation.map((item) => item.group))).map((group) => {
-						const items = navigation
+					{navigationGroups.map((group) => {
+						const items = sidebarNavigation
 							.filter((item) => item.group === group)
 							.map((item) => {
 								const Icon = icons[item.icon];
@@ -261,7 +272,7 @@ export function AppShell() {
 									<Icon
 										key={item.href}
 										className="octo-nav-icon"
-										size={16}
+										size={18}
 										strokeWidth={1.5}
 										aria-hidden="true"
 									/>
@@ -352,36 +363,20 @@ export function AppShell() {
 						mobile ? headerCrumbs(location.pathname).slice(-1) : headerCrumbs(location.pathname)
 					}
 					leading={
-						<>
-							{mobile && (
-								<Button
-									ref={menuButton}
-									variant="ghost"
-									size="icon"
-									aria-label="打开导航"
-									onClick={(event) => {
-										event.currentTarget.focus();
-										setDrawer(true);
-									}}
-								>
-									<Menu aria-hidden="true" />
-								</Button>
-							)}
-							<HeaderHint label="返回上一页">
-								<Button
-									variant="ghost"
-									size="icon"
-									aria-label="返回上一页"
-									onClick={() => {
-										const target = backTarget(location.pathname, window.history.state?.idx);
-										if (target === -1) void navigate(-1);
-										else void navigate(target, { replace: true });
-									}}
-								>
-									<ArrowLeft strokeWidth={1.5} aria-hidden="true" />
-								</Button>
-							</HeaderHint>
-						</>
+						mobile && (
+							<Button
+								ref={menuButton}
+								variant="ghost"
+								size="icon"
+								aria-label="打开导航"
+								onClick={(event) => {
+									event.currentTarget.focus();
+									setDrawer(true);
+								}}
+							>
+								<Menu aria-hidden="true" />
+							</Button>
+						)
 					}
 					actions={
 						<>
@@ -464,44 +459,84 @@ export function AppShell() {
 					</Suspense>
 				</ContentIsland>
 			</AppMain>
-			<CommandPalette
+			<Dialog
 				open={palette}
 				onOpenChange={(open) => {
 					setPalette(open);
 					if (!open) setQuery("");
 				}}
 			>
-				<CommandInput
-					aria-label="搜索页面或记忆"
-					placeholder="跳转页面，或搜索记忆…"
-					value={query}
-					onValueChange={setQuery}
-				/>
-				<CommandList label="搜索结果">
-					<CommandEmpty>没有匹配页面，按搜索命令查找记忆。</CommandEmpty>
-					<CommandGroup heading="页面">
-						{navigation.map((item) => (
-							<CommandItem
-								key={item.href}
-								value={`${item.label} ${item.href}`}
-								onSelect={() => go(item.href)}
-							>
-								{item.label}
-							</CommandItem>
-						))}
-					</CommandGroup>
-					{query.trim() && (
-						<CommandGroup heading="记忆">
-							<CommandItem
-								value={query}
-								onSelect={() => go(`/search?q=${encodeURIComponent(query.trim())}`)}
-							>
-								搜索记忆：{query}
-							</CommandItem>
-						</CommandGroup>
-					)}
-				</CommandList>
-			</CommandPalette>
+				<DialogContent
+					size="lg"
+					className="octo-command-dialog"
+					aria-describedby={undefined}
+					onOpenAutoFocus={() => {
+						paletteOpener.current = document.activeElement as HTMLElement;
+					}}
+					onCloseAutoFocus={(event) => {
+						event.preventDefault();
+						paletteOpener.current?.focus();
+					}}
+				>
+					<DialogTitle className="sr-only">搜索与命令</DialogTitle>
+					<Command label="搜索页面或记忆" className="octo-command-root">
+						<CommandInput
+							aria-label="搜索页面或记忆"
+							placeholder="跳转页面，或搜索记忆…"
+							value={query}
+							onValueChange={setQuery}
+						/>
+						<CommandList label="搜索结果" className="octo-command-list">
+							{query.trim() && (
+								<CommandGroup heading="搜索记忆" forceMount>
+									<CommandItem
+										value="search-memories"
+										forceMount
+										onSelect={() => go(`/search?q=${encodeURIComponent(query.trim())}`)}
+									>
+										<Search aria-hidden="true" />
+										<span className="octo-command-label">搜索记忆：{query.trim()}</span>
+										<CornerDownLeft className="octo-command-enter" aria-hidden="true" />
+									</CommandItem>
+								</CommandGroup>
+							)}
+							{navigationGroups.map((group) => (
+								<CommandGroup key={group} heading={group}>
+									{navigation
+										.filter((item) => item.group === group)
+										.map((item) => {
+											const Icon = icons[item.icon];
+											return (
+												<CommandItem
+													key={item.href}
+													value={`${item.label} ${item.href}`}
+													onSelect={() => go(item.href)}
+												>
+													<Icon aria-hidden="true" />
+													<span className="octo-command-label">{item.label}</span>
+													<CornerDownLeft className="octo-command-enter" aria-hidden="true" />
+												</CommandItem>
+											);
+										})}
+								</CommandGroup>
+							))}
+						</CommandList>
+						<Grid className="octo-command-footer">
+							<span>
+								<ArrowUpDown aria-hidden="true" />
+								选择
+							</span>
+							<span>
+								<CornerDownLeft aria-hidden="true" />
+								打开
+							</span>
+							<span>
+								<kbd>Esc</kbd>关闭
+							</span>
+						</Grid>
+					</Command>
+				</DialogContent>
+			</Dialog>
 		</Frame>
 	);
 }
