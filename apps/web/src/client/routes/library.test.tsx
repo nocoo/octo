@@ -114,13 +114,11 @@ describe("library page installed-component boundaries", () => {
 			],
 		};
 		const html = render(TimelinePage, `/timeline?zoom=${zoom}`);
-		expect(html).toMatch(
-			new RegExp(
-				`<section[^>]*space-y-basalt-layout"[^>]*><div[^>]*><div[^>]*><h2[^>]*text-basalt-xl[^>]*>${label}</h2></div><div[^>]*ml-auto[^>]*><span[^>]*>1 条记忆</span></div></div><div[^>]*data-basalt-surface=""`,
-			),
-		);
+		expect(html).toContain(`>${label}</h2>`);
+		expect(html).toContain("1 条记忆 · UTC");
+		expect(html.indexOf(`>${label}</h2>`)).toBeLessThan(html.indexOf('data-basalt-surface=""'));
 		expect(html).toContain(`aria-label="${label} 的记忆"`);
-		expect(html).toContain(`aria-label="${label} 的时间线数据"`);
+		expect(html).not.toContain("<table");
 	});
 	it("uses stable native tag colors without losing canonical-name filtering or aligned actions", () => {
 		overrides.state = {
@@ -166,7 +164,7 @@ describe("library page installed-component boundaries", () => {
 	});
 	it.each([
 		[GraphPage, "/graph", "图谱节点"],
-		[TimelinePage, "/timeline?field=created_at", "的时间线数据"],
+		[TimelinePage, "/timeline?field=created_at&view=table", "的时间线数据"],
 	] as const)("styles populated visualization tables in %s", (Page, url, label) => {
 		overrides.state = {
 			ready: true,

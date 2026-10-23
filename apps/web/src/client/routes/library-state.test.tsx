@@ -60,7 +60,7 @@ it.each([
 	[SpacesPage, "/spaces", "空间", ["24ch", "22ch", "26ch", "24ch", "10ch", "12ch"]],
 	[GraphPage, "/graph", "图谱节点", ["24ch", "12ch", "10ch"]],
 	[GraphPage, "/graph", "图谱关系", ["24ch", "24ch", "12ch"]],
-	[TimelinePage, "/timeline", "2026-10-17 的时间线数据", ["16ch", "24ch", "24ch"]],
+	[TimelinePage, "/timeline?view=table", "2026-10-17 的时间线数据", ["16ch", "24ch", "24ch"]],
 ] as const)(
 	"keeps %s record columns readable rather than squeezing them on mobile",
 	(Page, url, label, widths) => {
@@ -225,17 +225,19 @@ describe("library unknown, failed and empty states", () => {
 			html.match(/<ol[^>]*aria-label="2026-10-18 的记忆"[^>]*>[\s\S]*?<\/ol>/)?.[0] ?? "";
 		expect(stream).toContain("较早的资料");
 		expect(stream).toContain("稍后的资料");
-		expect(stream).toContain("03:15 UTC");
-		expect(stream).toContain("03:45 UTC");
+		expect(stream).toContain("03:15:00 UTC");
+		expect(stream).toContain("03:45:00 UTC");
 		expect(stream.indexOf("较早的资料")).toBeLessThan(stream.indexOf("稍后的资料"));
 		const table =
-			html.match(/<table\b[^>]*aria-label="2026-10-18 的时间线数据"[\s\S]*?<\/table>/)?.[0] ?? "";
+			render(TimelinePage, "/timeline?view=table").match(
+				/<table\b[^>]*aria-label="2026-10-18 的时间线数据"[\s\S]*?<\/table>/,
+			)?.[0] ?? "";
 		expect(table).toContain("work");
 		expect(table).toContain("稍后的资料");
 		const monthlyHtml = render(TimelinePage, "/timeline?zoom=month");
 		const monthlyStream =
 			monthlyHtml.match(/<ol[^>]*aria-label="2026-10 的记忆"[^>]*>[\s\S]*?<\/ol>/)?.[0] ?? "";
-		expect(monthlyStream).toContain("10-18 03:15 UTC");
-		expect(monthlyStream).toContain("10-18 03:45 UTC");
+		expect(monthlyStream).toContain("10-18 03:15:00 UTC");
+		expect(monthlyStream).toContain("10-18 03:45:00 UTC");
 	});
 });

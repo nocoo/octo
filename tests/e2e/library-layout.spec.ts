@@ -1,6 +1,6 @@
 import { capture, expect, test } from "./fixtures";
 
-test("timeline renders contemporary records with compact UTC labels and an exact data alternative", async ({
+test("timeline switches between linked records and tables without duplicating content", async ({
 	page,
 	admin,
 }, info) => {
@@ -10,11 +10,84 @@ test("timeline renders contemporary records with compact UTC labels and an exact
 		await page.goto(`/timeline?field=created_at&zoom=${zoom}&space=${memory.space}`);
 		const timeline = page.getByRole("list", { name: / 的记忆$/ }).filter({ hasText: memory.title });
 		await expect(timeline.getByText(memory.title, { exact: true })).toBeVisible();
-		await expect(timeline).toContainText(/\d{2}:\d{2} UTC/);
-		if (zoom === "month") await expect(timeline).toContainText(/\d{2}-\d{2} \d{2}:\d{2} UTC/);
-		await expect(page.getByRole("table", { name: / 的时间线数据$/ })).toContainText(memory.space);
+		await expect(timeline).toContainText(/\d{2}:\d{2}:\d{2} UTC/);
+		if (zoom === "month") await expect(timeline).toContainText(/\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);
+		await expect(page.getByRole("table")).toHaveCount(0);
+		await expect(timeline.getByRole("link", { name: memory.title })).toHaveAttribute(
+			"href",
+			`/memories/${memory.id}`,
+		);
+		await expect(timeline.getByRole("link", { name: memory.space })).toHaveAttribute(
+			"href",
+			`/memories?spaces=${memory.space}`,
+		);
+		await timeline.getByRole("checkbox").click();
+		await expect(timeline.getByRole("checkbox")).toBeChecked();
+		await page.getByRole("radio", { name: "表格", exact: true }).click();
+		const table = page.getByRole("table", { name: / 的时间线数据$/ });
+		await expect(table).toContainText(memory.space);
+		await expect(table.locator('tbody [role="checkbox"]')).toBeChecked();
+		await expect(page.getByRole("list", { name: / 的记忆$/ })).toHaveCount(0);
+		await page.getByRole("radio", { name: "时间轴", exact: true }).click();
+		await expect(timeline.getByRole("checkbox")).toBeChecked();
+		expect(new URL(page.url()).searchParams.get("zoom")).toBe(zoom);
 	}
 	await capture(page, info, "timeline-visible-records");
+});
+
+test("timeline filters, grouped selections and responsive rails preserve navigation", async ({
+	page,
+	admin,
+}, info) => {
+	const first = await admin.memory();
+	await admin.json(
+		`/memories/${first.id}`,
+		"PATCH",
+		{ event_time: "2026-10-01T03:15:06Z" },
+		{ "If-Match": String(first.version) },
+	);
+	const second = await admin.json<{ id: string; title: string }>("/memories", "POST", {
+		space: first.space,
+		title: "A second date",
+		body: "Second event",
+		type: "note",
+		tags: [],
+		event_time: "2026-10-02T03:15:06Z",
+	});
+	for (const width of [1440, 390]) {
+		await page.setViewportSize({ width, height: 900 });
+		await page.goto(
+			`/timeline?space=${first.space}&from=2026-10-01T03%3A15%3A06Z&to=2026-10-02T03%3A15%3A06Z`,
+		);
+		await expect(page.locator(".octo-timeline-group")).toHaveCount(2);
+		const groups = page.locator(".octo-timeline-group");
+		await groups.nth(0).getByRole("checkbox").click();
+		await expect(groups.nth(0).getByRole("checkbox")).toBeChecked();
+		await groups.nth(1).getByRole("checkbox").click();
+		await expect(groups.nth(1).getByRole("checkbox")).toBeChecked();
+		expect(new URL(page.url()).searchParams.getAll("selected")).toEqual([first.id, second.id]);
+		const date = await groups.first().locator(".octo-timeline-date").boundingBox();
+		const records = await groups.first().getByRole("list").boundingBox();
+		if (!date || !records) throw new Error("Missing timeline geometry");
+		if (width === 1440) expect(date.x + date.width).toBeLessThan(records.x);
+		else expect(date.y + date.height).toBeLessThan(records.y);
+		await expect(
+			page.locator(".octo-timeline-content").first().locator("[data-tag-color]"),
+		).toHaveCount(0);
+		await capture(page, info, `timeline-rail-${width}`);
+		await page.getByRole("button", { name: "移除结束时间筛选" }).click();
+		expect(new URL(page.url()).searchParams.has("to")).toBe(false);
+		await page.getByRole("button", { name: "清除范围筛选" }).click();
+		const params = new URL(page.url()).searchParams;
+		expect(params.has("space")).toBe(false);
+		expect(params.has("from")).toBe(false);
+		expect(params.getAll("selected")).toEqual([first.id, second.id]);
+	}
+	await page.goto(`/timeline?space=${first.space}`);
+	await page.getByRole("link", { name: first.title, exact: true }).click();
+	await expect(page).toHaveURL(new RegExp(`/memories/${first.id}$`));
+	await page.getByRole("button", { name: "返回上一页", exact: true }).click();
+	await expect(page).toHaveURL(new RegExp(`/timeline\\?space=${first.space}$`));
 });
 
 test("space creation keeps errors in its short-screen dialog and restores the actual opener", async ({

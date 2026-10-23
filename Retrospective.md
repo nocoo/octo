@@ -940,3 +940,13 @@ rejection; the importer instead uses the existing memory list's `include=trashed
 option to identify both active and deleted records through one documented contract.
 Trace the actual mounted route, not a similarly named parity handler, and verify
 the real local HTTP path before treating mocked importer tests as integration proof.
+
+### 2026-10-23 - Verify tokens against the installed stylesheet
+
+The timeline layout initially referenced numeric spacing tokens that do not exist
+in Basalt 3.2.1. CSS silently discarded the grid declaration, so desktop groups
+stacked like mobile despite a passing typecheck. Local screenshots and computed
+columns exposed the error before acceptance. Replaced the guessed names with
+published tokens and added a stylesheet-token regression check alongside desktop
+and mobile geometry assertions. A familiar spacing scale is not evidence that a
+design system exports every step of that scale.

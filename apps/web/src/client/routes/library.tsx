@@ -14,7 +14,6 @@ import {
 	Link,
 	toast,
 } from "@nocoo/basalt";
-import { Timeline } from "@nocoo/basalt/charts/timeline";
 import { Banner } from "@nocoo/basalt/components/banner";
 import {
 	Collapsible,
@@ -22,6 +21,7 @@ import {
 	CollapsibleTrigger,
 } from "@nocoo/basalt/components/collapsible";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
+import { FilterBar, FilterChip } from "@nocoo/basalt/components/filter-bar";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
@@ -50,7 +50,7 @@ import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } 
 import { useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
-import { RecordTime, SpaceLink, ViewSwitch } from "../components/record-display";
+import { SpaceLink, ViewSwitch } from "../components/record-display";
 import { formatNumber } from "../lib/format";
 import {
 	type LibraryKind,
@@ -72,6 +72,7 @@ import {
 	timelineOptions,
 	updateLibraryUrl,
 } from "../viewmodels/library-visualizations";
+import { TimelineRecords } from "./library-timeline";
 import { SpaceRenameForm } from "./space-rename";
 
 const GraphCanvas = lazy(() => import("./library-graph"));
@@ -977,38 +978,7 @@ export function TimelinePage() {
 	const [params, setParams] = useSearchParams();
 	const options = timelineOptions(params);
 	const timeline = buildTimeline(filterMemories(state.memories, params), options);
-	const columns: DataTableColumn<LibraryMemory & { timestamp: number }>[] = [
-		{
-			id: "time",
-			header: "时间（UTC）",
-			width: "16ch",
-			accessor: (item) => <RecordTime value={new Date(item.timestamp).toISOString()} utc />,
-			sortValue: (item) => item.timestamp,
-		},
-		{
-			id: "memory",
-			header: "记忆",
-			width: "24ch",
-			accessor: (item) => (
-				<Link
-					href={`/memories/${encodeURIComponent(item.id)}`}
-					className="octo-record-title"
-					title={item.title}
-				>
-					{item.title}
-				</Link>
-			),
-			sortValue: (item) => item.title,
-			wrap: true,
-		},
-		{
-			id: "space",
-			header: "空间",
-			width: "24ch",
-			accessor: (item) => <SpaceLink space={item.space} />,
-			sortValue: (item) => item.space,
-		},
-	];
+	const table = params.get("view") === "table";
 	const rangeField = (name: "from" | "to", label: string): ReactNode => (
 		<Field label={label} htmlFor={`timeline-${name}`} hint="包含边界时刻的 UTC 时间。">
 			<Input
@@ -1031,21 +1001,24 @@ export function TimelinePage() {
 						title="时间线"
 						description="按时间回顾记忆，支持事件时间与创建时间，统一使用 UTC。"
 						actions={
-							<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-								<RefreshCw size={16} aria-hidden="true" />
-								刷新
-							</Button>
+							<>
+								<ViewSwitch
+									label="时间线显示方式"
+									value={table ? "table" : "stream"}
+									options={[
+										{ value: "stream", label: "时间轴" },
+										{ value: "table", label: "表格" },
+									]}
+									onChange={(value) => setParams(updateLibraryUrl(params, "view", value))}
+								/>
+								<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
+									<RefreshCw size={16} aria-hidden="true" />
+									刷新
+								</Button>
+							</>
 						}
 						filters={
-							<Grid
-								columns={1}
-								style={{
-									display: "flex",
-									flexWrap: "wrap",
-									alignItems: "end",
-									gap: "var(--basalt-space-layout-sm)",
-								}}
-							>
+							<Grid columns={1} gap="sm" className="octo-timeline-controls">
 								<Field label="时间依据">
 									<ViewSwitch
 										label="时间依据"
@@ -1079,13 +1052,32 @@ export function TimelinePage() {
 						}
 					/>
 					<CollapsibleContent unstyled>
-						<Grid
-							gap="sm"
-							style={{
-								gridTemplateColumns:
-									"repeat(auto-fit, minmax(min(100%, var(--basalt-space-56)), 1fr))",
-								alignItems: "start",
+						<FilterBar
+							label="时间线范围筛选"
+							active={Boolean(params.get("space") || params.get("from") || params.get("to"))}
+							clearLabel="清除范围筛选"
+							onClear={() => {
+								const next = new URLSearchParams(params);
+								for (const key of ["space", "from", "to"]) next.delete(key);
+								setParams(next);
 							}}
+							chips={(
+								[
+									["space", "空间"],
+									["from", "开始时间"],
+									["to", "结束时间"],
+								] as const
+							).map(([key, label]) =>
+								params.get(key) ? (
+									<FilterChip
+										key={key}
+										label={label}
+										value={params.get(key)}
+										removeLabel={`移除${label}筛选`}
+										onRemove={() => setParams(updateLibraryUrl(params, key, ""))}
+									/>
+								) : null,
+							)}
 						>
 							<SpaceFilter
 								memories={state.memories}
@@ -1094,12 +1086,24 @@ export function TimelinePage() {
 							/>
 							{rangeField("from", "开始时间（UTC）")}
 							{rangeField("to", "结束时间（UTC）")}
-						</Grid>
+						</FilterBar>
 					</CollapsibleContent>
 				</Grid>
 			</Collapsible>
 
-			<SectionRule variant="heading" title="时间分组" />
+			<SectionRule
+				variant="heading"
+				title="记忆时间线"
+				hint="从早到晚排列；日期分组和范围边界均使用 UTC。"
+				actions={
+					state.ready ? (
+						<span className="octo-muted">
+							{timeline.groups.reduce((count, group) => count + group.items.length, 0)} 条记忆 ·{" "}
+							{timeline.groups.length} 个时间分组
+						</span>
+					) : undefined
+				}
+			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
 			{state.ready && timeline.undated > 0 && (
 				<p className="text-basalt-sm text-basalt-muted-foreground">
@@ -1125,46 +1129,15 @@ export function TimelinePage() {
 					/>
 				</LayerCard>
 			)}
-			{state.ready &&
-				timeline.groups.map((group) => (
-					<SectionRule
-						key={group.label}
-						variant="heading"
-						title={group.label}
-						actions={<Badge variant="secondary">{group.items.length} 条记忆</Badge>}
-					>
-						<LayerCard>
-							<LayerCard.Body>
-								<Grid columns={1}>
-									<Timeline
-										ariaLabel={`${group.label} 的记忆`}
-										items={group.items.map((item) => {
-											const timestamp = new Date(item.timestamp).toISOString();
-											return {
-												id: item.id,
-												title: item.title,
-												at:
-													options.zoom === "month"
-														? `${timestamp.slice(5, 10)} ${timestamp.slice(11, 16)} UTC`
-														: `${timestamp.slice(11, 16)} UTC`,
-											};
-										})}
-									/>
-									<DataTable
-										className="octo-table"
-										aria-label={`${group.label} 的时间线数据`}
-										data={group.items}
-										columns={columns}
-										getRowId={(item) => item.id}
-										selected={selectedIds(params)}
-										onSelectedChange={(ids) => setParams(setSelection(params, ids))}
-										pageSize={20}
-									/>
-								</Grid>
-							</LayerCard.Body>
-						</LayerCard>
-					</SectionRule>
-				))}
+			{state.ready && timeline.groups.length > 0 && (
+				<TimelineRecords
+					groups={timeline.groups}
+					zoom={options.zoom}
+					table={table}
+					selected={selectedIds(params)}
+					onSelected={(ids) => setParams(setSelection(params, ids))}
+				/>
+			)}
 		</Grid>
 	);
 }
