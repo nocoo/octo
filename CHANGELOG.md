@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 — 2026-10-23
+
+### Changed
+
+- Bump development and dashboard dependencies (Biome, Vite, Wrangler, workers types, oxc-parser, react-router, lucide-react).
+
+### Security
+
+- Pin transitive `ip-address` to 10.7.4 (GHSA-rxp7-6hxx-x8q5).
+
 ## 0.5.0 — 2026-10-21
 
 ### Added

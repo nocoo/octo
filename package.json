@@ -1,6 +1,6 @@
 {
 	"name": "octo",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -25,8 +25,8 @@
 		"prepare": "husky"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.15",
-		"@cloudflare/workers-types": "5.20261016.1",
+		"@biomejs/biome": "2.6.2",
+		"@cloudflare/workers-types": "5.20261022.1",
 		"@playwright/test": "^1.58.0",
 		"@types/bun": "1.4.3",
 		"@types/react": "^19.2.0",
@@ -34,15 +34,16 @@
 		"@vitest/coverage-v8": "5.0.5",
 		"husky": "9.1.7",
 		"miniflare": "5.20260930.0-alpha",
-		"oxc-parser": "^0.125.0",
+		"oxc-parser": "0.155.0",
 		"smol-toml": "1.9.1",
 		"typescript": "7.0.2",
 		"undici": "7.29.1",
-		"vite": "^8.3.1",
+		"vite": "8.3.5",
 		"vitest": "5.0.5",
-		"wrangler": "4.151.1"
+		"wrangler": "4.152.0"
 	},
 	"overrides": {
+		"ip-address": "10.7.4",
 		"sharp": "0.35.5"
 	},
 	"workspaces": [

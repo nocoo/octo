@@ -105,7 +105,7 @@ test("places local and API name validation beside the name field", async ({
 	await expect(name).toHaveValue("合法名称");
 	await expect(dialog.getByRole("alert")).toBeInViewport();
 	await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
-	expect(await dialog.innerText()).not.toMatch(/raw English|Invalid name|Save|Cancel/);
+	expect(await dialog.textContent()).not.toMatch(/raw English|Invalid name|Save|Cancel/);
 	expect(writes).toBe(1);
 	await capture(page, info, "space-rename-field-error-mobile");
 	await page.keyboard.press("Escape");
