@@ -25,7 +25,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
-import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import { Text } from "@nocoo/basalt/components/text";
 import {
 	AlertCircle,
@@ -43,7 +42,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
-import { RecordTime } from "../components/record-display";
+import { RecordTime, SpaceLink } from "../components/record-display";
 import { formatNumber } from "../lib/format";
 import { type LibraryMemory, setSelection } from "../viewmodels/library";
 import {
@@ -184,7 +183,7 @@ export function TrashPage() {
 			id: "space",
 			header: "空间",
 			width: "24ch",
-			accessor: (item) => <TagBadge name={item.space} size="sm" />,
+			accessor: (item) => <SpaceLink space={item.space} />,
 			sortable: false,
 		},
 		{

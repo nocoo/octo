@@ -87,7 +87,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
 		expect(html).not.toContain("octo-title-icon");
 		expect(html).toMatch(/<h2\b[^>]*>记忆列表<\/h2>/);
-		for (const label of ["notes", "work"])
+		for (const label of ["work"])
 			expect(html).toMatch(
 				new RegExp(`<span[^>]*data-tag-color="${tagColorFor(label)}"[^>]*>${label}</span>`),
 			);
@@ -242,10 +242,10 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		const html = render(MemoriesPage, "/memories");
 		expect(html).toMatch(/<th[^>]*>空间<\/th>/);
 		expect(html).toMatch(/<th[^>]*>标签<\/th>/);
-		expect(html).toMatch(/<td[^>]*><div[^>]*><span[^>]*>s{64}<\/span>/);
+		expect(html).toMatch(/<td[^>]*><div[^>]*><a[^>]*>s{64}<\/a>/);
 	});
 	it.each(["/memories", "/memories?view=cards"])(
-		"wraps unbroken space and tag values inside their badges at %s",
+		"wraps unbroken space links and tag badges at %s",
 		(path) => {
 			overrides.list = { items: [{ ...memory, space: "s".repeat(64), tags: ["t".repeat(64)] }] };
 			const html = render(MemoriesPage, path);
@@ -259,7 +259,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 					/\.octo-memory-meta \[data-tag-color\][^{]*\{[^}]*overflow-wrap: anywhere/,
 				);
 			} else {
-				const gridStyle = html.match(/<div[^>]*style="([^"]*)"[^>]*><span[^>]*>s{64}<\/span>/)?.[1];
+				const gridStyle = html.match(/<div[^>]*style="([^"]*)"[^>]*><a[^>]*>s{64}<\/a>/)?.[1];
 				expect(gridStyle).toContain("overflow-wrap:anywhere");
 			}
 			expect(html).toContain("s".repeat(64));

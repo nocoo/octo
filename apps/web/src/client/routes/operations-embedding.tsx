@@ -13,7 +13,6 @@ import { Banner } from "@nocoo/basalt/components/banner";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
-import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
 	CircleAlert,
 	CircleCheck,
@@ -78,6 +77,7 @@ export function EmbeddingPage() {
 		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="向量模型"
+				description="配置嵌入网关与模型，检查连接并管理向量回填。"
 				actions={
 					<Button
 						icon={<RefreshCw aria-hidden="true" />}
@@ -366,7 +366,7 @@ export function SettingsPage() {
 			header: "模型",
 			width: "24ch",
 			sortValue: (profile) => profile.model,
-			accessor: (profile) => <TagBadge name={profile.model} size="sm" />,
+			accessor: (profile) => <span className="octo-record-title">{profile.model}</span>,
 		},
 		{
 			id: "dims",
@@ -407,6 +407,7 @@ export function SettingsPage() {
 		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="设置"
+				description="管理嵌入配置，查看各模型的向量维度与使用情况。"
 				actions={
 					<>
 						<Button

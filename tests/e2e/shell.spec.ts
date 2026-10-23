@@ -251,6 +251,14 @@ for (const [path, heading, endpoints] of pages) {
 			).toBe(true);
 		await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
 		await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+		const chrome = page.locator(".octo-page-header");
+		const subtitle = chrome.locator("header > div:first-child > div:first-child > p");
+		await expect(subtitle).toBeVisible();
+		await expect(subtitle).not.toHaveText("");
+		const backBox = await chrome.getByRole("button", { name: "返回上一页" }).boundingBox();
+		const subtitleBox = await subtitle.boundingBox();
+		expect(backBox && subtitleBox).toBeTruthy();
+		expect((backBox?.x ?? 0) + (backBox?.width ?? 0)).toBeLessThan(subtitleBox?.x ?? 0);
 		expect(await page.getByRole("heading", { level: 2 }).count()).toBeGreaterThan(0);
 		await expect(page.getByRole("button", { name: "返回上一页", exact: true })).toBeVisible();
 		await expect(page.getByRole("main")).toBeVisible();

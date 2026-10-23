@@ -150,7 +150,7 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 	expect(html).toContain('href="/memories/m1"');
 	expect(html).toContain('href="/memories/m1/edit"');
 	expect(html).toContain('aria-label="编辑 User title"');
-	for (const label of ["notes", "work"])
+	for (const label of ["work"])
 		expect(html).toMatch(
 			new RegExp(`<span[^>]*data-tag-color="${tagColorFor(label)}"[^>]*>${label}</span>`),
 		);

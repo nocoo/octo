@@ -40,9 +40,9 @@ it("bounds long space names without losing their accessible text", () => {
 	};
 	const html = render(SpacesPage, "/spaces");
 	const link = html.match(/<a\b[^>]*href="\/memories\?spaces=work"[^>]*>[\s\S]*?<\/a>/)?.[0];
-	expect(link).toContain("width:24ch");
+	expect(link).toContain("octo-record-title");
 	expect(link).toContain(`title="${name}"`);
-	expect(link).toContain("data-tag-color=");
+	expect(link).not.toContain("data-tag-color=");
 	expect(link?.replace(/<[^>]*>/g, "")).toBe(name);
 	expect(html).toContain(`aria-label="重命名空间 ${name}"`);
 });

@@ -143,7 +143,7 @@ describe("library page installed-component boundaries", () => {
 		}
 		expect(html).toContain("justify-content:flex-end");
 	});
-	it("applies native stable space colors with unchanged links and counts", () => {
+	it("renders space names as plain navigation links with unchanged counts", () => {
 		overrides.state = {
 			ready: true,
 			spaces: [
@@ -159,9 +159,8 @@ describe("library page installed-component boundaries", () => {
 		};
 		const html = render(SpacesPage, "/spaces?q=笔记");
 		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
-		expect(html).toMatch(
-			new RegExp(`<span[^>]*data-tag-color="${tagColorFor("notes")}"[^>]*>笔记</span>`),
-		);
+		expect(html).toMatch(/<a[^>]*href="\/memories\?spaces=notes"[^>]*>笔记<\/a>/);
+		expect(html).not.toContain("data-tag-color=");
 		expect(html).toContain('href="/memories?spaces=notes"');
 		expect(html).toMatch(/<td[^>]*class="[^"]*text-end[^>]*><span[^>]*>12<\/span><\/td>/);
 	});

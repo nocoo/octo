@@ -31,7 +31,10 @@ function renderShell(path = "/") {
 				<MemoryRouter initialEntries={[path]}>
 					<Routes>
 						<Route element={<AppShell />}>
-							<Route path="*" element={<PageHeader title="总览" />} />
+							<Route
+								path="*"
+								element={<PageHeader description="Page description" title="总览" />}
+							/>
 						</Route>
 					</Routes>
 				</MemoryRouter>

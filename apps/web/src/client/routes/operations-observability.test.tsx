@@ -98,9 +98,9 @@ const base: UsageDaily = {
 	bytes_out: 0,
 };
 const ids = (html: string) =>
-	[...html.matchAll(/<td[^>]*><span[^>]*>(key-(?:ten|two|unknown))<\/span><\/td>/g)].map(
-		(m) => m[1],
-	);
+	[
+		...html.matchAll(/<td[^>]*><a[^>]*href="\/keys"[^>]*>(key-(?:ten|two|unknown))<\/a><\/td>/g),
+	].map((m) => m[1]);
 
 beforeEach(() => {
 	fixture.usage = {};

@@ -1,7 +1,20 @@
+import { Link } from "@nocoo/basalt";
 import { TagBadge, type TagColor } from "@nocoo/basalt/components/tag-badge";
 import { ToggleGroup, ToggleGroupItem } from "@nocoo/basalt/components/toggle-group";
 import { formatDateTime } from "../lib/format";
 import { memoryTypeLabels } from "../viewmodels/memories";
+
+export function SpaceLink({ space, name = space }: { space: string; name?: string }) {
+	return (
+		<Link
+			href={`/memories?${new URLSearchParams({ spaces: space })}`}
+			className="octo-record-title"
+			title={name}
+		>
+			{name}
+		</Link>
+	);
+}
 
 export function RecordTime({ value, utc = false }: { value: string; utc?: boolean }) {
 	const formatted = formatDateTime(value, utc ? "UTC" : undefined);

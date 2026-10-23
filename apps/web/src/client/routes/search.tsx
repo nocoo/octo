@@ -1,4 +1,4 @@
-import { Badge, Button, Field, Input, LayerCard, Meter } from "@nocoo/basalt";
+import { Button, Field, Input, LayerCard, Meter } from "@nocoo/basalt";
 import { Banner } from "@nocoo/basalt/components/banner";
 import {
 	Collapsible,
@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
-import { MemoryTypeBadge, RecordTime } from "../components/record-display";
+import { MemoryTypeBadge, RecordTime, SpaceLink } from "../components/record-display";
 import { formatNumber } from "../lib/format";
 import {
 	type SearchItem,
@@ -106,7 +106,7 @@ export function SearchPage() {
 						overflowWrap: "anywhere",
 					}}
 				>
-					<TagBadge name={item.space} size="sm" />
+					<SpaceLink space={item.space} />
 					<MemoryTypeBadge type={item.type} />
 					{item.tags.map((tag) => (
 						<TagBadge key={tag} name={tag} size="sm" />
@@ -200,6 +200,7 @@ export function SearchPage() {
 			<MemoryFilters params={params} onChange={setParams}>
 				<PageHeader
 					title="搜索"
+					description="通过全文与语义检索查找记忆，按条件缩小结果范围。"
 					actions={
 						<Button
 							type="button"
@@ -410,18 +411,15 @@ export function SearchPage() {
 						role="status"
 					>
 						<span>{formatNumber(result.items.length)} 条结果</span>
-						<TagBadge
-							color="blue"
-							name={`全文候选：${formatNumber(result.channels.fts.candidates)}`}
-							size="sm"
-						/>
-						<TagBadge
-							color="teal"
-							name={`向量候选：${result.channels.vector.candidates === undefined ? "已跳过" : formatNumber(result.channels.vector.candidates)}`}
-							size="sm"
-						/>
+						<span>全文候选：{formatNumber(result.channels.fts.candidates)}</span>
+						<span>
+							向量候选：
+							{result.channels.vector.candidates === undefined
+								? "已跳过"
+								: formatNumber(result.channels.vector.candidates)}
+						</span>
 						{result.channels.vector.profile && (
-							<Badge variant="secondary">{result.channels.vector.profile}</Badge>
+							<span className="octo-muted">{result.channels.vector.profile}</span>
 						)}
 					</Grid>
 					{!result.items.length && !state.loading && !state.error && (

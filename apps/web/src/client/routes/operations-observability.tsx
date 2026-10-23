@@ -79,7 +79,11 @@ export function UsagePage() {
 			header: "密钥",
 			width: "18ch",
 			sortValue: (row) => row.key_id,
-			accessor: (row) => <TagBadge name={row.key_id} size="sm" />,
+			accessor: (row) => (
+				<Link href="/keys" className="octo-record-title">
+					{row.key_id}
+				</Link>
+			),
 		},
 		{
 			id: "calls",

@@ -75,7 +75,7 @@ import {
 } from "../components/layout/markdown-navigation";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
-import { MemoryTypeBadge, RecordTime, ViewSwitch } from "../components/record-display";
+import { MemoryTypeBadge, RecordTime, SpaceLink, ViewSwitch } from "../components/record-display";
 import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
 import { selectedIds, setSelection } from "../viewmodels/library";
 import {
@@ -136,7 +136,7 @@ function MemoryMetadata({ memory }: { memory: Pick<Memory, "tags" | "space" | "t
 				<span className="octo-muted" aria-hidden="true">
 					空间
 				</span>
-				<TagBadge name={memory.space} size="sm" />
+				<SpaceLink space={memory.space} />
 			</Grid>
 			<Grid columns={1} role="group" aria-label="类型" className="octo-memory-meta-group">
 				<span className="octo-muted" aria-hidden="true">
@@ -229,6 +229,7 @@ export function MemoriesPage() {
 			<MemoryFilters params={params} onChange={setParams}>
 				<PageHeader
 					title="记忆库"
+					description="浏览和筛选所有记忆，按空间、类型与标签整理知识。"
 					actions={
 						<ViewSwitch
 							label="显示方式"
@@ -383,7 +384,7 @@ export function MemoriesPage() {
 													columns={1}
 													style={{ overflowWrap: "anywhere", justifyItems: "start" }}
 												>
-													<TagBadge name={memory.space} size="sm" />
+													<SpaceLink space={memory.space} />
 												</Grid>
 											</TableCell>
 											<TableCell>
@@ -509,7 +510,7 @@ export function MemoryPage() {
 							{memory?.title ?? cachedTitle ?? "记忆"}
 						</span>
 					}
-					description={memory ? `第 ${memory.version} 版` : undefined}
+					description={memory ? `第 ${memory.version} 版` : "查看记忆正文、元数据与版本记录。"}
 					actions={
 						<>
 							{memory && (

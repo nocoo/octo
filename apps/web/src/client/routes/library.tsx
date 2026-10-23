@@ -50,7 +50,7 @@ import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } 
 import { useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
-import { RecordTime, ViewSwitch } from "../components/record-display";
+import { RecordTime, SpaceLink, ViewSwitch } from "../components/record-display";
 import { formatNumber } from "../lib/format";
 import {
 	type LibraryKind,
@@ -378,6 +378,7 @@ export function TagsPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="标签"
+				description="按主题浏览记忆，统一维护标签名称与合并关系。"
 				actions={
 					<>
 						<Input
@@ -585,21 +586,7 @@ export function SpacesPage() {
 			id: "name",
 			header: "空间",
 			width: "24ch",
-			accessor: (space) => (
-				<Link
-					href={`/memories?${new URLSearchParams({ spaces: space.slug })}`}
-					className="block"
-					style={{ width: "24ch" }}
-					title={space.name}
-				>
-					<TagBadge
-						name={space.name}
-						colorKey={space.slug}
-						size="sm"
-						className="inline-block truncate align-middle"
-					/>
-				</Link>
-			),
+			accessor: (space) => <SpaceLink space={space.slug} name={space.name} />,
 			sortValue: (space) => space.name,
 		},
 		{
@@ -681,6 +668,7 @@ export function SpacesPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="空间"
+				description="按空间组织记忆，管理名称、说明与所属密钥。"
 				actions={
 					<>
 						<Input
@@ -868,6 +856,7 @@ export function GraphPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="关系图"
+				description="探索记忆与标签之间的联系，查看当前样本的知识结构。"
 				actions={
 					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 						<RefreshCw size={16} aria-hidden="true" />
@@ -1016,7 +1005,7 @@ export function TimelinePage() {
 			id: "space",
 			header: "空间",
 			width: "24ch",
-			accessor: (item) => <TagBadge name={item.space} size="sm" />,
+			accessor: (item) => <SpaceLink space={item.space} />,
 			sortValue: (item) => item.space,
 		},
 	];
@@ -1040,6 +1029,7 @@ export function TimelinePage() {
 				<Grid columns={1} gap="lg">
 					<PageHeader
 						title="时间线"
+						description="按时间回顾记忆，支持事件时间与创建时间，统一使用 UTC。"
 						actions={
 							<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 								<RefreshCw size={16} aria-hidden="true" />

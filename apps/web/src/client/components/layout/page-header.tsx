@@ -8,7 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { backTarget } from "../../viewmodels/shell";
 
-export function PageHeader(props: PageHeaderProps) {
+export function PageHeader(props: PageHeaderProps & { description: string }) {
 	const { pathname } = useLocation();
 	const navigate = useNavigate();
 	return (

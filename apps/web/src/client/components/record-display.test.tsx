@@ -1,9 +1,20 @@
 import type { ToggleGroupProps } from "@nocoo/basalt/components/toggle-group";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import { MemoryTypeBadge, RecordTime, ViewSwitch } from "./record-display";
+import { MemoryTypeBadge, RecordTime, SpaceLink, ViewSwitch } from "./record-display";
 
 const control = vi.hoisted(() => ({ change: (_value: string) => {} }));
+
+it("renders space navigation as text and encodes the exact space filter", () => {
+	for (const name of [undefined, "Shared notes"]) {
+		const html = renderToStaticMarkup(
+			<SpaceLink space="work & notes" {...(name ? { name } : {})} />,
+		);
+		expect(html).toContain('href="/memories?spaces=work+%26+notes"');
+		expect(html).toContain(name ?? "work &amp; notes");
+		expect(html).not.toContain("data-tag-color");
+	}
+});
 vi.mock("@nocoo/basalt/components/toggle-group", async (original) => {
 	const module = await original<typeof import("@nocoo/basalt/components/toggle-group")>();
 	return {

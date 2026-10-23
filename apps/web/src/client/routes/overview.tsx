@@ -36,7 +36,7 @@ import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
-import { RecordTime } from "../components/record-display";
+import { RecordTime, SpaceLink } from "../components/record-display";
 import { formatNumber } from "../lib/format";
 import { activitySeries, OverviewModel } from "../viewmodels/overview";
 
@@ -87,7 +87,9 @@ export function OverviewPage() {
 					<TableRow key={`${row.day}:${row.key_id}`}>
 						<TableCell>{row.day}</TableCell>
 						<TableCell>
-							<TagBadge name={row.key_id} size="sm" />
+							<Link to="/keys" className="octo-record-title">
+								{row.key_id}
+							</Link>
 						</TableCell>
 						<TableCell textAlign="end">{formatNumber(row.calls)}</TableCell>
 						<TableCell textAlign="end">{formatNumber(row.errors)}</TableCell>
@@ -101,6 +103,7 @@ export function OverviewPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="总览"
+				description="查看知识库规模、最近更新与接口活动。"
 				actions={
 					<Button variant="secondary" disabled={state.loading} onClick={() => void model.load()}>
 						<RefreshCw size={16} />
@@ -337,7 +340,9 @@ export function OverviewPage() {
 								width: "28ch",
 								wrap: true,
 								sortable: false,
-								accessor: (change) => <TagBadge name={change.actor ?? "未提供"} size="sm" />,
+								accessor: (change) => (
+									<span className="octo-record-title">{change.actor ?? "未提供"}</span>
+								),
 							},
 							{
 								id: "time",
@@ -388,7 +393,7 @@ export function OverviewPage() {
 								width: "24ch",
 								wrap: true,
 								sortable: false,
-								accessor: (memory) => <TagBadge name={memory.space} size="sm" />,
+								accessor: (memory) => <SpaceLink space={memory.space} />,
 							},
 							{
 								id: "updated",
