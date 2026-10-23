@@ -40,7 +40,7 @@ describe("memory v1 routes", () => {
 		const { app, env, token } = await boot();
 		for (const body of [
 			"a".repeat(1_000_000),
-			"中".repeat(333_333) + "a",
+			`${"中".repeat(333_333)}a`,
 			"\u0000".repeat(1_000_000),
 		]) {
 			const res = await app.request(
@@ -59,7 +59,7 @@ describe("memory v1 routes", () => {
 				{
 					method: "PATCH",
 					headers: auth(token, { "If-Match": "1" }),
-					body: JSON.stringify({ body: body + "a" }),
+					body: JSON.stringify({ body: `${body}a` }),
 				},
 				env,
 			);
