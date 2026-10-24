@@ -23,7 +23,7 @@
         "oxc-parser": "0.155.0",
         "smol-toml": "1.9.1",
         "typescript": "7.0.2",
-        "undici": "7.29.1",
+        "undici": "7.30.1",
         "vite": "8.3.5",
         "vitest": "5.0.5",
         "wrangler": "4.152.0",
@@ -58,6 +58,7 @@
     "fast-uri": "3.1.9",
     "ip-address": "10.7.4",
     "sharp": "0.35.5",
+    "undici": "7.30.1",
   },
   "packages": {
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.7", "", {}, "sha1-fwhx2Zgk0jE31g+G/PYTD9WhtR8="],
@@ -1120,7 +1121,7 @@
 
     "typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "./bin/tsc" } }, "sha1-nsdz15VKjBgsF8xbvVdaoovFFYI="],
 
-    "undici": ["undici@7.29.1", "", {}, "sha1-d0HG/Is+GkjjAyODNkK/voQUQ60="],
+    "undici": ["undici@7.30.1", "", {}, "sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg=="],
 
     "undici-types": ["undici-types@8.9.0", "", {}, "sha1-4kDZfItdheU0fOc9JYZceQbB7J8="],
 
