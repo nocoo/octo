@@ -55,6 +55,7 @@
   },
   "overrides": {
     "body-parser": "2.4.0",
+    "fast-uri": "3.1.9",
     "ip-address": "10.7.4",
     "sharp": "0.35.5",
   },
@@ -711,7 +712,7 @@
 
     "fast-deep-equal": ["fast-deep-equal@3.1.3", "", {}, "sha1-On1WtVnWy8PrUSMlJE5hmmXGxSU="],
 
-    "fast-uri": ["fast-uri@3.1.8", "", {}, "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg=="],
+    "fast-uri": ["fast-uri@3.1.9", "", {}, "sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ=="],
 
     "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha1-7Sq5Z6MxreYvGNB32uGSaE1Q01A="],
 
