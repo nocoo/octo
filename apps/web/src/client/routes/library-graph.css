@@ -1,0 +1,244 @@
+.octo-graph-stage {
+	position: relative;
+	isolation: isolate;
+	min-block-size: var(--basalt-space-96);
+}
+
+.octo-graph-canvas {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	border-radius: var(--basalt-radius-card);
+	background-color: hsl(var(--basalt-secondary));
+}
+
+.octo-graph-tools {
+	position: absolute;
+	inset-block-start: var(--basalt-space-layout);
+	inset-inline: 0;
+	margin-inline: auto;
+	width: fit-content;
+	border: var(--basalt-border-width) solid hsl(var(--basalt-border));
+	border-radius: var(--basalt-radius-full);
+	background: hsl(var(--basalt-popover) / 0.88);
+	backdrop-filter: blur(var(--basalt-sheet-backdrop-blur));
+	padding: var(--basalt-space-0_5);
+}
+
+.octo-graph-panel {
+	position: absolute;
+	background: hsl(var(--basalt-popover) / 0.9);
+	backdrop-filter: blur(var(--basalt-sheet-backdrop-blur));
+}
+
+.octo-graph-panel--directory {
+	inset-block: var(--basalt-space-layout);
+	inset-inline-start: var(--basalt-space-layout);
+	inline-size: var(--basalt-space-64);
+	display: grid;
+	grid-template-rows: minmax(0, 1fr);
+}
+
+.octo-graph-panel--inspector {
+	inset-block-start: calc(var(--basalt-space-layout) * 4);
+	inset-block-end: var(--basalt-space-layout);
+	inset-inline-end: var(--basalt-space-layout);
+	inline-size: var(--basalt-space-72);
+	display: grid;
+	grid-template-rows: minmax(0, 1fr);
+}
+
+.octo-graph-panel--legend {
+	inset-block-end: var(--basalt-space-layout);
+	inset-inline: calc(var(--basalt-space-64) + var(--basalt-space-layout) * 2);
+	margin-inline: auto;
+	width: fit-content;
+	max-inline-size: calc(100% - var(--basalt-space-64) * 2);
+}
+
+.octo-graph-directory,
+.octo-graph-inspector {
+	grid-template-rows: auto minmax(0, 1fr);
+	min-block-size: 0;
+}
+
+.octo-graph-directory-head,
+.octo-graph-inspector-head {
+	align-items: center;
+	column-gap: var(--basalt-space-sm);
+	justify-items: start;
+}
+
+.octo-graph-directory-title {
+	grid-template-columns: auto auto;
+	align-items: center;
+	column-gap: var(--basalt-space-sm);
+	font-size: var(--basalt-text-sm);
+	font-weight: 500;
+}
+
+.octo-graph-directory-head > :last-child,
+.octo-graph-inspector-head > :last-child {
+	justify-self: end;
+}
+
+.octo-graph-directory-body,
+.octo-graph-inspector-body {
+	display: grid;
+	grid-template-rows: auto auto minmax(0, 1fr);
+	row-gap: var(--basalt-space-sm);
+	min-block-size: 0;
+}
+
+.octo-graph-inspector-body {
+	grid-template-rows: minmax(0, 1fr);
+}
+
+.octo-graph-list,
+.octo-graph-inspector-scroll {
+	min-block-size: 0;
+	block-size: 100%;
+}
+
+.octo-graph-inspector-title {
+	font-size: var(--basalt-text-base);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+
+.octo-graph-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	column-gap: var(--basalt-space-sm);
+	inline-size: 100%;
+	block-size: auto;
+	justify-content: stretch;
+	justify-items: start;
+	padding: var(--basalt-space-1) var(--basalt-space-2);
+	text-align: start;
+	font-weight: 400;
+}
+
+.octo-graph-row-label {
+	overflow: hidden;
+	max-inline-size: 100%;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--basalt-text-sm);
+}
+
+.octo-graph-row-count {
+	font-size: var(--basalt-text-xs);
+	font-variant-numeric: tabular-nums;
+	color: hsl(var(--basalt-muted-foreground));
+}
+
+.octo-graph-row[data-selected="true"] {
+	background: hsl(var(--basalt-selected));
+	color: hsl(var(--basalt-selected-foreground));
+}
+
+.octo-graph-dot {
+	display: block;
+	inline-size: var(--basalt-space-2);
+	block-size: var(--basalt-space-2);
+	border-radius: var(--basalt-radius-full);
+}
+
+.octo-graph-dot[data-kind="tag"] {
+	background: hsl(var(--basalt-chart-green));
+}
+
+.octo-graph-dot[data-kind="memory"] {
+	background: hsl(var(--basalt-chart-blue));
+}
+
+.octo-graph-dot[data-kind="cluster"] {
+	background: hsl(var(--basalt-chart-pearl));
+}
+
+.octo-graph-legend {
+	display: flex;
+	flex-wrap: wrap;
+	column-gap: var(--basalt-space-md);
+	row-gap: var(--basalt-space-xs);
+}
+
+.octo-graph-legend-item {
+	display: flex;
+	align-items: center;
+	column-gap: var(--basalt-space-xs);
+	font-size: var(--basalt-text-xs);
+	white-space: nowrap;
+}
+
+.octo-graph-taglist {
+	display: flex;
+	flex-wrap: wrap;
+	column-gap: var(--basalt-space-xs);
+	row-gap: var(--basalt-space-xs);
+}
+
+.octo-graph-hint {
+	max-inline-size: var(--basalt-space-72);
+}
+
+.octo-graph-sheet {
+	overflow: hidden;
+}
+
+.octo-graph-sheet > .octo-graph-directory,
+.octo-graph-sheet > .octo-graph-inspector {
+	min-block-size: 0;
+	flex: 1;
+}
+
+@media (width < 1024px) {
+	.octo-graph-panel--directory,
+	.octo-graph-panel--inspector {
+		display: none;
+	}
+
+	.octo-graph-panel--legend {
+		inset-inline: var(--basalt-space-layout);
+		max-inline-size: none;
+	}
+
+	.octo-graph-hint {
+		max-inline-size: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.octo-graph-tools,
+	.octo-graph-panel {
+		transition: none;
+	}
+}
+
+.octo-graph-page {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	min-block-size: 0;
+}
+
+.octo-graph-page > section {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	row-gap: var(--basalt-space-layout);
+	min-block-size: 0;
+}
+
+.octo-island:has(.octo-graph-page) {
+	align-content: stretch;
+}
+
+.octo-graph-sheet-scroll {
+	flex: 1;
+	min-block-size: 0;
+}
+
+.octo-graph-tables {
+	min-block-size: 0;
+}

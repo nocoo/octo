@@ -66,12 +66,11 @@ import {
 	buildGraph,
 	buildTimeline,
 	filterMemories,
-	type GraphNode,
 	graphOptions,
-	type LibraryGraph,
 	timelineOptions,
 	updateLibraryUrl,
 } from "../viewmodels/library-visualizations";
+import { GraphTables } from "./library-graph-tables";
 import { TimelineRecords } from "./library-timeline";
 import { SpaceRenameForm } from "./space-rename";
 
@@ -153,142 +152,6 @@ function SpaceFilter({
 				))}
 			</SelectContent>
 		</Select>
-	);
-}
-
-function GraphTables({
-	graph,
-	selected,
-	onSelected,
-}: {
-	graph: LibraryGraph;
-	selected: string[];
-	onSelected: (ids: string[]) => void;
-}) {
-	const labels = new Map(graph.nodes.map((node) => [node.id, node.label]));
-	const columns: DataTableColumn<GraphNode>[] = [
-		{
-			id: "label",
-			header: "节点",
-			width: "24ch",
-			accessor: (node) =>
-				node.href ? (
-					<Link href={node.href} className="octo-record-title" title={node.label}>
-						{node.kind === "tag" ? <TagBadge name={node.label} size="sm" /> : node.label}
-					</Link>
-				) : (
-					node.label
-				),
-			sortValue: (node) => node.label,
-			wrap: true,
-		},
-		{
-			id: "kind",
-			header: "类型",
-			width: "12ch",
-			accessor: (node) => (
-				<TagBadge
-					name={{ tag: "标签", memory: "记忆", cluster: "聚合节点" }[node.kind]}
-					color={({ tag: "blue", memory: "teal", cluster: "slate" } as const)[node.kind]}
-					size="sm"
-				/>
-			),
-			sortValue: (node) => node.kind,
-		},
-		{
-			id: "count",
-			header: "数量",
-			width: "10ch",
-			accessor: (node) => formatNumber(node.count),
-			sortValue: (node) => node.count,
-			textAlign: "end",
-			cellClassName: "tabular-nums",
-		},
-	];
-	return (
-		<Grid columns={1}>
-			<DataTable
-				className="octo-table"
-				aria-label="图谱节点"
-				data={graph.nodes}
-				columns={columns}
-				getRowId={(node) => node.id}
-				selected={selected}
-				onSelectedChange={onSelected}
-				pageSize={20}
-				empty={
-					<LayerCard.Empty
-						className="octo-empty"
-						icon={<Network aria-hidden="true" />}
-						title="没有符合筛选条件的节点。"
-						action={
-							<Button asChild>
-								<Link href="/memories">
-									<ArrowUpRight size={16} aria-hidden="true" />
-									浏览记忆
-								</Link>
-							</Button>
-						}
-					/>
-				}
-			/>
-			<DataTable
-				className="octo-table"
-				aria-label="图谱关系"
-				data={graph.links}
-				columns={[
-					{
-						id: "source",
-						header: "起点",
-						width: "24ch",
-						accessor: (link) => (
-							<span className="octo-record-title" title={labels.get(link.source)}>
-								{labels.get(link.source)}
-							</span>
-						),
-						sortValue: (link) => labels.get(link.source) ?? link.source,
-						wrap: true,
-					},
-					{
-						id: "target",
-						header: "终点",
-						width: "24ch",
-						accessor: (link) => (
-							<span className="octo-record-title" title={labels.get(link.target)}>
-								{labels.get(link.target)}
-							</span>
-						),
-						sortValue: (link) => labels.get(link.target) ?? link.target,
-						wrap: true,
-					},
-					{
-						id: "value",
-						header: "关联强度",
-						width: "12ch",
-						accessor: (link) => formatNumber(link.value),
-						sortValue: (link) => link.value,
-						textAlign: "end",
-					},
-				]}
-				getRowId={(link) => JSON.stringify([link.source, link.target])}
-				pageSize={20}
-				empty={
-					<LayerCard.Empty
-						className="octo-empty"
-						icon={<Network aria-hidden="true" />}
-						title="当前样本中没有关联。"
-						action={
-							<Button asChild>
-								<Link href="/memories">
-									<ArrowUpRight size={16} aria-hidden="true" />
-									浏览记忆
-								</Link>
-							</Button>
-						}
-					/>
-				}
-			/>
-		</Grid>
 	);
 }
 
@@ -853,11 +716,12 @@ export function GraphPage() {
 		() => buildGraph(filterMemories(state.memories, params), options.mode, options.cap),
 		[state.memories, params, options.mode, options.cap],
 	);
+	const populated = state.ready && graph.nodes.length > 0;
 	return (
-		<Grid columns={1} gap="lg">
+		<Grid columns={1} gap="lg" className={populated ? "octo-graph-page" : ""}>
 			<PageHeader
 				title="关系图"
-				description="探索记忆与标签之间的联系，查看当前样本的知识结构。"
+				description="在整屏画布上探索记忆与标签的联系，选中节点查看它的属性与关联。"
 				actions={
 					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 						<RefreshCw size={16} aria-hidden="true" />
@@ -907,7 +771,7 @@ export function GraphPage() {
 				variant="heading"
 				title="知识关联"
 				actions={
-					state.ready && graph.nodes.length > 0 ? (
+					populated ? (
 						<>
 							<span className="text-basalt-sm text-basalt-muted-foreground">
 								{graph.nodes.length} 个节点 · {graph.links.length} 条关联
@@ -938,37 +802,12 @@ export function GraphPage() {
 						/>
 					</LayerCard>
 				)}
-				{state.ready && graph.nodes.length > 0 && (
-					<LayerCard>
-						<LayerCard.Body>
-							<Grid columns={1}>
-								<Suspense fallback={<p role="status">正在加载图谱…</p>}>
-									<GraphCanvas graph={graph} />
-								</Suspense>
-							</Grid>
-						</LayerCard.Body>
-					</LayerCard>
+				{populated && (
+					<Suspense fallback={<LayerCard.Loading label="正在加载图谱…" />}>
+						<GraphCanvas graph={graph} />
+					</Suspense>
 				)}
 			</SectionRule>
-			{state.ready && graph.nodes.length > 0 && (
-				<SectionRule
-					variant="heading"
-					title="图谱数据表"
-					hint="可在表格或图谱中选择节点，所选节点会保存在网址中。"
-				>
-					<LayerCard>
-						<LayerCard.Body>
-							<Grid columns={1}>
-								<GraphTables
-									graph={graph}
-									selected={params.get("node") ? [params.get("node") as string] : []}
-									onSelected={(ids) => setParams(updateLibraryUrl(params, "node", ids[0] ?? ""))}
-								/>
-							</Grid>
-						</LayerCard.Body>
-					</LayerCard>
-				</SectionRule>
-			)}
 		</Grid>
 	);
 }

@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LibraryModel, type LibraryState } from "../viewmodels/library";
 import { GraphPage, SpacesPage, TagsPage, TimelinePage } from "./library";
+import { GraphTables } from "./library-graph-tables";
 
 const snapshot = vi.hoisted(() => ({ state: null as LibraryState | null }));
 vi.mock("../components/layout/use-model", () => ({
@@ -58,8 +59,6 @@ it("does not offer sorting for space actions", () => {
 it.each([
 	[TagsPage, "/tags", "标签", ["24ch", "10ch", "24ch"]],
 	[SpacesPage, "/spaces", "空间", ["24ch", "22ch", "26ch", "24ch", "10ch", "12ch"]],
-	[GraphPage, "/graph", "图谱节点", ["24ch", "12ch", "10ch"]],
-	[GraphPage, "/graph", "图谱关系", ["24ch", "24ch", "12ch"]],
 	[TimelinePage, "/timeline?view=table", "2026-10-17 的时间线数据", ["16ch", "24ch", "24ch"]],
 ] as const)(
 	"keeps %s record columns readable rather than squeezing them on mobile",
@@ -189,11 +188,10 @@ describe("library unknown, failed and empty states", () => {
 		const html = render(Page, url);
 		expect(html).toContain("请求失败，请稍后重试。");
 		expect(html).toContain("重试");
-		expect(html).toContain("Cached");
 		if (Page === GraphPage) {
 			expect(html).toContain("2 个节点");
 			expect(html).not.toContain("0 个节点");
-		}
+		} else expect(html).toContain("Cached");
 	});
 	it("renders contemporary events with compact UTC timestamps in chronological order", () => {
 		snapshot.state = {
@@ -241,3 +239,51 @@ describe("library unknown, failed and empty states", () => {
 		expect(monthlyStream).toContain("10-18 03:45:00 UTC");
 	});
 });
+
+it.each([
+	["图谱节点", ["24ch", "12ch", "10ch"]],
+	["图谱关系", ["24ch", "24ch", "12ch"]],
+] as const)(
+	"keeps graph %s columns readable rather than squeezing them on mobile",
+	(label, widths) => {
+		const html = renderToStaticMarkup(
+			<ThemeProvider persist={false}>
+				<MemoryRouter>
+					<GraphTables
+						graph={{
+							nodes: [
+								{
+									id: "tag:work",
+									label: "work",
+									kind: "tag",
+									count: 2,
+									href: "/memories?tags_all=work",
+								},
+								{
+									id: "tag:notes",
+									label: "notes",
+									kind: "tag",
+									count: 1,
+									href: "/memories?tags_all=notes",
+								},
+							],
+							links: [{ source: "tag:work", target: "tag:notes", value: 1 }],
+							clustered: 0,
+						}}
+						selected={[]}
+						onSelected={() => {}}
+					/>
+				</MemoryRouter>
+			</ThemeProvider>,
+		);
+		expect(html).toContain(`aria-label="${label} scroll area" tabindex="0"`);
+		const table = html.match(
+			new RegExp(`<table\\b[^>]*aria-label="${label}"[\\s\\S]*?<\\/table>`),
+		)?.[0];
+		const heads = table?.match(/<th\b[^>]*style="[^"]*"[^>]*>/g) ?? [];
+		expect(heads).toHaveLength(widths.length);
+		for (const [index, width] of widths.entries())
+			expect(heads[index]).toContain(`style="width:${width};min-width:${width}"`);
+		expect(table).toContain("whitespace-normal break-words");
+	},
+);

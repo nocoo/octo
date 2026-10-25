@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LibraryState } from "../viewmodels/library";
 import { GraphPage, SpacesPage, TagsPage, TimelinePage } from "./library";
 import { LibraryBulkActions } from "./library-bulk";
+import { GraphTables } from "./library-graph-tables";
 
 vi.mock("./library-graph", () => ({ default: () => null }));
 const overrides = vi.hoisted(() => ({ state: {} as Partial<LibraryState> }));
@@ -89,9 +90,7 @@ describe("library page installed-component boundaries", () => {
 		expect(section).toContain("text-basalt-xl");
 		expect(section).toContain("9 个节点 · 8 条关联");
 		expect(section).toContain("已聚合 5 个节点");
-		expect(section.indexOf("已聚合 5 个节点")).toBeLessThan(
-			section.indexOf('data-basalt-surface=""'),
-		);
+		expect(section).not.toContain('data-basalt-surface=""');
 		expect(html).not.toMatch(/<h3[^>]*>\d+ 个节点/);
 	});
 	it.each([
@@ -162,10 +161,43 @@ describe("library page installed-component boundaries", () => {
 		expect(html).toContain('href="/memories?spaces=notes"');
 		expect(html).toMatch(/<td[^>]*class="[^"]*text-end[^>]*><span[^>]*>12<\/span><\/td>/);
 	});
-	it.each([
-		[GraphPage, "/graph", "图谱节点"],
-		[TimelinePage, "/timeline?field=created_at&view=table", "的时间线数据"],
-	] as const)("styles populated visualization tables in %s", (Page, url, label) => {
+	it("styles the graph data tables used by the graph sheet", () => {
+		const graph = {
+			nodes: [
+				{
+					id: "tag:work",
+					label: "work",
+					kind: "tag" as const,
+					count: 1,
+					href: "/memories?tags_all=work",
+				},
+				{
+					id: "memory:m1",
+					label: "记忆",
+					kind: "memory" as const,
+					count: 1,
+					href: "/memories/m1",
+				},
+			],
+			links: [{ source: "tag:work", target: "memory:m1", value: 1 }],
+			clustered: 0,
+		};
+		const html = renderToStaticMarkup(
+			<ThemeProvider persist={false}>
+				<MemoryRouter>
+					<GraphTables graph={graph} selected={[]} onSelected={() => {}} />
+				</MemoryRouter>
+			</ThemeProvider>,
+		);
+		for (const label of ["图谱节点", "图谱关系"]) expect(html).toContain(`aria-label="${label}"`);
+		for (const table of html.matchAll(/<table\b[^>]*>/g)) expect(table[0]).toContain("octo-table");
+		for (const [kind, color] of [
+			["标签", "blue"],
+			["记忆", "teal"],
+		])
+			expect(html).toMatch(new RegExp(`<span[^>]*data-tag-color="${color}"[^>]*>${kind}</span>`));
+	});
+	it("styles populated timeline tables", () => {
 		overrides.state = {
 			ready: true,
 			memories: [
@@ -180,16 +212,9 @@ describe("library page installed-component boundaries", () => {
 				},
 			],
 		};
-		const html = render(Page, url);
-		expect(html).toContain(label);
+		const html = render(TimelinePage, "/timeline?field=created_at&view=table");
+		expect(html).toContain("的时间线数据");
 		for (const table of html.matchAll(/<table\b[^>]*>/g)) expect(table[0]).toContain("octo-table");
-		if (Page === GraphPage) {
-			for (const [kind, color] of [
-				["标签", "blue"],
-				["记忆", "teal"],
-			])
-				expect(html).toMatch(new RegExp(`<span[^>]*data-tag-color="${color}"[^>]*>${kind}</span>`));
-		}
 	});
 	it("shows exact UTC timestamp range controls without implying inclusive whole dates", () => {
 		const html = render(TimelinePage, "/timeline?from=2026-10-17T00%3A00%3A00Z&zoom=hour");

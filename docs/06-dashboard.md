@@ -32,7 +32,7 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 | `/search` | 搜索 | 与 API 功能对等：模式（hybrid / fts / vector）、融合方法和参数、过滤条件；每个结果展示各通道分数条（fts / vector / fused）。查询文本由 Worker 经 `QueryEmbedder` 转成向量（「向量模型」设置页配置的网关）；未配置时降级为全文 + 过滤，见 03 §2.1 |
 | `/tags` | 标签 | 用量表、重命名、合并（预览受影响条目数）；标签共现图 |
 | `/spaces` | 空间 | 列表、新建、重命名、所属密钥、记忆计数 |
-| `/graph` | 关系图 | 标签 ↔ memory 二部图 / 标签共现图（力导向，WebGL 或 canvas；节点数上限 + 聚类） |
+| `/graph` | 关系图 | 沉浸式整屏画布：标签 ↔ memory 二部图 / 标签共现图（力导向 canvas；节点数上限 + 聚类），左浮动节点列表、右浮动详情、顶部工具栏、数据表在 Sheet 中，见 §7 |
 | `/timeline` | 时间线 | 按 `event_time` / `created_at` 排布的事件时间线，可缩放 |
 | `/keys` | API Key | 按角色模板创建；明文只显示一次（可复制，关闭后不可再看）；轮换（宽限期）、吊销、过期；每个 key 的用量 sparkline |
 | `/usage` | 用量与健康 | 按 key / 日的调用数、错误率、延迟 P50 / P95；D1 体积、向量同步积压、cron 最近运行时间 |
@@ -87,3 +87,15 @@ alignment. No replacement controls or surface system are introduced.
 
 - L1：每个 ViewModel 的状态机、筛选和 URL 互相转换、diff 渲染模型、Markdown TOC 提取。
 - L3（Playwright Chromium，本地隔离）：搜索 → 阅读 → 编辑 → 冲突 → 回滚；创建 key → 明文只出现一次 → 吊销；删除 → 回收站 → 恢复 → 硬删除；移动端视口的阅读页。
+
+## 7. 关系图的沉浸式画布
+
+关系图是整页铺满内容岛的单一画布，不再由卡片分节堆叠：
+
+- 画布是 `LayerCard`（Basalt surface）内的 canvas，`resize` 由 ResizeObserver 驱动；主题切换时重新读取 token 重绘，`prefers-reduced-motion` 下关闭拖拽、动效与长时间布局计算。
+- 节点绘制使用 canvas 2D：标签为大节点（半径随度数增长，绿色 `--basalt-chart-green`），记忆为小点（蓝色 `--basalt-chart-blue`），聚合节点为灰色；名称只绘制度高标签、选中与悬停节点，随缩放保持 11px 屏幕字号。选中节点时其余节点与关联线降到低透明度，形成焦点。
+- 顶部居中 `Toolbar`：放大、缩小、适应画布、显示节点名称、暂停／继续布局计算、节点列表、图谱数据表。适应画布在布局结算后自动执行一次，用户手动缩放或拖动后不再强制覆盖。
+- 左侧浮动 `LayerCard`：节点搜索（`find`）、类型过滤（`kind`）、按度数排序的节点列表；点击即选中。右侧浮动 `LayerCard`：所选节点属性（`DescriptionList`）、跳转动作、关联节点列表；关闭即清除选择。
+- 选择与过滤保留在 URL（`node`、`find`、`kind`、`mode`、`space`、`cap`）；`node` 与 `find` 用 `replace` 写入，避免污染历史。`Esc` 不参与画布操作。
+- 小于 1024px 时两个浮动面板隐藏，改由工具栏打开 Sheet：`节点列表` 与 `节点详情`；选择节点后自动打开详情 Sheet。
+- 图谱数据表（节点表 + 关系表）从页面正文移入 `图谱数据表` Sheet，保持「图表都有表格备选」的可访问性契约，页面上不再出现表格。

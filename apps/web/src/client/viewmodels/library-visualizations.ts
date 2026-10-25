@@ -23,12 +23,16 @@ export function filterMemories(
 	);
 }
 export type GraphMode = "bipartite" | "cooccurrence";
+export type GraphKind = "tag" | "memory" | "cluster";
 export interface GraphNode {
 	id: string;
 	label: string;
-	kind: "tag" | "memory" | "cluster";
+	kind: GraphKind;
 	count: number;
 	href: string | null;
+	space?: string;
+	tags?: string[];
+	time?: string;
 }
 export interface GraphLink {
 	source: string;
@@ -83,6 +87,9 @@ export function buildGraph(memories: LibraryMemory[], mode: GraphMode, cap: numb
 				kind: "memory",
 				count: 1,
 				href: `/memories/${encodeURIComponent(memory.id)}`,
+				space: memory.space,
+				tags,
+				time: memory.event_time ?? memory.created_at,
 			});
 			for (const tag of tags) addEdge(edges, `tag:${tag}`, id);
 		} else {
@@ -126,6 +133,79 @@ export function buildGraph(memories: LibraryMemory[], mode: GraphMode, cap: numb
 		addEdge(grouped, pair[0], pair[1], link.value);
 	}
 	return { nodes: kept, links: [...grouped.values()], clustered: clustered.length };
+}
+
+export interface GraphRankedNode extends GraphNode {
+	degree: number;
+}
+export interface GraphNeighbor {
+	node: GraphNode;
+	value: number;
+}
+
+const kindOrder: Record<GraphKind, number> = { tag: 0, memory: 1, cluster: 2 };
+
+export function graphDegrees(graph: LibraryGraph): Map<string, number> {
+	const degrees = new Map<string, number>();
+	for (const node of graph.nodes) degrees.set(node.id, 0);
+	for (const link of graph.links) {
+		degrees.set(link.source, (degrees.get(link.source) ?? 0) + 1);
+		degrees.set(link.target, (degrees.get(link.target) ?? 0) + 1);
+	}
+	return degrees;
+}
+
+export function rankGraphNodes(graph: LibraryGraph): GraphRankedNode[] {
+	const degrees = graphDegrees(graph);
+	return graph.nodes
+		.map((node) => ({ ...node, degree: degrees.get(node.id) ?? 0 }))
+		.sort(
+			(left, right) =>
+				kindOrder[left.kind] - kindOrder[right.kind] ||
+				right.degree - left.degree ||
+				right.count - left.count ||
+				left.label.localeCompare(right.label),
+		);
+}
+
+export function filterGraphNodes(
+	nodes: GraphRankedNode[],
+	query: string,
+	kind: GraphKind | "all",
+): GraphRankedNode[] {
+	const needle = query.trim().toLocaleLowerCase();
+	return nodes.filter(
+		(node) =>
+			(kind === "all" || node.kind === kind) &&
+			(!needle || node.label.toLocaleLowerCase().includes(needle)),
+	);
+}
+
+export function graphNeighbors(graph: LibraryGraph, id: string): GraphNeighbor[] {
+	const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+	const neighbors: GraphNeighbor[] = [];
+	for (const link of graph.links) {
+		const other = link.source === id ? link.target : link.target === id ? link.source : null;
+		if (!other) continue;
+		const node = byId.get(other);
+		if (node) neighbors.push({ node, value: link.value });
+	}
+	return neighbors.sort(
+		(left, right) =>
+			right.value - left.value ||
+			right.node.count - left.node.count ||
+			left.node.label.localeCompare(right.node.label),
+	);
+}
+
+export function selectedGraphNode(graph: LibraryGraph, id: string | null): GraphNode | null {
+	if (!id) return null;
+	return graph.nodes.find((node) => node.id === id) ?? null;
+}
+
+export function graphFocus(graph: LibraryGraph, id: string | null): Set<string> | null {
+	if (!id || !graph.nodes.some((node) => node.id === id)) return null;
+	return new Set([id, ...graphNeighbors(graph, id).map((neighbor) => neighbor.node.id)]);
 }
 
 export interface TimelineOptions {

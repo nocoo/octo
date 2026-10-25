@@ -3,8 +3,14 @@ import type { LibraryMemory } from "./library";
 import {
 	buildGraph,
 	buildTimeline,
+	filterGraphNodes,
 	filterMemories,
+	graphDegrees,
+	graphFocus,
+	graphNeighbors,
 	graphOptions,
+	rankGraphNodes,
+	selectedGraphNode,
 	timelineOptions,
 	updateLibraryUrl,
 } from "./library-visualizations";
@@ -166,5 +172,68 @@ describe("timeline projection", () => {
 				(item) => item.id,
 			),
 		).toEqual(["a", "z"]);
+	});
+});
+
+describe("graph inspection model", () => {
+	const graph = buildGraph(memories, "bipartite", 150);
+
+	it("carries memory metadata for the inspector", () => {
+		expect(graph.nodes.find((node) => node.id === "memory:a")).toMatchObject({
+			space: "work",
+			tags: ["alpha", "beta"],
+			time: "2026-10-17T02:00:00Z",
+		});
+		expect(graph.nodes.find((node) => node.id === "memory:b")?.time).toBe("2026-10-17T01:00:00Z");
+	});
+
+	it("counts each link on both endpoints", () => {
+		const degrees = graphDegrees(graph);
+		expect(degrees.get("tag:alpha")).toBe(2);
+		expect(degrees.get("memory:a")).toBe(2);
+		expect(degrees.get("tag:gamma")).toBe(1);
+		expect(degrees.get("memory:c")).toBe(0);
+	});
+
+	it("ranks tags before memories, then by degree, count and label", () => {
+		expect(rankGraphNodes(graph).map((node) => [node.id, node.degree])).toEqual([
+			["tag:alpha", 2],
+			["tag:beta", 2],
+			["tag:gamma", 1],
+			["memory:b", 3],
+			["memory:a", 2],
+			["memory:c", 0],
+		]);
+	});
+
+	it("filters the directory without rebuilding the graph", () => {
+		const ranked = rankGraphNodes(graph);
+		expect(filterGraphNodes(ranked, "  GAM ", "all").map((node) => node.id)).toEqual(["tag:gamma"]);
+		expect(filterGraphNodes(ranked, "", "memory")).toHaveLength(3);
+		expect(filterGraphNodes(ranked, "", "tag")).toHaveLength(3);
+		expect(filterGraphNodes(ranked, "missing", "all")).toHaveLength(0);
+	});
+
+	it("lists neighbours by link strength and exposes the one-hop focus set", () => {
+		expect(
+			graphNeighbors(graph, "tag:alpha").map((neighbor) => [neighbor.node.id, neighbor.value]),
+		).toEqual([
+			["memory:a", 1],
+			["memory:b", 1],
+		]);
+		expect(graphNeighbors(graph, "memory:c")).toEqual([]);
+		expect([...(graphFocus(graph, "memory:a") ?? [])].sort()).toEqual([
+			"memory:a",
+			"tag:alpha",
+			"tag:beta",
+		]);
+		expect(graphFocus(graph, "memory:unknown")).toBeNull();
+		expect(graphFocus(graph, null)).toBeNull();
+	});
+
+	it("resolves the selected node from the URL param", () => {
+		expect(selectedGraphNode(graph, "tag:beta")?.label).toBe("beta");
+		expect(selectedGraphNode(graph, "tag:missing")).toBeNull();
+		expect(selectedGraphNode(graph, null)).toBeNull();
 	});
 });
