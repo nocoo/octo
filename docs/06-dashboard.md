@@ -109,7 +109,9 @@ Basalt `PageHeader` 的 `description` 与 `filters` 槽位会各占一行，本�
 ```
 
 - 每页只有一行 chrome：返回键 + `h1` + 内联 meta（计数、范围、一句话说明，溢出截断并用 `title` 保留全文）+ 右侧 actions。
-- 筛选、视图切换与主操作都在 `actions` 里，控件用 `size="sm"`（28px）；主操作永远最后一个；窄屏整行折到标题下方。
+- `h1` 用 `flex: 0 0 auto` 只占文本宽度（长标题在 100% 处折行并限两行），meta 在同一行紧随其后，不允许被标题盒撑开距离。
+- 筛选、视图切换与主操作都在 `actions` 里，全部使用 Basalt 原生默认密度（34px）：`Button`/`Input`/`SelectTrigger` 不传 `size="sm"`，`ToggleGroup` 也保持默认。**同一行不允许混用 28px 与 34px**——`ViewSwitch` 没有 compact 变体，所以整行统一到 34px。主操作永远最后一个；窄屏整行折到标题下方。
+- 记忆库的分页行同样统一 34px；`MultiSelect` 外层 `space-y` 会给按钮加 8px 下边距（它后面还有一个 sr-only 计数元素），`octo-filter-choice` 的两条规则只为消除这个额外高度，让筛选行与按钮基线一致。
 - 工具栏里的字段不再用 `Field` 包一层标签行，改用控件自身的 `aria-label` 与 `title`。
 - 只为标注单张表格而存在的 `SectionRule` 标题带已删除：表格的 `aria-label` 就是它的名字。页面有 ≥2 个内容区块时才保留 `SectionRule`，并优先 `variant="label"`（单行细标），`variant="heading"` 只留给真正的区块入口。
 - 表单项多的筛选（用量、审计、搜索）收进 `Popover`，页头只留一个「筛选（N）」按钮；`FilterBar` 的字段、chips 与「清除」都在弹层内，不占页面行。

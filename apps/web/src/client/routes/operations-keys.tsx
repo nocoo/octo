@@ -276,7 +276,6 @@ export function KeysPage() {
 				actions={
 					<>
 						<Button
-							size="sm"
 							icon={<RefreshCw aria-hidden="true" />}
 							variant="outline"
 							onClick={() => {
@@ -288,7 +287,6 @@ export function KeysPage() {
 							刷新
 						</Button>
 						<Button
-							size="sm"
 							icon={<Plus aria-hidden="true" />}
 							ref={createTrigger}
 							onClick={(event) => {

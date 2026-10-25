@@ -169,7 +169,7 @@ export function UsagePage() {
 					<>
 						<Popover>
 							<PopoverTrigger asChild>
-								<Button size="sm" variant="outline" aria-label="用量筛选" title="用量筛选">
+								<Button variant="outline" aria-label="用量筛选" title="用量筛选">
 									<Filter aria-hidden="true" />
 									筛选
 									{Object.values(filters).filter(Boolean).length
@@ -224,7 +224,6 @@ export function UsagePage() {
 											>
 												<Field label="开始日期">
 													<Input
-														size="sm"
 														type="date"
 														name="from"
 														aria-label="开始日期"
@@ -234,7 +233,6 @@ export function UsagePage() {
 												</Field>
 												<Field label="结束日期">
 													<Input
-														size="sm"
 														type="date"
 														name="to"
 														aria-label="结束日期"
@@ -245,7 +243,6 @@ export function UsagePage() {
 											</Grid>
 											<Field label="密钥标识">
 												<Input
-													size="sm"
 													className="ops-filter-key"
 													name="key_id"
 													aria-label="密钥标识"
@@ -255,16 +252,10 @@ export function UsagePage() {
 												/>
 											</Field>
 											<fieldset className="ops-filter-actions" aria-label="筛选操作">
-												<Button
-													size="sm"
-													type="button"
-													variant="ghost"
-													onClick={() => setParams("")}
-												>
+												<Button type="button" variant="ghost" onClick={() => setParams("")}>
 													清除筛选
 												</Button>
 												<Button
-													size="sm"
 													type="submit"
 													icon={<Filter aria-hidden="true" />}
 													variant="outline"
@@ -278,7 +269,6 @@ export function UsagePage() {
 							</PopoverContent>
 						</Popover>
 						<Button
-							size="sm"
 							icon={<RefreshCw aria-hidden="true" />}
 							variant="outline"
 							onClick={() => void model.load(search)}
@@ -441,7 +431,7 @@ export function AuditPage() {
 					<>
 						<Popover>
 							<PopoverTrigger asChild>
-								<Button size="sm" variant="outline" aria-label="审计筛选" title="审计筛选">
+								<Button variant="outline" aria-label="审计筛选" title="审计筛选">
 									<Filter aria-hidden="true" />
 									筛选
 									{Object.values(filters).filter(Boolean).length
@@ -498,7 +488,6 @@ export function AuditPage() {
 											>
 												<Field label="开始日期">
 													<Input
-														size="sm"
 														name="from"
 														type="date"
 														aria-label="开始日期"
@@ -508,7 +497,6 @@ export function AuditPage() {
 												</Field>
 												<Field label="结束日期">
 													<Input
-														size="sm"
 														name="to"
 														type="date"
 														aria-label="结束日期"
@@ -519,7 +507,6 @@ export function AuditPage() {
 											</Grid>
 											<Field label="状态码">
 												<Input
-													size="sm"
 													className="ops-filter-status"
 													aria-label="状态码"
 													title="状态码"
@@ -533,7 +520,6 @@ export function AuditPage() {
 											</Field>
 											<Field label="调用者">
 												<Input
-													size="sm"
 													className="ops-filter-actor"
 													name="actor"
 													aria-label="调用者"
@@ -544,7 +530,6 @@ export function AuditPage() {
 											</Field>
 											<Field label="路由模板">
 												<Input
-													size="sm"
 													className="ops-filter-route"
 													name="action"
 													aria-label="路由模板"
@@ -554,16 +539,10 @@ export function AuditPage() {
 												/>
 											</Field>
 											<fieldset className="ops-filter-actions" aria-label="筛选操作">
-												<Button
-													size="sm"
-													type="button"
-													variant="ghost"
-													onClick={() => setParams("")}
-												>
+												<Button type="button" variant="ghost" onClick={() => setParams("")}>
 													清除筛选
 												</Button>
 												<Button
-													size="sm"
 													type="submit"
 													icon={<Filter aria-hidden="true" />}
 													variant="outline"
@@ -577,7 +556,6 @@ export function AuditPage() {
 							</PopoverContent>
 						</Popover>
 						<Button
-							size="sm"
 							icon={<RefreshCw aria-hidden="true" />}
 							variant="outline"
 							onClick={() => void model.load(search)}
@@ -586,7 +564,6 @@ export function AuditPage() {
 							刷新
 						</Button>
 						<Button
-							size="sm"
 							icon={<Download aria-hidden="true" />}
 							loading={state.exporting}
 							onClick={async () => {

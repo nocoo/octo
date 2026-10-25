@@ -201,7 +201,6 @@ export function SearchPage() {
 				actions={
 					<>
 						<Input
-							size="sm"
 							className="w-basalt-48 min-w-0 max-w-full"
 							ref={queryInput}
 							key={query}
@@ -223,15 +222,13 @@ export function SearchPage() {
 							value={params.get("mode") ?? "hybrid"}
 							options={["hybrid", "fts", "vector"]}
 							inline
-							size="sm"
 							className="w-basalt-32"
 						/>
-						<Button size="sm" type="submit" form="search-options" loading={state.loading}>
+						<Button type="submit" form="search-options" loading={state.loading}>
 							<Search aria-hidden="true" />
 							搜索
 						</Button>
 						<Button
-							size="sm"
 							type="button"
 							variant="outline"
 							aria-label="高级融合选项"

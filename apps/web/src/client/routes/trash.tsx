@@ -229,7 +229,6 @@ export function TrashPage() {
 						style={{ display: "flex", flexWrap: "wrap", alignItems: "center" }}
 					>
 						<Input
-							size="sm"
 							id="trash-query"
 							className="w-basalt-56 max-w-full"
 							aria-label="筛选回收站"
@@ -249,7 +248,6 @@ export function TrashPage() {
 							}
 						>
 							<SelectTrigger
-								size="sm"
 								aria-label="按空间筛选"
 								title="空间"
 								className="w-basalt-36 max-w-full"
@@ -268,17 +266,11 @@ export function TrashPage() {
 								))}
 							</SelectContent>
 						</Select>
-						<Button
-							size="sm"
-							variant="outline"
-							disabled={locked}
-							onClick={() => void model.load(filters)}
-						>
+						<Button variant="outline" disabled={locked} onClick={() => void model.load(filters)}>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
 						<Button
-							size="sm"
 							variant="destructive"
 							disabled={locked || !state.ready || state.total === 0}
 							onClick={(event) => {

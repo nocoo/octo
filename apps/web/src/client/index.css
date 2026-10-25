@@ -207,8 +207,8 @@ a {
 }
 .octo-page-title {
 	display: -webkit-box;
-	flex: 0 1 auto;
-	min-inline-size: 12ch;
+	flex: 0 0 auto;
+	max-inline-size: 100%;
 	overflow: hidden;
 	overflow-wrap: anywhere;
 	-webkit-box-orient: vertical;
@@ -320,6 +320,9 @@ a {
 	flex: 1 1 var(--basalt-space-40);
 	max-inline-size: var(--basalt-space-80);
 	gap: var(--basalt-space-field-gap);
+}
+.octo-filter-choice > div {
+	display: flex;
 }
 .octo-search-controls {
 	display: flex;
@@ -440,6 +443,10 @@ html:not(.dark) {
 	html {
 		scroll-behavior: auto;
 	}
+}
+
+.octo-filter-choice > div > button {
+	margin-block-end: unset;
 }
 
 .octo-search-advanced[hidden] {

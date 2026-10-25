@@ -137,12 +137,7 @@ function SpaceFilter({
 			value={value || "__all__"}
 			onValueChange={(next) => onChange(next === "__all__" ? "" : next)}
 		>
-			<SelectTrigger
-				size="sm"
-				aria-label="按空间筛选"
-				title="按空间筛选"
-				className="w-basalt-32 max-w-full"
-			>
+			<SelectTrigger title="按空间筛选" className="w-basalt-32 max-w-full">
 				<SelectValue placeholder="全部空间" />
 			</SelectTrigger>
 			<SelectContent>
@@ -248,7 +243,6 @@ export function TagsPage() {
 				actions={
 					<>
 						<Input
-							size="sm"
 							className="w-basalt-40 max-w-full"
 							ref={focusFallback}
 							aria-label="筛选标签"
@@ -256,12 +250,7 @@ export function TagsPage() {
 							value={query}
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
 						/>
-						<Button
-							size="sm"
-							variant="outline"
-							disabled={state.busy}
-							onClick={() => void model.load()}
-						>
+						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
@@ -543,7 +532,6 @@ export function SpacesPage() {
 				actions={
 					<>
 						<Input
-							size="sm"
 							className="w-basalt-28 max-w-full"
 							aria-label="筛选空间"
 							ref={filter}
@@ -551,16 +539,11 @@ export function SpacesPage() {
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
 							placeholder="查找空间"
 						/>
-						<Button
-							size="sm"
-							variant="outline"
-							disabled={state.busy}
-							onClick={() => void model.load()}
-						>
+						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
-						<Button size="sm" onClick={(event) => openCreate(event.currentTarget)}>
+						<Button onClick={(event) => openCreate(event.currentTarget)}>
 							<FolderPlus size={16} aria-hidden="true" />
 							创建空间
 						</Button>
@@ -756,7 +739,6 @@ export function GraphPage() {
 							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
 						/>
 						<Input
-							size="sm"
 							className="w-basalt-20"
 							aria-label="节点上限"
 							title="节点上限（10–500）"
@@ -766,12 +748,7 @@ export function GraphPage() {
 							value={options.cap}
 							onChange={(event) => setParams(updateLibraryUrl(params, "cap", event.target.value))}
 						/>
-						<Button
-							size="sm"
-							variant="outline"
-							disabled={state.busy}
-							onClick={() => void model.load()}
-						>
+						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
@@ -870,17 +847,12 @@ export function TimelinePage() {
 									]}
 								/>
 								<CollapsibleTrigger asChild>
-									<Button size="sm" variant="outline">
+									<Button variant="outline">
 										<SlidersHorizontal size={16} aria-hidden="true" />
 										筛选
 									</Button>
 								</CollapsibleTrigger>
-								<Button
-									size="sm"
-									variant="outline"
-									disabled={state.busy}
-									onClick={() => void model.load()}
-								>
+								<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
 									<RefreshCw size={16} aria-hidden="true" />
 									刷新
 								</Button>
