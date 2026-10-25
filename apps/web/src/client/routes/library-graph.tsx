@@ -36,6 +36,8 @@ import { GraphTables } from "./library-graph-tables";
 import "./library-graph.css";
 
 interface Palette {
+	background: string;
+	dark: boolean;
 	tag: string;
 	memory: string;
 	cluster: string;
@@ -47,6 +49,8 @@ interface Palette {
 }
 
 const emptyPalette: Palette = {
+	background: "",
+	dark: true,
 	tag: "",
 	memory: "",
 	cluster: "",
@@ -281,6 +285,11 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 	const [params, setParams] = useSearchParams();
 	const host = useRef<HTMLDivElement>(null);
 	const force = useRef<ForceGraphMethods<GraphNode> | undefined>(undefined);
+	const backdrop = useRef<{
+		ctx: CanvasRenderingContext2D;
+		key: string;
+		fills: CanvasGradient[];
+	} | null>(null);
 	const fitted = useRef(false);
 	const manual = useRef(false);
 	const [box, setBox] = useState({ width: 0, height: 0 });
@@ -331,6 +340,8 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 			const style = getComputedStyle(element);
 			const token = (name: string) => style.getPropertyValue(`--basalt-${name}`).trim();
 			setPalette({
+				background: token("background"),
+				dark: document.documentElement.classList.contains("dark"),
 				tag: token("chart-green"),
 				memory: token("chart-blue"),
 				cluster: token("chart-pearl"),
@@ -500,22 +511,57 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 	const paintFrame = useCallback(
 		(ctx: CanvasRenderingContext2D) => {
 			const { width, height } = box;
-			if (!width || !height || !palette.primary) return;
-			const glow = ctx.createRadialGradient(
-				width * 0.5,
-				height * 0.46,
-				0,
-				width * 0.5,
-				height * 0.46,
-				Math.max(width, height) * 0.62,
-			);
-			glow.addColorStop(0, `hsl(${palette.primary} / 0.18)`);
-			glow.addColorStop(0.55, `hsl(${palette.tag} / 0.06)`);
-			glow.addColorStop(1, `hsl(${palette.tag} / 0)`);
+			if (!width || !height || !palette.primary || !palette.background) return;
+			const key = [
+				width,
+				height,
+				palette.background,
+				palette.primary,
+				palette.tag,
+				palette.dark,
+			].join("|");
+			let cached = backdrop.current;
+			if (!cached || cached.ctx !== ctx || cached.key !== key) {
+				const reach = Math.max(width, height);
+				const strength = palette.dark ? 1 : 0.34;
+				const halo = (cx: number, cy: number, radius: number, hue: string, alpha: number) => {
+					const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+					gradient.addColorStop(0, `hsl(${hue} / ${alpha * strength})`);
+					gradient.addColorStop(0.55, `hsl(${hue} / ${alpha * strength * 0.34})`);
+					gradient.addColorStop(1, `hsl(${hue} / 0)`);
+					return gradient;
+				};
+				const vignette = ctx.createRadialGradient(
+					width * 0.5,
+					height * 0.46,
+					reach * 0.26,
+					width * 0.5,
+					height * 0.46,
+					reach * 0.82,
+				);
+				vignette.addColorStop(0, `hsl(${palette.background} / 0)`);
+				vignette.addColorStop(
+					0.72,
+					`hsl(${palette.background} / ${0.55 * (palette.dark ? 1 : 0.6)})`,
+				);
+				vignette.addColorStop(1, `hsl(${palette.background} / ${0.95 * (palette.dark ? 1 : 0.7)})`);
+				const fills = [
+					halo(width * 0.5, height * 0.44, reach * 0.58, palette.primary, 0.34),
+					halo(width * 0.86, height * 0.14, reach * 0.42, palette.primary, 0.16),
+					halo(width * 0.2, height * 0.84, reach * 0.46, palette.tag, 0.16),
+					vignette,
+				];
+				cached = { ctx, key, fills };
+				backdrop.current = cached;
+			}
 			ctx.save();
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
-			ctx.fillStyle = glow;
+			ctx.fillStyle = `hsl(${palette.background})`;
 			ctx.fillRect(0, 0, width, height);
+			for (const fill of cached.fills) {
+				ctx.fillStyle = fill;
+				ctx.fillRect(0, 0, width, height);
+			}
 			ctx.restore();
 		},
 		[box, palette],
