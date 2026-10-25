@@ -30,13 +30,19 @@ test("usage and audit filters keep date ranges and submit/reset actions together
 			await expect(dates.getByLabel("开始日期", { exact: true })).toBeVisible();
 			await expect(dates.getByLabel("结束日期", { exact: true })).toBeVisible();
 			const actions = page.getByRole("group", { name: "筛选操作", exact: true });
-			const apply = await actions
-				.getByRole("button", { name: "应用筛选", exact: true })
-				.boundingBox();
-			const clear = await actions
-				.getByRole("button", { name: "清除筛选", exact: true })
-				.boundingBox();
-			expect(apply?.y).toBeCloseTo(clear?.y ?? -1, 0);
+			// the popover enters with a scale animation; measure once it has settled
+			await expect
+				.poll(async () => {
+					const apply = await actions
+						.getByRole("button", { name: "应用筛选", exact: true })
+						.boundingBox();
+					const clear = await actions
+						.getByRole("button", { name: "清除筛选", exact: true })
+						.boundingBox();
+					if (!apply || !clear) return Number.POSITIVE_INFINITY;
+					return Math.abs(apply.y - clear.y);
+				})
+				.toBeLessThan(0.5);
 			expect(
 				await actions.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
 			).toBe(true);

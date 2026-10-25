@@ -93,7 +93,14 @@ test("pagination aligns labels and controls while date filters follow the native
 		await page.getByRole("button", { name: "审计筛选", exact: true }).click();
 		const from = page.getByLabel("开始日期", { exact: true });
 		const to = page.getByLabel("结束日期", { exact: true });
-		expect((await from.boundingBox())?.y).toBeCloseTo((await to.boundingBox())?.y ?? -1, 0);
+		await expect
+			.poll(async () => {
+				const a = await from.boundingBox();
+				const b = await to.boundingBox();
+				if (!a || !b) return Number.POSITIVE_INFINITY;
+				return Math.abs(a.y - b.y);
+			})
+			.toBeLessThan(1);
 		await expect(from).toHaveCSS("color-scheme", colorScheme);
 	}
 });
