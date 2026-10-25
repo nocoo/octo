@@ -400,6 +400,7 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 
 	const selectNode = useCallback(
 		(id: string) => {
+			manual.current = true;
 			setParam("node", id);
 			const target = (data.nodes as VisualNode[]).find((node) => node.id === id);
 			if (target && Number.isFinite(target.x) && Number.isFinite(target.y))
@@ -578,6 +579,9 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 					/>
 				)}
 			</LayerCard>
+			<p className="sr-only" aria-live="polite">
+				{selected ? `已选择${kindLabel[selected.kind]}：${selected.label}` : ""}
+			</p>
 			<Toolbar aria-label="关系图工具" className="octo-graph-tools">
 				<Toolbar.Button
 					aria-label="放大"

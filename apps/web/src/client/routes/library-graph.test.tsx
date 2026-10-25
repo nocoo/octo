@@ -104,6 +104,8 @@ it("opens the inspector for a memory node with its metadata and navigation", () 
 	expect(html).toContain("打开记忆");
 	expect(html).toContain('href="/memories?spaces=notes"');
 	expect(html).toContain("关联节点 · 2");
+	expect(html).toContain('aria-live="polite"');
+	expect(html).toContain("已选择记忆：Borrowed essay collection");
 });
 
 it("adapts the inspector action to tags and clusters", () => {
