@@ -272,7 +272,7 @@ export function KeysPage() {
 		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="接口密钥"
-				meta="明文仅展示一次 · 用量统计最近 30 个 UTC 日期（含今日）"
+				meta="明文仅展示一次"
 				actions={
 					<>
 						<Button
