@@ -198,6 +198,34 @@ export function graphNeighbors(graph: LibraryGraph, id: string): GraphNeighbor[]
 	);
 }
 
+export function graphMainComponent(graph: LibraryGraph): Set<string> {
+	const adjacency = new Map<string, string[]>();
+	for (const node of graph.nodes) adjacency.set(node.id, []);
+	for (const link of graph.links) {
+		adjacency.get(link.source)?.push(link.target);
+		adjacency.get(link.target)?.push(link.source);
+	}
+	const seen = new Set<string>();
+	let largest: string[] = [];
+	for (const node of graph.nodes) {
+		if (seen.has(node.id)) continue;
+		const stack = [node.id];
+		const component: string[] = [];
+		seen.add(node.id);
+		while (stack.length > 0) {
+			const current = stack.pop() as string;
+			component.push(current);
+			for (const next of adjacency.get(current) ?? []) {
+				if (seen.has(next)) continue;
+				seen.add(next);
+				stack.push(next);
+			}
+		}
+		if (component.length > largest.length) largest = component;
+	}
+	return new Set(largest);
+}
+
 export function selectedGraphNode(graph: LibraryGraph, id: string | null): GraphNode | null {
 	if (!id) return null;
 	return graph.nodes.find((node) => node.id === id) ?? null;

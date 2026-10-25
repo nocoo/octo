@@ -7,6 +7,7 @@ import {
 	filterMemories,
 	graphDegrees,
 	graphFocus,
+	graphMainComponent,
 	graphNeighbors,
 	graphOptions,
 	rankGraphNodes,
@@ -235,5 +236,29 @@ describe("graph inspection model", () => {
 		expect(selectedGraphNode(graph, "tag:beta")?.label).toBe("beta");
 		expect(selectedGraphNode(graph, "tag:missing")).toBeNull();
 		expect(selectedGraphNode(graph, null)).toBeNull();
+	});
+});
+
+describe("graph main component", () => {
+	it("returns the largest connected component and ignores isolates", () => {
+		const graph = buildGraph(memories, "bipartite", 150);
+		const mainComponent = graphMainComponent(graph);
+		expect([...mainComponent].sort()).toEqual([
+			"memory:a",
+			"memory:b",
+			"tag:alpha",
+			"tag:beta",
+			"tag:gamma",
+		]);
+		expect(mainComponent.has("memory:c")).toBe(false);
+	});
+
+	it("keeps the first component when sizes tie", () => {
+		const graph = buildGraph(memories, "cooccurrence", 150);
+		expect([...graphMainComponent(graph)].sort()).toEqual(["tag:alpha", "tag:beta", "tag:gamma"]);
+	});
+
+	it("handles an empty graph", () => {
+		expect(graphMainComponent({ nodes: [], links: [], clustered: 0 }).size).toBe(0);
 	});
 });

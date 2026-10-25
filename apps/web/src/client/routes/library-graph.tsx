@@ -26,6 +26,7 @@ import {
 	type GraphRankedNode,
 	graphDegrees,
 	graphFocus,
+	graphMainComponent,
 	graphNeighbors,
 	type LibraryGraph,
 	rankGraphNodes,
@@ -138,6 +139,7 @@ function GraphDirectory({
 							<Button
 								key={node.id}
 								variant="ghost"
+								size="sm"
 								className="octo-graph-row"
 								data-selected={node.id === selectedId}
 								aria-pressed={node.id === selectedId}
@@ -250,6 +252,7 @@ function GraphInspector({
 									<Button
 										key={neighbor.node.id}
 										variant="ghost"
+										size="sm"
 										className="octo-graph-row"
 										onClick={() => onSelect(neighbor.node.id)}
 									>
@@ -314,6 +317,7 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 		[graph, selected],
 	);
 	const focus = useMemo(() => graphFocus(graph, selectedId), [graph, selectedId]);
+	const mainComponent = useMemo(() => graphMainComponent(graph), [graph]);
 	const labelIds = useMemo(
 		() =>
 			new Set(
@@ -498,14 +502,15 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 		(duration = 400) => {
 			const fg = force.current;
 			if (!fg) return;
-			fg.zoomToFit(duration, 28);
-			const shift = compact ? 0 : 140;
+			const keep = mainComponent.size * 2 >= graph.nodes.length ? mainComponent : null;
+			fg.zoomToFit(duration, 28, keep ? (node) => keep.has((node as GraphNode).id) : undefined);
+			const shift = compact ? 0 : 120;
 			if (shift === 0) return;
 			const center = fg.centerAt();
 			const scale = fg.zoom();
 			if (Number.isFinite(center.x) && scale > 0) fg.centerAt(center.x - shift / scale, center.y);
 		},
-		[compact],
+		[compact, graph.nodes.length, mainComponent],
 	);
 
 	const paintFrame = useCallback(
