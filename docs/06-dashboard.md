@@ -56,7 +56,7 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 ## 5. 设计和动效（2026 标准）
 
 - 动效遵循 Basalt `DESIGN.md` 的 motion 规则：时长 150–250ms，用标准 easing；尊重 `prefers-reduced-motion`。
-- 用 View Transitions API 做列表到详情的共享元素过渡（不支持时降级为淡入）。
+- 导航与列表到详情的跳转不使用 View Transitions：侧栏切页、记忆标题点击都是即时切换。标题如果带共享元素动画，会和单行页头的静态排版冲突，也让「记忆库」这样的列表页多出一次无意义动效。
 - 骨架屏只用在首屏加载超过 200ms 时；操作后乐观更新 + toast，提供撤销（删除可以从回收站撤销）。
 - 深色 / 浅色主题（Basalt ThemeProvider），accent 用 octo 品牌色（logo 按 `zhengli-project-logo` skill 另外生成）。
 - 移动端：侧栏变成 Sheet，阅读页单栏，TOC 改成浮动按钮。

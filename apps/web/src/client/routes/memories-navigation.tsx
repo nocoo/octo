@@ -1,9 +1,4 @@
-import { flushSync } from "react-dom";
-import { Link, type LinkProps, useNavigate } from "react-router";
-
-export function memoryTransition(id: string): string {
-	return `memory-${id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
-}
+import { Link, type LinkProps } from "react-router";
 
 export function MemoryLink({
 	memoryId,
@@ -11,38 +6,8 @@ export function MemoryLink({
 	children,
 	...props
 }: Omit<LinkProps, "to"> & { memoryId: string; memoryTitle: string }) {
-	const navigate = useNavigate();
-	const to = `/memories/${encodeURIComponent(memoryId)}`;
 	return (
-		<Link
-			{...props}
-			to={to}
-			state={{ memoryTitle }}
-			style={{ viewTransitionName: memoryTransition(memoryId) }}
-			onClick={(event) => {
-				props.onClick?.(event);
-				if (
-					event.defaultPrevented ||
-					event.button !== 0 ||
-					event.metaKey ||
-					event.ctrlKey ||
-					event.shiftKey ||
-					event.altKey ||
-					(props.target && props.target !== "_self") ||
-					props.download !== undefined ||
-					!document.startViewTransition ||
-					window.matchMedia("(prefers-reduced-motion: reduce)").matches
-				)
-					return;
-				event.preventDefault();
-				const transition = document.startViewTransition(() => {
-					flushSync(() => navigate(to, { state: { memoryTitle } }));
-					document.querySelector(".octo-island")?.scrollTo(0, 0);
-					window.scrollTo(0, 0);
-				});
-				void transition.finished.catch(() => undefined);
-			}}
-		>
+		<Link {...props} to={`/memories/${encodeURIComponent(memoryId)}`} state={{ memoryTitle }}>
 			{children}
 		</Link>
 	);

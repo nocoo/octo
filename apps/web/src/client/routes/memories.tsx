@@ -92,7 +92,7 @@ import { EditorModel } from "../viewmodels/memories-editor";
 import { diffLines, markdownContents } from "../viewmodels/memories-markdown";
 import { LibraryBulkActions } from "./library-bulk";
 import { Choice, MemoryFilters } from "./memories-filters";
-import { MemoryLink, memoryTransition } from "./memories-navigation";
+import { MemoryLink } from "./memories-navigation";
 
 function Feedback({
 	error,
@@ -508,11 +508,7 @@ export function MemoryPage() {
 		<Grid columns={1} gap="lg" className="octo-memory-reader">
 			<Sheet open={tocOpen} onOpenChange={setTocOpen}>
 				<PageHeader
-					title={
-						<span style={{ viewTransitionName: memoryTransition(id) }}>
-							{memory?.title ?? cachedTitle ?? "记忆"}
-						</span>
-					}
+					title={memory?.title ?? cachedTitle ?? "记忆"}
 					meta={memory ? `第 ${memory.version} 版` : undefined}
 					actions={
 						<>

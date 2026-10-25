@@ -158,13 +158,7 @@ export function AppShell() {
 		setDrawer(false);
 		setPalette(false);
 		setQuery("");
-		if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-			document.startViewTransition(() =>
-				flushSync(() => {
-					void navigate(path);
-				}),
-			);
-		} else void navigate(path);
+		void navigate(path);
 	}
 	const active = (href: string) =>
 		href === "/"

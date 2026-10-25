@@ -433,11 +433,6 @@ html:not(.dark) {
 		display: none;
 	}
 }
-::view-transition-old(root),
-::view-transition-new(root) {
-	animation-duration: var(--basalt-motion-normal);
-	animation-timing-function: var(--basalt-motion-ease);
-}
 @media (prefers-reduced-motion: reduce) {
 	::view-transition-old(root),
 	::view-transition-new(root) {
