@@ -964,3 +964,23 @@ top element, and a canvas resize observer that always assigns a fresh object
 re-renders forever. Read the component's DOM contract before using it as
 positioning scaffolding, and confirm "is it painted" with pixel probes rather than
 screenshots alone.
+
+### 2026-10-25 - Mounting hidden overlays steals focus
+
+The search page kept its options popover mounted with `forceMount` so drafts would
+survive, but a force-mounted closed Radix popover mounts a FocusScope: on every
+page load it moved focus to its first control 16ms after the query box had been
+focused, so the `/` shortcut appeared broken and the popover's memory filters sat
+in a 55%-wide rail. Mount the panel only while it is open, and let the popover own
+its own state. Corollary for the chrome cleanup: a header row that wraps is not a
+saving - measure the rendered header height on the real page, not the diff.
+
+### 2026-10-25 - Device pixels are not CSS pixels
+
+The graph backdrop looked perfect in every headless screenshot and empty on the
+owner's Retina screen. The paint callback reset the canvas transform before
+filling `box.width x box.height`, which are CSS units: at devicePixelRatio 2 that
+covers a quarter of the bitmap, so the gradient stopped mid-canvas. Headless
+Chromium defaults to DPR 1, which hid it. Verify canvas painting at
+`deviceScaleFactor: 2` before calling a visual fix done, and scale every
+transform reset by `canvas.width / cssWidth`.
