@@ -207,7 +207,8 @@ a {
 }
 .octo-page-title {
 	display: -webkit-box;
-	min-inline-size: 0;
+	flex: 0 1 auto;
+	min-inline-size: 12ch;
 	overflow: hidden;
 	overflow-wrap: anywhere;
 	-webkit-box-orient: vertical;
@@ -219,6 +220,7 @@ a {
 	letter-spacing: -0.01em;
 }
 .octo-page-meta {
+	flex: 0 1 auto;
 	min-inline-size: 0;
 	max-inline-size: var(--basalt-space-96);
 	overflow: hidden;

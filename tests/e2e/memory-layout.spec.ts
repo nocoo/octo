@@ -111,6 +111,8 @@ test("memory filters occupy the content rail and align fields independently of h
 		await page.setViewportSize({ width, height: 900 });
 		for (const path of ["/memories", `/search?q=${encodeURIComponent(memory.title)}`]) {
 			await page.goto(path);
+			if (path.startsWith("/search"))
+				await page.getByRole("button", { name: "高级融合选项", exact: true }).click();
 			await page.getByRole("button", { name: "展开或收起记忆筛选", exact: true }).click();
 			const filters = page.getByRole("form", { name: "记忆筛选", exact: true });
 			await expect(filters).toBeVisible();
