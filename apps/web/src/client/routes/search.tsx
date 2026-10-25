@@ -246,7 +246,6 @@ export function SearchPage() {
 								</Button>
 							</PopoverTrigger>
 							<PopoverContent
-								forceMount
 								align="end"
 								style={{ width: "min(44rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
 							>
@@ -351,7 +350,7 @@ export function SearchPage() {
 										</Field>
 									</Grid>
 								</form>
-								<MemoryFilters params={params} onChange={setParams} />
+								{advancedOpen ? <MemoryFilters params={params} onChange={setParams} /> : null}
 							</PopoverContent>
 						</Popover>
 					</>

@@ -206,10 +206,12 @@ a {
 	column-gap: var(--basalt-space-sm);
 }
 .octo-page-title {
+	display: -webkit-box;
 	min-inline-size: 0;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 	font-family: var(--basalt-font-display);
 	font-size: var(--basalt-text-3xl);
 	font-weight: 600;

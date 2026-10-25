@@ -90,6 +90,7 @@ test("pagination aligns labels and controls while date filters follow the native
 	for (const colorScheme of ["light", "dark"] as const) {
 		await page.emulateMedia({ colorScheme });
 		await page.goto("/audit");
+		await page.getByRole("button", { name: "审计筛选", exact: true }).click();
 		const from = page.getByLabel("开始日期", { exact: true });
 		const to = page.getByLabel("结束日期", { exact: true });
 		expect((await from.boundingBox())?.y).toBeCloseTo((await to.boundingBox())?.y ?? -1, 0);

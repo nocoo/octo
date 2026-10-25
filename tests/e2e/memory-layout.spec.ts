@@ -115,9 +115,13 @@ test("memory filters occupy the content rail and align fields independently of h
 			const filters = page.getByRole("form", { name: "记忆筛选", exact: true });
 			await expect(filters).toBeVisible();
 			const widthRatio = await filters.evaluate((form) => {
-				const island = form.closest(".octo-island");
+				const island = document.querySelector(".octo-island");
 				if (!island) throw new Error("Expected the application content island");
-				return form.getBoundingClientRect().width / island.getBoundingClientRect().width;
+				// /search hosts the memory filters inside the search-options popover, so the
+				// panel is the rail there; elsewhere the page band must fill the island.
+				const panel =
+					form.closest("[data-radix-popper-content-wrapper]") ?? form.closest(".z-50") ?? island;
+				return form.getBoundingClientRect().width / panel.getBoundingClientRect().width;
 			});
 			expect(widthRatio).toBeGreaterThan(0.85);
 			if (width === 1440) {

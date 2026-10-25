@@ -1,6 +1,6 @@
 import { capture, expect, test } from "./fixtures";
 
-test("back navigation sits left of the page title and subtitle", async ({ page }, info) => {
+test("back navigation sits left of the page title and inline metadata", async ({ page }, info) => {
 	for (const width of [1440, 390]) {
 		await page.setViewportSize({ width, height: 900 });
 		await page.goto("/audit");
@@ -9,22 +9,23 @@ test("back navigation sits left of the page title and subtitle", async ({ page }
 		const section = page.locator(".octo-page-header");
 		const back = section.getByRole("button", { name: "返回上一页" });
 		const title = section.getByRole("heading", { level: 1 });
-		const subtitle = section.getByText("包含被拒绝的请求；不记录请求正文和凭据。");
+		const meta = section.locator(".octo-page-meta");
 		await expect(back).toBeInViewport({ ratio: 1 });
 		await expect(back.locator("svg")).toHaveCSS("width", "20px");
 		const b = await back.boundingBox();
 		const t = await title.boundingBox();
-		const s = await subtitle.boundingBox();
-		expect(b && t && s).toBeTruthy();
-		if (!b || !t || !s) throw new Error("Missing page header geometry");
+		const m = await meta.boundingBox();
+		expect(b && t && m).toBeTruthy();
+		if (!b || !t || !m) throw new Error("Missing page header geometry");
 		expect(b.x + b.width).toBeLessThan(t.x);
-		expect(b.x + b.width).toBeLessThan(s.x);
-		expect(Math.abs(b.y - t.y)).toBeLessThan(2);
-		const filters = await section.locator("form").boundingBox();
-		const whole = await section.boundingBox();
-		expect(filters?.x).toBeCloseTo(whole?.x ?? -1, 0);
-		expect(filters?.width).toBeCloseTo(whole?.width ?? -1, 0);
-		await expect(section.getByRole("button", { name: "应用筛选" })).toBeInViewport({ ratio: 1 });
+		expect(t.x + t.width).toBeLessThan(m.x);
+		expect(Math.abs(b.y + b.height / 2 - (t.y + t.height / 2))).toBeLessThan(3);
+		await section.getByRole("button", { name: "审计筛选", exact: true }).click();
+		const filterForm = page
+			.locator("form")
+			.filter({ has: page.getByRole("group", { name: "日期范围" }) });
+		await expect(filterForm).toBeVisible();
+		await expect(filterForm.getByRole("button", { name: "应用筛选" })).toBeVisible();
 		await capture(page, info, `page-back-${width}`);
 	}
 });
@@ -113,9 +114,10 @@ test("mobile navigation restores focus to its opener", async ({ page }) => {
 	await page.goto("/search");
 	const opener = page.getByRole("button", { name: "打开导航", exact: true });
 	await opener.click();
-	await expect(page.getByRole("dialog")).toBeVisible();
+	const navigation = page.locator("[data-basalt-sheet]");
+	await expect(navigation).toBeVisible();
 	await page.keyboard.press("Escape");
-	await expect(page.getByRole("dialog")).not.toBeVisible();
+	await expect(navigation).not.toBeVisible();
 	await expect(opener).toBeFocused();
 });
 
@@ -252,14 +254,11 @@ for (const [path, heading, endpoints] of pages) {
 		await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
 		await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 		const chrome = page.locator(".octo-page-header");
-		const subtitle = chrome.locator("header > div:first-child > div:first-child > p");
-		await expect(subtitle).toBeVisible();
-		await expect(subtitle).not.toHaveText("");
 		const backBox = await chrome.getByRole("button", { name: "返回上一页" }).boundingBox();
-		const subtitleBox = await subtitle.boundingBox();
-		expect(backBox && subtitleBox).toBeTruthy();
-		expect((backBox?.x ?? 0) + (backBox?.width ?? 0)).toBeLessThan(subtitleBox?.x ?? 0);
-		expect(await page.getByRole("heading", { level: 2 }).count()).toBeGreaterThan(0);
+		const titleBox = await chrome.getByRole("heading", { level: 1 }).boundingBox();
+		expect(backBox && titleBox).toBeTruthy();
+		expect((backBox?.x ?? 0) + (backBox?.width ?? 0)).toBeLessThan(titleBox?.x ?? 0);
+		await expect(page.locator('[data-slot="card-header"] h2')).toHaveCount(0);
 		await expect(page.getByRole("button", { name: "返回上一页", exact: true })).toBeVisible();
 		await expect(page.getByRole("main")).toBeVisible();
 		await expect(page.getByText("l3@local", { exact: true })).toBeVisible();

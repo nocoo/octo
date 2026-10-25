@@ -85,8 +85,11 @@
 }
 
 .ops-filter-actions {
+	display: flex;
+	align-items: center;
+	column-gap: var(--basalt-space-sm);
+	min-inline-size: 0;
 	border: 0;
 	padding: unset;
 	margin: unset;
-	min-inline-size: 0;
 }

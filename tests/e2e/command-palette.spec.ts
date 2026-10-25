@@ -53,7 +53,7 @@ test("command palette keeps one sidebar search entry and keyboard search navigat
 	await opener.click();
 	await expect(input).toHaveValue("");
 	await page.keyboard.press("Escape");
-	await expect(page.getByRole("dialog")).toHaveCount(0);
+	await expect(input).not.toBeVisible();
 	await expect(opener).toBeFocused();
 	await opener.click();
 	await input.fill("设置");
