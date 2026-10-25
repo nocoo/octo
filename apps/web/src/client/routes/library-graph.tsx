@@ -425,7 +425,6 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 		(node: VisualNode, ctx: CanvasRenderingContext2D, scale: number) => {
 			const x = node.x ?? 0;
 			const y = node.y ?? 0;
-			const degree = degrees.get(node.id) ?? 0;
 			const active = !focus || focus.has(node.id);
 			const selectedNode = node.id === selectedId;
 			const hoveredNode = node.id === hovered;
@@ -436,7 +435,7 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 						? palette.memory
 						: palette.cluster;
 			const radius =
-				(node.kind === "tag" ? 3 + Math.sqrt(degree) * 1.6 : node.kind === "cluster" ? 5 : 2.6) *
+				(node.kind === "tag" ? 2.2 + Math.sqrt(node.count) : node.kind === "cluster" ? 4.6 : 2.4) *
 				(selectedNode ? 1.6 : 1);
 			ctx.globalAlpha = active ? 1 : 0.14;
 			ctx.beginPath();
@@ -481,7 +480,7 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 			}
 			ctx.globalAlpha = 1;
 		},
-		[degrees, focus, hovered, labelIds, labels, palette, selectedId],
+		[focus, hovered, labelIds, labels, palette, selectedId],
 	);
 
 	const fitView = useCallback(
