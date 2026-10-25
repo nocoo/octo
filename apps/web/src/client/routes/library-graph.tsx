@@ -527,33 +527,35 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 			].join("|");
 			let cached = backdrop.current;
 			if (!cached || cached.ctx !== ctx || cached.key !== key) {
-				const reach = Math.max(width, height);
+				const diagonal = Math.hypot(width, height);
 				const strength = palette.dark ? 1 : 0.34;
 				const halo = (cx: number, cy: number, radius: number, hue: string, alpha: number) => {
 					const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
 					gradient.addColorStop(0, `hsl(${hue} / ${alpha * strength})`);
-					gradient.addColorStop(0.55, `hsl(${hue} / ${alpha * strength * 0.34})`);
+					gradient.addColorStop(0.6, `hsl(${hue} / ${alpha * strength * 0.5})`);
 					gradient.addColorStop(1, `hsl(${hue} / 0)`);
 					return gradient;
 				};
+				const wash = ctx.createLinearGradient(0, 0, width, height);
+				wash.addColorStop(0, `hsl(${palette.primary} / ${0.28 * strength})`);
+				wash.addColorStop(0.45, `hsl(${palette.primary} / ${0.12 * strength})`);
+				wash.addColorStop(1, `hsl(${palette.tag} / ${0.24 * strength})`);
 				const vignette = ctx.createRadialGradient(
 					width * 0.5,
-					height * 0.46,
-					reach * 0.26,
+					height * 0.45,
+					diagonal * 0.32,
 					width * 0.5,
-					height * 0.46,
-					reach * 0.82,
+					height * 0.45,
+					diagonal * 0.88,
 				);
+				const shade = palette.dark ? 1 : 0.5;
 				vignette.addColorStop(0, `hsl(${palette.background} / 0)`);
-				vignette.addColorStop(
-					0.72,
-					`hsl(${palette.background} / ${0.55 * (palette.dark ? 1 : 0.6)})`,
-				);
-				vignette.addColorStop(1, `hsl(${palette.background} / ${0.95 * (palette.dark ? 1 : 0.7)})`);
+				vignette.addColorStop(0.55, `hsl(${palette.background} / ${0.1 * shade})`);
+				vignette.addColorStop(1, `hsl(${palette.background} / ${0.38 * shade})`);
 				const fills = [
-					halo(width * 0.5, height * 0.44, reach * 0.58, palette.primary, 0.34),
-					halo(width * 0.86, height * 0.14, reach * 0.42, palette.primary, 0.16),
-					halo(width * 0.2, height * 0.84, reach * 0.46, palette.tag, 0.16),
+					wash,
+					halo(width * 0.5, height * 0.42, diagonal * 0.58, palette.primary, 0.24),
+					halo(width * 0.14, height * 0.94, diagonal * 0.5, palette.tag, 0.14),
 					vignette,
 				];
 				cached = { ctx, key, fills };
