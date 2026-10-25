@@ -950,3 +950,17 @@ columns exposed the error before acceptance. Replaced the guessed names with
 published tokens and added a stylesheet-token regression check alongside desktop
 and mobile geometry assertions. A familiar spacing scale is not evidence that a
 design system exports every step of that scale.
+
+### 2026-10-25 - Read what a layout component actually renders
+
+The immersive graph canvas stayed invisible while its bitmap contained the whole
+graph. `getImageData` proved the drawing was correct, so the hunt went through
+zoom transforms, force physics and compositing before a selector dump showed the
+overlay wrapper was a `GridItem`: that component renders a painted Basalt surface,
+not a grid cell, so it covered the canvas with an opaque card. Removing the
+wrapper fixed it. Two smaller lessons from the same hunt: `elementFromPoint` skips
+`pointer-events: none` subtrees, so a transparent overlay never shows up as the
+top element, and a canvas resize observer that always assigns a fresh object
+re-renders forever. Read the component's DOM contract before using it as
+positioning scaffolding, and confirm "is it painted" with pixel probes rather than
+screenshots alone.
