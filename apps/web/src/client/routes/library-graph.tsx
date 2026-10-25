@@ -561,8 +561,9 @@ export default function LibraryGraphCanvas({ graph }: { graph: LibraryGraph }) {
 				cached = { ctx, key, fills };
 				backdrop.current = cached;
 			}
+			const ratio = width > 0 ? ctx.canvas.width / width : 1;
 			ctx.save();
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 			ctx.fillStyle = `hsl(${palette.background})`;
 			ctx.fillRect(0, 0, width, height);
 			for (const fill of cached.fills) {

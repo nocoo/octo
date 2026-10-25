@@ -441,3 +441,7 @@ html:not(.dark) {
 		scroll-behavior: auto;
 	}
 }
+
+.octo-search-advanced[hidden] {
+	display: none;
+}

@@ -269,7 +269,7 @@ export function SearchPage() {
 					setParams(next);
 				}}
 			>
-				<Grid columns={1} gap="sm" hidden={!advancedOpen}>
+				<Grid columns={1} gap="sm" className="octo-search-advanced" hidden={!advancedOpen}>
 					<LayerCard>
 						<LayerCard.Body>
 							<Grid

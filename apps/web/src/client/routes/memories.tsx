@@ -427,6 +427,7 @@ export function MemoriesPage() {
 				<Choice
 					label="每页条数"
 					inline
+					size="sm"
 					value={params.get("limit") ?? "50"}
 					options={["20", "50", "100", "200"]}
 					onChange={(limit) => {
@@ -437,6 +438,7 @@ export function MemoriesPage() {
 					}}
 				/>
 				<Button
+					size="sm"
 					variant="outline"
 					disabled={!params.has("cursor") || state.loading}
 					onClick={() => {
@@ -450,6 +452,7 @@ export function MemoriesPage() {
 					第一页
 				</Button>
 				<Button
+					size="sm"
 					variant="outline"
 					disabled={!state.nextCursor || state.loading}
 					onClick={() => {
