@@ -103,7 +103,6 @@ export function OverviewPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="总览"
-				description="查看知识库规模、最近更新与接口活动。"
 				actions={
 					<Button variant="secondary" disabled={state.loading} onClick={() => void model.load()}>
 						<RefreshCw size={16} />
@@ -170,11 +169,7 @@ export function OverviewPage() {
 					},
 				]}
 			/>
-			<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
-				调用与写入次数来自本年度 UTC 小时汇总，非实时数据，也不等同于新增记忆数。
-				当前接口未提供向量同步积压、D1 体积和定时任务最近运行时间。
-			</p>
-			<SectionRule variant="heading" title="知识入口">
+			<SectionRule variant="label" title="知识入口">
 				<LayerCard>
 					<LayerCard.Body>
 						<Grid columns={1} gap="sm">
@@ -211,7 +206,11 @@ export function OverviewPage() {
 					</LayerCard.Body>
 				</LayerCard>
 			</SectionRule>
-			<SectionRule variant="heading" title="智能体活动 · 按密钥小时汇总">
+			<SectionRule
+				variant="label"
+				title="智能体活动 · 按密钥小时汇总"
+				hint="调用与写入次数来自本年度 UTC 小时汇总，非实时数据，也不等同于新增记忆数。当前接口未提供向量同步积压、D1 体积和定时任务最近运行时间。"
+			>
 				<LayerCard>
 					<LayerCard.Body>
 						<Grid columns={1}>
@@ -249,7 +248,7 @@ export function OverviewPage() {
 					</LayerCard.Body>
 				</LayerCard>
 			</SectionRule>
-			<SectionRule variant="heading" title="调用趋势">
+			<SectionRule variant="label" title="调用趋势">
 				<LayerCard>
 					<LayerCard.Body>
 						<Grid columns={1}>
@@ -283,7 +282,7 @@ export function OverviewPage() {
 					</LayerCard.Body>
 				</LayerCard>
 			</SectionRule>
-			<SectionRule variant="heading" title="最近变更">
+			<SectionRule variant="label" title="最近变更">
 				<LayerCard padding="none">
 					<DataTable
 						className="octo-table"
@@ -361,7 +360,7 @@ export function OverviewPage() {
 					)}
 				</LayerCard>
 			</SectionRule>
-			<SectionRule variant="heading" title="最近更新的记忆">
+			<SectionRule variant="label" title="最近更新的记忆">
 				<LayerCard padding="none">
 					<DataTable
 						className="octo-table"

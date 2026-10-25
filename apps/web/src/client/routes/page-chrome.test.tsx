@@ -26,7 +26,7 @@ it.each([
 	TrashPage,
 	SettingsPage,
 	EmbeddingPage,
-])("%s keeps a title, nonempty subtitle and back control even before data loads", (Page) => {
+])("%s keeps a title and back control even before data loads", (Page) => {
 	const html = renderToStaticMarkup(
 		<ThemeProvider persist={false}>
 			<MemoryRouter>
@@ -34,8 +34,9 @@ it.each([
 			</MemoryRouter>
 		</ThemeProvider>,
 	);
-	const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
+	const header =
+		html.match(/class="grid gap-basalt-layout octo-page-header"[\s\S]*?<\/h1>/)?.[0] ?? "";
 	expect(header).toMatch(/<h1\b[^>]*>[\s\S]+?<\/h1>/);
-	expect(header).toMatch(/<p\b[^>]*>[^<]+<\/p>/);
-	expect(html).toContain('aria-label="返回上一页"');
+	expect(header).toContain('aria-label="返回上一页"');
+	expect(html.match(/<h1\b/g)).toHaveLength(1);
 });

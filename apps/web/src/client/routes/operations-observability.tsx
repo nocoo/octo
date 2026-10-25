@@ -3,6 +3,7 @@ import { BarChart } from "@nocoo/basalt/charts/bar";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { FilterBar, FilterChip } from "@nocoo/basalt/components/filter-bar";
 import { Grid } from "@nocoo/basalt/components/grid";
+import { Popover, PopoverContent, PopoverTrigger } from "@nocoo/basalt/components/popover";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Table,
@@ -160,99 +161,132 @@ export function UsagePage() {
 		</p>
 	);
 	return (
-		<Grid columns={1} gap="lg" className="min-w-0">
+		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
 				title="每日用量"
-				description="按 UTC 日期与密钥展示已汇总数据；不是实时请求统计。"
+				meta="按 UTC 日期与密钥汇总；非实时数据"
 				actions={
-					<Button
-						icon={<RefreshCw aria-hidden="true" />}
-						variant="outline"
-						onClick={() => void model.load(search)}
-						disabled={state.loading}
-					>
-						刷新
-					</Button>
-				}
-				filters={
-					<form
-						key={search}
-						className="w-full"
-						onSubmit={(event) => {
-							event.preventDefault();
-							const data = new FormData(event.currentTarget);
-							setParams(
-								usageQuery({
-									key_id: String(data.get("key_id") ?? "").trim(),
-									from: String(data.get("from") ?? ""),
-									to: String(data.get("to") ?? ""),
-								}),
-							);
-						}}
-					>
-						<FilterBar
-							label="用量筛选"
-							chips={
-								usageFilterFields.some(([key]) => filters[key])
-									? usageFilterFields
-											.filter(([key]) => filters[key])
-											.map(([key, label]) => (
-												<FilterChip
-													key={key}
-													label={label}
-													value={filters[key]}
-													removeLabel={`移除${label}筛选`}
-													onRemove={() => setParams(usageQuery({ ...filters, [key]: "" }))}
-												/>
-											))
-									: undefined
-							}
-						>
-							<Grid columns={1} gap="sm" className="ops-filter-fields">
-								<Grid
-									columns={2}
-									gap="sm"
-									className="ops-date-range"
-									role="group"
-									aria-label="日期范围"
-									style={{
-										gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-										alignItems: "end",
+					<>
+						<Popover>
+							<PopoverTrigger asChild>
+								<Button size="sm" variant="outline" aria-label="用量筛选" title="用量筛选">
+									<Filter aria-hidden="true" />
+									筛选
+									{Object.values(filters).filter(Boolean).length
+										? `（${Object.values(filters).filter(Boolean).length}）`
+										: ""}
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent
+								align="end"
+								style={{ width: "min(36rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
+							>
+								<form
+									key={search}
+									onSubmit={(event) => {
+										event.preventDefault();
+										const data = new FormData(event.currentTarget);
+										setParams(
+											usageQuery({
+												key_id: String(data.get("key_id") ?? "").trim(),
+												from: String(data.get("from") ?? ""),
+												to: String(data.get("to") ?? ""),
+											}),
+										);
 									}}
 								>
-									<Field label="开始日期">
-										<Input type="date" name="from" defaultValue={filters.from} />
-									</Field>
-									<Field label="结束日期">
-										<Input type="date" name="to" defaultValue={filters.to} />
-									</Field>
-								</Grid>
-								<Field label="密钥标识" className="ops-filter-key">
-									<Input name="key_id" defaultValue={filters.key_id} autoComplete="off" />
-								</Field>
-								<Grid
-									columns={2}
-									gap="sm"
-									className="ops-filter-actions"
-									role="group"
-									aria-label="筛选操作"
-									style={{ gridTemplateColumns: "repeat(2, max-content)", alignItems: "end" }}
-								>
-									<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
-										应用筛选
-									</Button>
-									<Button
-										type="button"
-										icon={<X aria-hidden="true" />}
-										variant="ghost"
-										onClick={() => setParams("")}
+									<FilterBar
+										label="用量筛选"
+										chips={
+											usageFilterFields.some(([key]) => filters[key])
+												? usageFilterFields
+														.filter(([key]) => filters[key])
+														.map(([key, label]) => (
+															<FilterChip
+																key={key}
+																label={label}
+																value={filters[key]}
+																removeLabel={`移除${label}筛选`}
+																onRemove={() => setParams(usageQuery({ ...filters, [key]: "" }))}
+															/>
+														))
+												: undefined
+										}
 									>
-										清除筛选
-									</Button>
-								</Grid>
-							</Grid>
-						</FilterBar>
-					</form>
+										<Grid columns={1} gap="sm" className="ops-filter-fields">
+											<Grid
+												columns={2}
+												gap="sm"
+												className="ops-date-range"
+												role="group"
+												aria-label="日期范围"
+												style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+											>
+												<Field label="开始日期">
+													<Input
+														size="sm"
+														type="date"
+														name="from"
+														aria-label="开始日期"
+														title="开始日期"
+														defaultValue={filters.from}
+													/>
+												</Field>
+												<Field label="结束日期">
+													<Input
+														size="sm"
+														type="date"
+														name="to"
+														aria-label="结束日期"
+														title="结束日期"
+														defaultValue={filters.to}
+													/>
+												</Field>
+											</Grid>
+											<Field label="密钥标识">
+												<Input
+													size="sm"
+													className="ops-filter-key"
+													name="key_id"
+													aria-label="密钥标识"
+													title="密钥标识"
+													defaultValue={filters.key_id}
+													autoComplete="off"
+												/>
+											</Field>
+											<fieldset className="ops-filter-actions" aria-label="筛选操作">
+												<Button
+													size="sm"
+													type="button"
+													variant="ghost"
+													onClick={() => setParams("")}
+												>
+													清除筛选
+												</Button>
+												<Button
+													size="sm"
+													type="submit"
+													icon={<Filter aria-hidden="true" />}
+													variant="outline"
+												>
+													应用筛选
+												</Button>
+											</fieldset>
+										</Grid>
+									</FilterBar>
+								</form>
+							</PopoverContent>
+						</Popover>
+						<Button
+							size="sm"
+							icon={<RefreshCw aria-hidden="true" />}
+							variant="outline"
+							onClick={() => void model.load(search)}
+							disabled={state.loading}
+						>
+							刷新
+						</Button>
+					</>
 				}
 			/>
 			{state.error && (
@@ -269,7 +303,7 @@ export function UsagePage() {
 					gap="sm"
 					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))" }}
 				>
-					<SectionRule variant="heading" title="调用次数">
+					<SectionRule variant="label" title="调用次数">
 						<LayerCard>
 							<LayerCard.Body>
 								<Grid columns={1} gap="sm">
@@ -286,7 +320,7 @@ export function UsagePage() {
 							</LayerCard.Body>
 						</LayerCard>
 					</SectionRule>
-					<SectionRule variant="heading" title="错误率">
+					<SectionRule variant="label" title="错误率">
 						<LayerCard>
 							<LayerCard.Body>
 								<Grid columns={1} gap="sm">
@@ -307,60 +341,58 @@ export function UsagePage() {
 					</SectionRule>
 				</Grid>
 			) : null}
-			<SectionRule variant="heading" title="每日用量与图表数据">
-				<LayerCard id="usage-daily-table" padding="none">
-					{state.loading && state.items.length === 0 ? (
-						<LayerCard.Loading label="正在加载每日用量" />
-					) : (
-						<DataTable
-							className="octo-table"
-							aria-label="每日用量表"
-							data={model.rows}
-							columns={columns}
-							getRowId={(row) => `${row.key_id}/${row.day}`}
-							edge="attached"
-							error={state.items.length === 0 ? state.error : null}
-							retryLabel="重试"
-							onRetry={() => void model.load(search)}
-							empty={
-								state.loaded ? (
-									<LayerCard.Empty
-										className="octo-empty octo-empty--page"
-										icon={<ChartNoAxesCombined aria-hidden="true" />}
-										title="此范围内暂无用量"
-										description="暂无每日用量记录。请调整筛选或发起接口请求。"
-										action={
-											<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
-												清除筛选
-											</Button>
-										}
-									/>
-								) : (
-									"每日用量尚未加载，请刷新。"
-								)
-							}
-						/>
-					)}
-					<LayerCard.Footer>
-						<Button
-							icon={<ArrowDown aria-hidden="true" />}
-							variant="outline"
-							disabled={!state.nextCursor || state.loading}
-							loading={state.loadingMore}
-							onClick={() => void model.loadMore()}
-						>
-							加载更多
-						</Button>
-						<span className="text-basalt-sm text-basalt-muted-foreground">
-							{state.nextCursor
-								? "还有更多记录"
-								: state.loaded && !state.loading && !state.error
-									? "已加载全部查询结果"
-									: "查询是否完成尚不确定"}
-						</span>
-					</LayerCard.Footer>
-				</LayerCard>
-			</SectionRule>
+			<LayerCard id="usage-daily-table" padding="none">
+				{state.loading && state.items.length === 0 ? (
+					<LayerCard.Loading label="正在加载每日用量" />
+				) : (
+					<DataTable
+						className="octo-table"
+						aria-label="每日用量表"
+						data={model.rows}
+						columns={columns}
+						getRowId={(row) => `${row.key_id}/${row.day}`}
+						edge="attached"
+						error={state.items.length === 0 ? state.error : null}
+						retryLabel="重试"
+						onRetry={() => void model.load(search)}
+						empty={
+							state.loaded ? (
+								<LayerCard.Empty
+									className="octo-empty octo-empty--page"
+									icon={<ChartNoAxesCombined aria-hidden="true" />}
+									title="此范围内暂无用量"
+									description="暂无每日用量记录。请调整筛选或发起接口请求。"
+									action={
+										<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
+											清除筛选
+										</Button>
+									}
+								/>
+							) : (
+								"每日用量尚未加载，请刷新。"
+							)
+						}
+					/>
+				)}
+				<LayerCard.Footer>
+					<Button
+						icon={<ArrowDown aria-hidden="true" />}
+						variant="outline"
+						disabled={!state.nextCursor || state.loading}
+						loading={state.loadingMore}
+						onClick={() => void model.loadMore()}
+					>
+						加载更多
+					</Button>
+					<span className="text-basalt-sm text-basalt-muted-foreground">
+						{state.nextCursor
+							? "还有更多记录"
+							: state.loaded && !state.loading && !state.error
+								? "已加载全部查询结果"
+								: "查询是否完成尚不确定"}
+					</span>
+				</LayerCard.Footer>
+			</LayerCard>
 		</Grid>
 	);
 }
@@ -401,13 +433,151 @@ export function AuditPage() {
 		return () => observer.disconnect();
 	}, [state.items.length]);
 	return (
-		<Grid columns={1} gap="lg" className="min-w-0">
+		<Grid columns={1} gap="md" className="min-w-0">
 			<PageHeader
 				title="审计日志"
-				description="包含被拒绝的请求；不记录请求正文和凭据。"
+				meta="包含被拒绝的请求；不记录正文和凭据"
 				actions={
 					<>
+						<Popover>
+							<PopoverTrigger asChild>
+								<Button size="sm" variant="outline" aria-label="审计筛选" title="审计筛选">
+									<Filter aria-hidden="true" />
+									筛选
+									{Object.values(filters).filter(Boolean).length
+										? `（${Object.values(filters).filter(Boolean).length}）`
+										: ""}
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent
+								align="end"
+								style={{ width: "min(40rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
+							>
+								<form
+									key={search}
+									onSubmit={(event) => {
+										event.preventDefault();
+										const data = new FormData(event.currentTarget);
+										setParams(
+											auditQuery({
+												actor: String(data.get("actor") ?? "").trim(),
+												action: String(data.get("action") ?? "").trim(),
+												status: String(data.get("status") ?? ""),
+												from: String(data.get("from") ?? ""),
+												to: String(data.get("to") ?? ""),
+											}),
+										);
+									}}
+								>
+									<FilterBar
+										label="审计筛选"
+										chips={
+											auditFilterFields.some(([key]) => filters[key])
+												? auditFilterFields
+														.filter(([key]) => filters[key])
+														.map(([key, label]) => (
+															<FilterChip
+																key={key}
+																label={label}
+																value={filters[key]}
+																removeLabel={`移除${label}筛选`}
+																onRemove={() => setParams(auditQuery({ ...filters, [key]: "" }))}
+															/>
+														))
+												: undefined
+										}
+									>
+										<Grid columns={1} gap="sm" className="ops-filter-fields">
+											<Grid
+												columns={2}
+												gap="sm"
+												className="ops-date-range"
+												role="group"
+												aria-label="日期范围"
+												style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+											>
+												<Field label="开始日期">
+													<Input
+														size="sm"
+														name="from"
+														type="date"
+														aria-label="开始日期"
+														title="开始日期"
+														defaultValue={filters.from.slice(0, 10)}
+													/>
+												</Field>
+												<Field label="结束日期">
+													<Input
+														size="sm"
+														name="to"
+														type="date"
+														aria-label="结束日期"
+														title="结束日期"
+														defaultValue={filters.to.slice(0, 10)}
+													/>
+												</Field>
+											</Grid>
+											<Field label="状态码">
+												<Input
+													size="sm"
+													className="ops-filter-status"
+													aria-label="状态码"
+													title="状态码"
+													name="status"
+													type="number"
+													min={100}
+													max={599}
+													step={1}
+													defaultValue={filters.status}
+												/>
+											</Field>
+											<Field label="调用者">
+												<Input
+													size="sm"
+													className="ops-filter-actor"
+													name="actor"
+													aria-label="调用者"
+													title="调用者"
+													defaultValue={filters.actor}
+													autoComplete="off"
+												/>
+											</Field>
+											<Field label="路由模板">
+												<Input
+													size="sm"
+													className="ops-filter-route"
+													name="action"
+													aria-label="路由模板"
+													title="路由模板"
+													defaultValue={filters.action}
+													autoComplete="off"
+												/>
+											</Field>
+											<fieldset className="ops-filter-actions" aria-label="筛选操作">
+												<Button
+													size="sm"
+													type="button"
+													variant="ghost"
+													onClick={() => setParams("")}
+												>
+													清除筛选
+												</Button>
+												<Button
+													size="sm"
+													type="submit"
+													icon={<Filter aria-hidden="true" />}
+													variant="outline"
+												>
+													应用筛选
+												</Button>
+											</fieldset>
+										</Grid>
+									</FilterBar>
+								</form>
+							</PopoverContent>
+						</Popover>
 						<Button
+							size="sm"
 							icon={<RefreshCw aria-hidden="true" />}
 							variant="outline"
 							onClick={() => void model.load(search)}
@@ -416,6 +586,7 @@ export function AuditPage() {
 							刷新
 						</Button>
 						<Button
+							size="sm"
 							icon={<Download aria-hidden="true" />}
 							loading={state.exporting}
 							onClick={async () => {
@@ -438,101 +609,6 @@ export function AuditPage() {
 						</Button>
 					</>
 				}
-				filters={
-					<form
-						key={search}
-						className="w-full"
-						onSubmit={(event) => {
-							event.preventDefault();
-							const data = new FormData(event.currentTarget);
-							setParams(
-								auditQuery({
-									actor: String(data.get("actor") ?? "").trim(),
-									action: String(data.get("action") ?? "").trim(),
-									status: String(data.get("status") ?? ""),
-									from: String(data.get("from") ?? ""),
-									to: String(data.get("to") ?? ""),
-								}),
-							);
-						}}
-					>
-						<FilterBar
-							label="审计筛选"
-							chips={
-								auditFilterFields.some(([key]) => filters[key])
-									? auditFilterFields
-											.filter(([key]) => filters[key])
-											.map(([key, label]) => (
-												<FilterChip
-													key={key}
-													label={label}
-													value={filters[key]}
-													removeLabel={`移除${label}筛选`}
-													onRemove={() => setParams(auditQuery({ ...filters, [key]: "" }))}
-												/>
-											))
-									: undefined
-							}
-						>
-							<Grid columns={1} gap="sm" className="ops-filter-fields">
-								<Grid
-									columns={2}
-									gap="sm"
-									className="ops-date-range"
-									role="group"
-									aria-label="日期范围"
-									style={{
-										gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-										alignItems: "end",
-									}}
-								>
-									<Field label="开始日期">
-										<Input name="from" type="date" defaultValue={filters.from.slice(0, 10)} />
-									</Field>
-									<Field label="结束日期">
-										<Input name="to" type="date" defaultValue={filters.to.slice(0, 10)} />
-									</Field>
-								</Grid>
-								<Field label="状态码" className="ops-filter-status">
-									<Input
-										name="status"
-										type="number"
-										min={100}
-										max={599}
-										step={1}
-										defaultValue={filters.status}
-									/>
-								</Field>
-								<Field label="调用者" className="ops-filter-actor">
-									<Input name="actor" defaultValue={filters.actor} autoComplete="off" />
-								</Field>
-								<Field label="路由模板" className="ops-filter-route">
-									<Input name="action" defaultValue={filters.action} autoComplete="off" />
-								</Field>
-								<Grid
-									columns={2}
-									gap="sm"
-									className="ops-filter-actions"
-									role="group"
-									aria-label="筛选操作"
-									style={{ gridTemplateColumns: "repeat(2, max-content)", alignItems: "end" }}
-								>
-									<Button type="submit" icon={<Filter aria-hidden="true" />} variant="outline">
-										应用筛选
-									</Button>
-									<Button
-										type="button"
-										icon={<X aria-hidden="true" />}
-										variant="ghost"
-										onClick={() => setParams("")}
-									>
-										清除筛选
-									</Button>
-								</Grid>
-							</Grid>
-						</FilterBar>
-					</form>
-				}
 			/>
 			{state.error && (
 				<p role="alert">
@@ -543,174 +619,154 @@ export function AuditPage() {
 				</p>
 			)}
 			{state.loading && <p role="status">正在刷新审计日志……</p>}
-			<SectionRule
-				variant="heading"
-				title="请求记录"
-				actions={
-					<span className="text-basalt-sm text-basalt-muted-foreground">
-						{state.loaded
-							? `${state.items.length.toLocaleString("zh-CN")} 条已加载记录`
-							: "审计记录尚未加载"}
-					</span>
-				}
-			>
-				<LayerCard padding="none">
-					<ScrollArea
-						ref={viewport}
-						orientation="both"
-						className={state.items.length ? "ops-audit-scroll" : ""}
-						tabIndex={0}
-						aria-label="可滚动的审计记录"
-						onScroll={(event) => {
-							const top = event.currentTarget.scrollTop;
-							setGeometry((current) => ({ ...current, top }));
-						}}
+			<LayerCard padding="none">
+				<ScrollArea
+					ref={viewport}
+					orientation="both"
+					className={state.items.length ? "ops-audit-scroll" : ""}
+					tabIndex={0}
+					aria-label="可滚动的审计记录"
+					onScroll={(event) => {
+						const top = event.currentTarget.scrollTop;
+						setGeometry((current) => ({ ...current, top }));
+					}}
+				>
+					<Table
+						ref={table}
+						className="octo-table ops-audit-table"
+						aria-label="审计记录"
+						aria-rowcount={state.items.length + 1}
 					>
-						<Table
-							ref={table}
-							className="octo-table ops-audit-table"
-							aria-label="审计记录"
-							aria-rowcount={state.items.length + 1}
-						>
-							<TableCaption>
-								本地时间；使用方向键或向下翻页键滚动，点击“加载更多”获取下一页。
-							</TableCaption>
-							<TableHeader>
-								<TableRow>
-									{["时间", "请求", "结果", "耗时", "调用者", "请求标识"].map((label) => (
-										<TableHead
-											key={label}
-											textAlign={label === "耗时" ? "end" : "start"}
-											className={
-												label === "时间"
-													? "ps-basalt-table-edge"
-													: label === "请求标识"
-														? "pe-basalt-table-edge"
-														: ""
-											}
-										>
-											{label}
-										</TableHead>
-									))}
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{window.before > 0 && (
-									<TableRow aria-hidden="true">
-										<TableCell
-											colSpan={6}
-											className="ops-spacer"
-											style={{ height: window.before }}
-										/>
-									</TableRow>
-								)}
-								{state.items.slice(window.start, window.end).map((row, index) => (
-									<TableRow key={row.id} data-audit-row="" aria-rowindex={window.start + index + 2}>
-										<TableCell className="ps-basalt-table-edge">
-											<RecordTime value={row.at} />
-										</TableCell>
-										<TableCell>
-											<Grid columns={1} gap="sm" className="ops-audit-detail">
-												<TagBadge
-													name={row.method}
-													color={
-														row.method === "GET"
-															? "blue"
-															: row.method === "DELETE"
-																? "danger"
-																: "amber"
-													}
-													size="sm"
-												/>
-												<code className="text-basalt-sm">{row.route}</code>
-											</Grid>
-										</TableCell>
-										<TableCell>
-											<Grid columns={1} gap="sm" className="ops-audit-detail">
-												<TagBadge
-													name={String(row.status)}
-													color={
-														row.status >= 500 ? "danger" : row.status >= 400 ? "warning" : "success"
-													}
-													size="sm"
-												/>
-												{row.error_code && (
-													<span className="text-basalt-sm text-basalt-muted-foreground">
-														{operationsError(row.error_code)}
-													</span>
-												)}
-											</Grid>
-										</TableCell>
-										<TableCell textAlign="end">
-											{formatNumber(row.duration_ms)} <span className="octo-muted">ms</span>
-										</TableCell>
-										<TableCell>
-											<span className="octo-record-id" title={row.actor}>
-												{row.actor}
-											</span>
-										</TableCell>
-										<TableCell className="pe-basalt-table-edge">
-											<span className="octo-record-id" title={row.request_id}>
-												{row.request_id}
-											</span>
-										</TableCell>
-									</TableRow>
+						<TableCaption>
+							本地时间；使用方向键或向下翻页键滚动，点击“加载更多”获取下一页。
+						</TableCaption>
+						<TableHeader>
+							<TableRow>
+								{["时间", "请求", "结果", "耗时", "调用者", "请求标识"].map((label) => (
+									<TableHead
+										key={label}
+										textAlign={label === "耗时" ? "end" : "start"}
+										className={
+											label === "时间"
+												? "ps-basalt-table-edge"
+												: label === "请求标识"
+													? "pe-basalt-table-edge"
+													: ""
+										}
+									>
+										{label}
+									</TableHead>
 								))}
-								{window.after > 0 && (
-									<TableRow aria-hidden="true">
-										<TableCell
-											colSpan={6}
-											className="ops-spacer"
-											style={{ height: window.after }}
-										/>
-									</TableRow>
-								)}
-								{state.items.length === 0 && !state.loading && (
-									<TableRow>
-										<TableCell colSpan={6} className="ps-basalt-table-edge pe-basalt-table-edge">
-											{state.error ? (
-												"审计记录暂不可用，请重试查询。"
-											) : state.loaded ? (
-												<LayerCard.Empty
-													className="octo-empty octo-empty--page"
-													icon={<ScrollText aria-hidden="true" />}
-													title="没有符合筛选条件的审计记录"
-													description="调整筛选后再次查询。"
-													action={
-														<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
-															清除筛选
-														</Button>
-													}
-												/>
-											) : (
-												"审计记录尚未加载，请刷新。"
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{window.before > 0 && (
+								<TableRow aria-hidden="true">
+									<TableCell colSpan={6} className="ops-spacer" style={{ height: window.before }} />
+								</TableRow>
+							)}
+							{state.items.slice(window.start, window.end).map((row, index) => (
+								<TableRow key={row.id} data-audit-row="" aria-rowindex={window.start + index + 2}>
+									<TableCell className="ps-basalt-table-edge">
+										<RecordTime value={row.at} />
+									</TableCell>
+									<TableCell>
+										<Grid columns={1} gap="sm" className="ops-audit-detail">
+											<TagBadge
+												name={row.method}
+												color={
+													row.method === "GET"
+														? "blue"
+														: row.method === "DELETE"
+															? "danger"
+															: "amber"
+												}
+												size="sm"
+											/>
+											<code className="text-basalt-sm">{row.route}</code>
+										</Grid>
+									</TableCell>
+									<TableCell>
+										<Grid columns={1} gap="sm" className="ops-audit-detail">
+											<TagBadge
+												name={String(row.status)}
+												color={
+													row.status >= 500 ? "danger" : row.status >= 400 ? "warning" : "success"
+												}
+												size="sm"
+											/>
+											{row.error_code && (
+												<span className="text-basalt-sm text-basalt-muted-foreground">
+													{operationsError(row.error_code)}
+												</span>
 											)}
-										</TableCell>
-									</TableRow>
-								)}
-							</TableBody>
-						</Table>
-					</ScrollArea>
-					<LayerCard.Footer>
-						<Button
-							icon={<ArrowDown aria-hidden="true" />}
-							variant="outline"
-							disabled={!state.nextCursor || state.loading}
-							loading={state.loadingMore}
-							onClick={() => void model.loadMore()}
-						>
-							加载更多
-						</Button>
-						<span className="text-basalt-sm text-basalt-muted-foreground">
-							{state.nextCursor
-								? "还有更多记录"
-								: state.loaded && !state.loading && !state.error
-									? "已加载全部查询结果"
-									: "查询是否完成尚不确定"}
-						</span>
-					</LayerCard.Footer>
-				</LayerCard>
-			</SectionRule>
+										</Grid>
+									</TableCell>
+									<TableCell textAlign="end">
+										{formatNumber(row.duration_ms)} <span className="octo-muted">ms</span>
+									</TableCell>
+									<TableCell>
+										<span className="octo-record-id" title={row.actor}>
+											{row.actor}
+										</span>
+									</TableCell>
+									<TableCell className="pe-basalt-table-edge">
+										<span className="octo-record-id" title={row.request_id}>
+											{row.request_id}
+										</span>
+									</TableCell>
+								</TableRow>
+							))}
+							{window.after > 0 && (
+								<TableRow aria-hidden="true">
+									<TableCell colSpan={6} className="ops-spacer" style={{ height: window.after }} />
+								</TableRow>
+							)}
+							{state.items.length === 0 && !state.loading && (
+								<TableRow>
+									<TableCell colSpan={6} className="ps-basalt-table-edge pe-basalt-table-edge">
+										{state.error ? (
+											"审计记录暂不可用，请重试查询。"
+										) : state.loaded ? (
+											<LayerCard.Empty
+												className="octo-empty octo-empty--page"
+												icon={<ScrollText aria-hidden="true" />}
+												title="没有符合筛选条件的审计记录"
+												description="调整筛选后再次查询。"
+												action={
+													<Button icon={<X aria-hidden="true" />} onClick={() => setParams("")}>
+														清除筛选
+													</Button>
+												}
+											/>
+										) : (
+											"审计记录尚未加载，请刷新。"
+										)}
+									</TableCell>
+								</TableRow>
+							)}
+						</TableBody>
+					</Table>
+				</ScrollArea>
+				<LayerCard.Footer>
+					<Button
+						icon={<ArrowDown aria-hidden="true" />}
+						variant="outline"
+						disabled={!state.nextCursor || state.loading}
+						loading={state.loadingMore}
+						onClick={() => void model.loadMore()}
+					>
+						加载更多
+					</Button>
+					<span className="text-basalt-sm text-basalt-muted-foreground">
+						{state.nextCursor
+							? "还有更多记录"
+							: state.loaded && !state.loading && !state.error
+								? "已加载全部查询结果"
+								: "查询是否完成尚不确定"}
+					</span>
+				</LayerCard.Footer>
+			</LayerCard>
 		</Grid>
 	);
 }

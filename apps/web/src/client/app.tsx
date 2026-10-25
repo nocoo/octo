@@ -104,10 +104,7 @@ const router = createBrowserRouter(
 			<Route path="audit" element={<AuditPage />} />
 			<Route path="settings" element={<SettingsPage />} />
 			<Route path="settings/embedding" element={<EmbeddingPage />} />
-			<Route
-				path="*"
-				element={<PageHeader title="页面不存在" description="请从主导航选择页面。" />}
-			/>
+			<Route path="*" element={<PageHeader title="页面不存在" />} />
 		</Route>,
 	),
 );

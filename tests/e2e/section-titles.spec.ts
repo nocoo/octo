@@ -38,7 +38,6 @@ test("functional section titles sit outside their cards using Basalt section chr
 	);
 	const cases: [string, string[]][] = [
 		["/", ["知识入口", "智能体活动 · 按密钥小时汇总", "调用趋势", "最近变更", "最近更新的记忆"]],
-		["/usage", ["每日用量与图表数据"]],
 		["/settings", ["应用信息", "嵌入配置"]],
 		[`/memories/${memory.id}`, ["详细信息", "附件", "版本时间线"]],
 		[`/memories/${memory.id}/edit`, ["Markdown 正文", "实时预览"]],

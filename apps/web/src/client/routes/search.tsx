@@ -7,7 +7,7 @@ import {
 } from "@nocoo/basalt/components/collapsible";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { SectionRule } from "@nocoo/basalt/components/section-rule";
+import { Popover, PopoverContent, PopoverTrigger } from "@nocoo/basalt/components/popover";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import { CircleAlert, FilterX, Pencil, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -196,145 +196,167 @@ export function SearchPage() {
 		},
 	];
 	return (
-		<Grid columns={1} gap="lg">
-			<MemoryFilters params={params} onChange={setParams}>
-				<PageHeader
-					title="搜索"
-					description="通过全文与语义检索查找记忆，按条件缩小结果范围。"
-					actions={
-						<Button
-							type="button"
-							variant="outline"
-							aria-label="高级融合选项"
-							aria-expanded={advancedOpen}
-							aria-controls="search-options"
-							onClick={() => setAdvancedOpen((open) => !open)}
-						>
-							<SlidersHorizontal aria-hidden="true" />
-							融合选项
+		<Grid columns={1} gap="sm">
+			<PageHeader
+				title="搜索"
+				actions={
+					<>
+						<Input
+							size="sm"
+							className="w-basalt-48 min-w-0 max-w-full"
+							ref={queryInput}
+							key={query}
+							id="search-query"
+							name="q"
+							form="search-options"
+							aria-label="搜索记忆"
+							title="搜索记忆"
+							data-search-input
+							defaultValue={params.get("q") ?? ""}
+							placeholder="输入关键词"
+							required
+						/>
+						<Choice
+							key={`mode-${query}`}
+							label="搜索模式"
+							name="mode"
+							form="search-options"
+							value={params.get("mode") ?? "hybrid"}
+							options={["hybrid", "fts", "vector"]}
+							inline
+							size="sm"
+							className="w-basalt-32"
+						/>
+						<Button size="sm" type="submit" form="search-options" loading={state.loading}>
+							<Search aria-hidden="true" />
+							搜索
 						</Button>
-					}
-					filters={
-						<Grid columns={1} gap="sm" className="octo-search-controls w-full">
-							<Input
-								ref={queryInput}
-								key={query}
-								id="search-query"
-								name="q"
-								form="search-options"
-								aria-label="搜索记忆"
-								data-search-input
-								defaultValue={params.get("q") ?? ""}
-								placeholder="输入关键词"
-								required
-							/>
-							<Choice
-								key={`mode-${query}`}
-								label="搜索模式"
-								name="mode"
-								form="search-options"
-								value={params.get("mode") ?? "hybrid"}
-								options={["hybrid", "fts", "vector"]}
-								inline
-							/>
-							<Button type="submit" form="search-options" loading={state.loading}>
-								<Search aria-hidden="true" />
-								搜索
-							</Button>
-						</Grid>
-					}
-				/>
-			</MemoryFilters>
-			<form
-				ref={optionsForm}
-				key={query}
-				id="search-options"
-				hidden={!advancedOpen}
-				noValidate
-				aria-label="搜索选项"
-				data-search-advanced="true"
-				onSubmit={(event) => {
-					event.preventDefault();
-					if (!queryInput.current?.reportValidity()) return;
-					const form = new FormData(event.currentTarget);
-					const next = new URLSearchParams(params);
-					for (const key of ["q", "mode", "fusion", "k", "fts_weight", "vector_weight", "limit"])
-						next.set(key, String(form.get(key) ?? ""));
-					const errors = searchOptionErrors(next);
-					setFieldErrors(errors);
-					if (Object.keys(errors).length) {
-						setAdvancedOpen(true);
-						return;
-					}
-					setParams(next);
-				}}
-			>
-				<Grid
-					columns={1}
-					style={{
-						gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
-						alignItems: "start",
-					}}
-				>
-					<Choice
-						label="融合方式"
-						name="fusion"
-						value={params.get("fusion") ?? "rrf"}
-						options={["rrf", "weighted"]}
-					/>
-					<Field label="RRF 参数 k" htmlFor="search-k" error={fieldErrors.k ?? null}>
-						<Input
-							id="search-k"
-							name="k"
-							type="number"
-							min={1}
-							max={200}
-							step={1}
-							defaultValue={params.get("k") ?? "60"}
-						/>
-					</Field>
-					<Field
-						label="全文权重"
-						htmlFor="search-fts-weight"
-						error={fieldErrors.fts_weight ?? null}
-					>
-						<Input
-							id="search-fts-weight"
-							name="fts_weight"
-							type="number"
-							min={0}
-							step={0.1}
-							defaultValue={params.get("fts_weight") ?? "1"}
-						/>
-					</Field>
-					<Field
-						label="向量权重"
-						htmlFor="search-vector-weight"
-						error={fieldErrors.vector_weight ?? null}
-					>
-						<Input
-							id="search-vector-weight"
-							name="vector_weight"
-							type="number"
-							min={0}
-							step={0.1}
-							defaultValue={params.get("vector_weight") ?? "1"}
-						/>
-					</Field>
-					<Field label="结果条数" htmlFor="search-limit" error={fieldErrors.limit ?? null}>
-						<Input
-							id="search-limit"
-							name="limit"
-							type="number"
-							min={1}
-							max={200}
-							step={1}
-							defaultValue={params.get("limit") ?? "50"}
-						/>
-					</Field>
-				</Grid>
-			</form>
-			<SectionRule variant="heading" title="搜索结果" />
+						<Popover open={advancedOpen} onOpenChange={setAdvancedOpen}>
+							<PopoverTrigger asChild>
+								<Button
+									size="sm"
+									type="button"
+									variant="outline"
+									aria-label="高级融合选项"
+									aria-expanded={advancedOpen}
+									aria-controls="search-options"
+								>
+									<SlidersHorizontal aria-hidden="true" />
+									筛选
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent
+								forceMount
+								align="end"
+								style={{ width: "min(44rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
+							>
+								<form
+									ref={optionsForm}
+									key={query}
+									id="search-options"
+									hidden={!advancedOpen}
+									noValidate
+									aria-label="搜索选项"
+									data-search-advanced="true"
+									onSubmit={(event) => {
+										event.preventDefault();
+										if (!queryInput.current?.reportValidity()) return;
+										const formData = new FormData(event.currentTarget);
+										const next = new URLSearchParams(params);
+										for (const key of [
+											"q",
+											"mode",
+											"fusion",
+											"k",
+											"fts_weight",
+											"vector_weight",
+											"limit",
+										])
+											next.set(key, String(formData.get(key) ?? ""));
+										const errors = searchOptionErrors(next);
+										setFieldErrors(errors);
+										if (Object.keys(errors).length) {
+											setAdvancedOpen(true);
+											return;
+										}
+										setParams(next);
+									}}
+								>
+									<Grid
+										columns={1}
+										style={{
+											gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 12rem), 1fr))",
+											alignItems: "start",
+										}}
+									>
+										<Choice
+											label="融合方式"
+											name="fusion"
+											value={params.get("fusion") ?? "rrf"}
+											options={["rrf", "weighted"]}
+										/>
+										<Field label="RRF 参数 k" htmlFor="search-k" error={fieldErrors.k ?? null}>
+											<Input
+												id="search-k"
+												name="k"
+												type="number"
+												min={1}
+												max={200}
+												step={1}
+												defaultValue={params.get("k") ?? "60"}
+											/>
+										</Field>
+										<Field
+											label="全文权重"
+											htmlFor="search-fts-weight"
+											error={fieldErrors.fts_weight ?? null}
+										>
+											<Input
+												id="search-fts-weight"
+												name="fts_weight"
+												type="number"
+												min={0}
+												step={0.1}
+												defaultValue={params.get("fts_weight") ?? "1"}
+											/>
+										</Field>
+										<Field
+											label="向量权重"
+											htmlFor="search-vector-weight"
+											error={fieldErrors.vector_weight ?? null}
+										>
+											<Input
+												id="search-vector-weight"
+												name="vector_weight"
+												type="number"
+												min={0}
+												step={0.1}
+												defaultValue={params.get("vector_weight") ?? "1"}
+											/>
+										</Field>
+										<Field
+											label="结果条数"
+											htmlFor="search-limit"
+											error={fieldErrors.limit ?? null}
+										>
+											<Input
+												id="search-limit"
+												name="limit"
+												type="number"
+												min={1}
+												max={200}
+												step={1}
+												defaultValue={params.get("limit") ?? "50"}
+											/>
+										</Field>
+									</Grid>
+								</form>
+								<MemoryFilters params={params} onChange={setParams} />
+							</PopoverContent>
+						</Popover>
+					</>
+				}
+			/>
 			{state.error && (
 				<Banner
 					role="alert"

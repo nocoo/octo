@@ -31,10 +31,7 @@ function renderShell(path = "/") {
 				<MemoryRouter initialEntries={[path]}>
 					<Routes>
 						<Route element={<AppShell />}>
-							<Route
-								path="*"
-								element={<PageHeader description="Page description" title="总览" />}
-							/>
+							<Route path="*" element={<PageHeader title="总览" />} />
 						</Route>
 					</Routes>
 				</MemoryRouter>
@@ -94,7 +91,7 @@ it("keeps back navigation beside the page title, not in the breadcrumb header", 
 	const header = html.match(/<header\b[^>]*data-basalt-header[^>]*>[\s\S]*?<\/header>/)?.[0];
 	expect(header).toBeDefined();
 	expect(header).not.toContain('aria-label="返回上一页"');
-	expect(html).toContain('class="grid gap-basalt-layout octo-page-header"');
+	expect(html).toContain("octo-page-header");
 	expect(html).not.toContain(">搜索</span></button>");
 });
 

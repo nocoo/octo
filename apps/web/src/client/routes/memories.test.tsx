@@ -86,7 +86,8 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		const html = render(MemoriesPage, "/memories?selected=m1");
 		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
 		expect(html).not.toContain("octo-title-icon");
-		expect(html).toMatch(/<h2\b[^>]*>记忆列表<\/h2>/);
+		expect(html).toContain('class="octo-page-meta" title="1 条">1 条');
+		expect(html).not.toContain("记忆列表");
 		for (const label of ["work"])
 			expect(html).toMatch(
 				new RegExp(`<span[^>]*data-tag-color="${tagColorFor(label)}"[^>]*>${label}</span>`),
@@ -141,10 +142,10 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 	});
 	it("keeps reader actions in the page header and metadata below it", () => {
 		const html = render(MemoryPage, "/memories/m1");
-		const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
-		expect(html.match(/<header\b/g)).toHaveLength(1);
+		const header = html.match(/octo-page-header"[\s\S]*?<\/h1>[\s\S]*?<\/div><\/div>/)?.[0] ?? "";
 		expect(header).toContain("版本历史");
 		expect(header).toContain("编辑记忆");
+		expect(html).toContain("本页目录");
 		expect(html).not.toContain("octo-memory-toolbar");
 		expect(html.match(/>本页目录<\/button>/g)).toHaveLength(1);
 		const source = readFileSync(new URL("memories.tsx", import.meta.url), "utf8");

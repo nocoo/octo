@@ -4,7 +4,13 @@ import type {
 	DataTableSort,
 } from "@nocoo/basalt/components/data-table";
 import type { FilterBarProps, FilterChipProps } from "@nocoo/basalt/components/filter-bar";
-import type { ComponentProps, ReactElement } from "react";
+import {
+	Children,
+	type ComponentProps,
+	isValidElement,
+	type ReactElement,
+	type ReactNode,
+} from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,12 +36,30 @@ vi.mock("react-router", async (original) => {
 		useSearchParams: () => [new URLSearchParams(fixture.search), fixture.setParams],
 	};
 });
+vi.mock("@nocoo/basalt/components/popover", async (original) => {
+	const module = await original<typeof import("@nocoo/basalt/components/popover")>();
+	return {
+		...module,
+		Popover: ({ children }: ComponentProps<typeof module.Popover>) => <>{children}</>,
+		PopoverTrigger: ({ children }: ComponentProps<typeof module.PopoverTrigger>) => <>{children}</>,
+		PopoverContent: ({ children }: ComponentProps<typeof module.PopoverContent>) => <>{children}</>,
+	};
+});
 vi.mock("../components/layout/page-header", async (original) => {
 	const module = await original<typeof import("../components/layout/page-header")>();
 	return {
 		...module,
 		PageHeader: (props: ComponentProps<typeof module.PageHeader>) => {
-			fixture.form = (props.filters as ReactElement<ComponentProps<"form">>).props;
+			const findForm = (node: ReactNode): ReactElement<ComponentProps<"form">> | null => {
+				for (const child of Children.toArray(node)) {
+					if (!isValidElement(child)) continue;
+					if (child.type === "form") return child as ReactElement<ComponentProps<"form">>;
+					const nested = findForm((child.props as { children?: ReactNode }).children);
+					if (nested) return nested;
+				}
+				return null;
+			};
+			fixture.form = findForm(props.actions)?.props ?? null;
 			return <module.PageHeader {...props} />;
 		},
 	};
@@ -118,16 +142,12 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-it("places usage chart and table headings outside their cards and preserves the table anchor", () => {
+it("keeps compact usage labels outside their cards and preserves the table anchor", () => {
 	fixture.usage = { loaded: true, items: [base] };
 	const html = render("usage");
-	for (const title of ["调用次数", "错误率", "每日用量与图表数据"]) {
-		expect(html).toMatch(
-			new RegExp(
-				`<section[^>]*space-y-basalt-layout"[^>]*><div[^>]*><div[^>]*><h2[^>]*text-basalt-xl[^>]*>${title}</h2></div></div><div[^>]*data-basalt-surface=""`,
-			),
-		);
-	}
+	expect(html).toContain("调用次数");
+	expect(html).toContain("错误率");
+	expect(html).not.toContain("每日用量与图表数据");
 	expect(html).toMatch(/<div[^>]*data-basalt-surface=""[^>]*id="usage-daily-table"/);
 });
 
@@ -432,7 +452,7 @@ it.each(["usage", "audit"] as const)(
 		const form = html.slice(html.indexOf("<form"), html.indexOf("</form>") + "</form>".length);
 		expect(form).toContain('role="group" aria-label="日期范围"');
 		expect(form).toContain("ops-date-range");
-		expect(form).toContain('role="group" aria-label="筛选操作"');
+		expect(form).toContain('aria-label="筛选操作"');
 		expect(form).toContain("ops-filter-actions");
 		const actions =
 			form.match(/class="[^"]*ops-filter-actions[^"]*"[^>]*>[\s\S]*?<\/div>/)?.[0] ?? "";

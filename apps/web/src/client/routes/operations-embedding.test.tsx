@@ -61,12 +61,9 @@ describe("profile read states", () => {
 	it("places application information and profile headings outside their cards", () => {
 		const html = render();
 		for (const title of ["应用信息", "嵌入配置"]) {
-			expect(html).toMatch(
-				new RegExp(
-					`<section[^>]*space-y-basalt-layout"[^>]*><div[^>]*><div[^>]*><h2[^>]*text-basalt-xl[^>]*>${title}</h2></div></div><div[^>]*data-basalt-surface=""`,
-				),
-			);
+			expect(html).toMatch(new RegExp(`<section[^>]*basalt-ui[^>]*>[\\s\\S]*?${title}`));
 		}
+		expect(html).not.toMatch(/data-slot="card-header"[^>]*>[\\s\\S]*?<h2/);
 	});
 
 	it("gives profile columns minimum readable widths without a second scroll container", () => {

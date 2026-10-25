@@ -193,15 +193,48 @@ a {
 	stroke-width: 1.5;
 }
 .octo-page-header {
-	position: relative;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	column-gap: var(--basalt-space-layout);
+	row-gap: var(--basalt-space-sm);
 }
-.octo-page-header > header > :has(h1) {
-	padding-inline-start: var(--basalt-space-12);
+.octo-page-heading {
+	display: flex;
+	min-inline-size: 0;
+	align-items: center;
+	column-gap: var(--basalt-space-sm);
+}
+.octo-page-title {
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--basalt-font-display);
+	font-size: var(--basalt-text-3xl);
+	font-weight: 600;
+	line-height: var(--basalt-leading-tight);
+	letter-spacing: -0.01em;
+}
+.octo-page-meta {
+	min-inline-size: 0;
+	max-inline-size: var(--basalt-space-96);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--basalt-text-sm);
+	color: hsl(var(--basalt-muted-foreground));
+	font-variant-numeric: tabular-nums;
+}
+.octo-page-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	column-gap: var(--basalt-space-sm);
+	row-gap: var(--basalt-space-sm);
+	margin-inline-start: auto;
 }
 .octo-page-back {
-	position: absolute;
-	inset-block-start: 0;
-	inset-inline-start: 0;
 	color: hsl(var(--basalt-muted-foreground));
 }
 .octo-page-back svg {
@@ -209,12 +242,8 @@ a {
 	block-size: var(--basalt-space-5);
 }
 @media (pointer: coarse) {
-	.octo-page-header > header > :has(h1) {
-		padding-inline-start: var(--basalt-space-16);
-	}
 	.octo-header :is(button, a):has(svg),
-	.octo-page-back,
-	.octo-command-list [cmdk-item] {
+	.octo-page-back {
 		min-inline-size: var(--basalt-size-touch);
 		min-block-size: var(--basalt-size-touch);
 	}
@@ -318,9 +347,6 @@ a {
 }
 .octo-inline-choice label {
 	white-space: nowrap;
-}
-.octo-inline-choice [role="combobox"] {
-	width: var(--basalt-space-20);
 }
 html.dark {
 	color-scheme: dark;

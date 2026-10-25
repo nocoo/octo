@@ -99,3 +99,20 @@ alignment. No replacement controls or surface system are introduced.
 - 选择与过滤保留在 URL（`node`、`find`、`kind`、`mode`、`space`、`cap`）；`node` 与 `find` 用 `replace` 写入，避免污染历史。`Esc` 不参与画布操作。
 - 小于 1024px 时两个浮动面板隐藏，改由工具栏打开 Sheet：`节点列表` 与 `节点详情`；选择节点后自动打开详情 Sheet。
 - 图谱数据表（节点表 + 关系表）从页面正文移入 `图谱数据表` Sheet，保持「图表都有表格备选」的可访问性契约，页面上不再出现表格。
+
+## 8. 单行页头与纵向空间
+
+Basalt `PageHeader` 的 `description` 与 `filters` 槽位会各占一行，本项目的 `components/layout/page-header.tsx` 因此覆盖它（与 zhe 的 `components/ui/page-header.tsx` 同一契约）：
+
+```ts
+{ title: ReactNode; meta?: ReactNode; actions?: ReactNode }
+```
+
+- 每页只有一行 chrome：返回键 + `h1` + 内联 meta（计数、范围、一句话说明，溢出截断并用 `title` 保留全文）+ 右侧 actions。
+- 筛选、视图切换与主操作都在 `actions` 里，控件用 `size="sm"`（28px）；主操作永远最后一个；窄屏整行折到标题下方。
+- 工具栏里的字段不再用 `Field` 包一层标签行，改用控件自身的 `aria-label` 与 `title`。
+- 只为标注单张表格而存在的 `SectionRule` 标题带已删除：表格的 `aria-label` 就是它的名字。页面有 ≥2 个内容区块时才保留 `SectionRule`，并优先 `variant="label"`（单行细标），`variant="heading"` 只留给真正的区块入口。
+- 表单项多的筛选（用量、审计、搜索）收进 `Popover`，页头只留一个「筛选（N）」按钮；`FilterBar` 的字段、chips 与「清除」都在弹层内，不占页面行。
+- 记忆库保留一行紧凑筛选工具条（空间、类型、更多筛选、应用筛选），因为它是页面的主操作面。
+
+1440×900 的基线（内容岛 832px，首个 surface 距岛顶）：总览/标签/空间/密钥/回收站 82px，每日用量 87px，审计 58px，关系图 82px，时间线 123px，记忆库 168px；改造前分别是 106/156/156/181/230、224、224、238、271、242px。关系图舞台因此从 570px 提升到 726px（内容岛的 87%）。

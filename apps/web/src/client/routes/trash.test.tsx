@@ -86,7 +86,7 @@ it("uses a plain space link, readable title and aligned compact trash actions", 
 	const html = render();
 	expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
 	expect(html).not.toContain("octo-title-icon");
-	expect(html).toMatch(/<h2\b[^>]*>已删除的记忆<\/h2>/);
+	expect(html).not.toContain("已删除的记忆");
 	expect(html).toMatch(/<a[^>]*href="\/memories\?spaces=work"[^>]*>work<\/a>/);
 	const headers = [...html.matchAll(/<th\b[^>]*>/g)].map((match) => match[0]);
 	const cells = [...html.matchAll(/<td\b[^>]*>/g)].map((match) => match[0]);

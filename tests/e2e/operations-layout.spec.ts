@@ -24,6 +24,8 @@ test("usage and audit filters keep date ranges and submit/reset actions together
 		await page.setViewportSize({ width, height: 844 });
 		for (const path of ["/usage", "/audit"]) {
 			await page.goto(path);
+			const filterName = path === "/audit" ? "审计筛选" : "用量筛选";
+			await page.getByRole("button", { name: filterName, exact: true }).click();
 			const dates = page.getByRole("group", { name: "日期范围", exact: true });
 			await expect(dates.getByLabel("开始日期", { exact: true })).toBeVisible();
 			await expect(dates.getByLabel("结束日期", { exact: true })).toBeVisible();

@@ -23,13 +23,17 @@ for (const view of ["usage", "audit"] as const) {
 			to: "结束日期",
 		};
 		const path = `/${view}?${new URLSearchParams(applied)}`;
+		const filterName = view === "audit" ? "审计筛选" : "用量筛选";
+		const openFilters = async () => {
+			const group = page.getByRole("group", { name: filterName, exact: true });
+			if (!(await group.isVisible().catch(() => false)))
+				await page.getByRole("button", { name: filterName, exact: true }).click();
+			return group;
+		};
 		await page.setViewportSize({ width: 390, height: 844 });
 		for (const key of Object.keys(applied)) {
 			await page.goto(path);
-			const bar = page.getByRole("group", {
-				name: view === "audit" ? "审计筛选" : "用量筛选",
-				exact: true,
-			});
+			const bar = await openFilters();
 			await expect(
 				bar.getByRole("button", { name: `移除${labels[key]}筛选`, exact: true }),
 			).toBeVisible();
@@ -53,6 +57,7 @@ for (const view of ["usage", "audit"] as const) {
 			).not.toHaveValue("unsubmitted-draft");
 		}
 		await page.goto(path);
+		await openFilters();
 		const identity = page.getByLabel(view === "audit" ? "调用者" : "密钥标识", { exact: true });
 		await identity.fill("submitted-draft");
 		await page.getByRole("button", { name: "应用筛选", exact: true }).click();

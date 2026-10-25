@@ -17,7 +17,6 @@ import {
 import { Banner } from "@nocoo/basalt/components/banner";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Select,
 	SelectContent,
@@ -222,14 +221,64 @@ export function TrashPage() {
 		<Grid columns={1} gap="lg" {...{ ref: region }} tabIndex={-1}>
 			<PageHeader
 				title="回收站"
-				description="不会自动清空。表头仅选择当前页，全部匹配项需单独选择。"
+				meta="不会自动清空 · 表头仅选择当前页"
 				actions={
-					<>
-						<Button variant="outline" disabled={locked} onClick={() => void model.load(filters)}>
+					<Grid
+						columns={1}
+						gap="sm"
+						style={{ display: "flex", flexWrap: "wrap", alignItems: "center" }}
+					>
+						<Input
+							size="sm"
+							id="trash-query"
+							className="w-basalt-56 max-w-full"
+							aria-label="筛选回收站"
+							title="查找记忆"
+							placeholder="搜索标题或标签"
+							value={params.get("q") ?? ""}
+							disabled={state.busy || state.preparing}
+							onChange={(event) =>
+								setParams(setTrashFilter(params, "q", event.target.value), { replace: true })
+							}
+						/>
+						<Select
+							value={filters.space || "__all__"}
+							disabled={state.busy || state.preparing}
+							onValueChange={(value) =>
+								setParams(setTrashFilter(params, "space", value === "__all__" ? "" : value))
+							}
+						>
+							<SelectTrigger
+								size="sm"
+								aria-label="按空间筛选"
+								title="空间"
+								className="w-basalt-36 max-w-full"
+							>
+								<SelectValue placeholder="全部空间" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="__all__">全部空间</SelectItem>
+								{filters.space && !state.spaces.some((space) => space.slug === filters.space) && (
+									<SelectItem value={filters.space}>{filters.space}</SelectItem>
+								)}
+								{state.spaces.map((space) => (
+									<SelectItem key={space.slug} value={space.slug}>
+										{space.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={locked}
+							onClick={() => void model.load(filters)}
+						>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
 						<Button
+							size="sm"
 							variant="destructive"
 							disabled={locked || !state.ready || state.total === 0}
 							onClick={(event) => {
@@ -240,55 +289,9 @@ export function TrashPage() {
 							<Trash2 size={16} aria-hidden="true" />
 							清空回收站（{state.total}）
 						</Button>
-					</>
-				}
-				filters={
-					<Grid
-						columns={1}
-						gap="sm"
-						style={{ display: "flex", flexWrap: "wrap", alignItems: "end" }}
-					>
-						<Field label="查找记忆" htmlFor="trash-query">
-							<Input
-								id="trash-query"
-								className="w-basalt-56 max-w-full"
-								aria-label="筛选回收站"
-								placeholder="搜索标题或标签"
-								value={params.get("q") ?? ""}
-								disabled={state.busy || state.preparing}
-								onChange={(event) =>
-									setParams(setTrashFilter(params, "q", event.target.value), { replace: true })
-								}
-							/>
-						</Field>
-						<Field label="空间">
-							<Select
-								value={filters.space || "__all__"}
-								disabled={state.busy || state.preparing}
-								onValueChange={(value) =>
-									setParams(setTrashFilter(params, "space", value === "__all__" ? "" : value))
-								}
-							>
-								<SelectTrigger aria-label="按空间筛选" className="w-basalt-36 max-w-full">
-									<SelectValue placeholder="全部空间" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="__all__">全部空间</SelectItem>
-									{filters.space && !state.spaces.some((space) => space.slug === filters.space) && (
-										<SelectItem value={filters.space}>{filters.space}</SelectItem>
-									)}
-									{state.spaces.map((space) => (
-										<SelectItem key={space.slug} value={space.slug}>
-											{space.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</Field>
 					</Grid>
 				}
 			/>
-			<SectionRule variant="heading" title="已删除的记忆" />
 			{!state.ready && !state.error && <Text role="status">正在加载回收站…</Text>}
 			{state.error && confirmation?.kind !== "single" && (
 				<Banner

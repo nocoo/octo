@@ -77,7 +77,6 @@ export function EmbeddingPage() {
 		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="向量模型"
-				description="配置嵌入网关与模型，检查连接并管理向量回填。"
 				actions={
 					<Button
 						icon={<RefreshCw aria-hidden="true" />}
@@ -95,7 +94,7 @@ export function EmbeddingPage() {
 					<CircleAlert className="inline size-basalt-icon" aria-hidden="true" /> {state.error}
 				</p>
 			)}
-			<SectionRule variant="heading" title="网关配置">
+			<SectionRule variant="label" title="网关配置">
 				<LayerCard>
 					<LayerCard.Body>
 						{state.loaded ? (
@@ -407,7 +406,6 @@ export function SettingsPage() {
 		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="设置"
-				description="管理嵌入配置，查看各模型的向量维度与使用情况。"
 				actions={
 					<>
 						<Button
@@ -427,7 +425,7 @@ export function SettingsPage() {
 					</>
 				}
 			/>
-			<SectionRule variant="heading" title="应用信息">
+			<SectionRule variant="label" title="应用信息">
 				<LayerCard>
 					<LayerCard.Body>
 						<DescriptionList>
@@ -452,7 +450,7 @@ export function SettingsPage() {
 					</Button>
 				</p>
 			)}
-			<SectionRule variant="heading" title="嵌入配置">
+			<SectionRule variant="label" title="嵌入配置">
 				<LayerCard padding="none">
 					{state.loading && state.profiles.length === 0 ? (
 						<LayerCard.Loading label="正在加载嵌入配置" />

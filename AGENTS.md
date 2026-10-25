@@ -23,6 +23,7 @@ Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not re
 - Tests never use remote Cloudflare resources or deploy `-test` resources; Vectorize is replaced locally by the D1 brute-force `VectorStore`.
 - Embedding gateway settings (base URL, AES-GCM-encrypted API key under `OCTO_SETTINGS_KEY`, model, dims, backfill toggle default off) are dashboard/Access-only and never exposed via `/api/v1`; outbound embedding calls always send a User-Agent.
 - Dashboard uses only `@nocoo/basalt@3.2.1` controls; MVVM with the single `fetch` in `src/client/lib/api.ts`.
+- Page chrome is one row: the local `PageHeader` override keeps `h1` + inline meta and puts every filter, view switch and the primary action in `actions` with `size="sm"`. Never use Basalt's `description`/`filters` slots, a `Field` label row inside a toolbar, or a `SectionRule` heading that only names the single table below it; see docs/06 §8.
 
 ## Setup and commands
 

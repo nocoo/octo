@@ -1,5 +1,4 @@
 import {
-	Badge,
 	Button,
 	ConfirmDialog,
 	Dialog,
@@ -138,11 +137,14 @@ function SpaceFilter({
 			value={value || "__all__"}
 			onValueChange={(next) => onChange(next === "__all__" ? "" : next)}
 		>
-			<Field label="空间">
-				<SelectTrigger aria-label="按空间筛选" className="w-basalt-36 max-w-full">
-					<SelectValue placeholder="全部空间" />
-				</SelectTrigger>
-			</Field>
+			<SelectTrigger
+				size="sm"
+				aria-label="按空间筛选"
+				title="按空间筛选"
+				className="w-basalt-32 max-w-full"
+			>
+				<SelectValue placeholder="全部空间" />
+			</SelectTrigger>
 			<SelectContent>
 				<SelectItem value="__all__">全部空间</SelectItem>
 				{spaces.map((space) => (
@@ -242,10 +244,11 @@ export function TagsPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="标签"
-				description="按主题浏览记忆，统一维护标签名称与合并关系。"
+				meta={state.ready ? `${state.tags.length} 个标签` : undefined}
 				actions={
 					<>
 						<Input
+							size="sm"
 							className="w-basalt-40 max-w-full"
 							ref={focusFallback}
 							aria-label="筛选标签"
@@ -253,7 +256,12 @@ export function TagsPage() {
 							value={query}
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
 						/>
-						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={state.busy}
+							onClick={() => void model.load()}
+						>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
@@ -261,7 +269,6 @@ export function TagsPage() {
 				}
 			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} hideError={confirming} />
-			<SectionRule variant="heading" title="标签列表" />
 			{state.ready && (
 				<>
 					<LayerCard padding="none">
@@ -532,10 +539,11 @@ export function SpacesPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="空间"
-				description="按空间组织记忆，管理名称、说明与所属密钥。"
+				meta={state.ready ? `${state.spaces.length} 个空间` : undefined}
 				actions={
 					<>
 						<Input
+							size="sm"
 							className="w-basalt-28 max-w-full"
 							aria-label="筛选空间"
 							ref={filter}
@@ -543,11 +551,16 @@ export function SpacesPage() {
 							onChange={(event) => setParams(updateLibraryUrl(params, "q", event.target.value))}
 							placeholder="查找空间"
 						/>
-						<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={state.busy}
+							onClick={() => void model.load()}
+						>
 							<RefreshCw size={16} aria-hidden="true" />
 							刷新
 						</Button>
-						<Button onClick={(event) => openCreate(event.currentTarget)}>
+						<Button size="sm" onClick={(event) => openCreate(event.currentTarget)}>
 							<FolderPlus size={16} aria-hidden="true" />
 							创建空间
 						</Button>
@@ -559,7 +572,6 @@ export function SpacesPage() {
 				onRetry={() => void model.load()}
 				hideError={creating || renaming !== null}
 			/>
-			<SectionRule variant="heading" title="空间列表" />
 			{state.ready && (
 				<LayerCard padding="none">
 					<DataTable
@@ -717,97 +729,79 @@ export function GraphPage() {
 		[state.memories, params, options.mode, options.cap],
 	);
 	const populated = state.ready && graph.nodes.length > 0;
+	const meta = populated
+		? `${graph.nodes.length} 个节点 · ${graph.links.length} 条关联${
+				graph.clustered > 0 ? ` · 已聚合 ${graph.clustered} 个` : ""
+			}`
+		: undefined;
 	return (
 		<Grid columns={1} gap="lg" className={populated ? "octo-graph-page" : ""}>
 			<PageHeader
 				title="关系图"
-				description="在整屏画布上探索记忆与标签的联系，选中节点查看它的属性与关联。"
+				meta={meta}
 				actions={
-					<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-						<RefreshCw size={16} aria-hidden="true" />
-						刷新
-					</Button>
-				}
-				filters={
-					<Grid
-						columns={1}
-						style={{
-							display: "flex",
-							flexWrap: "wrap",
-							alignItems: "end",
-							gap: "var(--basalt-space-layout-sm)",
-						}}
-					>
-						<Field label="关系类型">
-							<ViewSwitch
-								label="关系类型"
-								value={options.mode}
-								onChange={(value) => setParams(updateLibraryUrl(params, "mode", value))}
-								options={[
-									{ value: "bipartite", label: "标签与记忆" },
-									{ value: "cooccurrence", label: "标签共现" },
-								]}
-							/>
-						</Field>
+					<>
+						<ViewSwitch
+							label="关系类型"
+							value={options.mode}
+							onChange={(value) => setParams(updateLibraryUrl(params, "mode", value))}
+							options={[
+								{ value: "bipartite", label: "标签与记忆" },
+								{ value: "cooccurrence", label: "标签共现" },
+							]}
+						/>
 						<SpaceFilter
 							memories={state.memories}
 							value={params.get("space") ?? ""}
 							onChange={(value) => setParams(updateLibraryUrl(params, "space", value))}
 						/>
-						<Field className="w-basalt-28" label="节点上限" htmlFor="graph-cap">
-							<Input
-								id="graph-cap"
-								type="number"
-								min={10}
-								max={500}
-								value={options.cap}
-								onChange={(event) => setParams(updateLibraryUrl(params, "cap", event.target.value))}
-							/>
-						</Field>
-					</Grid>
+						<Input
+							size="sm"
+							className="w-basalt-20"
+							aria-label="节点上限"
+							title="节点上限（10–500）"
+							type="number"
+							min={10}
+							max={500}
+							value={options.cap}
+							onChange={(event) => setParams(updateLibraryUrl(params, "cap", event.target.value))}
+						/>
+						<Button
+							size="sm"
+							variant="outline"
+							disabled={state.busy}
+							onClick={() => void model.load()}
+						>
+							<RefreshCw size={16} aria-hidden="true" />
+							刷新
+						</Button>
+					</>
 				}
 			/>
-			<SectionRule
-				variant="heading"
-				title="知识关联"
-				actions={
-					populated ? (
-						<>
-							<span className="text-basalt-sm text-basalt-muted-foreground">
-								{graph.nodes.length} 个节点 · {graph.links.length} 条关联
-							</span>
-							{graph.clustered > 0 && (
-								<Badge variant="secondary">已聚合 {graph.clustered} 个节点</Badge>
-							)}
-						</>
-					) : undefined
-				}
-			>
-				<LibraryStatus state={state} onRetry={() => void model.load()} />
-				{state.ready && graph.nodes.length === 0 && (
-					<LayerCard>
-						<LayerCard.Empty
-							className="octo-empty octo-empty--page"
-							icon={<Network aria-hidden="true" />}
-							title="暂无关系数据"
-							description="添加记忆和标签后，可在这里查看关联。"
-							action={
-								<Button asChild>
-									<Link href="/memories">
-										<ArrowUpRight size={16} aria-hidden="true" />
-										浏览记忆
-									</Link>
-								</Button>
-							}
-						/>
-					</LayerCard>
-				)}
-				{populated && (
-					<Suspense fallback={<LayerCard.Loading label="正在加载图谱…" />}>
-						<GraphCanvas graph={graph} />
-					</Suspense>
-				)}
-			</SectionRule>
+			<LibraryStatus state={state} onRetry={() => void model.load()} />
+			{state.ready && graph.nodes.length === 0 && (
+				<LayerCard>
+					<LayerCard.Empty
+						className="octo-empty octo-empty--page"
+						icon={<Network aria-hidden="true" />}
+						title="暂无关系数据"
+						description="添加记忆和标签后，可在这里查看关联。"
+						action={
+							<Button asChild>
+								<Link href="/memories">
+									<ArrowUpRight size={16} aria-hidden="true" />
+									浏览记忆
+								</Link>
+							</Button>
+						}
+					/>
+				</LayerCard>
+			)}
+			{populated && (
+				<Suspense fallback={<LayerCard.Loading label="正在加载图谱…" />}>
+					<GraphCanvas graph={graph} />
+				</Suspense>
+			)}
 		</Grid>
 	);
 }
@@ -838,7 +832,13 @@ export function TimelinePage() {
 				<Grid columns={1} gap="lg">
 					<PageHeader
 						title="时间线"
-						description="按时间回顾记忆，支持事件时间与创建时间，统一使用 UTC。"
+						meta={
+							state.ready
+								? `${timeline.groups.reduce((count, group) => count + group.items.length, 0)} 条记忆 · ${
+										timeline.groups.length
+									} 个分组 · UTC`
+								: undefined
+						}
 						actions={
 							<>
 								<ViewSwitch
@@ -850,44 +850,41 @@ export function TimelinePage() {
 									]}
 									onChange={(value) => setParams(updateLibraryUrl(params, "view", value))}
 								/>
-								<Button variant="outline" disabled={state.busy} onClick={() => void model.load()}>
-									<RefreshCw size={16} aria-hidden="true" />
-									刷新
-								</Button>
-							</>
-						}
-						filters={
-							<Grid columns={1} gap="sm" className="octo-timeline-controls">
-								<Field label="时间依据">
-									<ViewSwitch
-										label="时间依据"
-										value={options.field}
-										onChange={(value) => setParams(updateLibraryUrl(params, "field", value))}
-										options={[
-											{ value: "event_time", label: "事件时间" },
-											{ value: "created_at", label: "创建时间" },
-										]}
-									/>
-								</Field>
-								<Field label="时间粒度">
-									<ViewSwitch
-										label="时间粒度"
-										value={options.zoom}
-										onChange={(value) => setParams(updateLibraryUrl(params, "zoom", value))}
-										options={[
-											{ value: "hour", label: "小时" },
-											{ value: "day", label: "天" },
-											{ value: "month", label: "月" },
-										]}
-									/>
-								</Field>
+								<ViewSwitch
+									label="时间依据"
+									value={options.field}
+									onChange={(value) => setParams(updateLibraryUrl(params, "field", value))}
+									options={[
+										{ value: "event_time", label: "事件时间" },
+										{ value: "created_at", label: "创建时间" },
+									]}
+								/>
+								<ViewSwitch
+									label="时间粒度"
+									value={options.zoom}
+									onChange={(value) => setParams(updateLibraryUrl(params, "zoom", value))}
+									options={[
+										{ value: "hour", label: "小时" },
+										{ value: "day", label: "天" },
+										{ value: "month", label: "月" },
+									]}
+								/>
 								<CollapsibleTrigger asChild>
-									<Button variant="outline">
+									<Button size="sm" variant="outline">
 										<SlidersHorizontal size={16} aria-hidden="true" />
 										筛选
 									</Button>
 								</CollapsibleTrigger>
-							</Grid>
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={state.busy}
+									onClick={() => void model.load()}
+								>
+									<RefreshCw size={16} aria-hidden="true" />
+									刷新
+								</Button>
+							</>
 						}
 					/>
 					<CollapsibleContent unstyled>
@@ -930,19 +927,6 @@ export function TimelinePage() {
 				</Grid>
 			</Collapsible>
 
-			<SectionRule
-				variant="heading"
-				title="记忆时间线"
-				hint="从早到晚排列；日期分组和范围边界均使用 UTC。"
-				actions={
-					state.ready ? (
-						<span className="octo-muted">
-							{timeline.groups.reduce((count, group) => count + group.items.length, 0)} 条记忆 ·{" "}
-							{timeline.groups.length} 个时间分组
-						</span>
-					) : undefined
-				}
-			/>
 			<LibraryStatus state={state} onRetry={() => void model.load()} />
 			{state.ready && timeline.undated > 0 && (
 				<p className="text-basalt-sm text-basalt-muted-foreground">

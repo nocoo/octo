@@ -83,3 +83,10 @@
 	padding: unset;
 	border: 0;
 }
+
+.ops-filter-actions {
+	border: 0;
+	padding: unset;
+	margin: unset;
+	min-inline-size: 0;
+}

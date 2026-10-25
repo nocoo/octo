@@ -229,7 +229,11 @@ export function MemoriesPage() {
 			<MemoryFilters params={params} onChange={setParams}>
 				<PageHeader
 					title="记忆库"
-					description="浏览和筛选所有记忆，按空间、类型与标签整理知识。"
+					meta={
+						state.items.length
+							? `${state.items.length} 条${state.nextCursor ? " · 还有更多" : ""}`
+							: undefined
+					}
 					actions={
 						<ViewSwitch
 							label="显示方式"
@@ -247,7 +251,6 @@ export function MemoriesPage() {
 					}
 				/>
 			</MemoryFilters>
-			<SectionRule variant="heading" title={cards ? "记忆卡片" : "记忆列表"} />
 			<LibraryBulkActions
 				memories={state.items}
 				selected={selected}
@@ -510,7 +513,7 @@ export function MemoryPage() {
 							{memory?.title ?? cachedTitle ?? "记忆"}
 						</span>
 					}
-					description={memory ? `第 ${memory.version} 版` : "查看记忆正文、元数据与版本记录。"}
+					meta={memory ? `第 ${memory.version} 版` : undefined}
 					actions={
 						<>
 							{memory && (
@@ -849,10 +852,10 @@ export function EditorPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="编辑记忆"
-				description={
+				meta={
 					state.base
-						? `基于第 ${state.base.version} 版${state.dirty ? " / 有未保存的修改" : ""}`
-						: "Markdown 编辑器"
+						? `基于第 ${state.base.version} 版${state.dirty ? " · 有未保存的修改" : ""}`
+						: undefined
 				}
 				actions={
 					<>
@@ -1102,25 +1105,13 @@ export function HistoryPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="版本历史"
-				description={state.current?.title ?? "每次写入都会保留可恢复的版本快照。"}
+				meta={state.current?.title}
 				actions={
-					<Button asChild variant="outline">
-						<Link to={`/memories/${id}`}>
-							<BookOpen aria-hidden="true" />
-							查看记忆
-						</Link>
-					</Button>
-				}
-				filters={
-					<Grid
-						columns={1}
-						gap="sm"
-						style={{
-							gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), max-content))",
-							alignItems: "center",
-						}}
-					>
+					<>
 						<Choice
+							inline
+							size="sm"
+							className="w-basalt-20"
 							label="起始版本"
 							value={String(from || state.versions[0]?.version || 1)}
 							options={state.versions.map((version) => String(version.version))}
@@ -1132,6 +1123,9 @@ export function HistoryPage() {
 							}}
 						/>
 						<Choice
+							inline
+							size="sm"
+							className="w-basalt-20"
 							label="目标版本"
 							value={String(to || state.current?.version || 1)}
 							options={state.versions.map((version) => String(version.version))}
@@ -1142,22 +1136,26 @@ export function HistoryPage() {
 								setParams(next);
 							}}
 						/>
-						<Field label="差异显示方式">
-							<ViewSwitch
-								label="差异显示方式"
-								value={params.get("diff") ?? "inline"}
-								options={[
-									{ value: "inline", label: "行内" },
-									{ value: "split", label: "并排" },
-								]}
-								onChange={(value) => {
-									const next = new URLSearchParams(params);
-									next.set("diff", value);
-									setParams(next);
-								}}
-							/>
-						</Field>
-					</Grid>
+						<ViewSwitch
+							label="差异显示方式"
+							value={params.get("diff") ?? "inline"}
+							options={[
+								{ value: "inline", label: "行内" },
+								{ value: "split", label: "并排" },
+							]}
+							onChange={(value) => {
+								const next = new URLSearchParams(params);
+								next.set("diff", value);
+								setParams(next);
+							}}
+						/>
+						<Button asChild size="sm" variant="outline">
+							<Link to={`/memories/${id}`}>
+								<BookOpen aria-hidden="true" />
+								查看记忆
+							</Link>
+						</Button>
+					</>
 				}
 			/>
 			<Feedback

@@ -38,7 +38,7 @@ describe("library page installed-component boundaries", () => {
 		expect(html).toContain(title);
 		expect(html).not.toContain("octo-title-icon");
 		expect(html.match(/<h1\b/g)).toHaveLength(1);
-		expect(html).toMatch(/<h2\b/);
+		expect(html).toContain("octo-page-header");
 		expect(html).toContain('class="grid gap-basalt-layout-lg"');
 		expect(html).not.toMatch(/class="library-(?:page|stack|actions|fields|search)/);
 		expect(html).toContain("正在加载资料库");
@@ -69,7 +69,7 @@ describe("library page installed-component boundaries", () => {
 		expect(section).toContain('aria-label="图谱关系"');
 		expect(html).not.toContain("标签之间的联系");
 	});
-	it("moves graph counts and clustering information into the outer heading actions", () => {
+	it("keeps graph counts and clustering information on the single header row", () => {
 		overrides.state = {
 			ready: true,
 			memories: Array.from({ length: 12 }, (_, index) => ({
@@ -83,14 +83,10 @@ describe("library page installed-component boundaries", () => {
 			})),
 		};
 		const html = render(GraphPage, "/graph?cap=10");
-		const section =
-			html.match(
-				/<section[^>]*><div[^>]*><div[^>]*><h2[^>]*>知识关联<\/h2>[\s\S]*?<\/section>/,
-			)?.[0] ?? "";
-		expect(section).toContain("text-basalt-xl");
-		expect(section).toContain("9 个节点 · 8 条关联");
-		expect(section).toContain("已聚合 5 个节点");
-		expect(section).not.toContain('data-basalt-surface=""');
+		const header = html.match(/octo-page-header"[\s\S]*?<\/div><\/div>/)?.[0] ?? "";
+		expect(header).toContain("9 个节点 · 8 条关联 · 已聚合 5 个");
+		expect(header).toContain('class="octo-page-meta"');
+		expect(html).not.toContain("知识关联");
 		expect(html).not.toMatch(/<h3[^>]*>\d+ 个节点/);
 	});
 	it.each([

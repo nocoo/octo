@@ -16,7 +16,6 @@ import {
 import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import {
 	Ban,
@@ -273,10 +272,11 @@ export function KeysPage() {
 		<Grid columns={1} gap="lg" className="min-w-0">
 			<PageHeader
 				title="接口密钥"
-				description="明文仅展示一次，绝不持久化。"
+				meta="明文仅展示一次 · 用量统计最近 30 个 UTC 日期（含今日）"
 				actions={
 					<>
 						<Button
+							size="sm"
 							icon={<RefreshCw aria-hidden="true" />}
 							variant="outline"
 							onClick={() => {
@@ -288,6 +288,7 @@ export function KeysPage() {
 							刷新
 						</Button>
 						<Button
+							size="sm"
 							icon={<Plus aria-hidden="true" />}
 							ref={createTrigger}
 							onClick={(event) => {
@@ -320,52 +321,47 @@ export function KeysPage() {
 			{usageState.loading && usageState.snapshot && (
 				<p role="status">用量刷新中；当前图表为上次成功数据。</p>
 			)}
-			<SectionRule variant="heading" title="密钥列表">
-				<p className="text-basalt-sm text-basalt-muted-foreground">
-					用量统计最近 30 个 UTC 日期（含今日）；今日数据尚未结束。
-				</p>
-				<LayerCard padding="none">
-					{state.loading && state.items.length === 0 ? (
-						<LayerCard.Loading label="正在加载接口密钥" />
-					) : (
-						<DataTable
-							aria-label="接口密钥"
-							className="octo-table"
-							data={state.items}
-							columns={columns}
-							getRowId={(key) => key.id}
-							edge="attached"
-							error={state.items.length === 0 ? state.error : null}
-							retryLabel="重试"
-							onRetry={() => void model.load()}
-							empty={
-								state.loaded ? (
-									<LayerCard.Empty
-										className="octo-empty octo-empty--page"
-										icon={<KeyRound aria-hidden="true" />}
-										title="暂无接口密钥。"
-										description="为代理创建第一把密钥。"
-										action={
-											<Button
-												icon={<Plus aria-hidden="true" />}
-												disabled={state.pending}
-												onClick={(event) => {
-													editorTrigger.current = event.currentTarget;
-													openEditor("create");
-												}}
-											>
-												创建密钥
-											</Button>
-										}
-									/>
-								) : (
-									"接口密钥列表尚未加载，请刷新。"
-								)
-							}
-						/>
-					)}
-				</LayerCard>
-			</SectionRule>
+			<LayerCard padding="none">
+				{state.loading && state.items.length === 0 ? (
+					<LayerCard.Loading label="正在加载接口密钥" />
+				) : (
+					<DataTable
+						aria-label="接口密钥"
+						className="octo-table"
+						data={state.items}
+						columns={columns}
+						getRowId={(key) => key.id}
+						edge="attached"
+						error={state.items.length === 0 ? state.error : null}
+						retryLabel="重试"
+						onRetry={() => void model.load()}
+						empty={
+							state.loaded ? (
+								<LayerCard.Empty
+									className="octo-empty octo-empty--page"
+									icon={<KeyRound aria-hidden="true" />}
+									title="暂无接口密钥。"
+									description="为代理创建第一把密钥。"
+									action={
+										<Button
+											icon={<Plus aria-hidden="true" />}
+											disabled={state.pending}
+											onClick={(event) => {
+												editorTrigger.current = event.currentTarget;
+												openEditor("create");
+											}}
+										>
+											创建密钥
+										</Button>
+									}
+								/>
+							) : (
+								"接口密钥列表尚未加载，请刷新。"
+							)
+						}
+					/>
+				)}
+			</LayerCard>
 			<Dialog
 				open={editor !== null}
 				onOpenChange={(open) => {

@@ -52,6 +52,8 @@ export function Choice({
 	optionLabels = choiceLabels,
 	onChange,
 	inline = false,
+	size,
+	className,
 }: {
 	label: string;
 	name?: string;
@@ -61,6 +63,8 @@ export function Choice({
 	optionLabels?: Readonly<Record<string, string>>;
 	onChange?: (value: string) => void;
 	inline?: boolean;
+	size?: "sm";
+	className?: string;
 }) {
 	const [selected, setSelected] = useState(value);
 	return (
@@ -78,7 +82,11 @@ export function Choice({
 				{...(inline ? { className: "octo-inline-choice" } : {})}
 				{...(name ? { htmlFor: name } : {})}
 			>
-				<SelectTrigger aria-label={label}>
+				<SelectTrigger
+					aria-label={label}
+					{...(size ? { size } : {})}
+					{...(className ? { className } : {})}
+				>
 					<SelectValue>
 						{optionLabels[onChange ? value : selected] ?? (onChange ? value : selected)}
 					</SelectValue>
@@ -112,9 +120,6 @@ function FilterSelect({
 	const [query, setQuery] = useState("");
 	return (
 		<Grid columns={1} className="octo-filter-choice">
-			<span className="text-basalt-base font-medium" aria-hidden="true">
-				{label}
-			</span>
 			<MultiSelect
 				name={name}
 				label={label}

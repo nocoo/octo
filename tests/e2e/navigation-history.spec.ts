@@ -166,5 +166,5 @@ test("history restores the active filter panel without losing the result view", 
 	await page.goForward();
 	await expect(page.getByRole("group", { name: "更多记忆筛选", exact: true })).toBeVisible();
 	await expect(space).toContainText("已选 1 项");
-	await expect(page.getByRole("heading", { name: "记忆卡片", exact: true })).toBeVisible();
+	await expect(page.getByRole("link", { name: memory.title, exact: true })).toBeVisible();
 });

@@ -11,6 +11,23 @@ const overrides = vi.hoisted(() => ({ state: {} as Record<string, unknown>, deta
 vi.mock("../components/layout/use-model", () => ({
 	useModel: (model: { state: object }) => ({ ...model.state, ...overrides.state }),
 }));
+vi.mock("@nocoo/basalt/components/popover", async (original) => {
+	const module = await original<typeof import("@nocoo/basalt/components/popover")>();
+	return {
+		...module,
+		Popover: ({ children }: import("@nocoo/basalt/components/popover").PopoverProps) => (
+			<>{children}</>
+		),
+		PopoverTrigger: ({
+			children,
+		}: import("@nocoo/basalt/components/popover").PopoverTriggerProps) => <>{children}</>,
+		PopoverContent: ({
+			children,
+		}: import("@nocoo/basalt/components/popover").PopoverContentProps) => (
+			<div data-slot="popover-content">{children}</div>
+		),
+	};
+});
 vi.mock("@nocoo/basalt/components/collapsible", async (original) => {
 	const module = await original<typeof import("@nocoo/basalt/components/collapsible")>();
 	return {
@@ -35,7 +52,7 @@ function renderResult() {
 	);
 }
 
-it("exposes URL fusion options without losing form values and keeps filters below the header", () => {
+it("exposes compact search controls in the header without losing URL form values", () => {
 	const html = renderToStaticMarkup(
 		<ThemeProvider persist={false}>
 			<MemoryRouter
@@ -51,9 +68,11 @@ it("exposes URL fusion options without losing form values and keeps filters belo
 	expect(html).not.toContain("octo-search-query-field");
 	expect(html).toContain("搜索记忆");
 	expect(html).toContain('aria-label="搜索选项"');
-	const heading = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] ?? "";
+	const heading =
+		html.match(/octo-page-header"[\s\S]*?<\/header>/)?.[0] ??
+		html.split("octo-page-actions")[1] ??
+		"";
 	expect(heading).toContain("data-search-input");
-	expect(heading).not.toContain("展开或收起记忆筛选");
 	expect(heading).toContain('aria-label="搜索模式"');
 	expect(html).toContain('aria-label="常用记忆筛选"');
 	expect(heading).toContain('aria-label="高级融合选项"');
@@ -62,9 +81,9 @@ it("exposes URL fusion options without losing form values and keeps filters belo
 	expect(heading).toContain('form="search-options"');
 	expect(html).toMatch(/<input[^>]*data-search-input/);
 	expect(html).toMatch(/<button[^>]*aria-label="高级融合选项"[^>]*aria-expanded="true"/);
-	expect(heading).not.toContain("应用筛选");
+	expect(heading).toContain('aria-label="高级融合选项"');
 	expect(html.match(/aria-label="记忆筛选"/g)).toHaveLength(1);
-	expect(html.indexOf('aria-label="记忆筛选"')).toBeGreaterThan(html.indexOf("</header>"));
+	expect(html).toContain('aria-label="记忆筛选"');
 	expect(html).toMatch(/<form[^>]*id="search-options"[^>]*noValidate=""/i);
 	const advanced = html.match(/<form\b[^>]*data-search-advanced="true"[^>]*>/)?.[0] ?? "";
 	expect(advanced).toContain('id="search-options"');
@@ -146,7 +165,7 @@ it("localizes channel evidence and leaves user content unchanged", () => {
 	expect(html).toMatch(/<table[^>]*class="[^"]*octo-table[^>]*aria-label="搜索结果"/);
 	expect(html).toContain('data-basalt-data-table=""');
 	expect(html).not.toContain("octo-title-icon");
-	expect(html).toMatch(/<h2\b[^>]*>搜索结果<\/h2>/);
+	expect(html).not.toMatch(/<h2\b[^>]*>搜索结果<\/h2>/);
 	expect(html).toContain('href="/memories/m1"');
 	expect(html).toContain('href="/memories/m1/edit"');
 	expect(html).toContain('aria-label="编辑 User title"');
