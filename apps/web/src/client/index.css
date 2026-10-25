@@ -201,18 +201,20 @@ a {
 }
 .octo-page-heading {
 	display: flex;
+	flex: 1 1 auto;
 	min-inline-size: 0;
+	max-inline-size: 100%;
 	align-items: center;
 	column-gap: var(--basalt-space-sm);
 }
 .octo-page-title {
-	display: -webkit-box;
-	flex: 0 0 auto;
+	display: block;
+	flex: 0 1 auto;
 	max-inline-size: 100%;
+	min-inline-size: 0;
 	overflow: hidden;
-	overflow-wrap: anywhere;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-family: var(--basalt-font-display);
 	font-size: var(--basalt-text-3xl);
 	font-weight: 600;
@@ -220,7 +222,7 @@ a {
 	letter-spacing: -0.01em;
 }
 .octo-page-meta {
-	flex: 0 1 auto;
+	flex-shrink: 100;
 	min-inline-size: 0;
 	max-inline-size: var(--basalt-space-96);
 	overflow: hidden;
@@ -245,6 +247,16 @@ a {
 	inline-size: var(--basalt-space-5);
 	block-size: var(--basalt-space-5);
 }
+@media (width < 768px) {
+	.octo-page-title {
+		display: -webkit-box;
+		overflow-wrap: anywhere;
+		white-space: normal;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+	}
+}
+
 @media (pointer: coarse) {
 	.octo-header :is(button, a):has(svg),
 	.octo-page-back {
