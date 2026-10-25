@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 — 2026-10-24
+
+### Changed
+
+- Bump `@cloudflare/workers-types`, `@modelcontextprotocol/sdk`, `@types/bun`, and `undici` (including miniflare transitive override).
+
+### Security
+
+- Pin transitive `body-parser` to 2.4.0 (GHSA-27r3-jxmh-p828).
+- Pin transitive `fast-uri` to 3.1.9 (GHSA-333x-w4r6-6crp, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, GHSA-xhq7-xmqj-769h).
+
 ## 0.5.1 — 2026-10-23
 
 ### Changed
