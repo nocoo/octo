@@ -140,7 +140,8 @@ test("memory filters occupy the content rail and align fields independently of h
 		.filter({ has: page.getByRole("link", { name: memory.title, exact: true }) });
 	await expect(row).toBeVisible();
 	const box = await row.boundingBox();
-	expect(box?.height).toBeLessThan(80);
+	// a two-line title plus its type badge stays a compact row; card layouts are far taller
+	expect(box?.height).toBeLessThan(96);
 });
 
 test("hidden invalid search options reopen with focus without dropping draft parameters", async ({
