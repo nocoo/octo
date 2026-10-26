@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.6.0 — 2026-10-26
+
+### Added
+
+- Immersive graph page: one full-height canvas inside the content island with a floating node directory, a floating inspector for the selected node's properties and neighbours, and a centred toolbar for zoom, labels, simulation and sheets.
+- Search, kind and selection state for the graph live in the URL (`find`, `kind`, `node`), and the graph data tables move into a `图谱数据表` sheet.
+- Graph viewmodel helpers: degrees, ranking, directory filtering, neighbours, one-hop focus, selected node and main connected component.
+
+### Changed
+
+- Page chrome collapses to a single row: the project `PageHeader` override keeps the `h1`, an inline meta line and one actions row, replacing Basalt's `description` and `filters` slots.
+- Every header control uses Basalt's native 34px density; filters with many fields (usage, audit, search) live in popovers or inline panels behind one trigger, and list pages drop the section band that only named their table.
+- The graph auto-fits the largest connected component when it holds at least half the nodes, sizes tags by memory count and damps node radius against the zoom level.
+
+### Fixed
+
+- Paint the graph ambience in device pixels so the gradient covers the whole canvas on 2x displays instead of its top-left quarter.
+- Reach all four canvas edges with a primary-to-tag wash instead of a centred halo that died out before the frame.
+- Keep the page title on one line above 768px and clamp it to two wrapped lines below, so long memory titles stay inside the reader column.
+- Keep search options mounted without a force-mounted popover; the closed popover no longer steals focus from the query box and the `/` shortcut survives.
+- Align the memory filter row, pager and usage/audit filter actions on one baseline.
+
+### Validation
+
+- L1 coverage 99.07% statements / 97.16% branches / 99.24% functions / 99.42% lines, strict typecheck and Biome with warnings as errors.
+- L2 API suite 322 tests, L3 Chromium suite 121 tests including four new graph journeys.
+- No database migration or authentication change is introduced.
+
 ## 0.5.2 — 2026-10-24
 
 ### Changed
