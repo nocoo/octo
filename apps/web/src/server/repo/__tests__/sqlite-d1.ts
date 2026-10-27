@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { normalizeSqliteBinds } from "../../../../../../tests/fixtures/sqlite-bind";
 import { D1_MAX_BOUND_PARAMS } from "../../lib/d1";
 
 type Bound = {
@@ -27,16 +28,16 @@ export function sqliteD1(db: DatabaseSync): D1Database {
 				return this;
 			},
 			async first<T>() {
-				const row = db.prepare(sql).get(...this.binds) as T | undefined;
+				const row = db.prepare(sql).get(...normalizeSqliteBinds(this.binds)) as T | undefined;
 				return row ?? null;
 			},
 			async all<T>() {
-				return { results: db.prepare(sql).all(...this.binds) as T[] };
+				return { results: db.prepare(sql).all(...normalizeSqliteBinds(this.binds)) as T[] };
 			},
 			async run() {
 				const prepared = db.prepare(sql);
 				prepared.setReadBigInts(true);
-				const info = prepared.run(...this.binds);
+				const info = prepared.run(...normalizeSqliteBinds(this.binds));
 				return { success: true as const, meta: { changes: Number(info.changes) } };
 			},
 		};

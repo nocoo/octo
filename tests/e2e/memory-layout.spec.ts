@@ -1,4 +1,5 @@
 import { capture, expect, test } from "./fixtures";
+import { expectDesktopMemoryRailGeometry, expectStackedMemoryColumns } from "./layout-helpers";
 
 test("short memory bodies fill the desktop rail beside a wider information sidebar", async ({
 	page,
@@ -20,31 +21,11 @@ test("short memory bodies fill the desktop rail beside a wider information sideb
 		await expect(metadata.getByRole("group", { name: "标签", exact: true })).not.toContainText(
 			"笔记",
 		);
-		const geometry = await page.locator(".octo-memory-layout").evaluate((layout) => {
-			const body = layout.firstElementChild;
-			const aside = layout.querySelector(".octo-memory-aside");
-			const island = layout.closest(".octo-island");
-			if (!body || !aside || !island) throw new Error("Missing reader columns");
-			return {
-				body: body.getBoundingClientRect().toJSON(),
-				aside: aside.getBoundingClientRect().toJSON(),
-				bottom:
-					island.getBoundingClientRect().bottom -
-					Number.parseFloat(getComputedStyle(island).paddingBottom),
-			};
-		});
-		expect(geometry.aside.width).toBe(384);
-		expect(geometry.body.width).toBeGreaterThan(400);
-		expect(geometry.body.bottom).toBeGreaterThanOrEqual(geometry.aside.bottom - 1);
-		expect(geometry.body.bottom).toBeGreaterThanOrEqual(geometry.bottom - 1);
+		await expectDesktopMemoryRailGeometry(page);
 		await capture(page, info, `reader-fill-${height}`);
 	}
 	await page.setViewportSize({ width: 390, height: 844 });
-	const body = await page.locator(".octo-memory-layout > :first-child").boundingBox();
-	const aside = await page.locator(".octo-memory-aside").boundingBox();
-	if (!body || !aside) throw new Error("Missing mobile reader columns");
-	expect(aside.x).toBeCloseTo(body.x, 0);
-	expect(aside.y).toBeGreaterThanOrEqual(body.y + body.height);
+	await expectStackedMemoryColumns(page);
 });
 
 test("reader protects the title and prose at intermediate widths and navigates its TOC", async ({
@@ -66,15 +47,20 @@ test("reader protects the title and prose at intermediate widths and navigates i
 		await page.goto(`/memories/${memory.id}`);
 		const heading = page.getByRole("heading", { name: title, exact: true });
 		await expect(heading).toBeVisible();
-		const reader = await page.locator(".octo-memory-reader").boundingBox();
-		const prose = await page.locator(".octo-markdown").boundingBox();
-		const headingBox = await heading.boundingBox();
-		expect(reader).not.toBeNull();
-		expect(prose?.width).toBeGreaterThanOrEqual(Math.min(400, (reader?.width ?? 0) - 32) - 1);
-		expect(headingBox?.x).toBeGreaterThanOrEqual(reader?.x ?? 0);
-		expect((headingBox?.x ?? 0) + (headingBox?.width ?? 0)).toBeLessThanOrEqual(
-			(reader?.x ?? 0) + (reader?.width ?? 0) + 1,
-		);
+		await expect
+			.poll(async () => {
+				const reader = await page.locator(".octo-memory-reader").boundingBox();
+				const prose = await page.locator(".octo-markdown").boundingBox();
+				const headingBox = await heading.boundingBox();
+				if (!reader || !prose || !headingBox) return false;
+				const proseMin = Math.min(400, reader.width - 32) - 1;
+				return (
+					prose.width >= proseMin &&
+					headingBox.x >= reader.x &&
+					headingBox.x + headingBox.width <= reader.x + reader.width + 1
+				);
+			})
+			.toBe(true);
 		expect(await heading.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
 			true,
 		);
@@ -127,9 +113,18 @@ test("memory filters occupy the content rail and align fields independently of h
 			});
 			expect(widthRatio).toBeGreaterThan(0.85);
 			if (width === 1440) {
-				const start = await filters.getByLabel("起始时间（UTC）", { exact: true }).boundingBox();
-				const importance = await filters.getByLabel("重要性下限", { exact: true }).boundingBox();
-				expect(start?.y).toBeCloseTo(importance?.y ?? -1, 0);
+				await expect
+					.poll(async () => {
+						const start = await filters
+							.getByLabel("起始时间（UTC）", { exact: true })
+							.boundingBox();
+						const importance = await filters
+							.getByLabel("重要性下限", { exact: true })
+							.boundingBox();
+						if (!start || !importance) return Number.POSITIVE_INFINITY;
+						return Math.abs(start.y - importance.y);
+					})
+					.toBeLessThan(0.5);
 			}
 		}
 	}
@@ -195,9 +190,14 @@ test("editor labels and same-row fields remain aligned", async ({ page, admin })
 		})),
 	);
 	for (const label of labels) expect(label.linked, label.label ?? "Field label").toBe(true);
-	const space = await page.getByLabel("空间", { exact: true }).boundingBox();
-	const event = await page.getByLabel("事件时间（UTC）", { exact: true }).boundingBox();
-	expect(event?.y).toBeCloseTo(space?.y ?? -1, 0);
+	await expect
+		.poll(async () => {
+			const space = await page.getByLabel("空间", { exact: true }).boundingBox();
+			const event = await page.getByLabel("事件时间（UTC）", { exact: true }).boundingBox();
+			if (!space || !event) return Number.POSITIVE_INFINITY;
+			return Math.abs(event.y - space.y);
+		})
+		.toBeLessThan(0.5);
 });
 
 for (const width of [390, 1440]) {
