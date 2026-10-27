@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync } from "node:fs";
+import type { SQLInputValue } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 import { migrationSqlForNode } from "../../scripts/sqlite-test";
 import { MEMORY_FIXTURE_SQL } from "./memories";
+import { normalizeSqliteBinds } from "./sqlite-bind";
 
 export function sqliteD1() {
 	const sqlite = new DatabaseSync(":memory:");
@@ -11,11 +13,11 @@ export function sqliteD1() {
 		sqlite.exec(migrationSqlForNode(readFileSync(`migrations/${file}`, "utf8")));
 	}
 	sqlite.exec(MEMORY_FIXTURE_SQL);
-	type Bound = { sql: string; params: (string | number | null)[] };
+	type Bound = { sql: string; params: SQLInputValue[] };
 	const result = (bound: Bound) => {
 		const statement = sqlite.prepare(bound.sql);
 		statement.setReadBigInts(true);
-		const info = statement.run(...bound.params);
+		const info = statement.run(...normalizeSqliteBinds(bound.params));
 		return { success: true, meta: { changes: Number(info.changes) }, results: [] };
 	};
 	const prepare = (sql: string, params: Bound["params"] = []) => ({
@@ -23,8 +25,11 @@ export function sqliteD1() {
 		params,
 		bind: (...values: Bound["params"]) => prepare(sql, values),
 		run: async () => result({ sql, params }),
-		first: async () => sqlite.prepare(sql).get(...params) ?? null,
-		all: async () => ({ success: true, results: sqlite.prepare(sql).all(...params) }),
+		first: async () => sqlite.prepare(sql).get(...normalizeSqliteBinds(params)) ?? null,
+		all: async () => ({
+			success: true,
+			results: sqlite.prepare(sql).all(...normalizeSqliteBinds(params)),
+		}),
 	});
 	const db = {
 		prepare,
