@@ -91,7 +91,7 @@ for (const navigation of [
 						.click();
 					break;
 				case "command palette":
-					await page.getByRole("button", { name: "搜索与命令", exact: true }).click();
+					await page.keyboard.press("ControlOrMeta+k");
 					await page.getByPlaceholder("跳转页面，或搜索记忆…", { exact: true }).fill("设置");
 					await page.getByRole("option", { name: "设置", exact: true }).click();
 					break;

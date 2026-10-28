@@ -10,7 +10,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 			await page.setViewportSize(viewport);
 			await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
 			await page.goto("/");
-			await page.getByRole("button", { name: "搜索与命令", exact: true }).click();
+			await page.keyboard.press("ControlOrMeta+k");
 			const dialog = page.getByRole("dialog");
 			await expect(dialog).toBeVisible();
 			await expect(dialog).toHaveCSS("padding", "0px");

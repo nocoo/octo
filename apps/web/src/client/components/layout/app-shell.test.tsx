@@ -86,6 +86,14 @@ it("separates the brand home link from the visible collapse control", () => {
 	);
 });
 
+it("keeps search in the sidebar and shortcut instead of the header bar", () => {
+	const html = renderShell();
+	const header = html.match(/<header\b[^>]*data-basalt-header[^>]*>[\s\S]*?<\/header>/)?.[0];
+	expect(header).toBeDefined();
+	expect(header).not.toContain('aria-label="搜索与命令"');
+	expect(html).toContain("搜索与命令");
+});
+
 it("keeps back navigation beside the page title, not in the breadcrumb header", () => {
 	const html = renderShell();
 	const header = html.match(/<header\b[^>]*data-basalt-header[^>]*>[\s\S]*?<\/header>/)?.[0];

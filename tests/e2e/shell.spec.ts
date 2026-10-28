@@ -46,7 +46,7 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 		}));
 		expect(geometry.gap).toBe("4px");
 		expect(geometry.controls).toEqual([
-			...Array.from({ length: 3 }, () => ({ width: 34, height: 34, icon: 18 })),
+			...Array.from({ length: 2 }, () => ({ width: 34, height: 34, icon: 18 })),
 			{ width: 34, height: 34, icon: 14 },
 		]);
 		expect(
@@ -149,7 +149,6 @@ test.describe("touch shell", () => {
 		for (const name of [
 			"打开导航",
 			"返回上一页",
-			"搜索与命令",
 			"GitHub 仓库",
 			"Octo 项目主页",
 			"切换深色或浅色主题",
@@ -212,7 +211,7 @@ test("memory breadcrumbs link ancestors and retain the current page on mobile", 
 	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
-	for (const action of ["搜索与命令", "GitHub 仓库", "Octo 项目主页", "切换深色或浅色主题"])
+	for (const action of ["GitHub 仓库", "Octo 项目主页", "切换深色或浅色主题"])
 		await expect(header.getByLabel(action, { exact: true })).toBeInViewport({ ratio: 1 });
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await header.getByRole("link", { name: "记忆详情", exact: true }).click();
@@ -330,7 +329,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 			}
 			const errors: string[] = [];
 			page.on("pageerror", (error) => errors.push(error.message));
-			await page.getByRole("button", { name: "搜索与命令", exact: true }).click();
+			await page.keyboard.press("ControlOrMeta+k");
 			await expect(page.getByRole("listbox")).toHaveAccessibleName("搜索结果");
 			await page.getByPlaceholder("跳转页面，或搜索记忆…", { exact: true }).fill("设置");
 			await page.getByRole("option", { name: "设置", exact: true }).click();

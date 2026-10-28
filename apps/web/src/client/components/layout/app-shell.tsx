@@ -374,17 +374,6 @@ export function AppShell() {
 					}
 					actions={
 						<>
-							<HeaderHint label="搜索与命令 · ⌘ K">
-								<Button
-									variant="ghost"
-									size="icon"
-									className="octo-header-link"
-									aria-label="搜索与命令"
-									onClick={() => setPalette(true)}
-								>
-									<Search strokeWidth={1.5} aria-hidden="true" />
-								</Button>
-							</HeaderHint>
 							<HeaderHint label="GitHub 仓库 · 在新标签页打开">
 								<Button variant="ghost" size="icon" className="octo-header-link" asChild>
 									<a
