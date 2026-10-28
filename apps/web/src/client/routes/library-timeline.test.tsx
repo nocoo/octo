@@ -61,40 +61,25 @@ it("uses spacing and color tokens present in the installed Basalt stylesheet", (
 	}
 });
 
-it.each(["day", "hour", "month"] as const)(
-	"renders one linked record per %s stream with exact UTC time",
-	(zoom) => {
-		const html = renderToStaticMarkup(
-			<TimelineRecords
-				groups={[group]}
-				zoom={zoom}
-				table={false}
-				selected={["m/1"]}
-				onSelected={() => {}}
-			/>,
-		);
-		expect(html).not.toContain("<table");
-		expect(html).toContain('aria-label="2026-10-17 的记忆"');
-		expect(html).toContain('href="/memories/m%2F1"');
-		expect(html).toContain('href="/memories?spaces=work"');
-		expect(html).toContain('dateTime="2026-10-17T03:15:06.000Z"');
-		expect(html).toContain("03:15:06 UTC");
-		if (zoom === "month") expect(html).toContain("10-17 03:15:06 UTC");
-		expect(html).toContain('aria-checked="true"');
-		expect(html).not.toContain("data-tag-color");
-	},
-);
+it("renders one linked record per stream with the local display time", () => {
+	const html = renderToStaticMarkup(
+		<TimelineRecords groups={[group]} table={false} selected={["m/1"]} onSelected={() => {}} />,
+	);
+	expect(html).not.toContain("<table");
+	expect(html).toContain('aria-label="2026-10-17 的记忆"');
+	expect(html).toContain('href="/memories/m%2F1"');
+	expect(html).toContain('href="/memories?spaces=work"');
+	expect(html).toContain('dateTime="2026-10-17T03:15:06.000Z"');
+	expect(html).toContain("2026-10-17，03:15");
+	expect(html).not.toContain("UTC");
+	expect(html).toContain('aria-checked="true"');
+	expect(html).not.toContain("data-tag-color");
+});
 
 it("adds and removes a stream selection without dropping other dates", () => {
 	const onSelected = vi.fn();
 	renderToStaticMarkup(
-		<TimelineRecords
-			groups={[group]}
-			zoom="day"
-			table={false}
-			selected={["other"]}
-			onSelected={onSelected}
-		/>,
+		<TimelineRecords groups={[group]} table={false} selected={["other"]} onSelected={onSelected} />,
 	);
 	controls.checkboxes[0]?.onCheckedChange?.(true);
 	expect(onSelected).toHaveBeenLastCalledWith(["other", "m/1"]);
@@ -105,13 +90,7 @@ it("adds and removes a stream selection without dropping other dates", () => {
 it("keeps sortable paginated tables as an alternative and preserves selection in other groups", () => {
 	const onSelected = vi.fn();
 	const html = renderToStaticMarkup(
-		<TimelineRecords
-			groups={[group]}
-			zoom="day"
-			table
-			selected={["other", "m/1"]}
-			onSelected={onSelected}
-		/>,
+		<TimelineRecords groups={[group]} table selected={["other", "m/1"]} onSelected={onSelected} />,
 	);
 	expect(html).not.toContain("<ol");
 	expect(html).toContain('aria-label="2026-10-17 的时间线数据"');

@@ -280,14 +280,11 @@ a {
 	color: hsl(var(--basalt-muted-foreground));
 }
 .octo-record-time {
-	display: inline-grid;
+	display: inline-block;
 	white-space: nowrap;
 	font-variant-numeric: tabular-nums;
 	font-size: var(--basalt-text-sm);
 	line-height: var(--basalt-leading-body);
-}
-.octo-record-time > :last-child {
-	font-size: var(--basalt-text-xs);
 }
 .octo-record-preview {
 	display: -webkit-box;

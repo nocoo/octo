@@ -168,7 +168,7 @@ export function KeysPage() {
 		},
 		{
 			id: "usage",
-			header: "30 天调用 · UTC",
+			header: "30 天调用",
 			width: "16ch",
 			sortable: false,
 			accessor: (key) => {
@@ -187,7 +187,7 @@ export function KeysPage() {
 						summary={`${formatNumber(usage.total)} 次调用`}
 						dataAlternative={
 							<span className="sr-only">
-								{usageState.snapshot?.from} 至 {usageState.snapshot?.to}（UTC）：
+								{usageState.snapshot?.from} 至 {usageState.snapshot?.to}：
 								{usage.data.map((point) => `${point.x}：${point.calls} 次`).join("；")}
 							</span>
 						}

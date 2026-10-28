@@ -1,3 +1,5 @@
+process.env.TZ = "UTC";
+
 import { vi } from "vitest";
 
 const realFetch = globalThis.fetch.bind(globalThis);

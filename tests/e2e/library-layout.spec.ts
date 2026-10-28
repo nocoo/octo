@@ -10,8 +10,8 @@ test("timeline switches between linked records and tables without duplicating co
 		await page.goto(`/timeline?field=created_at&zoom=${zoom}&space=${memory.space}`);
 		const timeline = page.getByRole("list", { name: / 的记忆$/ }).filter({ hasText: memory.title });
 		await expect(timeline.getByText(memory.title, { exact: true })).toBeVisible();
-		await expect(timeline).toContainText(/\d{2}:\d{2}:\d{2} UTC/);
-		if (zoom === "month") await expect(timeline).toContainText(/\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);
+		await expect(timeline).toContainText(/\d{4}-\d{2}-\d{2}，\d{2}:\d{2}/);
+		await expect(timeline).not.toContainText("UTC");
 		await expect(page.getByRole("table")).toHaveCount(0);
 		await expect(timeline.getByRole("link", { name: memory.title })).toHaveAttribute(
 			"href",

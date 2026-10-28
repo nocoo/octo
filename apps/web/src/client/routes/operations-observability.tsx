@@ -614,9 +614,7 @@ export function AuditPage() {
 						aria-label="审计记录"
 						aria-rowcount={state.items.length + 1}
 					>
-						<TableCaption>
-							本地时间；使用方向键或向下翻页键滚动，点击“加载更多”获取下一页。
-						</TableCaption>
+						<TableCaption>使用方向键或向下翻页键滚动，点击“加载更多”获取下一页。</TableCaption>
 						<TableHeader>
 							<TableRow>
 								{["时间", "请求", "结果", "耗时", "调用者", "请求标识"].map((label) => (

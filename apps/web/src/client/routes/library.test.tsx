@@ -91,7 +91,7 @@ describe("library page installed-component boundaries", () => {
 	});
 	it.each([
 		["day", "2026-10-17"],
-		["hour", "2026-10-17T03:00Z"],
+		["hour", "2026-10-17 03:00"],
 		["month", "2026-10"],
 	] as const)("places %s timeline group headings and counts outside their cards", (zoom, label) => {
 		overrides.state = {
@@ -110,7 +110,7 @@ describe("library page installed-component boundaries", () => {
 		};
 		const html = render(TimelinePage, `/timeline?zoom=${zoom}`);
 		expect(html).toContain(`>${label}</h2>`);
-		expect(html).toContain("1 条记忆 · UTC");
+		expect(html).toContain("1 条记忆");
 		expect(html.indexOf(`>${label}</h2>`)).toBeLessThan(html.indexOf('data-basalt-surface=""'));
 		expect(html).toContain(`aria-label="${label} 的记忆"`);
 		expect(html).not.toContain("<table");

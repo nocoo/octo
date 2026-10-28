@@ -193,7 +193,7 @@ describe("library unknown, failed and empty states", () => {
 			expect(html).not.toContain("0 个节点");
 		} else expect(html).toContain("Cached");
 	});
-	it("renders contemporary events with compact UTC timestamps in chronological order", () => {
+	it("renders contemporary events with local timestamps in chronological order", () => {
 		snapshot.state = {
 			...new LibraryModel("timeline").state,
 			ready: true,
@@ -223,8 +223,8 @@ describe("library unknown, failed and empty states", () => {
 			html.match(/<ol[^>]*aria-label="2026-10-18 的记忆"[^>]*>[\s\S]*?<\/ol>/)?.[0] ?? "";
 		expect(stream).toContain("较早的资料");
 		expect(stream).toContain("稍后的资料");
-		expect(stream).toContain("03:15:00 UTC");
-		expect(stream).toContain("03:45:00 UTC");
+		expect(stream).toContain("2026-10-18，03:15");
+		expect(stream).toContain("2026-10-18，03:45");
 		expect(stream.indexOf("较早的资料")).toBeLessThan(stream.indexOf("稍后的资料"));
 		const table =
 			render(TimelinePage, "/timeline?view=table").match(
@@ -235,8 +235,8 @@ describe("library unknown, failed and empty states", () => {
 		const monthlyHtml = render(TimelinePage, "/timeline?zoom=month");
 		const monthlyStream =
 			monthlyHtml.match(/<ol[^>]*aria-label="2026-10 的记忆"[^>]*>[\s\S]*?<\/ol>/)?.[0] ?? "";
-		expect(monthlyStream).toContain("10-18 03:15:00 UTC");
-		expect(monthlyStream).toContain("10-18 03:45:00 UTC");
+		expect(monthlyStream).toContain("2026-10-18，03:15");
+		expect(monthlyStream).toContain("2026-10-18，03:45");
 	});
 });
 

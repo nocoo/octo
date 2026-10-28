@@ -302,8 +302,8 @@ export function OverviewPage() {
 				title="总览"
 				meta={
 					data
-						? `近 ${range} 天 · ${data.totals.spaces} 个空间 · 回收站 ${formatNumber(data.totals.trash)} · UTC`
-						: `近 ${range} 天 · UTC`
+						? `近 ${range} 天 · ${data.totals.spaces} 个空间 · 回收站 ${formatNumber(data.totals.trash)}`
+						: `近 ${range} 天`
 				}
 				actions={
 					<>

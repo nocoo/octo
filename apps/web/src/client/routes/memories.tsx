@@ -76,7 +76,7 @@ import {
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { MemoryTypeBadge, RecordTime, SpaceLink, ViewSwitch } from "../components/record-display";
-import { formatBytes, formatDateTime, formatNumber } from "../lib/format";
+import { formatBytes, formatNumber, formatTimestamp } from "../lib/format";
 import { selectedIds, setSelection } from "../viewmodels/library";
 import {
 	filterKeys,
@@ -586,13 +586,13 @@ export function MemoryPage() {
 									<DescriptionList columns={1}>
 										<DescriptionList.Item term="重要性">{memory.importance}</DescriptionList.Item>
 										<DescriptionList.Item term="创建时间">
-											{formatDateTime(memory.created_at)}
+											{formatTimestamp(memory.created_at)}
 										</DescriptionList.Item>
 										<DescriptionList.Item term="更新时间">
-											{formatDateTime(memory.updated_at)}
+											{formatTimestamp(memory.updated_at)}
 										</DescriptionList.Item>
 										<DescriptionList.Item term="事件时间">
-											{memory.event_time ? formatDateTime(memory.event_time) : "未设置"}
+											{memory.event_time ? formatTimestamp(memory.event_time) : "未设置"}
 										</DescriptionList.Item>
 										<DescriptionList.Item term="来源">
 											{memory.source_key_id ?? "控制台"}
@@ -655,7 +655,7 @@ export function MemoryPage() {
 												</Link>
 												<p className="octo-muted">
 													{version.actor === "admin" ? "管理员" : version.actor} /{" "}
-													{formatDateTime(version.created_at)}
+													{formatTimestamp(version.created_at)}
 												</p>
 											</li>
 										))}
@@ -1197,7 +1197,11 @@ export function HistoryPage() {
 															{field.field === "type"
 																? (memoryTypeLabels[String(field[side])] ?? "未知类型")
 																: field.field === "event_time" && field[side] !== null
-																	? `${formatDateTime(typeof field[side] === "number" ? field[side] : String(field[side]), "UTC")} UTC`
+																	? formatTimestamp(
+																			typeof field[side] === "number"
+																				? field[side]
+																				: String(field[side]),
+																		)
 																	: String(field[side] ?? "未设置")}
 														</p>
 													</LayerCard.Well>
@@ -1292,7 +1296,7 @@ export function HistoryPage() {
 									/>{" "}
 									{version.actor === "admin" ? "管理员" : version.actor}
 								</span>
-								<time dateTime={version.created_at}>{formatDateTime(version.created_at)}</time>
+								<time dateTime={version.created_at}>{formatTimestamp(version.created_at)}</time>
 								<Button
 									variant="outline"
 									aria-label={`回滚到第 ${version.version} 版`}

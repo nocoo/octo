@@ -1,3 +1,4 @@
+import { localBucket } from "../lib/format";
 import type { LibraryMemory } from "./library";
 
 export function updateLibraryUrl(
@@ -281,13 +282,8 @@ export function buildTimeline(
 	dated.sort((left, right) => left.timestamp - right.timestamp || left.id.localeCompare(right.id));
 	const groups = new Map<string, TimelineGroup>();
 	for (const item of dated) {
-		const iso = new Date(item.timestamp).toISOString();
-		const label =
-			options.zoom === "month"
-				? iso.slice(0, 7)
-				: options.zoom === "hour"
-					? `${iso.slice(0, 13)}:00Z`
-					: iso.slice(0, 10);
+		const label = localBucket(item.timestamp, options.zoom);
+		if (!label) continue;
 		const group = groups.get(label);
 		if (group) group.items.push(item);
 		else groups.set(label, { label, items: [item] });

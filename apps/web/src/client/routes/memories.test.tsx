@@ -4,6 +4,7 @@ import { tagColorFor } from "@nocoo/basalt/components/tag-badge";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatTimestamp } from "../lib/format";
 import { memory } from "../viewmodels/__tests__/memories-fixtures";
 import { HistoryModel, MemoriesModel, MemoryModel } from "../viewmodels/memories";
 import { EditorModel, toDraft } from "../viewmodels/memories-editor";
@@ -73,7 +74,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 			},
 		};
 		const html = render(HistoryPage, "/memories/m1/history");
-		expect(html).toContain("2026/10/20 04:05:06 UTC");
+		expect(html).toContain(formatTimestamp(1792469106000));
 		expect(html).toContain("未设置");
 		expect(html).not.toContain("1792469106000");
 	});

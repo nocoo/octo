@@ -151,8 +151,8 @@ describe("timeline projection", () => {
 		);
 		expect(created.undated).toBe(1);
 		expect(created.groups.map((group) => group.label)).toEqual([
-			"2026-10-16T23:00Z",
-			"2026-10-17T01:00Z",
+			"2026-10-16 23:00",
+			"2026-10-17 01:00",
 		]);
 		expect(
 			buildTimeline(memories, timelineOptions(new URLSearchParams("field=created_at&zoom=month")))

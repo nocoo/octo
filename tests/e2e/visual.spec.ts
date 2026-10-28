@@ -132,7 +132,9 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 			}
 			if (name === "history") {
 				await expect(
-					page.locator(".octo-memory-value").filter({ hasText: "2026/10/20 04:05:06 UTC" }),
+					page
+						.locator(".octo-memory-value")
+						.filter({ hasText: /^\d{4}-\d{2}-\d{2}，\d{2}:\d{2}$/ }),
 				).toBeVisible();
 				await expect(page.getByText("1792469106000", { exact: true })).toHaveCount(0);
 			}

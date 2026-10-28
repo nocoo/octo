@@ -215,7 +215,7 @@ function GraphInspector({
 							)}
 							{selected.kind === "memory" && selected.time && (
 								<DescriptionList.Item term="时间">
-									<RecordTime value={selected.time} utc />
+									<RecordTime value={selected.time} />
 								</DescriptionList.Item>
 							)}
 						</DescriptionList>

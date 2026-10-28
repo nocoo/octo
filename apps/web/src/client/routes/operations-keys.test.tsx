@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, adminApi } from "../lib/api";
-import { formatDateTime } from "../lib/format";
+import { formatTimestamp } from "../lib/format";
 import type { KeyUsageModel } from "../viewmodels/operations-key-usage";
 import type { KeyMetadata, KeysModel } from "../viewmodels/operations-keys";
 import { KeysPage } from "./operations-keys";
@@ -270,7 +270,7 @@ describe("key table sorting", () => {
 		expect(html).toContain("用量尚未加载");
 		expect(html).not.toContain("次调用");
 		expect(html).not.toContain("Invalid Date");
-		expect(html).toContain(formatDateTime(base.last_used_at));
+		expect(html).toContain(formatTimestamp(base.last_used_at));
 	});
 });
 
@@ -290,7 +290,7 @@ describe("independent key usage displays", () => {
 		expect(html).toContain('aria-label="Alpha 近 30 天每日调用量"');
 		expect(html).toContain("8 次调用");
 		expect(html).toContain("0 次调用");
-		expect(html).toContain("2026-09-18 至 2026-10-17（UTC）");
+		expect(html).toContain("2026-09-18 至 2026-10-17");
 		expect(html).toContain("2026-10-17：8 次");
 		expect(html).toContain("2026-09-18：0 次");
 		expect(html).toContain("basalt-chart");

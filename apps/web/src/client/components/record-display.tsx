@@ -1,7 +1,7 @@
 import { Link } from "@nocoo/basalt";
 import { TagBadge, type TagColor } from "@nocoo/basalt/components/tag-badge";
 import { ToggleGroup, ToggleGroupItem } from "@nocoo/basalt/components/toggle-group";
-import { formatDateTime } from "../lib/format";
+import { formatTimestamp } from "../lib/format";
 import { memoryTypeLabels } from "../viewmodels/memories";
 
 export function SpaceLink({ space, name = space }: { space: string; name?: string }) {
@@ -16,20 +16,13 @@ export function SpaceLink({ space, name = space }: { space: string; name?: strin
 	);
 }
 
-export function RecordTime({ value, utc = false }: { value: string; utc?: boolean }) {
-	const formatted = formatDateTime(value, utc ? "UTC" : undefined);
-	const [date, time] = formatted.split(" ");
+export function RecordTime({ value }: { value: string | number }) {
 	return (
 		<time
-			dateTime={value}
-			title={`${formatted}${utc ? " UTC" : " (本地时间)"}`}
+			dateTime={typeof value === "number" ? new Date(value).toISOString() : value}
 			className="octo-record-time"
 		>
-			<span>{date}</span>
-			<span className="octo-muted">
-				{time}
-				{utc ? " UTC" : ""}
-			</span>
+			{formatTimestamp(value)}
 		</time>
 	);
 }

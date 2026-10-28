@@ -26,13 +26,14 @@ vi.mock("@nocoo/basalt/components/toggle-group", async (original) => {
 	};
 });
 
-it("retains the exact instant and visibly labels explicit UTC dates", () => {
-	const value = "2026-10-20T04:05:06Z";
-	const utc = renderToStaticMarkup(<RecordTime value={value} utc />);
-	expect(utc).toContain(`dateTime="${value}"`);
-	expect(utc).toContain("2026/10/20");
-	expect(utc).toContain("04:05:06 UTC");
-	expect(renderToStaticMarkup(<RecordTime value={value} />)).not.toContain(" UTC");
+it("renders the stored instant once in local time without a zone label", () => {
+	const value = "2026-09-30T05:42:19Z";
+	const html = renderToStaticMarkup(<RecordTime value={value} />);
+	expect(html).toContain(`dateTime="${value}"`);
+	expect(html).toContain("2026-09-30，05:42");
+	expect(html).not.toContain("UTC");
+	const epoch = renderToStaticMarkup(<RecordTime value={Date.parse(value)} />);
+	expect(epoch).toContain('dateTime="2026-09-30T05:42:19.000Z"');
 });
 
 it("pairs semantic type colors with readable text, including unknown types", () => {

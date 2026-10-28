@@ -59,6 +59,7 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 - 动效遵循 Basalt `DESIGN.md` 的 motion 规则：时长 150–250ms，用标准 easing；尊重 `prefers-reduced-motion`。
 - 导航与列表到详情的跳转不使用 View Transitions：侧栏切页、记忆标题点击都是即时切换。标题如果带共享元素动画，会和单行页头的静态排版冲突，也让「记忆库」这样的列表页多出一次无意义动效。
 - 骨架屏只用在首屏加载超过 200ms 时；操作后乐观更新 + toast，提供撤销（删除可以从回收站撤销）。
+- 时间：落盘一律 UTC，展示一律经过 `src/client/lib/format.ts` 的 `formatTimestamp`（按浏览器时区换算成 `2026-09-30，13:42`，不显示时区，也不显示秒）；时间线分组等按日历粒度取标签时用同一个文件的 `localBucket`。按日聚合的用量和总览区间仍是 UTC 日历日，页面在说明里标注来源，不再给单个时间值加 UTC 后缀。
 - 深色 / 浅色主题（Basalt ThemeProvider），accent 用 octo 品牌色（logo 按 `zhengli-project-logo` skill 另外生成）。
 - 移动端：侧栏变成 Sheet，阅读页单栏，TOC 改成浮动按钮。
 - 可访问性：跳过链接（`AppMain tabIndex={-1}`）、焦点环、对比度 AA、所有图表都有表格备选视图。

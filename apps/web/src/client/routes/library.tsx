@@ -813,7 +813,7 @@ export function TimelinePage() {
 							state.ready
 								? `${timeline.groups.reduce((count, group) => count + group.items.length, 0)} 条记忆 · ${
 										timeline.groups.length
-									} 个分组 · UTC`
+									} 个分组`
 								: undefined
 						}
 						actions={
@@ -927,7 +927,6 @@ export function TimelinePage() {
 			{state.ready && timeline.groups.length > 0 && (
 				<TimelineRecords
 					groups={timeline.groups}
-					zoom={options.zoom}
 					table={table}
 					selected={selectedIds(params)}
 					onSelected={(ids) => setParams(setSelection(params, ids))}

@@ -4,16 +4,17 @@ import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-t
 import { Grid } from "@nocoo/basalt/components/grid";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import { RecordTime, SpaceLink } from "../components/record-display";
-import type { TimelineGroup, TimelineOptions } from "../viewmodels/library-visualizations";
+import { formatTimestamp } from "../lib/format";
+import type { TimelineGroup } from "../viewmodels/library-visualizations";
 import "./library-timeline.css";
 
 type TimelineMemory = TimelineGroup["items"][number];
 const columns: DataTableColumn<TimelineMemory>[] = [
 	{
 		id: "time",
-		header: "时间（UTC）",
+		header: "时间",
 		width: "16ch",
-		accessor: (item) => <RecordTime value={new Date(item.timestamp).toISOString()} utc />,
+		accessor: (item) => <RecordTime value={item.timestamp} />,
 		sortValue: (item) => item.timestamp,
 	},
 	{
@@ -43,13 +44,11 @@ const columns: DataTableColumn<TimelineMemory>[] = [
 
 export function TimelineRecords({
 	groups,
-	zoom,
 	table,
 	selected,
 	onSelected,
 }: {
 	groups: TimelineGroup[];
-	zoom: TimelineOptions["zoom"];
 	table: boolean;
 	selected: string[];
 	onSelected: (ids: string[]) => void;
@@ -63,7 +62,7 @@ export function TimelineRecords({
 					style={{ gridTemplateColumns: "var(--octo-timeline-columns)" }}
 				>
 					<SectionRule variant="heading" title={group.label} className="octo-timeline-date">
-						<p className="octo-muted">{group.items.length} 条记忆 · UTC</p>
+						<p className="octo-muted">{group.items.length} 条记忆</p>
 					</SectionRule>
 					<LayerCard padding="none">
 						{table ? (
@@ -103,8 +102,8 @@ export function TimelineRecords({
 													])
 												}
 											/>
-											<time dateTime={timestamp} title={timestamp} className="octo-timeline-time">
-												{`${zoom === "month" ? `${timestamp.slice(5, 10)} ` : ""}${timestamp.slice(11, 19)} UTC`}
+											<time dateTime={timestamp} className="octo-timeline-time">
+												{formatTimestamp(item.timestamp)}
 											</time>
 											<Grid
 												gap="sm"
