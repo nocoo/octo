@@ -240,7 +240,7 @@ Multipart uploads accept exactly one `file` part (no extra fields), with at most
 
 `POST /api/admin/settings/search/backfill`：无正文，使用 Cloudflare Access 与同源 Origin 验证，推进最多 100 个 tag/memory 的分词索引回填，返回 `{tags, memories, complete}`。操作幂等可恢复，不修改 memory 版本；部署顺序、预算和完成检查见 [回填手册](round3-validation.md)。
 
-前缀 `/api/admin/*`，要求通过 Cloudflare Access JWT 校验，并且写请求必须同源（`Origin` 必须等于 `https://octo.hexly.ai`，开发环境是 `https://octo.dev.hexly.ai`）。功能：key 的增删改查、轮换、吊销；space 增删改；purge；审计查询；全局用量；embedding profile 管理；向量模型设置（`GET/PUT /api/admin/settings/embedding`，API key 只能写；`POST …/test` 测试连接）；回收站批量操作；以及与 v1 对等的读写（actor 记为 `admin:<email>`）。详见 [05](05-auth-permissions-audit.md)、[06](06-dashboard.md)。
+前缀 `/api/admin/*`，要求通过 Cloudflare Access JWT 校验，并且写请求必须同源（`Origin` 必须等于 `https://octo.hexly.ai`，开发环境是 `https://octo.dev.hexly.ai`）。功能：key 的增删改查、轮换、吊销；space 增删改；purge；审计查询；全局用量；总览聚合（`GET /api/admin/dashboard`）；embedding profile 管理；向量模型设置（`GET/PUT /api/admin/settings/embedding`，API key 只能写；`POST …/test` 测试连接）；回收站批量操作；以及与 v1 对等的读写（actor 记为 `admin:<email>`）。详见 [05](05-auth-permissions-audit.md)、[06](06-dashboard.md)。
 
 ### M7 dashboard contract
 
@@ -259,6 +259,7 @@ these routes. Write requests require both Access and the allowed Origin.
 | GET / PATCH / DELETE | `/spaces/:slug` | Read / edit / delete only when empty, including trash |
 | GET | `/audit` | Filter by `from,to,actor,action,status`; opaque `cursor`, bounded `limit` |
 | GET | `/usage` | UTC daily rows; `from,to,key_id?` |
+| GET | `/dashboard` | Read-only aggregates for the overview page in one response: `from,to?` (inclusive UTC days, default last 30 days, at most 90). Returns `range`, `totals`, memory `ops` by day × actor × space × op, `usage` by day × key, active `types` by space, `spaces` with active/trash counts and sanitized `keys`; no secrets and no request bodies |
 | GET | `/embedding-profiles` | Profile discovery, identical payload to v1 |
 | GET / PUT | `/settings/embedding` | Read sanitized configuration / atomically save fields |
 | POST | `/settings/embedding/test` | Current configuration or unsaved overrides; fixed probe text |

@@ -11,6 +11,7 @@ import { newRequestId, withOctoHeaders } from "./lib/request";
 import { mcpRoutes } from "./mcp";
 import { accessMiddleware } from "./middleware/access";
 import { adminAuditRoutes } from "./routes/admin/audit";
+import { adminDashboardRoutes } from "./routes/admin/dashboard";
 import { keysRoutes } from "./routes/admin/keys";
 import { createAdminParityRoutes } from "./routes/admin/parity";
 import { createAdminPurgeRoutes } from "./routes/admin/purge";
@@ -105,6 +106,7 @@ export function createApp(): Hono<{
 	app.route("/api/admin/spaces", adminSpacesRoutes());
 	app.route("/api/admin/audit", adminAuditRoutes());
 	app.route("/api/admin/usage", adminUsageRoutes());
+	app.route("/api/admin/dashboard", adminDashboardRoutes());
 	app.route("/api/admin/settings", settingsRoutes());
 	app.route("/api/admin", createAdminPurgeRoutes());
 	app.route("/api/admin", createAdminParityRoutes());

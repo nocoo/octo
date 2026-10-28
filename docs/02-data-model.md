@@ -140,6 +140,7 @@ CREATE TABLE changes (
   at INTEGER NOT NULL
 );
 CREATE INDEX changes_space_seq ON changes(space_id, seq);
+CREATE INDEX changes_at ON changes(at);        -- 总览按 UTC 日聚合操作
 
 CREATE TABLE idempotency_records (
   key_id TEXT NOT NULL,

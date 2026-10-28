@@ -34,6 +34,7 @@ export const TESTED_API_ROUTES: RouteKey[] = [
 	"GET /api/admin/audit",
 	"GET /api/admin/changes",
 	"GET /api/admin/changes/head",
+	"GET /api/admin/dashboard",
 	"GET /api/admin/embedding-profiles",
 	"GET /api/admin/keys",
 	"GET /api/admin/keys/:id",
