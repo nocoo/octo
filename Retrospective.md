@@ -997,3 +997,13 @@ active project pane before any layout mutation, and work locally if they differ.
 An L3 run built the page before a later wording edit but loaded the changed test
 expectation afterward, producing a false failure. Finish source and test edits
 before starting the isolated build and browser run; rerun after any such change.
+
+### 2026-10-28 - Preflight locked packages before installing for release
+
+The approved npm mirror returned 404 for several locked dependency versions.
+The failed Bun install nevertheless repointed existing package links to missing
+directories. The broken direct links were restored to the previously cached
+versions and typecheck passed, but those versions do not match the lockfile and
+are not release evidence. Before installing, verify that the chosen mirror has
+the exact locked artifacts; do not assume a successful registry health check
+proves that recently pinned packages are available.

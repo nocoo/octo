@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.2 — 2026-10-28
+
+### Changed
+
+- Let administrators rename API key agents independently of their automatically owned space. New automatic space slugs use the lowercase key ID instead of the agent name.
+- Simplify key actions and dialogs, and add select-all and clear-all permission controls, including support for keys without operations.
+- Update Hono, React Router, Lucide, Wrangler, Biome, Cloudflare Workers types, and oxc-parser.
+
+### Security
+
+- Pin the transitive `qs` dependency to 6.16.1 for GHSA-6pq8-jhm2-2vcw.
+
+### Validation
+
+- No schema or data migration is required. Existing spaces are not renamed.
+- Verify key renaming, stable automatic space identifiers, permission selection, and desktop/mobile dialog layout against an isolated local Worker.
+
 ## 0.6.0 — 2026-10-26
 
 ### Added
