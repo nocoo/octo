@@ -7,6 +7,7 @@ export default defineConfig({
 		fileParallelism: false,
 		maxWorkers: 1,
 		sequence: { shuffle: false },
+		server: { deps: { inline: ["wrangler"] } },
 		hookTimeout: 180_000,
 		testTimeout: 120_000,
 	},

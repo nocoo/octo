@@ -1014,3 +1014,12 @@ A zsh loop used `path` for an artifact URL, inadvertently replacing the shell's
 command search path and preventing `curl` from running. No network request was
 sent. Use a descriptive variable such as `artifact` rather than zsh's tied
 `path`/`PATH` variable when scripting preflight checks.
+
+### 2026-10-28 - Test the locked Wrangler SDK, not a stale cache
+
+L2 isolation tests passed with the old cached Wrangler but failed after the
+locked upgrade: Vitest externalized Wrangler, so the real fixture's dynamic
+import bypassed the test spy. Inlining Wrangler in the L2 test configuration
+restored interception while preserving the real SDK and all isolation checks.
+Run release gates after installing the exact lockfile, not merely whatever
+versions happen to be present in `node_modules`.
