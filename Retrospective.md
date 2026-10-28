@@ -1007,3 +1007,10 @@ versions and typecheck passed, but those versions do not match the lockfile and
 are not release evidence. Before installing, verify that the chosen mirror has
 the exact locked artifacts; do not assume a successful registry health check
 proves that recently pinned packages are available.
+
+### 2026-10-28 - Avoid shell-special variable names in preflight scripts
+
+A zsh loop used `path` for an artifact URL, inadvertently replacing the shell's
+command search path and preventing `curl` from running. No network request was
+sent. Use a descriptive variable such as `artifact` rather than zsh's tied
+`path`/`PATH` variable when scripting preflight checks.
