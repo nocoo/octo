@@ -59,7 +59,13 @@ describe("memory HTTP transaction boundary", () => {
 			)
 			.bind(keyId)
 			.run();
-		const item = { space: "first-own", title: "title", body: "body", type: "note", tags: [] };
+		const item = {
+			space: keyId.toLowerCase(),
+			title: "title",
+			body: "body",
+			type: "note",
+			tags: [],
+		};
 		const path = kind === "single" ? "/memories" : "/memories:batchCreate";
 		const body = kind === "single" ? item : { items: [item] };
 		if (mode === "lost-ack") {
@@ -104,12 +110,12 @@ describe("memory HTTP transaction boundary", () => {
 			spyBusinessBatch(db).mockImplementationOnce(async (statements) => {
 				await batch(statements);
 				sqlite
-					.prepare("UPDATE spaces SET owner_key_id = 'another-key' WHERE slug = 'transferred'")
-					.run();
+					.prepare("UPDATE spaces SET owner_key_id = 'another-key' WHERE slug = ?")
+					.run(keyId.toLowerCase());
 				throw new Error("committed acknowledgment lost");
 			});
 			const item = {
-				space: "transferred",
+				space: keyId.toLowerCase(),
 				title: "title",
 				body: "private body",
 				type: "note",
@@ -292,20 +298,25 @@ describe("memory HTTP transaction boundary", () => {
 			.bind(keyId)
 			.run();
 		const input = {
-			space: "new-own",
+			space: keyId.toLowerCase(),
 			title: "title",
 			body: "body",
 			type: "note",
 			tags: ["orphan", " "],
 		};
 		expect((await request("/memories", "POST", input, "invalid-own")).status).toBe(400);
-		expect(await db.prepare("SELECT * FROM spaces WHERE slug = 'new-own'").first()).toBeNull();
+		expect(
+			await db.prepare("SELECT * FROM spaces WHERE slug = ?").bind(keyId.toLowerCase()).first(),
+		).toBeNull();
 		const batch = spyBusinessBatch(db);
 		const created = await request("/memories", "POST", { ...input, tags: ["valid"] }, "valid-own");
 		expect(created.status).toBe(201);
 		expect(batch).toHaveBeenCalledTimes(1);
 		expect(
-			await db.prepare("SELECT owner_key_id FROM spaces WHERE slug = 'new-own'").first(),
+			await db
+				.prepare("SELECT owner_key_id FROM spaces WHERE slug = ?")
+				.bind(keyId.toLowerCase())
+				.first(),
 		).toEqual({ owner_key_id: keyId });
 	});
 	it.each(["ops", "scope", "move"])(

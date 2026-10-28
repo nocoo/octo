@@ -49,8 +49,8 @@ beforeAll(async () => {
 	const taken = generateApiKeyMaterial();
 	const takenHash = await hashSecret(pepper, taken.secret);
 	const now = Date.now();
-	const slug = `alice-${material.keyid.toLowerCase()}`;
-	const takenSlug = `taken-${taken.keyid.toLowerCase()}`;
+	const slug = material.keyid.toLowerCase();
+	const takenSlug = taken.keyid.toLowerCase();
 	await d1([
 		"--command",
 		`

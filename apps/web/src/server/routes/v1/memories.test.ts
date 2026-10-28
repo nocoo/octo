@@ -715,7 +715,7 @@ describe("memory v1 routes", () => {
 				method: "POST",
 				headers: auth(minted.plaintext),
 				body: JSON.stringify({
-					space: "alice",
+					space: minted.row.id.toLowerCase(),
 					title: "t",
 					body: "b",
 					type: "note",
@@ -725,16 +725,20 @@ describe("memory v1 routes", () => {
 			env,
 		);
 		expect(created.status).toBe(201);
-		expect(await created.json()).toMatchObject({ space: "alice" });
+		expect(await created.json()).toMatchObject({ space: minted.row.id.toLowerCase() });
 
 		const takenDb = openTestD1();
-		await insertSpace(takenDb, { id: "sTaken", slug: "alice", ownerKeyId: "other" });
 		const takenKey = await mintApiKey(takenDb, pepper, {
 			name: "alice",
 			role: "project",
 			ops: "r,w,u,d",
 			scope: "own",
 			autoOwnSpace: true,
+		});
+		await insertSpace(takenDb, {
+			id: "sTaken",
+			slug: takenKey.row.id.toLowerCase(),
+			ownerKeyId: "other",
 		});
 		const takenEnv: Env = {
 			DB: takenDb,
@@ -748,7 +752,7 @@ describe("memory v1 routes", () => {
 				method: "POST",
 				headers: auth(takenKey.plaintext),
 				body: JSON.stringify({
-					space: "alice",
+					space: takenKey.row.id.toLowerCase(),
 					title: "t",
 					body: "b",
 					type: "note",

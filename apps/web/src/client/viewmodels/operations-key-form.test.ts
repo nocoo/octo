@@ -7,6 +7,35 @@ const permissions = { ...rolePermissions("custom"), ops: "r,w", space_ids: [spac
 const draft = { name: "Research agent", role: "custom" as const, expires_at: null, permissions };
 
 describe("key form contract and validation", () => {
+	it("saves a custom key with no allowed operations", async () => {
+		const request = vi.fn().mockResolvedValue({ items: [] });
+		const model = new KeysModel({ request });
+		expect(
+			await model.update("custom", {
+				name: "Agent",
+				role: "custom",
+				expires_at: null,
+				permissions: { ...rolePermissions("custom"), scope: "all" },
+			}),
+		).toBe(true);
+		expect(request).toHaveBeenCalledWith(
+			"/keys/custom",
+			expect.objectContaining({
+				json: expect.objectContaining({ ops: "" }),
+			}),
+		);
+	});
+	it("sends an editable display name for project keys", async () => {
+		const request = vi.fn().mockResolvedValue({ items: [] });
+		const model = new KeysModel({ request });
+		expect(
+			await model.update("project", { name: "研究助手", role: "project", expires_at: null }),
+		).toBe(true);
+		expect(request).toHaveBeenCalledWith("/keys/project", {
+			method: "PATCH",
+			json: { name: "研究助手", role: "project", expires_at: null },
+		});
+	});
 	it("persists permitted readonly space changes rather than discarding the picker selection", async () => {
 		const request = vi.fn().mockResolvedValue({ items: [space] });
 		const model = new KeysModel({ request });
@@ -26,7 +55,13 @@ describe("key form contract and validation", () => {
 		).toBe(true);
 		expect(request).toHaveBeenCalledWith("/keys/readonly", {
 			method: "PATCH",
-			json: { role: "readonly", expires_at: null, scope: "spaces", space_ids: [space.id] },
+			json: {
+				name: "Reader",
+				role: "readonly",
+				expires_at: null,
+				scope: "spaces",
+				space_ids: [space.id],
+			},
 		});
 		expect(
 			await model.update("readonly", {
@@ -115,11 +150,11 @@ describe("key form contract and validation", () => {
 		).toBe(true);
 		expect(request).toHaveBeenCalledWith("/keys/project", {
 			method: "PATCH",
-			json: { role: "project", expires_at: "2027-01-01T00:00:00.000Z" },
+			json: { name: "project-key", role: "project", expires_at: "2027-01-01T00:00:00.000Z" },
 		});
-		expect(
-			await model.update("project", { name: "Invalid Name", role: "project", expires_at: null }),
-		).toBe(false);
+		expect(await model.update("project", { name: " ", role: "project", expires_at: null })).toBe(
+			false,
+		);
 		expect(model.state.fieldErrors.name).toBeTruthy();
 	});
 	it("reports every client field error rather than only a generic message", async () => {
@@ -130,7 +165,7 @@ describe("key form contract and validation", () => {
 				...draft,
 				name: " ",
 				expires_at: "2027-02-30T00:00:00Z",
-				permissions: rolePermissions("custom"),
+				permissions: { ...rolePermissions("custom"), ops: "r,r" },
 			}),
 		).toBeNull();
 		expect(model.state.fieldErrors).toEqual({

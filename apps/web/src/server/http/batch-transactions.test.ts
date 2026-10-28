@@ -144,7 +144,7 @@ describe("production batch HTTP transactions", () => {
 
 	it("stages lazy own-space creation, rolls back failed items and reuses the successful space", async () => {
 		const scenario = await fixture("w", true);
-		const own = { ...input, space: "batch-bot" };
+		const own = { ...input, space: scenario.key.row.id.toLowerCase() };
 		const response = await scenario.post(
 			"Create",
 			{
@@ -160,15 +160,15 @@ describe("production batch HTTP transactions", () => {
 		expect(await response.json()).toMatchObject({
 			results: [
 				{ ok: false, error: { code: "validation_failed" } },
-				{ ok: true, item: { space: "batch-bot", version: 1 } },
-				{ ok: true, item: { space: "batch-bot", version: 1 } },
+				{ ok: true, item: { space: scenario.key.row.id.toLowerCase(), version: 1 } },
+				{ ok: true, item: { space: scenario.key.row.id.toLowerCase(), version: 1 } },
 			],
 		});
 		expect(
 			scenario.sqlite
 				.prepare("SELECT slug, owner_key_id FROM spaces WHERE owner_key_id = ?")
 				.all(scenario.key.row.id),
-		).toEqual([{ slug: "batch-bot", owner_key_id: scenario.key.row.id }]);
+		).toEqual([{ slug: scenario.key.row.id.toLowerCase(), owner_key_id: scenario.key.row.id }]);
 		expect(scenario.sqlite.prepare("SELECT * FROM memories").all()).toHaveLength(2);
 		expect(scenario.sqlite.prepare("SELECT name FROM tags").all()).toEqual([{ name: "shared" }]);
 	});
@@ -181,7 +181,7 @@ describe("production batch HTTP transactions", () => {
 		);
 		const response = await scenario.post(
 			"Create",
-			{ items: [{ ...input, space: "batch-bot" }] },
+			{ items: [{ ...input, space: scenario.key.row.id.toLowerCase() }] },
 			"auto-own-fail",
 		);
 		expect(response.status).toBe(503);

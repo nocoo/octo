@@ -44,7 +44,7 @@ for (const editing of [false, true]) {
 				mutations.push(request.method());
 		});
 		await editor
-			.getByRole("button", { name: editing ? "保存权限" : "创建密钥", exact: true })
+			.getByRole("button", { name: editing ? "保存修改" : "创建密钥", exact: true })
 			.click();
 		await expect
 			.poll(
@@ -53,7 +53,7 @@ for (const editing of [false, true]) {
 			.toBe(true);
 		const accidentalReveal = page.getByRole("dialog", { name: "请立即复制密钥", exact: true });
 		if (await accidentalReveal.isVisible())
-			await accidentalReveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+			await accidentalReveal.getByRole("button", { name: "关闭", exact: true }).click();
 		expect(mutations).toEqual([]);
 		await expect(expiry).toHaveAttribute("aria-invalid", "true");
 		await expect(
@@ -75,7 +75,7 @@ for (const editing of [false, true]) {
 				new URL(request.url()).pathname.startsWith("/api/admin/keys"),
 		);
 		await editor
-			.getByRole("button", { name: editing ? "保存权限" : "创建密钥", exact: true })
+			.getByRole("button", { name: editing ? "保存修改" : "创建密钥", exact: true })
 			.click();
 		expect((await submitted).postDataJSON()).toMatchObject({ expires_at: null });
 		if (created) {
@@ -84,7 +84,7 @@ for (const editing of [false, true]) {
 		} else {
 			const reveal = page.getByRole("dialog", { name: "请立即复制密钥", exact: true });
 			await expect.poll(() => reveal.isVisible()).toBe(true);
-			await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+			await reveal.getByRole("button", { name: "关闭", exact: true }).click();
 		}
 	});
 }

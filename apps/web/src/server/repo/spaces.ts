@@ -28,13 +28,13 @@ export async function prepareOwnSpace(
 	if (owned) return { row: owned };
 	const existing = await db
 		.prepare("SELECT * FROM spaces WHERE slug = ?")
-		.bind(key.name)
+		.bind(key.id.toLowerCase())
 		.first<SpaceRow>();
 	if (existing) throw new ApiError("unprocessable", "own space slug is taken");
 	const timestamp = now();
 	const row: SpaceRow = {
 		id: id(),
-		slug: key.name,
+		slug: key.id.toLowerCase(),
 		name: key.name,
 		description: "",
 		owner_key_id: key.id,
@@ -136,11 +136,11 @@ export async function ensureAutoOwnSpace(
 		.prepare(
 			"INSERT INTO spaces (id, slug, name, description, owner_key_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(slug) DO NOTHING",
 		)
-		.bind(id(), key.name, key.name, "", key.id, ts, ts)
+		.bind(id(), key.id.toLowerCase(), key.name, "", key.id, ts, ts)
 		.run();
 	const row = await db
 		.prepare("SELECT * FROM spaces WHERE slug = ?")
-		.bind(key.name)
+		.bind(key.id.toLowerCase())
 		.first<SpaceRow>();
 	if (!row) {
 		throw new ApiError("internal", "failed to ensure own space");

@@ -163,7 +163,7 @@ See [vector convergence and smoke usage](vector-convergence.md).
 
 空间写接口只接受 `role=admin` 的 API key，而不是任意 `scope=all` 或全操作 key。无 key 为 401，其他角色一律为 403，且在读取正文和幂等重放之前检查。`slug` 为 1–64 字符的小写字母/数字及单个连字符分隔，`name` 去除首尾空白后为 1–256 字符，`description` 最长 10000，创建时默认空字符串。未知字段为 400。PATCH 只改显示名称/描述，不接受 slug 或 owner；重复 slug 为 409 `version_conflict`，删除含任何记忆（包括回收站）的空间为 409 `space_not_empty`。删除检查和写入原子执行，复用 dashboard 的服务与冲突处理。全部调用以 key 身份审计。
 
-开了 `auto_own_space` 的 key 第一次写入时，仍可自动创建自己的 space（slug = key 名）。key 创建、轮换、授权与 owner 管理保持 dashboard-only，不新增对应 v1/MCP API。
+A key with `auto_own_space` creates its space on the first write using the lowercase key ID as its slug. The initial space name is the key display name; renaming the key does not change the space.key 创建、轮换、授权与 owner 管理保持 dashboard-only，不新增对应 v1/MCP API。
 
 ### 附件
 
@@ -332,13 +332,12 @@ requests are audited through the standard request audit middleware.
 Spaces remain editable after their owner key is deleted. Space updates retain
 an unchanged historical owner ID and validate only a newly assigned owner.
 Space slugs are 1–64 lowercase alphanumeric characters with single interior
-hyphens. Keys with `auto_own_space` enabled, including `project`, require a name
-meeting the same slug contract so their space can be used by memory writes.
-This also applies when PATCH enables auto-own for an existing display name.
+hyphens. Automatically owned spaces use the lowercase key ID as their slug; key
+display names can be changed independently and are not subject to slug rules.
 Key schema and semantic validation errors return `validation_failed` with
 `details.issues[]` entries containing a dot-separated `path` and `message`.
-Unknown space IDs identify `space_ids`; auto-owned name violations identify
-`name`; missing custom permissions and incompatible template overrides identify
+Unknown space IDs identify `space_ids`; invalid names identify `name`;
+missing custom permissions and incompatible template overrides identify
 the affected permission fields. Semantic messages do not echo submitted values.
 Object-level errors, such as extra keys or an empty PATCH, use an empty path
 and should be shown at form level.

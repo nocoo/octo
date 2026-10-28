@@ -42,6 +42,23 @@
 	margin-inline-start: auto;
 }
 
+.ops-key-legend {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	inline-size: 100%;
+}
+
+.ops-key-selection {
+	display: flex;
+	justify-content: end;
+	gap: var(--basalt-space-sm);
+}
+
+.ops-key-permissions label {
+	white-space: nowrap;
+}
+
 .ops-plot {
 	inline-size: 100%;
 	block-size: clamp(14rem, 26vh, 20rem);

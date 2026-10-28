@@ -29,7 +29,7 @@ test("readonly space picker edits persist to the real server", async ({ page, ad
 		.getByRole("option", { name: `${replacement.name}（${replacement.slug}）`, exact: true })
 		.click();
 	await page.keyboard.press("Escape");
-	await editor.getByRole("button", { name: "保存权限", exact: true }).click();
+	await editor.getByRole("button", { name: "保存修改", exact: true }).click();
 	await expect(editor).not.toBeVisible();
 	expect(await admin.json(`/keys/${created.key.id}`)).toMatchObject({
 		role: "readonly",
@@ -38,7 +38,10 @@ test("readonly space picker edits persist to the real server", async ({ page, ad
 	});
 });
 
-test("create and edit a project key with visible slug guidance", async ({ page, admin }, info) => {
+test("rename a project key without changing its auto-owned space identifier", async ({
+	page,
+	admin,
+}, info) => {
 	const name = `project-${randomUUID()}`;
 	await page.goto("/keys");
 	await page.getByRole("button", { name: "创建密钥", exact: true }).first().click();
@@ -47,7 +50,7 @@ test("create and edit a project key with visible slug guidance", async ({ page, 
 	await expect(autoSpace).toBeVisible();
 	await expect(autoSpace).toBeDisabled();
 	await capture(page, info, "keys-form-default");
-	await editor.getByRole("textbox", { name: "代理名称", exact: true }).fill("Invalid Project Name");
+	await editor.getByRole("textbox", { name: "代理名称", exact: true }).fill(" ");
 	await editor.getByRole("button", { name: "创建密钥", exact: true }).click();
 	await expect(editor.getByRole("textbox", { name: "代理名称", exact: true })).toHaveAttribute(
 		"aria-invalid",
@@ -63,21 +66,45 @@ test("create and edit a project key with visible slug guidance", async ({ page, 
 	expect((await submitted).postDataJSON()).toEqual({ name, role: "project", expires_at: null });
 	const reveal = page.getByRole("dialog", { name: "请立即复制密钥", exact: true });
 	await expect.poll(() => reveal.isVisible()).toBe(true);
-	await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+	const secret = await reveal.getByRole("textbox", { name: "接口密钥", exact: true }).inputValue();
+	await reveal.getByRole("button", { name: "关闭", exact: true }).click();
 	const listed = await admin.json<{ items: { id: string; name: string }[] }>("/keys");
 	const key = listed.items.find((key) => key.name === name);
 	expect(key).toBeDefined();
 	await page.getByRole("button", { name: `编辑 ${name}`, exact: true }).click();
 	const edit = page.getByRole("dialog", { name: "编辑接口密钥", exact: true });
 	await expect(edit.getByRole("switch", { name: "自动创建自有空间", exact: true })).toBeChecked();
+	await edit.getByRole("textbox", { name: "代理名称", exact: true }).fill("研究助手");
 	await edit.getByLabel("到期时间", { exact: true }).fill("2099-05-06T12:30");
-	await edit.getByRole("button", { name: "保存权限", exact: true }).click();
+	await edit.getByRole("button", { name: "保存修改", exact: true }).click();
 	await expect(edit).not.toBeVisible();
 	const metadata = await admin.json<{ expires_at: string; role: string; auto_own_space: boolean }>(
 		`/keys/${key?.id}`,
 	);
-	expect(metadata).toMatchObject({ role: "project", auto_own_space: true });
+	expect(metadata).toMatchObject({ name: "研究助手", role: "project", auto_own_space: true });
 	expect(Date.parse(metadata.expires_at)).toBeGreaterThan(Date.parse("2099-05-05T00:00:00Z"));
+	const created = await page.request.post("/api/v1/memories", {
+		headers: { Authorization: `Bearer ${secret}` },
+		data: { space: key?.id.toLowerCase(), title: "First", body: "Body", type: "note", tags: [] },
+	});
+	expect(created.status()).toBe(201);
+	expect(await created.json()).toMatchObject({ space: key?.id.toLowerCase() });
+	await page.getByRole("button", { name: "编辑 研究助手", exact: true }).click();
+	await edit.getByRole("textbox", { name: "代理名称", exact: true }).fill("研究助手二");
+	await edit.getByRole("button", { name: "保存修改", exact: true }).click();
+	await expect(edit).not.toBeVisible();
+	const again = await page.request.post("/api/v1/memories", {
+		headers: { Authorization: `Bearer ${secret}` },
+		data: {
+			space: key?.id.toLowerCase(),
+			title: "Second",
+			body: "Body",
+			type: "note",
+			tags: [],
+		},
+	});
+	expect(again.status()).toBe(201);
+	expect(await again.json()).toMatchObject({ space: key?.id.toLowerCase() });
 });
 
 test("create and edit a custom key with the existing-space multiselect", async ({
@@ -99,6 +126,30 @@ test("create and edit a custom key with the existing-space multiselect", async (
 	await editor.getByRole("textbox", { name: "代理名称", exact: true }).fill(name);
 	await editor.getByRole("combobox", { name: "角色模板", exact: true }).click();
 	await page.getByRole("option", { name: "自定义", exact: true }).click();
+	await editor.getByRole("button", { name: "全选", exact: true }).click();
+	for (const label of ["读取", "创建", "更新", "删除"])
+		await expect(editor.getByRole("checkbox", { name: label, exact: true })).toBeChecked();
+	const positions = await Promise.all(
+		["读取", "创建", "更新", "删除"].map((label) =>
+			editor.getByRole("checkbox", { name: label, exact: true }).boundingBox(),
+		),
+	);
+	expect(new Set(positions.map((box) => box?.y)).size).toBe(1);
+	await page.setViewportSize({ width: 390, height: 844 });
+	const mobilePositions = await Promise.all(
+		["读取", "创建", "更新", "删除"].map((label) =>
+			editor.getByRole("checkbox", { name: label, exact: true }).boundingBox(),
+		),
+	);
+	expect(new Set(mobilePositions.map((box) => box?.y)).size).toBe(1);
+	for (const box of mobilePositions) {
+		expect(box).not.toBeNull();
+		expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThan(390);
+	}
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await editor.getByRole("button", { name: "全不选", exact: true }).click();
+	for (const label of ["读取", "创建", "更新", "删除"])
+		await expect(editor.getByRole("checkbox", { name: label, exact: true })).not.toBeChecked();
 	await editor.getByRole("checkbox", { name: "读取", exact: true }).check();
 	await editor.getByRole("checkbox", { name: "创建", exact: true }).check();
 	await editor.getByRole("button", { name: "空间", exact: true }).click();
@@ -126,7 +177,7 @@ test("create and edit a custom key with the existing-space multiselect", async (
 	});
 	const reveal = page.getByRole("dialog", { name: "请立即复制密钥", exact: true });
 	await expect.poll(() => reveal.isVisible()).toBe(true);
-	await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+	await reveal.getByRole("button", { name: "关闭", exact: true }).click();
 	const listed = await admin.json<{ items: { id: string; name: string }[] }>("/keys");
 	const key = listed.items.find((key) => key.name === name);
 	expect(key).toBeDefined();
@@ -138,13 +189,18 @@ test("create and edit a custom key with the existing-space multiselect", async (
 	).toHaveAttribute("aria-selected", "true");
 	await page.getByRole("option", { name: `${first.name}（${first.slug}）`, exact: true }).click();
 	await page.keyboard.press("Escape");
-	await edit.getByRole("button", { name: "保存权限", exact: true }).click();
+	await edit.getByRole("button", { name: "保存修改", exact: true }).click();
 	await expect(edit).not.toBeVisible();
 	expect(await admin.json(`/keys/${key?.id}`)).toMatchObject({
 		ops: "r,w",
 		scope: "spaces",
 		space_ids: [second.id],
 	});
+	await page.getByRole("button", { name: `编辑 ${name}`, exact: true }).click();
+	await edit.getByRole("button", { name: "全不选", exact: true }).click();
+	await edit.getByRole("button", { name: "保存修改", exact: true }).click();
+	await expect(edit).not.toBeVisible();
+	expect(await admin.json(`/keys/${key?.id}`)).toMatchObject({ ops: "" });
 });
 
 test("show real server validation beside a space deleted after selection", async ({
@@ -161,14 +217,12 @@ test("show real server validation beside a space deleted after selection", async
 	await editor.getByRole("textbox", { name: "代理名称", exact: true }).fill("临时读取密钥");
 	await editor.getByRole("combobox", { name: "角色模板", exact: true }).click();
 	await page.getByRole("option", { name: "自定义", exact: true }).click();
-	await expect(
-		editor.getByRole("switch", { name: "自动创建自有空间", exact: true }),
-	).toBeDisabled();
+	await expect(editor.getByRole("switch", { name: "自动创建自有空间", exact: true })).toBeEnabled();
 	await editor.getByRole("checkbox", { name: "读取", exact: true }).check();
 	await editor.getByRole("button", { name: "空间", exact: true }).click();
 	await page.getByRole("option", { name: `${space.name}（${space.slug}）`, exact: true }).click();
 	await page.keyboard.press("Escape");
-	await expect(editor.getByText(/当前名称不符合规则，无法启用/)).toBeVisible();
+	await expect(editor.getByText("空间标识使用小写密钥 ID。", { exact: true })).toBeVisible();
 	await capture(page, info, "keys-form-auto-own-disabled");
 	await admin.json(`/spaces/${space.slug}`, "DELETE");
 	const rejected = page.waitForResponse(

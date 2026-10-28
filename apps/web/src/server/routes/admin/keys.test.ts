@@ -95,24 +95,18 @@ describe("admin keys", () => {
 	});
 
 	it.each(["project", "custom"] as const)(
-		"returns name field errors for invalid auto-owned %s names on create and edit",
+		"returns name field errors for invalid %s names on create and edit",
 		async (role) => {
 			const permissions =
 				role === "custom" ? { ops: "r,w", scope: "own", auto_own_space: true } : {};
 			const { key } = await mint({ name: "a".repeat(64), role, ...permissions });
-			for (const name of [
-				"a".repeat(65),
-				"UpperCase",
-				"with space",
-				"with/slash",
-				"double--hyphen",
-			]) {
+			for (const name of ["a".repeat(129), " "]) {
 				for (const response of [
 					await request("", "POST", { name, role, ...permissions }),
 					await request(`/${key.id}`, "PATCH", { name }),
 				]) {
 					const error = await expectFieldErrors(response, ["name"]);
-					expect(JSON.stringify(error)).not.toContain(name);
+					if (name.trim()) expect(JSON.stringify(error)).not.toContain(name);
 				}
 			}
 		},
@@ -185,12 +179,10 @@ describe("admin keys", () => {
 		);
 	});
 
-	it("validates an existing display name when custom auto-own is enabled", async () => {
+	it("allows a display name when custom auto-own is enabled", async () => {
 		const { key } = await mint({ name: "Display Name", role: "custom", ops: "w", scope: "own" });
 		expect(key.auto_own_space).toBe(false);
-		await expectFieldErrors(await request(`/${key.id}`, "PATCH", { auto_own_space: true }), [
-			"name",
-		]);
+		expect((await request(`/${key.id}`, "PATCH", { auto_own_space: true })).status).toBe(200);
 		const edited = await request(`/${key.id}`, "PATCH", {
 			name: "custom-owner",
 			auto_own_space: true,

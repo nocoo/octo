@@ -3,7 +3,6 @@ import type { ApiKeyRow, MintInput } from "../auth/api-key";
 import { ROLE_TEMPLATES } from "../auth/authorize";
 import { ApiError } from "../lib/errors";
 import { parseStrict } from "../lib/validate";
-import { spaceSlugSchema } from "./spaces";
 
 const fields = {
 	name: z.string().trim().min(1).max(128),
@@ -80,7 +79,6 @@ export async function resolveKeyInput(
 		input.auto_own_space ??
 		(reset ? (template?.autoOwnSpace ?? false) : existing.auto_own_space === 1);
 	const name = input.name ?? (existing as ApiKeyRow).name;
-	if (autoOwnSpace) parseStrict(z.strictObject({ name: spaceSlugSchema }), { name });
 	if (template) {
 		const permittedScope =
 			role === "drop"

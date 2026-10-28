@@ -254,27 +254,27 @@ describe("MemoryService", () => {
 			}),
 		);
 		const created = await svc.create(authz, {
-			space: "alice",
+			space: "kown",
 			title: "t",
 			body: "b",
 			type: "note",
 			tags: [],
 		});
-		expect(created.space).toBe("alice");
+		expect(created.space).toBe("kown");
 		expect(authz.principal.ownedSpaceIds).toHaveLength(1);
 		const again = await svc.create(authz, {
-			space: "alice",
+			space: "kown",
 			title: "t2",
 			body: "b2",
 			type: "note",
 			tags: [],
 		});
-		expect(again.space).toBe("alice");
+		expect(again.space).toBe("kown");
 	});
 
 	it("rejects first write when the own space slug is taken", async () => {
 		const db = openTestD1();
-		await insertSpace(db, { id: "sTaken", slug: "alice", ownerKeyId: "other" });
+		await insertSpace(db, { id: "sTaken", slug: "kown", ownerKeyId: "other" });
 		const svc = new MemoryService(db);
 		const authz = authzFrom(
 			principal({
@@ -287,7 +287,7 @@ describe("MemoryService", () => {
 		);
 		await expect(
 			svc.create(authz, {
-				space: "alice",
+				space: "kown",
 				title: "t",
 				body: "b",
 				type: "note",

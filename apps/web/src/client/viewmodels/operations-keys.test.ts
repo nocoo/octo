@@ -327,10 +327,10 @@ describe("key permissions and lifecycle", () => {
 		expect(request).toHaveBeenCalledTimes(before);
 	});
 
-	it("sends drop space permissions and rejects auto-space names outside the real slug contract", async () => {
+	it("sends drop space permissions and validates display name length", async () => {
 		const request = vi.fn().mockResolvedValue({ items: [], plaintext: "once" });
 		const model = new KeysModel({ request });
-		for (const name of ["Uppercase", "has spaces", "double--hyphen", "a".repeat(65)]) {
+		for (const name of [" ", "a".repeat(129)]) {
 			expect(await model.create({ name, role: "project", expires_at: null })).toBeNull();
 		}
 		expect(request).not.toHaveBeenCalled();

@@ -34,7 +34,7 @@ for (const [scope, label] of [
 			(request) =>
 				request.method() === "PATCH" && request.url().endsWith(`/keys/${created.key.id}`),
 		);
-		await editor.getByRole("button", { name: "保存权限", exact: true }).click();
+		await editor.getByRole("button", { name: "保存修改", exact: true }).click();
 		const expectedIds = scope === "spaces" ? [space.id] : [];
 		expect((await submitted).postDataJSON()).toMatchObject({ scope, space_ids: expectedIds });
 		await expect(editor).not.toBeVisible();
@@ -73,7 +73,7 @@ test("mint once, copy, close, refresh, and revoke a real API key", async ({
 				secret,
 			),
 		).toBe(true);
-		await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+		await reveal.getByRole("button", { name: "关闭", exact: true }).click();
 		await expect.poll(() => reveal.isVisible()).toBe(false);
 		await page.reload();
 		await expect(page.getByRole("row").filter({ hasText: name })).toContainText("有效");
@@ -125,7 +125,7 @@ test("mint once, copy, close, refresh, and revoke a real API key", async ({
 			.inputValue();
 		expect(rotated.startsWith("octo_")).toBe(true);
 		expect(rotated === secret).toBe(false);
-		await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+		await reveal.getByRole("button", { name: "关闭", exact: true }).click();
 		await expect.poll(() => reveal.isVisible()).toBe(false);
 		for (const value of [secret, rotated]) {
 			const duringGrace = await page.request.get("/api/v1/me", {

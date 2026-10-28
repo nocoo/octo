@@ -102,6 +102,22 @@ describe("SpaceRepo", () => {
 });
 
 describe("ensureAutoOwnSpace", () => {
+	it("uses the stable key id as slug and leaves it unchanged when the agent is renamed", async () => {
+		const db = new FakeD1();
+		const created = await ensureAutoOwnSpace(
+			asD1(db),
+			{ id: "KEY123", name: "Research Agent", auto_own_space: 1 },
+			() => 8,
+			() => "sid",
+		);
+		expect(created).toMatchObject({ slug: "key123", name: "Research Agent" });
+		const renamed = await ensureAutoOwnSpace(asD1(db), {
+			id: "KEY123",
+			name: "Renamed Agent",
+			auto_own_space: 1,
+		});
+		expect(renamed).toEqual(created);
+	});
 	it("returns null when the flag is off", async () => {
 		expect(
 			await ensureAutoOwnSpace(asD1(new FakeD1()), {
@@ -112,7 +128,7 @@ describe("ensureAutoOwnSpace", () => {
 		).toBeNull();
 	});
 
-	it("reuses an owned space or creates slug=key name", async () => {
+	it("reuses an owned space or creates slug=key id", async () => {
 		const db = new FakeD1();
 		const created = await ensureAutoOwnSpace(
 			asD1(db),
@@ -120,7 +136,7 @@ describe("ensureAutoOwnSpace", () => {
 			() => 8,
 			() => "sid",
 		);
-		expect(created?.slug).toBe("kb-bot");
+		expect(created?.slug).toBe("k1");
 		expect(created?.owner_key_id).toBe("k1");
 		const again = await ensureAutoOwnSpace(asD1(db), {
 			id: "k1",
@@ -134,7 +150,7 @@ describe("ensureAutoOwnSpace", () => {
 		const db = new FakeD1();
 		db.spaces.set("s", {
 			id: "s",
-			slug: "kb-bot",
+			slug: "k1",
 			name: "kb-bot",
 			description: "",
 			owner_key_id: "other",

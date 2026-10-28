@@ -50,7 +50,7 @@ export async function authorizeMemoryRequest(
 			space &&
 			principal.autoOwnSpace &&
 			principal.ops.has("w") &&
-			payload.space === principal.name
+			payload.space === principal.id.toLowerCase()
 		) {
 			const owner = await context.env.DB.prepare("SELECT owner_key_id FROM spaces WHERE id = ?")
 				.bind(space.id)
@@ -60,7 +60,11 @@ export async function authorizeMemoryRequest(
 		}
 		if (space) authz.denyUnless("write", { spaceId: space.id });
 		else if (
-			!(principal.autoOwnSpace && payload.space === principal.name && principal.ops.has("w"))
+			!(
+				principal.autoOwnSpace &&
+				payload.space === principal.id.toLowerCase() &&
+				principal.ops.has("w")
+			)
 		) {
 			throw new ApiError(principal.ops.has("w") ? "not_found" : "forbidden", "not allowed");
 		}

@@ -117,6 +117,17 @@ beforeEach(() => {
 });
 
 describe("key form", () => {
+	it("selects and clears all operations", () => {
+		const { render, props } = setup({ initial: { ...existing, role: "custom" } });
+		let tree = render();
+		control(tree, Button, (button) => button.children === "全选").props.onClick?.({} as never);
+		tree = render();
+		expect(control(tree, Checkbox.Group).props.value).toEqual(["r", "w", "u", "d"]);
+		control(tree, Button, (button) => button.children === "全不选").props.onClick?.({} as never);
+		tree = render();
+		expect(control(tree, Checkbox.Group).props.value).toEqual([]);
+		expect(props.onClearFieldError).toHaveBeenCalledWith("ops");
+	});
 	it("keeps partial datetime input invalid instead of clearing the expiry", async () => {
 		const { render, submit, props } = setup();
 		const tree = render();
@@ -181,12 +192,12 @@ describe("key form", () => {
 		expect(props.onClearFieldError).toHaveBeenCalledWith("ops");
 	});
 
-	it("retains selected ids when editing a custom key and submits an immutable name for validation", async () => {
+	it("retains selected ids when editing a custom key and submits the editable name", async () => {
 		const { render, submit, props } = setup({
 			initial: { ...existing, role: "custom", scope: "spaces", space_ids: ["space-1"] },
 		});
 		const tree = render();
-		expect(control(tree, Input).props.disabled).toBe(true);
+		expect(control(tree, Input).props.disabled).toBe(false);
 		expect(control(tree, MultiSelect).props.value).toEqual(["space-1"]);
 		expect(renderToStaticMarkup(tree)).toContain("设计资料（design）");
 		await submit(tree);
@@ -195,12 +206,12 @@ describe("key form", () => {
 		);
 	});
 
-	it("edits project expiry without changing its immutable name or fixed template", async () => {
+	it("edits project expiry and name while keeping its fixed template", async () => {
 		const { props, render, submit } = setup({ initial: existing });
 		let tree = render();
 		expect(control(tree, Input).props).toMatchObject({
 			value: "project-agent",
-			disabled: true,
+			disabled: false,
 		});
 		expect(control(tree, Switch).props).toMatchObject({ checked: true, disabled: true });
 		control(tree, Input, (props) => props.type === "datetime-local").props.onChange?.({
@@ -223,11 +234,11 @@ describe("key form", () => {
 		expect(props.onClearFieldError).toHaveBeenCalledWith("expires_at");
 	});
 
-	it("keeps the fixed project switch checked but disabled with a hint for invalid existing names", () => {
+	it("keeps the fixed project switch checked regardless of display name", () => {
 		const { render } = setup({ initial: { ...existing, name: "Invalid Project" } });
 		const tree = render();
 		expect(control(tree, Switch).props).toMatchObject({ checked: true, disabled: true });
-		expect(renderToStaticMarkup(tree)).toContain("当前名称不符合规则");
+		expect(renderToStaticMarkup(tree)).toContain("空间标识使用小写密钥 ID");
 	});
 
 	it("clears scope-dependent errors and omits selected ids after changing scope", async () => {
@@ -249,17 +260,17 @@ describe("key form", () => {
 	});
 
 	it.each(["Invalid Name", "has--gap", "a".repeat(65)])(
-		"disables auto-space for an invalid immutable name: %s",
+		"allows auto-space regardless of display name: %s",
 		(name) => {
 			const { render } = setup({ initial: { ...existing, name, role: "custom" } });
 			const tree = render();
 			const field = control(tree, Field, (props) => props.label === "自动创建自有空间");
-			expect(control(field, Switch).props.disabled).toBe(true);
-			expect(field.props.hint).toContain("名称须为 1 至 64 位小写字母、数字与单连字符");
+			expect(control(field, Switch).props.disabled).toBe(false);
+			expect(field.props.hint).toContain("空间标识使用小写密钥 ID");
 		},
 	);
 
-	it("turns custom auto-space off when a once-valid name becomes invalid", async () => {
+	it("preserves custom auto-space when the display name changes", async () => {
 		const { render, submit, props } = setup();
 		let tree = render();
 		control(tree, Select).props.onValueChange?.("custom");
@@ -275,10 +286,10 @@ describe("key form", () => {
 		tree = render();
 		expect(
 			control(tree, Switch, (props) => props.id?.endsWith("-auto-space") === true).props,
-		).toMatchObject({ checked: false, disabled: true });
+		).toMatchObject({ checked: true, disabled: false });
 		await submit(tree);
 		expect(props.onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({ permissions: expect.objectContaining({ auto_own_space: false }) }),
+			expect.objectContaining({ permissions: expect.objectContaining({ auto_own_space: true }) }),
 		);
 	});
 
@@ -347,7 +358,6 @@ describe("key form", () => {
 		tree = render();
 		control(tree, Input).props.onChange?.({ target: { value: "new-name" } } as never);
 		expect(props.onClearFieldError).toHaveBeenCalledWith("name");
-		expect(props.onClearFieldError).toHaveBeenCalledWith("auto_own_space");
 	});
 
 	it("offers space refresh after stale-id errors and links the error to the picker group", () => {

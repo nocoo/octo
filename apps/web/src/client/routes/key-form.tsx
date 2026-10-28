@@ -12,7 +12,6 @@ import {
 import { CircleAlert, RefreshCw, Save } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import {
-	isKeySpaceSlug,
 	type KeyDraft,
 	type KeyField,
 	type KeyFieldErrors,
@@ -43,7 +42,6 @@ export const operationText = (ops: string) =>
 		.map((op) => operationLabels[op] ?? "未授权")
 		.join("、");
 const roles: KeyRole[] = ["project", "drop", "readonly", "admin", "custom"];
-const slugHint = "名称须为 1 至 64 位小写字母、数字与单连字符；当前名称不符合规则，无法启用。";
 
 function localDate(value: string | null): string {
 	if (value === null) return "";
@@ -98,11 +96,11 @@ export function KeyForm({
 				}
 			: rolePermissions("project"),
 	);
-	const validName = isKeySpaceSlug(name);
-	const autoSpace = role === "project" || (permissions.auto_own_space && validName);
+	const autoSpace = role === "project" || permissions.auto_own_space;
 	return (
 		<form
 			noValidate
+			className="mt-basalt-layout"
 			onSubmit={async (event) => {
 				event.preventDefault();
 				const expiryDate = expiry ? new Date(expiry) : null;
@@ -124,7 +122,7 @@ export function KeyForm({
 				});
 			}}
 		>
-			<Grid columns={1} gap="sm">
+			<Grid columns={1} gap="md">
 				{error && (
 					<Banner
 						variant="error"
@@ -138,24 +136,17 @@ export function KeyForm({
 					label="代理名称"
 					required
 					error={fieldErrors.name ?? null}
-					hint={
-						initial
-							? "名称创建后不可修改。"
-							: "项目或自动创建空间的名称须为 1 至 64 位小写字母、数字与单连字符。"
-					}
+					hint="名称仅用于显示，不影响空间标识。"
 				>
 					<Input
 						value={name}
 						onChange={(event) => {
 							const next = event.target.value;
 							setName(next);
-							if (role === "custom" && !isKeySpaceSlug(next))
-								setPermissions({ ...permissions, auto_own_space: false });
 							onClearFieldError("name");
-							onClearFieldError("auto_own_space");
 						}}
 						required
-						disabled={pending || initial !== null}
+						disabled={pending}
 						autoComplete="off"
 					/>
 				</Field>
@@ -222,16 +213,38 @@ export function KeyForm({
 								onClearFieldError("ops");
 							}}
 						>
-							<Checkbox.Legend>允许的操作</Checkbox.Legend>
+							<Checkbox.Legend className="ops-key-legend">
+								<span>允许的操作</span>
+								<span className="ops-key-selection">
+									<Button
+										size="sm"
+										variant="ghost"
+										disabled={pending}
+										onClick={() => {
+											setPermissions({ ...permissions, ops: "r,w,u,d" });
+											onClearFieldError("ops");
+										}}
+									>
+										全选
+									</Button>
+									<Button
+										size="sm"
+										variant="ghost"
+										disabled={pending}
+										onClick={() => {
+											setPermissions({ ...permissions, ops: "" });
+											onClearFieldError("ops");
+										}}
+									>
+										全不选
+									</Button>
+								</span>
+							</Checkbox.Legend>
 							<Grid
 								columns={4}
 								gap="sm"
 								className="ops-key-permissions"
-								style={{
-									gridTemplateColumns:
-										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), 1fr))",
-									alignItems: "center",
-								}}
+								style={{ alignItems: "center" }}
 							>
 								{Object.entries(operationLabels).map(([op, label]) => (
 									<Checkbox.Item key={op} value={op}>
@@ -360,11 +373,9 @@ export function KeyForm({
 						htmlFor={`${id}-auto-space`}
 						error={fieldErrors.auto_own_space ?? null}
 						hint={
-							validName
-								? role === "project"
-									? "项目模板固定开启，使用代理名称作为空间标识。"
-									: "使用代理名称作为空间标识；仅自定义角色可修改此项。"
-								: `${slugHint}${role === "project" ? "项目模板固定开启，须使用符合规则的名称。" : ""}`
+							role === "project"
+								? "项目模板固定开启，空间标识使用小写密钥 ID。"
+								: "空间标识使用小写密钥 ID。"
 						}
 					>
 						<Switch
@@ -374,19 +385,19 @@ export function KeyForm({
 								setPermissions({ ...permissions, auto_own_space });
 								onClearFieldError("auto_own_space");
 							}}
-							disabled={pending || role === "project" || !validName}
+							disabled={pending || role === "project"}
 						/>
 					</Field>
 				)}
-				<DialogFooter>
-					<Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
-						取消
-					</Button>
-					<Button type="submit" icon={<Save aria-hidden="true" />} loading={pending}>
-						{initial ? "保存权限" : "创建密钥"}
-					</Button>
-				</DialogFooter>
 			</Grid>
+			<DialogFooter>
+				<Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
+					取消
+				</Button>
+				<Button type="submit" icon={<Save aria-hidden="true" />} loading={pending}>
+					{initial ? "保存修改" : "创建密钥"}
+				</Button>
+			</DialogFooter>
 		</form>
 	);
 }

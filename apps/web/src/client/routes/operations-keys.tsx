@@ -214,36 +214,34 @@ export function KeysPage() {
 				key.revoked_at !== null ? (
 					<Button
 						icon={<Trash2 aria-hidden="true" />}
-						size="sm"
-						variant="destructive"
+						size="icon"
+						variant="ghost"
 						disabled={state.pending}
 						onClick={(event) => {
 							deleteTrigger.current = event.currentTarget;
 							model.openDelete(key.id);
 						}}
 						aria-label={`永久删除 ${key.name}`}
-					>
-						删除
-					</Button>
+						title="永久删除"
+					/>
 				) : (
 					<Grid columns={3} gap="sm" className="ops-key-actions">
 						<Button
 							icon={<Pencil aria-hidden="true" />}
-							size="sm"
-							variant="outline"
+							size="icon"
+							variant="ghost"
 							disabled={state.pending}
 							onClick={(event) => {
 								editorTrigger.current = event.currentTarget;
 								openEditor(key);
 							}}
 							aria-label={`编辑 ${key.name}`}
-						>
-							编辑
-						</Button>
+							title="编辑"
+						/>
 						<Button
 							icon={<RotateCw aria-hidden="true" />}
-							size="sm"
-							variant="outline"
+							size="icon"
+							variant="ghost"
 							disabled={state.pending || keyStatus(key) !== "active"}
 							onClick={(event) => {
 								rotateTrigger.current = event.currentTarget;
@@ -251,19 +249,17 @@ export function KeysPage() {
 								setGrace("0");
 							}}
 							aria-label={`轮换 ${key.name}`}
-						>
-							轮换
-						</Button>
+							title="轮换"
+						/>
 						<Button
 							icon={<Ban aria-hidden="true" />}
-							size="sm"
+							size="icon"
 							variant="ghost"
 							disabled={state.pending}
 							onClick={() => setRevoking(key)}
 							aria-label={`撤销 ${key.name}`}
-						>
-							撤销
-						</Button>
+							title="撤销"
+						/>
 					</Grid>
 				),
 		},
@@ -419,6 +415,7 @@ export function KeysPage() {
 						</DialogDescription>
 					</DialogHeader>
 					<form
+						className="mt-basalt-layout"
 						onSubmit={async (event) => {
 							event.preventDefault();
 							if (rotating) reveal(await model.rotate(rotating.id, Number(grace)));
@@ -438,24 +435,20 @@ export function KeysPage() {
 								/>
 							</Field>
 							{state.error && <p role="alert">{state.error}</p>}
-							<DialogFooter>
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => setRotating(null)}
-									disabled={state.pending}
-								>
-									取消
-								</Button>
-								<Button
-									type="submit"
-									icon={<RotateCw aria-hidden="true" />}
-									loading={state.pending}
-								>
-									轮换密钥
-								</Button>
-							</DialogFooter>
 						</Grid>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setRotating(null)}
+								disabled={state.pending}
+							>
+								取消
+							</Button>
+							<Button type="submit" icon={<RotateCw aria-hidden="true" />} loading={state.pending}>
+								轮换密钥
+							</Button>
+						</DialogFooter>
 					</form>
 				</DialogContent>
 			</Dialog>
@@ -540,7 +533,7 @@ export function KeysPage() {
 						</DialogDescription>
 					</DialogHeader>
 					{secret !== null && (
-						<Field label="接口密钥">
+						<Field label="接口密钥" className="mt-basalt-layout">
 							<Input
 								readOnly
 								value={secret}
@@ -552,7 +545,7 @@ export function KeysPage() {
 					)}
 					<DialogFooter>
 						<Button icon={<X aria-hidden="true" />} variant="outline" onClick={clearSecret}>
-							关闭并清除
+							关闭
 						</Button>
 						<Button
 							icon={copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}

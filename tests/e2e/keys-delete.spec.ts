@@ -18,7 +18,7 @@ test("real key forms persist creation, revocation and deletion after reload", as
 		await editor.getByRole("button", { name: "创建密钥", exact: true }).click();
 		expect((await created).status()).toBe(201);
 		const reveal = page.getByRole("dialog", { name: "请立即复制密钥", exact: true });
-		await reveal.getByRole("button", { name: "关闭并清除", exact: true }).click();
+		await reveal.getByRole("button", { name: "关闭", exact: true }).click();
 		await page.reload();
 		const createdRow = page.getByRole("row").filter({ hasText: keyName });
 		await expect(createdRow).toContainText("有效");

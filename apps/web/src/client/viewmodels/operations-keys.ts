@@ -57,9 +57,9 @@ interface KeysState {
 }
 
 const fieldMessages: Record<KeyField, string> = {
-	name: "名称无效；自动创建空间时须为 1 至 64 位小写字母、数字与单连字符。",
+	name: "请填写 1 至 128 位的名称。",
 	role: "请选择有效的角色模板。",
-	ops: "请至少选择一项操作，且不能重复。",
+	ops: "请选择有效且不重复的操作。",
 	scope: "请选择有效的空间范围。",
 	space_ids: "请选择有效的现有空间；空间可能已删除，请刷新列表。",
 	own_entries_only: "请检查仅操作本人记忆的设置。",
@@ -67,10 +67,6 @@ const fieldMessages: Record<KeyField, string> = {
 	expires_at: "请填写有效的到期时间，或留空表示永不过期。",
 };
 const formError = "请检查标记的字段后重试。";
-
-export function isKeySpaceSlug(name: string): boolean {
-	return name.trim().length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name.trim());
-}
 
 function serverFieldErrors(error: unknown): KeyFieldErrors {
 	if (!(error instanceof ApiError) || error.code !== "validation_failed") return {};
@@ -266,6 +262,7 @@ export class KeysModel extends Store<KeysState> {
 			return false;
 		return (
 			(await this.change(`/keys/${encodeURIComponent(id)}`, "PATCH", {
+				...(patch.name === undefined ? {} : { name: patch.name.trim() }),
 				expires_at: patch.expires_at,
 				...(patch.role
 					? {
@@ -325,15 +322,13 @@ export class KeysModel extends Store<KeysState> {
 		if (draft.role) {
 			if (
 				!permissions ||
-				!/^[rwud](?:,[rwud])*$/.test(permissions.ops) ||
+				!/^(?:[rwud](?:,[rwud])*)?$/.test(permissions.ops) ||
 				new Set(permissions.ops.split(",")).size !== permissions.ops.split(",").length
 			)
 				errors.ops = fieldMessages.ops;
 			if (!permissions) errors.scope = fieldMessages.scope;
 			if (draft.role === "readonly" && permissions?.scope === "own")
 				errors.scope = fieldMessages.scope;
-			if (permissions?.auto_own_space && draft.name !== undefined && !isKeySpaceSlug(draft.name))
-				errors.name = fieldMessages.name;
 			if (
 				permissions?.scope === "spaces" &&
 				(!this.state.spacesLoaded ||

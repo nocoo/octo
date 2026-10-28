@@ -984,3 +984,16 @@ covers a quarter of the bitmap, so the gradient stopped mid-canvas. Headless
 Chromium defaults to DPR 1, which hid it. Verify canvas painting at
 `deviceScaleFactor: 2` before calling a visual fix done, and scale every
 transform reset by `canvas.width / cssWidth`.
+
+### 2026-10-28 - Verify Herdr caller context before splitting
+
+The inherited Herdr pane ID pointed to a different workspace than the active Octo
+pane. A split created an empty shell in that other workspace; it was closed
+immediately without running a task. Compare the inherited caller IDs with the
+active project pane before any layout mutation, and work locally if they differ.
+
+### 2026-10-28 - Keep browser test inputs stable during a run
+
+An L3 run built the page before a later wording edit but loaded the changed test
+expectation afterward, producing a false failure. Finish source and test edits
+before starting the isolated build and browser run; rerun after any such change.
