@@ -1,200 +1,300 @@
 import { describe, expect, it, vi } from "vitest";
 import { type AdminClient, ApiError } from "../lib/api";
-import { activitySeries, OverviewModel } from "./overview";
+import {
+	actorId,
+	botCalls,
+	botDetail,
+	botName,
+	botOperations,
+	bucketOf,
+	type DashboardPayload,
+	dailySeries,
+	OverviewModel,
+	operationTotals,
+	parseOverviewRange,
+	rangeWindow,
+	spaceDetail,
+	spaceDistribution,
+	spaceOperations,
+	summary,
+	topBots,
+	topSpaces,
+	typeDistribution,
+} from "./overview";
 
-describe("overview aggregation", () => {
-	it("explains known API failures in Chinese without exposing arbitrary service details", async () => {
+function payload(overrides: Partial<DashboardPayload> = {}): DashboardPayload {
+	return {
+		range: { from: "2026-10-16", to: "2026-10-18", days: 3 },
+		totals: { memories: 5, trash: 2, spaces: 2, keys: 2 },
+		ops: [
+			{ day: "2026-10-16", actor: "key:K1", space_id: "s1", op: "created", count: 2 },
+			{ day: "2026-10-16", actor: "key:K1", space_id: "s1", op: "updated", count: 1 },
+			{ day: "2026-10-17", actor: "key:K2", space_id: "s2", op: "moved_out", count: 3 },
+			{ day: "2026-10-17", actor: "admin:a@b.c", space_id: "s2", op: "trashed", count: 1 },
+			{ day: "2026-10-18", actor: "key:K1", space_id: "s2", op: "purged", count: 2 },
+			{ day: "2026-10-18", actor: "key:K1", space_id: "s1", op: "tag_merged", count: 9 },
+		],
+		usage: [
+			{ day: "2026-10-16", key_id: "K1", calls: 10, errors: 1, writes: 4 },
+			{ day: "2026-10-17", key_id: "K2", calls: 40, errors: 0, writes: 2 },
+			{ day: "2026-10-18", key_id: "K1", calls: 20, errors: 3, writes: 1 },
+		],
+		types: [
+			{ space_id: "s1", type: "fact", count: 3 },
+			{ space_id: "s2", type: "note", count: 2 },
+		],
+		spaces: [
+			{ id: "s1", slug: "kb", name: "知识库", memories: 3, trash: 1 },
+			{ id: "s2", slug: "notes", name: "笔记", memories: 2, trash: 1 },
+		],
+		keys: [
+			{ id: "K1", name: "采集助手", role: "project", revoked: false, last_used_at: null },
+			{ id: "K2", name: "整理助手", role: "drop", revoked: true, last_used_at: null },
+		],
+		...overrides,
+	};
+}
+
+describe("overview daily series", () => {
+	it("zero-fills every UTC day and buckets operations by type", () => {
+		const rows = dailySeries(payload());
+		expect(rows.map((row) => row.x)).toEqual(["2026-10-16", "2026-10-17", "2026-10-18"]);
+		expect(rows[0]).toMatchObject({ created: 2, updated: 1, moved: 0, net: 2 });
+		expect(rows[1]).toMatchObject({ moved: 3, trashed: 1, net: 0 });
+		expect(rows[2]).toMatchObject({ purged: 2, net: -2 });
+		expect(rows[0]).toMatchObject({ calls: 10, errors: 1, writes: 4 });
+		expect(rows[0]?.errorRate).toBeCloseTo(0.1);
+		expect(rows[1]?.errorRate).toBe(0);
+		expect(
+			dailySeries(payload({ range: { from: "2026-10-16", to: "2026-10-16", days: 1 } })),
+		).toHaveLength(1);
+	});
+
+	it("maps only known memory operations and ignores derived tag events", () => {
+		expect(bucketOf("moved_out")).toBe("moved");
+		expect(bucketOf("rolled_back")).toBe("rolled_back");
+		expect(bucketOf("tag_merged")).toBeNull();
+		expect(bucketOf("unknown")).toBeNull();
+		expect(dailySeries(payload()).reduce((sum, row) => sum + row.updated, 0)).toBe(1);
+	});
+
+	it("leaves the error rate undefined without calls and totals operations by bucket", () => {
+		const rows = dailySeries(payload({ usage: [] }));
+		expect(rows[0]?.errorRate).toBeNull();
+		expect(operationTotals(rows)).toEqual([
+			{ key: "created", name: "创建", value: 2 },
+			{ key: "updated", name: "更新", value: 1 },
+			{ key: "moved", name: "移动", value: 3 },
+			{ key: "trashed", name: "回收站", value: 1 },
+			{ key: "purged", name: "永久删除", value: 2 },
+		]);
+	});
+});
+
+describe("overview identity helpers", () => {
+	it("maps actors to bots and prefers configured names", () => {
+		expect(actorId("key:K1")).toBe("K1");
+		expect(actorId("admin:a@b.c")).toBe("admin");
+		expect(botName("K1", payload().keys)).toBe("采集助手");
+		expect(botName("admin", payload().keys)).toBe("控制台");
+		expect(botName("K9", payload().keys)).toBe("K9");
+	});
+
+	it("assigns one distinct colour slot per stacked series", () => {
+		const chart = spaceOperations(payload(), 1);
+		expect(chart.series.map((series) => series.colorIndex)).toEqual([0, -1]);
+		expect(botOperations(payload()).series.map((series) => series.colorIndex)).toEqual([0, 1, 2]);
+		expect(spaceOperations(payload({ ops: [...payload().ops].reverse() }), 1).series).toEqual(
+			chart.series,
+		);
+	});
+});
+
+describe("overview stacked charts", () => {
+	it("stacks the busiest spaces and aggregates the tail per day", () => {
+		const chart = spaceOperations(payload(), 1);
+		expect(chart.series.map((series) => series.label)).toEqual(["笔记", "其他 1 项"]);
+		expect(chart.rows).toEqual([
+			{ x: "2026-10-16", s0: 0, s1: 3 },
+			{ x: "2026-10-17", s0: 4, s1: 0 },
+			{ x: "2026-10-18", s0: 2, s1: 0 },
+		]);
+	});
+
+	it("stacks operations and calls per bot with the console actor", () => {
+		expect(botOperations(payload()).series.map((series) => series.label)).toEqual([
+			"采集助手",
+			"整理助手",
+			"控制台",
+		]);
+		expect(botCalls(payload()).rows[1]).toEqual({ x: "2026-10-17", s0: 40, s1: 0 });
+		expect(botOperations(payload({ keys: [] })).series[0]?.label).toBe("K1");
+		expect(botCalls(payload({ usage: [] })).series).toEqual([]);
+	});
+
+	it("renders empty charts without a tail series", () => {
+		const empty = spaceOperations(payload({ ops: [] }));
+		expect(empty.series).toEqual([]);
+		expect(empty.rows.map((row) => row.x)).toHaveLength(3);
+	});
+});
+
+describe("overview distributions", () => {
+	it("labels memory types in Chinese and sorts by count", () => {
+		expect(typeDistribution(payload())).toEqual([
+			{ key: "fact", name: "事实", value: 3 },
+			{ key: "note", name: "笔记", value: 2 },
+		]);
+		expect(
+			typeDistribution(payload({ types: [{ space_id: "s1", type: "custom", count: 1 }] })),
+		).toEqual([{ key: "custom", name: "custom", value: 1 }]);
+	});
+
+	it("groups the space tail into one slice", () => {
+		expect(spaceDistribution(payload(), 1)).toEqual([
+			{ key: "s1", name: "知识库", value: 3 },
+			{ key: "other", name: "其他 1 个空间", value: 2 },
+		]);
+		expect(spaceDistribution(payload({ spaces: [] }))).toEqual([]);
+	});
+});
+
+describe("overview summary", () => {
+	it("counts operations, calls, active bots and the daily average", () => {
+		const data = payload();
+		expect(summary(data, dailySeries(data))).toEqual({
+			memories: 5,
+			trash: 2,
+			spaces: 2,
+			bots: 2,
+			activeBots: 2,
+			ops: 9,
+			net: 0,
+			calls: 70,
+			errors: 4,
+			errorRate: 4 / 70,
+			dailyOps: 3,
+		});
+	});
+});
+
+describe("overview rankings", () => {
+	it("ranks bots by calls with shares, error rates and sparklines", () => {
+		const rows = topBots(payload());
+		expect(rows.map((row) => row.name)).toEqual(["整理助手", "采集助手"]);
+		expect(rows[0]).toMatchObject({ calls: 40, ops: 3, revoked: true, share: 40 / 70 });
+		expect(rows[1]).toMatchObject({ calls: 30, ops: 5 });
+		expect(rows[1]?.errorRate).toBeCloseTo(4 / 30);
+		expect(rows[1]?.sparkline.map((point) => point.value)).toEqual([3, 0, 2]);
+		expect(topBots(payload({ keys: [] }))).toEqual([]);
+	});
+
+	it("ranks spaces by operations and exposes the memory share", () => {
+		expect(topSpaces(payload())).toEqual([
+			expect.objectContaining({ name: "笔记", ops: 6, memories: 2, share: 2 / 5 }),
+			expect.objectContaining({ name: "知识库", ops: 3, memories: 3, share: 3 / 5 }),
+		]);
+		expect(topSpaces(payload(), 1)).toHaveLength(1);
+	});
+});
+
+describe("overview detail panels", () => {
+	it("scopes bot operations, calls and spaces", () => {
+		const detail = botDetail(payload(), "K1");
+		expect(detail.bot?.name).toBe("采集助手");
+		expect(detail.totals).toMatchObject({ ops: 5, calls: 30, errors: 4, writes: 5 });
+		expect(detail.spaces).toEqual([
+			{ id: "s1", name: "知识库", ops: 3, memories: 3 },
+			{ id: "s2", name: "笔记", ops: 2, memories: 2 },
+		]);
+		expect(botDetail(payload(), "missing").bot).toBeNull();
+	});
+
+	it("scopes a space's operations, types and bots", () => {
+		const detail = spaceDetail(payload(), "s1");
+		expect(detail.space?.name).toBe("知识库");
+		expect(detail.totals).toEqual({ ops: 3, net: 2, memories: 3, trash: 1 });
+		expect(detail.types).toEqual([{ key: "fact", name: "事实", value: 3 }]);
+		expect(detail.bots).toEqual([{ id: "K1", name: "采集助手", ops: 3 }]);
+		expect(spaceDetail(payload(), "missing").space).toBeNull();
+		const orphan = spaceDetail(
+			payload({
+				ops: [
+					{ day: "2026-10-16", actor: "key:K2", space_id: "s9", op: "created", count: 1 },
+					{ day: "2026-10-16", actor: "key:K1", space_id: "s9", op: "created", count: 1 },
+				],
+				types: [
+					{ space_id: "s9", type: "custom", count: 2 },
+					{ space_id: "s9", type: "fact", count: 2 },
+				],
+			}),
+			"s9",
+		);
+		expect(orphan.space).toBeNull();
+		expect(orphan.types).toEqual([
+			{ key: "custom", name: "custom", value: 2 },
+			{ key: "fact", name: "事实", value: 2 },
+		]);
+		expect(orphan.bots.map((bot) => bot.name)).toEqual(["整理助手", "采集助手"]);
+		expect(orphan.totals).toMatchObject({ memories: 0, trash: 0, ops: 2 });
+	});
+});
+
+describe("overview range", () => {
+	it("accepts only supported ranges from the URL", () => {
+		expect(parseOverviewRange(new URLSearchParams("range=7"))).toBe(7);
+		expect(parseOverviewRange(new URLSearchParams("range=90"))).toBe(90);
+		expect(parseOverviewRange(new URLSearchParams("range=13"))).toBe(30);
+		expect(parseOverviewRange(new URLSearchParams(""))).toBe(30);
+	});
+
+	it("builds an inclusive UTC window ending today", () => {
+		const now = Date.parse("2026-10-19T23:30:00.000Z");
+		expect(rangeWindow(7, now)).toEqual({ from: "2026-10-13", to: "2026-10-19" });
+		expect(rangeWindow(90, now)).toEqual({ from: "2026-07-22", to: "2026-10-19" });
+	});
+});
+
+describe("OverviewModel", () => {
+	it("loads the dashboard for the selected window", async () => {
+		const request = vi.fn(async () => payload());
+		const model = new OverviewModel({ request } as unknown as AdminClient, () =>
+			Date.parse("2026-10-18T06:00:00.000Z"),
+		);
+		await model.load(7);
+		expect(request).toHaveBeenCalledWith("/dashboard?from=2026-10-12&to=2026-10-18");
+		expect(model.state.data?.totals.memories).toBe(5);
+		expect(model.state.loading).toBe(false);
+	});
+
+	it("explains known API failures in Chinese without exposing service details", async () => {
 		const model = new OverviewModel({
 			request: async () => {
 				throw new ApiError(403, "access_denied");
 			},
 		});
-		await model.load();
+		await model.load(30);
 		expect(model.state.error).toBe("无法刷新总览：没有访问权限，请重新登录或联系管理员。");
 	});
-	it("aggregates stable key series and daily activity", () => {
-		const daily = [
-			{ day: "2026-10-17", key_id: "b", calls: 3 },
-			{ day: "2026-10-16", key_id: "a", calls: 4 },
-			{ day: "2026-10-17", key_id: "a", calls: 2 },
-		];
-		const result = activitySeries(daily);
-		expect(result.keys).toEqual(["a", "b"]);
-		expect(result.rows).toEqual([
-			{ x: "2026-10-16", agent_0: 4, agent_1: 0 },
-			{ x: "2026-10-17", agent_0: 2, agent_1: 3 },
-		]);
-		expect(result.heatmap).toEqual([
-			{ date: "2026-10-16", value: 4 },
-			{ date: "2026-10-17", value: 5 },
-		]);
-		expect(activitySeries([])).toEqual({ keys: [], colors: [], rows: [], heatmap: [] });
-	});
-	it("keeps chart colors stable as agents enter or leave the dataset", () => {
-		const one = activitySeries([{ day: "2026-10-17", key_id: "b", calls: 3 }]);
-		const many = activitySeries([
-			{ day: "2026-10-17", key_id: "a", calls: 1 },
-			{ day: "2026-10-17", key_id: "b", calls: 3 },
-		]);
-		expect(one.colors[0]).toBe(many.colors[1]);
-	});
-	it("keeps key identifiers separate from chart coordinate fields", () => {
-		expect(activitySeries([{ day: "2026-10-17", key_id: "x", calls: 7 }]).rows).toEqual([
-			{ x: "2026-10-17", agent_0: 7 },
-		]);
-	});
-	it("fully paginates M7 rollups, trash and ascending changes before deriving exact metrics", async () => {
-		const request = vi.fn(async (path: string) => {
-			const url = new URL(path, "https://admin.invalid");
-			const more = url.searchParams.has("cursor");
-			switch (url.pathname) {
-				case "/spaces":
-					return { items: [{ memory_count: 5 }, { memory_count: 7 }], next_cursor: null };
-				case "/usage":
-					expect(url.searchParams.get("from")).toBe("2026-01-01");
-					expect(url.searchParams.get("to")).toBe("2026-10-18");
-					return {
-						items: [
-							{
-								day: more ? "2026-10-18" : "2026-10-17",
-								key_id: "k",
-								calls: 3,
-								errors: 0,
-								writes: more ? 2 : 9,
-								bytes_in: 20,
-								bytes_out: 30,
-							},
-						],
-						next_cursor: more ? null : "usage+page",
-					};
-				case "/trash":
-					return {
-						items: more ? [{ id: "t2" }, { id: "t3" }] : [{ id: "t1" }],
-						next_cursor: more ? null : "trash/page",
-					};
-				case "/changes":
-					return {
-						items: more
-							? [
-									{
-										seq: 20,
-										entity: "memory",
-										entity_id: "m20",
-										op: "trashed",
-										at: "2026-10-18T02:00:00.000Z",
-									},
-								]
-							: Array.from({ length: 15 }, (_, index) => ({
-									seq: index + 1,
-									entity: "memory",
-									entity_id: `m${index}`,
-									op: "update",
-									actor: "admin:owner@example.com",
-									at: "2026-10-18T01:00:00.000Z",
-									version: 2,
-									space_id: "s1",
-								})),
-						next_cursor: more ? null : "changes=next",
-					};
-				default:
-					return {
-						items: [
-							{
-								id: "memory",
-								title: "Note",
-								space: "notes",
-								tags: [],
-								updated_at: "2026-10-17T00:00:00.000Z",
-							},
-						],
-						next_cursor: null,
-					};
-			}
-		});
-		const model = new OverviewModel({ request } as AdminClient, () =>
-			Date.parse("2026-10-18T00:30:00Z"),
+
+	it("drops a stale response when the range changes while loading", async () => {
+		const releases: (() => void)[] = [];
+		const request = vi.fn(
+			() =>
+				new Promise((resolve) => {
+					releases.push(() => resolve(payload()));
+				}),
 		);
-		await model.load();
-		expect(model.state).toMatchObject({
-			memoryCount: 12,
-			trashCount: 3,
-			writesToday: 2,
-			activeKeysToday: 1,
-			error: null,
-		});
-		expect(model.state.usage).toHaveLength(2);
-		expect(model.state.changes).toHaveLength(12);
-		expect(model.state.changes[0]).toMatchObject({ seq: 20, op: "trashed" });
-		expect(model.state.changes[1]).toMatchObject({
-			seq: 15,
-			actor: "admin:owner@example.com",
-			at: "2026-10-18T01:00:00.000Z",
-		});
-		expect(request).toHaveBeenCalledWith(
-			"/usage?from=2026-01-01&to=2026-10-18&limit=200&cursor=usage%2Bpage",
-		);
-		expect(request).toHaveBeenCalledWith("/trash?limit=200&cursor=trash%2Fpage");
-		expect(request).toHaveBeenCalledWith("/changes?limit=200&cursor=changes%3Dnext");
-		expect(request.mock.calls.every(([path]) => !path.includes("settings"))).toBe(true);
-	});
-	it.each(["/trash", "/usage"])(
-		"never reports partial %s pages as complete counts",
-		async (endpoint) => {
-			const request = vi.fn(async (path: string) => {
-				if (path.startsWith(endpoint)) return { items: [{ id: "t" }], next_cursor: "repeat" };
-				return { items: [], next_cursor: null };
-			});
-			const model = new OverviewModel({ request } as AdminClient);
-			await model.load();
-			expect(model.state.trashCount).toBeNull();
-			expect(model.state.writesToday).toBeNull();
-			expect(model.state.error).toContain("分页游标重复");
-		},
-	);
-	it("ignores overlapping refreshes and reports a genuine empty rollup as zero", async () => {
-		let release!: (page: { items: []; next_cursor: null }) => void;
-		const page = new Promise((resolve) => {
-			release = resolve;
-		});
-		const request = vi.fn(() => page);
-		const model = new OverviewModel({ request } as AdminClient);
-		const pending = model.load();
-		await model.load();
-		expect(request).toHaveBeenCalledTimes(5);
-		release({ items: [], next_cursor: null });
-		await pending;
-		expect(model.state).toMatchObject({
-			memoryCount: 0,
-			trashCount: 0,
-			writesToday: 0,
-			activeKeysToday: 0,
-			loading: false,
-			error: null,
-		});
-	});
-	it("loads existing snapshots, retains old data on refresh errors", async () => {
-		let fail = false;
-		const client = {
-			request: async (path: string) => {
-				if (fail) throw new Error("failed");
-				if (path === "/spaces")
-					return { items: [{ memory_count: 5 }, { memory_count: 7 }], next_cursor: null };
-				if (!path.startsWith("/memories")) return { items: [], next_cursor: null };
-				return {
-					items: [{ id: "memory", title: "Note", updated_at: "2026-10-17" }],
-					next_cursor: null,
-				};
-			},
-		} as AdminClient;
-		const model = new OverviewModel(client);
-		await model.load();
-		expect(model.state.memoryCount).toBe(12);
-		expect(model.state.recent).toHaveLength(1);
-		expect(model.state.error).toBeNull();
-		fail = true;
-		await model.load();
-		expect(model.state.memoryCount).toBe(12);
-		expect(model.state.error).toBe("无法刷新总览：请求失败，请稍后重试。");
+		const model = new OverviewModel({ request } as unknown as AdminClient);
+		const first = model.load(30);
+		const second = model.load(7);
+		expect(request).toHaveBeenCalledTimes(2);
+		releases[1]?.();
+		await second;
+		const current = model.state.data;
+		releases[0]?.();
+		await first;
+		expect(model.state.data).toBe(current);
 		expect(model.state.loading).toBe(false);
 	});
 });

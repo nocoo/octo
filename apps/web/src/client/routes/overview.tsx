@@ -1,116 +1,338 @@
 import { Button, LayerCard, StatStrip } from "@nocoo/basalt";
-import { AreaChart } from "@nocoo/basalt/charts/area";
-import { type ChartSeriesDescriptor, getChartColor } from "@nocoo/basalt/charts/config";
-import { HeatmapCalendar } from "@nocoo/basalt/charts/heatmap-calendar";
+import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { Banner } from "@nocoo/basalt/components/banner";
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@nocoo/basalt/components/collapsible";
-import { DataTable } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@nocoo/basalt/components/table";
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetHeader,
+	SheetTitle,
+} from "@nocoo/basalt/components/sheet";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
+import { Text } from "@nocoo/basalt/components/text";
+import { ToggleGroup, ToggleGroupItem } from "@nocoo/basalt/components/toggle-group";
 import {
 	Activity,
 	AlertCircle,
-	ArrowUpRight,
 	BookOpen,
-	KeyRound,
-	Network,
-	PenLine,
+	Bot,
+	ChartNoAxesCombined,
 	RefreshCw,
-	Search,
-	Trash2,
+	TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
-import { Link } from "react-router";
+import { useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
-import { RecordTime, SpaceLink } from "../components/record-display";
-import { formatNumber } from "../lib/format";
-import { activitySeries, OverviewModel } from "../viewmodels/overview";
+import { formatNumber, formatPercent } from "../lib/format";
+import {
+	type BotDetail,
+	type BotRow,
+	botCalls,
+	botDetail,
+	botOperations,
+	dailySeries,
+	OVERVIEW_RANGES,
+	OverviewModel,
+	operationTotals,
+	parseOverviewRange,
+	type SpaceDetail,
+	type SpaceRow,
+	spaceDetail,
+	spaceDistribution,
+	spaceOperations,
+	summary,
+	topBots,
+	topSpaces,
+	typeDistribution,
+} from "../viewmodels/overview";
+import "./overview.css";
+import {
+	BotCallChart,
+	BotOperationChart,
+	OperationTrendChart,
+	OverviewDonut,
+	opColorOf,
+	SpaceTrendChart,
+} from "./overview-charts";
 
-const changeLabels = new Map([
-	["created", "创建"],
-	["updated", "更新"],
-	["deleted", "删除"],
-	["trashed", "移入回收站"],
-	["purged", "永久删除"],
-	["moved", "移动"],
-	["restored", "恢复"],
-	["rolled_back", "回滚"],
-	["tag_renamed", "重命名标签"],
-	["tag_merged", "合并标签"],
-]);
+function signed(value: number): string {
+	return `${value > 0 ? "+" : ""}${formatNumber(value)}`;
+}
 
-export function activityChartSeries(activity: ReturnType<typeof activitySeries>) {
-	return activity.keys.map(
-		(key, index) =>
-			({
-				key: `agent_${index}` as const,
-				label: key,
-				color: getChartColor(activity.colors[index] ?? 0),
-			}) satisfies ChartSeriesDescriptor,
+function botMeta(row: BotRow): string {
+	return [
+		`${formatNumber(row.ops)} 次操作`,
+		`${formatNumber(row.writes)} 次写入`,
+		`错误率 ${formatPercent(row.errorRate, 1)}`,
+	]
+		.filter(Boolean)
+		.join(" · ");
+}
+
+function BotsPanel({ rows, onSelect }: { rows: BotRow[]; onSelect: (id: string) => void }) {
+	if (!rows.length)
+		return <p className="text-basalt-sm text-basalt-muted-foreground">所选区间内没有 Bot 活动。</p>;
+	return (
+		<ol className="octo-rank" aria-label="Bot 排行">
+			{rows.map((row) => (
+				<li key={row.id} className="octo-rank-entry">
+					<Button
+						variant="ghost"
+						className="octo-rank-row"
+						aria-label={`查看 ${row.name} 详情`}
+						onClick={() => onSelect(row.id)}
+					>
+						<span className="octo-rank-main">
+							<span className="octo-rank-label" title={row.name}>
+								{row.name}
+							</span>
+							<span className="octo-rank-meta">{botMeta(row)}</span>
+						</span>
+						<Sparkline
+							data={row.sparkline}
+							series={[{ key: "value", color: "hsl(var(--basalt-chart-1))" }]}
+							ariaLabel={`${row.name} 每日操作量`}
+							accessibilityLayer={false}
+							summary={<span className="sr-only">{row.name} 每日操作量迷你条形图。</span>}
+							className="octo-rank-spark"
+						/>
+						<span className="octo-rank-value">
+							{formatNumber(row.calls)}
+							<small>调用</small>
+						</span>
+					</Button>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+function SpacesPanel({ rows, onSelect }: { rows: SpaceRow[]; onSelect: (id: string) => void }) {
+	if (!rows.length)
+		return <p className="text-basalt-sm text-basalt-muted-foreground">还没有空间数据。</p>;
+	return (
+		<ol className="octo-rank" aria-label="空间排行">
+			{rows.map((row) => (
+				<li key={row.id} className="octo-rank-entry">
+					<Button
+						variant="ghost"
+						className="octo-rank-row"
+						aria-label={`查看 ${row.name} 详情`}
+						onClick={() => onSelect(row.id)}
+					>
+						<span className="octo-rank-main">
+							<span className="octo-rank-label" title={row.name}>
+								{row.name}
+							</span>
+							<span className="octo-rank-meta">
+								{`${formatNumber(row.memories)} 条记忆`}
+								{row.trash ? ` · 回收站 ${formatNumber(row.trash)}` : ""}
+								{` · ${formatNumber(row.ops)} 次操作`}
+							</span>
+						</span>
+						<Sparkline
+							data={row.sparkline}
+							series={[{ key: "value", color: "hsl(var(--basalt-chart-3))" }]}
+							ariaLabel={`${row.name} 每日操作量`}
+							accessibilityLayer={false}
+							summary={<span className="sr-only">{row.name} 每日操作量迷你条形图。</span>}
+							className="octo-rank-spark"
+						/>
+						<span className="octo-rank-value">
+							{formatPercent(row.share, 1)}
+							<small>记忆占比</small>
+						</span>
+					</Button>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+	return (
+		<Grid
+			columns={2}
+			className="octo-detail-row"
+			style={{ gridTemplateColumns: "minmax(0, 1fr) auto" }}
+		>
+			<dt title={label}>{label}</dt>
+			<dd>{value}</dd>
+		</Grid>
+	);
+}
+
+function DetailStats({ items }: { items: { label: string; value: string }[] }) {
+	return (
+		<dl className="octo-detail-stats">
+			{items.map((item) => (
+				<Grid key={item.label} columns={1} gap="sm">
+					<dt className="text-basalt-xs text-basalt-muted-foreground">{item.label}</dt>
+					<dd className="text-basalt-md font-medium tabular-nums">{item.value}</dd>
+				</Grid>
+			))}
+		</dl>
+	);
+}
+
+function BotSheet({ detail, onClose }: { detail: BotDetail; onClose: () => void }) {
+	const bot = detail.bot;
+	return (
+		<Sheet open onOpenChange={(open) => (open ? undefined : onClose())}>
+			<SheetContent side="right" className="octo-detail-sheet">
+				<SheetHeader>
+					<SheetTitle>{bot?.name ?? "Bot 详情"}</SheetTitle>
+					<SheetDescription>
+						{bot?.revoked ? "该密钥已吊销，仅展示历史数据。" : "所选区间内的操作与调用明细。"}
+					</SheetDescription>
+				</SheetHeader>
+				<Grid columns={1} gap="md">
+					<DetailStats
+						items={[
+							{ label: "记忆操作", value: formatNumber(detail.totals.ops) },
+							{ label: "接口调用", value: formatNumber(detail.totals.calls) },
+							{ label: "写入请求", value: formatNumber(detail.totals.writes) },
+							{ label: "错误率", value: formatPercent(detail.totals.errorRate, 1) },
+						]}
+					/>
+					<OperationTrendChart rows={detail.series} />
+					<dl className="octo-detail-list" aria-label="Bot 操作的空间">
+						{detail.spaces.length ? (
+							detail.spaces.map((space) => (
+								<DetailRow
+									key={space.id}
+									label={space.name}
+									value={`${formatNumber(space.ops)} 次 · ${formatNumber(space.memories)} 条记忆`}
+								/>
+							))
+						) : (
+							<DetailRow label="没有记忆操作" value="仅接口调用" />
+						)}
+					</dl>
+				</Grid>
+			</SheetContent>
+		</Sheet>
+	);
+}
+
+function SpaceSheet({ detail, onClose }: { detail: SpaceDetail; onClose: () => void }) {
+	return (
+		<Sheet open onOpenChange={(open) => (open ? undefined : onClose())}>
+			<SheetContent side="right" className="octo-detail-sheet">
+				<SheetHeader>
+					<SheetTitle>{detail.space?.name ?? "空间详情"}</SheetTitle>
+					<SheetDescription>{detail.space?.slug ?? ""}</SheetDescription>
+				</SheetHeader>
+				<Grid columns={1} gap="md">
+					<DetailStats
+						items={[
+							{ label: "有效记忆", value: formatNumber(detail.totals.memories) },
+							{ label: "回收站", value: formatNumber(detail.totals.trash) },
+							{ label: "区间操作", value: formatNumber(detail.totals.ops) },
+							{ label: "区间净增", value: signed(detail.totals.net) },
+						]}
+					/>
+					<OperationTrendChart rows={detail.series} />
+					{detail.types.length ? (
+						<OverviewDonut
+							data={detail.types}
+							ariaLabel="该空间的记忆类型分布"
+							summary={<span className="sr-only">该空间内有效记忆按类型分布。</span>}
+						/>
+					) : null}
+					<dl className="octo-detail-list" aria-label="该空间的操作者">
+						{detail.bots.map((bot) => (
+							<DetailRow key={bot.id} label={bot.name} value={`${formatNumber(bot.ops)} 次操作`} />
+						))}
+					</dl>
+				</Grid>
+			</SheetContent>
+		</Sheet>
 	);
 }
 
 export function OverviewPage() {
 	const model = useMemo(() => new OverviewModel(), []);
 	const state = useModel(model);
+	const [params, setParams] = useSearchParams();
+	const range = parseOverviewRange(params);
+	const botId = params.get("bot");
+	const spaceId = params.get("space");
+	const data = state.data;
+	const series = useMemo(() => (data ? dailySeries(data) : []), [data]);
 	useEffect(() => {
-		void model.load();
-	}, [model]);
-	const activity = activitySeries(state.usage ?? []);
-	const table = (
-		<Table className="octo-table" aria-label="按日期和智能体统计的调用量">
-			<TableHeader>
-				<TableRow>
-					<TableHead>日期</TableHead>
-					<TableHead>智能体</TableHead>
-					<TableHead textAlign="end">调用</TableHead>
-					<TableHead textAlign="end">错误</TableHead>
-					<TableHead textAlign="end">写入次数</TableHead>
-				</TableRow>
-			</TableHeader>
-			<TableBody>
-				{state.usage?.map((row) => (
-					<TableRow key={`${row.day}:${row.key_id}`}>
-						<TableCell>{row.day}</TableCell>
-						<TableCell>
-							<Link to="/keys" className="octo-record-title">
-								{row.key_id}
-							</Link>
-						</TableCell>
-						<TableCell textAlign="end">{formatNumber(row.calls)}</TableCell>
-						<TableCell textAlign="end">{formatNumber(row.errors)}</TableCell>
-						<TableCell textAlign="end">{formatNumber(row.writes)}</TableCell>
-					</TableRow>
-				))}
-			</TableBody>
-		</Table>
-	);
+		void model.load(range);
+	}, [model, range]);
+	const update = (key: string, value: string | null) => {
+		const next = new URLSearchParams(params);
+		if (value === null) next.delete(key);
+		else next.set(key, value);
+		setParams(next, { replace: true });
+	};
+	const select = (kind: "bot" | "space", id: string) => {
+		const next = new URLSearchParams(params);
+		next.delete(kind === "bot" ? "space" : "bot");
+		next.set(kind, id);
+		setParams(next, { replace: true });
+	};
+	const closeDetail = () => {
+		const next = new URLSearchParams(params);
+		next.delete("bot");
+		next.delete("space");
+		setParams(next, { replace: true });
+	};
+	const bots = data ? topBots(data) : [];
+	const spaces = data ? topSpaces(data) : [];
+	const types = data ? typeDistribution(data) : [];
+	const opTotals = data ? operationTotals(series) : [];
+	const operations = data ? spaceOperations(data) : null;
+	const botOps = data ? botOperations(data) : null;
+	const calls = data ? botCalls(data) : null;
+	const stats = data ? summary(data, series) : null;
+	const detailBot = data && botId ? botDetail(data, botId) : null;
+	const detailSpace = data && spaceId ? spaceDetail(data, spaceId) : null;
+	const quiet =
+		Boolean(stats) && stats?.ops === 0 && stats?.calls === 0 && data?.totals.memories === 0;
 	return (
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="总览"
+				meta={
+					data
+						? `近 ${range} 天 · ${data.totals.spaces} 个空间 · 回收站 ${formatNumber(data.totals.trash)} · UTC`
+						: `近 ${range} 天 · UTC`
+				}
 				actions={
-					<Button variant="secondary" disabled={state.loading} onClick={() => void model.load()}>
-						<RefreshCw size={16} />
-						刷新
-					</Button>
+					<>
+						<ToggleGroup
+							type="single"
+							aria-label="时间范围"
+							value={String(range)}
+							onValueChange={(value) => {
+								if (value) update("range", value);
+							}}
+						>
+							{OVERVIEW_RANGES.map((option) => (
+								<ToggleGroupItem key={option} value={String(option)}>
+									{option} 天
+								</ToggleGroupItem>
+							))}
+						</ToggleGroup>
+						<Button
+							variant="secondary"
+							disabled={state.loading}
+							onClick={() => void model.load(range)}
+						>
+							<RefreshCw aria-hidden="true" />
+							刷新
+						</Button>
+					</>
 				}
 			/>
-			{state.error && (
+			{state.error ? (
 				<Banner
 					variant="error"
 					role="alert"
@@ -121,313 +343,244 @@ export function OverviewPage() {
 							size="sm"
 							variant="outline"
 							disabled={state.loading}
-							onClick={() => void model.load()}
+							onClick={() => void model.load(range)}
 						>
 							<RefreshCw size={16} aria-hidden="true" />
 							重试
 						</Button>
 					}
 				/>
-			)}
+			) : null}
 			<StatStrip
+				loading={!data}
 				items={[
 					{
 						label: (
 							<span className="octo-stat-label text-basalt-tag-blue-foreground">
 								<BookOpen aria-hidden="true" />
-								有效记忆数
+								有效记忆
 							</span>
 						),
-						value: formatNumber(state.memoryCount),
+						value: formatNumber(data?.totals.memories ?? null),
 					},
 					{
 						label: (
 							<span className="octo-stat-label text-basalt-tag-teal-foreground">
-								<PenLine aria-hidden="true" />
-								今日写入次数 · UTC 小时汇总
+								<Activity aria-hidden="true" />近 {range} 天操作
 							</span>
 						),
-						value: formatNumber(state.writesToday),
+						value: formatNumber(stats?.ops ?? null),
 					},
 					{
 						label: (
 							<span className="octo-stat-label text-basalt-tag-violet-foreground">
-								<KeyRound aria-hidden="true" />
-								今日调用密钥 · UTC 小时汇总
+								<TrendingUp aria-hidden="true" />
+								区间净增
 							</span>
 						),
-						value: formatNumber(state.activeKeysToday),
+						value: stats ? signed(stats.net) : "—",
 					},
 					{
 						label: (
 							<span className="octo-stat-label text-basalt-tag-amber-foreground">
-								<Trash2 aria-hidden="true" />
-								回收站记忆数
+								<Bot aria-hidden="true" />
+								活跃 Bot
 							</span>
 						),
-						value: formatNumber(state.trashCount),
+						value: stats ? `${formatNumber(stats.activeBots)} / ${formatNumber(stats.bots)}` : "—",
 					},
 				]}
 			/>
-			<SectionRule variant="label" title="知识入口">
+			{!data && !state.error ? <LayerCard.Loading label="正在汇总总览" /> : null}
+			{quiet ? (
 				<LayerCard>
-					<LayerCard.Body>
-						<Grid columns={1} gap="sm">
-							<Grid
-								gap="sm"
-								style={{
-									gridTemplateColumns:
-										"repeat(auto-fit, minmax(min(100%, var(--basalt-space-36)), max-content))",
-									justifyContent: "start",
-								}}
-							>
-								<Button asChild>
-									<Link to="/memories">
-										浏览记忆 <ArrowUpRight size={16} />
-									</Link>
-								</Button>
-								<Button variant="secondary" asChild>
-									<Link to="/search">
-										<Search size={16} aria-hidden="true" />
-										混合搜索
-									</Link>
-								</Button>
-								<Button variant="secondary" asChild>
-									<Link to="/graph">
-										<Network size={16} aria-hidden="true" />
-										探索关系
-									</Link>
-								</Button>
-							</Grid>
-							<p className="text-basalt-sm text-basalt-muted-foreground">
-								⌘ K 快速跳转，/ 开始搜索。
-							</p>
-						</Grid>
-					</LayerCard.Body>
+					<LayerCard.Empty
+						icon={<ChartNoAxesCombined aria-hidden="true" />}
+						title="还没有活动数据"
+						description="智能体开始读写记忆后，这里会显示操作趋势、类型分布与排行。"
+					/>
 				</LayerCard>
-			</SectionRule>
-			<SectionRule
-				variant="label"
-				title="智能体活动 · 按密钥小时汇总"
-				hint="调用与写入次数来自本年度 UTC 小时汇总，非实时数据，也不等同于新增记忆数。当前接口未提供向量同步积压、D1 体积和定时任务最近运行时间。"
-			>
-				<LayerCard>
-					<LayerCard.Body>
-						<Grid columns={1}>
-							{state.usage && !activity.heatmap.length ? (
-								<LayerCard.Empty
-									className="octo-empty"
-									icon={<Activity aria-hidden="true" />}
-									title="暂无调用记录"
-									description="智能体开始使用后，这里会显示每日活动。"
-									action={
-										<Button asChild>
-											<Link to="/keys">
-												<KeyRound size={16} aria-hidden="true" />
-												管理密钥
-											</Link>
-										</Button>
-									}
-								/>
-							) : state.usage ? (
-								<HeatmapCalendar
-									data={activity.heatmap}
-									year={new Date().getUTCFullYear()}
-									locale="zh-CN"
-									ariaLabel="全年智能体调用活动"
-									metricLabel="次调用"
-									lessLabel="少"
-									moreLabel="多"
-								/>
-							) : (
-								<p className="text-basalt-sm text-basalt-muted-foreground" role="status">
-									{state.loading ? "正在读取活动记录…" : "活动数据尚未加载"}
-								</p>
-							)}
+			) : null}
+			{data && !quiet ? (
+				<>
+					<SectionRule
+						variant="label"
+						title="操作趋势"
+						hint="来自记忆变更流与每日用量汇总，按 UTC 日聚合"
+					>
+						<Grid
+							columns={2}
+							gap="md"
+							className="octo-overview-pair"
+							style={{ gridTemplateColumns: "var(--octo-grid-columns)" }}
+						>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										按操作类型
+									</Text>
+									<Text size="xs" tone="muted">
+										日均 {formatNumber(stats?.dailyOps ?? null)} 次
+									</Text>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									<OperationTrendChart rows={series} />
+								</LayerCard.Body>
+							</LayerCard>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										按空间
+									</Text>
+									<Text size="xs" tone="muted">
+										操作量前 {Math.min(5, data.totals.spaces)} 个空间
+									</Text>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									{operations ? <SpaceTrendChart data={operations} /> : null}
+								</LayerCard.Body>
+							</LayerCard>
 						</Grid>
-					</LayerCard.Body>
-				</LayerCard>
-			</SectionRule>
-			<SectionRule variant="label" title="调用趋势">
-				<LayerCard>
-					<LayerCard.Body>
-						<Grid columns={1}>
-							{activity.rows.length ? (
-								<AreaChart
-									data={activity.rows}
-									series={activityChartSeries(activity)}
-									stacked
-									showAxes
-									showLegend
-									className="h-basalt-80 w-full"
-									ariaLabel="按智能体堆叠的每日调用量"
-									summary="每日接口调用次数，纵轴从零开始。"
-								/>
-							) : state.usage ? (
-								<LayerCard.Empty
-									className="octo-empty"
-									icon={<Activity aria-hidden="true" />}
-									title="暂无调用趋势"
-								/>
-							) : (
-								<p className="text-basalt-sm text-basalt-muted-foreground">
-									{state.loading ? "正在读取调用记录…" : "调用数据尚未加载"}
-								</p>
-							)}
-							<Collapsible>
-								<CollapsibleTrigger>查看活动数据表</CollapsibleTrigger>
-								<CollapsibleContent unstyled>{table}</CollapsibleContent>
-							</Collapsible>
+					</SectionRule>
+					<SectionRule
+						variant="label"
+						title="Bot 活动"
+						hint="记忆操作按密钥归集，接口调用与错误来自每日用量汇总"
+					>
+						<Grid
+							columns={2}
+							gap="md"
+							className="octo-overview-pair"
+							style={{ gridTemplateColumns: "var(--octo-grid-columns)" }}
+						>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										操作与调用
+									</Text>
+									<Text size="xs" tone="muted">
+										堆叠为操作，折线为调用
+									</Text>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									{botOps ? <BotOperationChart data={botOps} rows={series} /> : null}
+								</LayerCard.Body>
+							</LayerCard>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										调用与错误率
+									</Text>
+									<Text size="xs" tone="muted">
+										堆叠为调用，折线为错误率
+									</Text>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									{calls ? <BotCallChart data={calls} rows={series} /> : null}
+								</LayerCard.Body>
+							</LayerCard>
 						</Grid>
-					</LayerCard.Body>
-				</LayerCard>
-			</SectionRule>
-			<SectionRule variant="label" title="最近变更">
-				<LayerCard padding="none">
-					<DataTable
-						className="octo-table"
-						aria-label="最近变更"
-						data={state.changes}
-						getRowId={(change) => String(change.seq)}
-						empty={null}
-						edge="attached"
-						columns={[
-							{
-								id: "content",
-								header: "内容",
-								width: "28ch",
-								wrap: true,
-								sortable: false,
-								accessor: (change) =>
-									change.entity === "memory" && !["trashed", "purged"].includes(change.op) ? (
-										<Link
-											to={`/memories/${encodeURIComponent(change.entity_id)}`}
-											className="octo-record-id"
-											title={change.entity_id}
-										>
-											{change.entity_id}
-										</Link>
-									) : (
-										<span className="octo-record-id" title={change.entity_id}>
-											{change.entity_id}
-										</span>
-									),
-							},
-							{
-								id: "operation",
-								header: "操作",
-								width: "12ch",
-								wrap: true,
-								sortable: false,
-								accessor: (change) => (
-									<TagBadge
-										name={changeLabels.get(change.op) ?? "其他操作"}
-										color={
-											["deleted", "trashed", "purged"].includes(change.op)
-												? "danger"
-												: ["created", "restored"].includes(change.op)
-													? "success"
-													: "info"
-										}
-										size="sm"
+					</SectionRule>
+					<SectionRule
+						variant="label"
+						title="分布"
+						hint="当前有效记忆（不含回收站）与所选区间的操作构成"
+					>
+						<Grid
+							columns={3}
+							gap="md"
+							className="octo-overview-trio"
+							style={{ gridTemplateColumns: "var(--octo-grid-columns)" }}
+						>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										记忆类型
+									</Text>
+									<Text size="xs" tone="muted">
+										{formatNumber(data.totals.memories)} 条
+									</Text>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									<OverviewDonut
+										data={types}
+										ariaLabel="记忆类型分布"
+										summary={<span className="sr-only">全部有效记忆按类型分布。</span>}
 									/>
-								),
-							},
-							{
-								id: "actor",
-								header: "操作者",
-								width: "28ch",
-								wrap: true,
-								sortable: false,
-								accessor: (change) => (
-									<span className="octo-record-title">{change.actor ?? "未提供"}</span>
-								),
-							},
-							{
-								id: "time",
-								header: "时间 · UTC",
-								width: "28ch",
-								wrap: true,
-								sortable: false,
-								accessor: (change) => <RecordTime value={change.at} utc />,
-							},
-						]}
-					/>
-					{!state.changes.length && (
-						<p className="px-basalt-panel-x py-basalt-panel-y text-basalt-sm text-basalt-muted-foreground">
-							{state.memoryCount === null ? "变更记录尚未加载" : "暂无变更记录"}
-						</p>
-					)}
-				</LayerCard>
-			</SectionRule>
-			<SectionRule variant="label" title="最近更新的记忆">
-				<LayerCard padding="none">
-					<DataTable
-						className="octo-table"
-						aria-label="最近更新的记忆"
-						data={state.recent}
-						getRowId={(memory) => memory.id}
-						empty={null}
-						edge="attached"
-						columns={[
-							{
-								id: "title",
-								header: "记忆",
-								width: "28ch",
-								wrap: true,
-								sortable: false,
-								accessor: (memory) => (
-									<Link
-										to={`/memories/${encodeURIComponent(memory.id)}`}
-										className="octo-record-title"
-										title={memory.title}
-									>
-										{memory.title}
-									</Link>
-								),
-							},
-							{
-								id: "space",
-								header: "空间",
-								width: "24ch",
-								wrap: true,
-								sortable: false,
-								accessor: (memory) => <SpaceLink space={memory.space} />,
-							},
-							{
-								id: "updated",
-								header: "更新时间",
-								width: "14ch",
-								textAlign: "end",
-								wrap: true,
-								sortable: false,
-								accessor: (memory) => <RecordTime value={memory.updated_at} />,
-							},
-						]}
-					/>
-					{!state.recent.length &&
-						(state.memoryCount !== null ? (
-							<LayerCard.Empty
-								className="octo-empty"
-								icon={<BookOpen aria-hidden="true" />}
-								title="还没有记忆"
-								description="从第一条记忆开始整理知识。"
-								action={
-									<Button asChild>
-										<Link to="/memories">
-											<ArrowUpRight size={16} aria-hidden="true" />
-											浏览记忆
-										</Link>
-									</Button>
-								}
-							/>
-						) : (
-							<p className="px-basalt-panel-x py-basalt-panel-y text-basalt-sm text-basalt-muted-foreground">
-								{state.loading ? "正在读取记忆…" : "记忆数据尚未加载。"}
-							</p>
-						))}
-				</LayerCard>
-			</SectionRule>
+								</LayerCard.Body>
+							</LayerCard>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										空间分布
+									</Text>
+									<Text size="xs" tone="muted">
+										前 6 个空间
+									</Text>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									<OverviewDonut
+										data={spaceDistribution(data)}
+										ariaLabel="记忆空间分布"
+										summary={<span className="sr-only">全部有效记忆按空间分布。</span>}
+									/>
+								</LayerCard.Body>
+							</LayerCard>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										操作构成
+									</Text>
+									<Text size="xs" tone="muted">
+										{formatNumber(stats?.ops ?? null)} 次
+									</Text>
+								</LayerCard.Header>
+								<LayerCard.Body>
+									<OverviewDonut
+										data={opTotals}
+										ariaLabel="操作构成分布"
+										summary={<span className="sr-only">所选区间内的记忆操作按类型分布。</span>}
+										colorOf={opColorOf}
+									/>
+								</LayerCard.Body>
+							</LayerCard>
+						</Grid>
+					</SectionRule>
+					<SectionRule variant="label" title="排行" hint="点击任意条目查看该 Bot 或空间的详细趋势">
+						<Grid
+							columns={2}
+							gap="md"
+							className="octo-overview-pair"
+							style={{ gridTemplateColumns: "var(--octo-grid-columns)" }}
+						>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										Top Bot
+									</Text>
+									<TagBadge name={`${bots.length} 个`} color="info" size="sm" />
+								</LayerCard.Header>
+								<LayerCard.Body>
+									<BotsPanel rows={bots} onSelect={(id) => select("bot", id)} />
+								</LayerCard.Body>
+							</LayerCard>
+							<LayerCard>
+								<LayerCard.Header>
+									<Text as="h3" variant="heading" size="sm">
+										Top Space
+									</Text>
+									<TagBadge name={`${spaces.length} 个`} color="success" size="sm" />
+								</LayerCard.Header>
+								<LayerCard.Body>
+									<SpacesPanel rows={spaces} onSelect={(id) => select("space", id)} />
+								</LayerCard.Body>
+							</LayerCard>
+						</Grid>
+					</SectionRule>
+				</>
+			) : null}
+			{detailBot ? <BotSheet detail={detailBot} onClose={closeDetail} /> : null}
+			{detailSpace ? <SpaceSheet detail={detailSpace} onClose={closeDetail} /> : null}
 		</Grid>
 	);
 }

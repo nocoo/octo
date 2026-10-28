@@ -57,7 +57,7 @@ test("populated dashboard visual acceptance on isolated real data", async ({
 	] as const;
 	const errors: string[] = [];
 	const endpoints: Record<string, string[]> = {
-		overview: ["/spaces", "/usage", "/memories", "/trash", "/changes"],
+		overview: ["/dashboard"],
 		memories: ["/memories"],
 		reader: [`/memories/${memory.id}`],
 		editor: [`/memories/${memory.id}`],

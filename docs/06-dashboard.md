@@ -24,7 +24,7 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 
 | 路由 | 页面 | 要点 |
 |---|---|---|
-| `/` | 总览 | StatStrip（memory 数、今日写入、活跃 agent、待同步向量、回收站数量）；agent 活动热力图；最近变更流 |
+| `/` | 总览 | 单次 `GET /api/admin/dashboard` 驱动的分析台：StatStrip（有效记忆、区间操作、区间净增、活跃 Bot、回收站）；四张双轴时间序列（操作按类型、按空间、Bot 操作与调用、Bot 调用与错误率）；三张并排饼图（记忆类型、空间分布、操作构成）；Top Bot / Top Space 排行，点击条目在 Sheet 中展开该 Bot 或空间的趋势、类型分布与操作者。没有原始表格和功能入口 |
 | `/memories` | 记忆库 | 左侧筛选（space、标签、类型、来源、时间、重要度），右侧列表 / 卡片切换；批量选择 → 打标签 / 移动 / 删除 |
 | `/memories/:id` | 阅读 | 一流的 Markdown 阅读体验：GFM 表格、代码高亮、图片（附件经过鉴权代理）、自动 TOC（sticky，移动端折叠）、阅读宽度约 72ch；右栏显示元数据、标签、版本时间线 |
 | `/memories/:id/edit` | 编辑 | 分栏 Markdown 编辑 + 实时预览（移动端用 tab 切换）；粘贴或拖入图片 / PDF 直接上传附件；保存时带 `If-Match`，冲突时打开三方对比 |
@@ -50,8 +50,9 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 「彻底删除所选」显示冻结的精确数量并使用危险确认；「清空回收站（N）」只清空当前关键词/空间范围，确认框同时展示范围和数量，通过原始 `expected_count` 和服务端游标分批推进。处理中禁用选择和操作，显示进度、实际删除数及逐项失败；失败不清除未完成选择，也不自动放宽范围重试。单行永久删除继续采用输入标题、再危险确认的两步流程。选择框、分页按钮、筛选器、提示和对话框均使用 Basalt 3.1.0，图标使用 lucide，应用标签为中文。
 
 - 统一用 Basalt charts（recharts）和 `chart-theme` 风格的色板（参照 giraffe：类别到颜色的映射稳定，排序变化不换色）。
+- 总览以信息密度为目标：每张图上同时呈现两种相关量（堆叠柱 + 第二 Y 轴折线），例如操作按类型堆叠配「净增」折线、Bot 操作堆叠配「接口调用」折线、Bot 调用堆叠配「错误率」折线。指针悬停显示当天全部分项数值。饼图按类别着色并附带数值与占比图例，不使用原始表格。
 - 标签和关系图是 Basalt 没有覆盖的领域：用成熟库（例如 `react-force-graph` 或 `sigma.js` + graphology）放在 Basalt `LayerCard` 里，配色读 Basalt token。选库前先确认 Basalt 3.1.0 没有对应组件。
-- agent 活动用 calendar heatmap + 按 key 堆叠的面积图。
+- 总览的排行按调用量或操作量排序，附 sparkline 与占比；选中状态保存在 URL（`range`、`bot`、`space`），刷新和分享保持同一视角。
 
 ## 5. 设计和动效（2026 标准）
 

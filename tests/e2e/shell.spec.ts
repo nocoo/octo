@@ -219,7 +219,7 @@ test("memory breadcrumbs link ancestors and retain the current page on mobile", 
 });
 
 const pages = [
-	["/", "总览", ["/spaces", "/usage", "/memories"]],
+	["/", "总览", ["/dashboard"]],
 	["/memories", "记忆库", ["/memories"]],
 	["/search", "搜索", []],
 	["/tags", "标签", ["/tags", "/memories"]],

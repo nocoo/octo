@@ -1,0 +1,195 @@
+.octo-overview-pair,
+.octo-overview-trio {
+	--octo-grid-columns: repeat(2, minmax(0, 1fr));
+	min-inline-size: 0;
+}
+
+.octo-overview-trio {
+	--octo-grid-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1180px) {
+	.octo-overview-pair,
+	.octo-overview-trio {
+		--octo-grid-columns: minmax(0, 1fr);
+	}
+}
+
+.octo-chart-plot {
+	block-size: var(--basalt-space-56);
+}
+
+.octo-chart-donut {
+	block-size: var(--basalt-space-40);
+}
+
+.octo-chart-tip {
+	gap: var(--basalt-space-sm);
+	max-inline-size: var(--basalt-space-60);
+	min-inline-size: var(--basalt-space-36);
+	padding: var(--basalt-space-default);
+	border: 1px solid hsl(var(--basalt-border) / 0.55);
+	border-radius: var(--basalt-radius-md);
+	background: hsl(var(--basalt-popover));
+	box-shadow:
+		0 12px 28px -8px rgb(0 0 0 / 0.28),
+		0 4px 10px -4px rgb(0 0 0 / 0.16);
+	color: hsl(var(--basalt-popover-foreground));
+}
+
+.octo-donut {
+	--octo-grid-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+	align-items: center;
+}
+
+@media (max-width: 520px) {
+	.octo-donut {
+		--octo-grid-columns: minmax(0, 1fr);
+	}
+}
+
+.octo-donut-legend {
+	display: grid;
+	gap: var(--basalt-space-1);
+	margin: unset;
+	padding: unset;
+	min-inline-size: 0;
+}
+
+.octo-donut-row {
+	align-items: center;
+	column-gap: var(--basalt-space-2);
+	min-inline-size: 0;
+}
+
+.octo-donut-legend dt {
+	display: flex;
+	align-items: center;
+	gap: var(--basalt-space-1_5);
+	min-inline-size: 0;
+	color: hsl(var(--basalt-foreground));
+}
+
+.octo-donut-legend dd {
+	display: flex;
+	align-items: baseline;
+	gap: var(--basalt-space-1_5);
+	margin: unset;
+	font-size: var(--basalt-text-xs);
+	font-variant-numeric: tabular-nums;
+	color: hsl(var(--basalt-foreground));
+}
+
+.octo-donut-legend dd small {
+	font-size: var(--basalt-text-xs);
+	font-variant-numeric: tabular-nums;
+	color: hsl(var(--basalt-muted-foreground));
+}
+
+.octo-donut-dot {
+	display: block;
+	flex: 0 0 auto;
+	inline-size: var(--basalt-space-2);
+	block-size: var(--basalt-space-2);
+	border-radius: var(--basalt-radius-sm);
+}
+
+.octo-rank {
+	display: grid;
+	gap: var(--basalt-space-0_5);
+	margin: unset;
+	padding: unset;
+	list-style: none;
+}
+
+.octo-rank-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	align-items: center;
+	column-gap: var(--basalt-space-3);
+	inline-size: 100%;
+	block-size: auto;
+	padding: var(--basalt-space-1) var(--basalt-space-2);
+	border-radius: var(--basalt-radius-md);
+	font-weight: 400;
+	text-align: start;
+}
+
+.octo-rank-row:hover {
+	background: hsl(var(--basalt-muted) / 0.6);
+}
+
+.octo-rank-main {
+	display: grid;
+	min-inline-size: 0;
+}
+
+.octo-rank-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--basalt-text-sm);
+	font-weight: 500;
+	color: hsl(var(--basalt-foreground));
+}
+
+.octo-rank-meta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--basalt-text-xs);
+	font-variant-numeric: tabular-nums;
+	color: hsl(var(--basalt-muted-foreground));
+}
+
+.octo-rank-spark {
+	inline-size: var(--basalt-space-28);
+	block-size: var(--basalt-space-5);
+}
+
+.octo-rank-value {
+	display: grid;
+	justify-items: end;
+	font-size: var(--basalt-text-sm);
+	font-variant-numeric: tabular-nums;
+	color: hsl(var(--basalt-foreground));
+}
+
+.octo-rank-row .octo-rank-value small {
+	font-size: var(--basalt-text-xs);
+	color: hsl(var(--basalt-muted-foreground));
+}
+
+.octo-detail-stats {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--basalt-space-sm);
+}
+
+.octo-detail-list {
+	display: grid;
+	gap: var(--basalt-space-1);
+	margin: unset;
+	padding: unset;
+}
+
+.octo-detail-row {
+	align-items: center;
+	column-gap: var(--basalt-space-2);
+	min-inline-size: 0;
+}
+
+.octo-detail-list dt {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--basalt-text-sm);
+	color: hsl(var(--basalt-foreground));
+}
+
+.octo-detail-list dd {
+	margin: unset;
+	font-size: var(--basalt-text-sm);
+	font-variant-numeric: tabular-nums;
+	color: hsl(var(--basalt-muted-foreground));
+}

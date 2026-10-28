@@ -9,6 +9,14 @@ export function formatBytes(bytes: number): string {
 	return `${formatNumber(bytes / 1024 ** unit)} ${["B", "KiB", "MiB", "GiB"][unit]}`;
 }
 
+export function formatPercent(value: number | null, digits = 0): string {
+	if (value === null) return "—";
+	return new Intl.NumberFormat("zh-CN", {
+		style: "percent",
+		maximumFractionDigits: digits,
+	}).format(value);
+}
+
 export function formatDateTime(value: string | number | null, timeZone?: string): string {
 	if (value === null) return "—";
 	const date = new Date(value);
