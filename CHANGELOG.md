@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 — 2026-10-28
+
+### Added
+
+- `GET /api/admin/dashboard` returns one Access-only window of dashboard aggregates: memory operations by day × actor × space × operation, daily usage per key, active memory types per space, space counts with trash and sanitized key metadata. A `changes_at` index keeps the range aggregation off a full change-stream scan.
+
+### Changed
+
+- Rebuild the overview as an analytics desk: dual-axis time series for operations by type (with a net-growth line), operations per space, bot operations against API calls, and bot calls against error rate; side-by-side donut distributions for memory type, space and operation mix; and Top Bot / Top Space rankings whose rows open a detail sheet. Range (7/30/90 days) and selection stay in the URL, and the previous stat-only page, raw tables and feature-entry block are gone.
+- Remove the duplicated header search icon. The command palette stays on the sidebar search field and `⌘K`.
+- Render every timestamp in the browser's local zone through one formatter, `2026-09-30，13:42` without a zone label or seconds. Stored values remain UTC, and timeline grouping now uses local month, day and hour buckets so rows never sit under a UTC bucket.
+
+### Validation
+
+- One additive migration creates `changes_at`; no data rewrite or backfill is required.
+- Dashboard aggregates cover both unit and L2 HTTP tests; the local demo database was inspected for the new charts before release.
+
 ## 0.6.2 — 2026-10-28
 
 ### Changed
