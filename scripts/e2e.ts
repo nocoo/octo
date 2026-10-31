@@ -118,11 +118,12 @@ export function spawnVitestProcess(
 	targets: string[] = ["tests/api", "--config", "vitest.e2e.config.ts"],
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const child = spawnFn(
-			join(root, "node_modules/.bin/vitest"),
-			["run", ...targets],
-			{ cwd: root, env: { ...process.env, ...env }, stdio: "inherit", detached: true },
-		);
+		const child = spawnFn(join(root, "node_modules/.bin/vitest"), ["run", ...targets], {
+			cwd: root,
+			env: { ...process.env, ...env },
+			stdio: "inherit",
+			detached: true,
+		});
 		const onSignal = (): void => {
 			void stopChild(child);
 		};
