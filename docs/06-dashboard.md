@@ -20,6 +20,29 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 - 状态：URL 是筛选和选择的唯一真相；服务端数据由 ViewModel 缓存，SWR 风格（先显示旧数据，后台重新校验）。
 - 键盘：`⌘K` 打开 CommandPalette（跳转到 memory、页面或命令），`/` 聚焦搜索，`j/k` 上下移动，`e` 编辑，`⌘S` 保存。
 
+### Public sidebar identity
+
+The visible brand is lowercase `octo`. The shell loads Access-only
+`GET /api/admin/whoami` once per SPA session, sharing concurrent requests and
+retaining the public name/avatar across navigation. An explicit retry remains
+available after an identity request failure; a full reload starts a new session.
+
+The Worker normalizes the verified email with `trim().toLowerCase()`, hashes its
+UTF-8 bytes with SHA-256, and sends only the lowercase hex hash to
+`https://lizheng.blog/api/authors/profile`. Workers Cache API keys contain only
+that hash. Public profiles expire after 24 hours, null profiles after one hour,
+and failures (including 429, 5xx, timeout and network errors) after five minutes.
+Cache failures do not fail authentication. The upstream request has a 2.5-second
+timeout, rejects redirects and includes the application User-Agent. The identity
+endpoint itself is `Cache-Control: no-store` and remains protected by Access.
+
+Avatars use Basalt's native image/error fallback, a meaningful alt label,
+`referrerPolicy="no-referrer"` and a fixed 36px box. Missing or failed avatars
+show initials; missing names retain the verified email. Only credential-free
+HTTPS avatar URLs and bounded base64 PNG data URIs are accepted. Isolated tests
+inject a hash-indexed profile fetcher with local PNG data and signed identities
+for hits, nulls and image decode failures; they never call the public service.
+
 ## 3. 页面
 
 | 路由 | 页面 | 要点 |
@@ -110,13 +133,14 @@ Basalt `PageHeader` 的 `description` 与 `filters` 槽位会各占一行，本�
 { title: ReactNode; meta?: ReactNode; actions?: ReactNode }
 ```
 
-- 每页只有一行 chrome：返回键 + `h1` + 内联 meta（计数、范围、一句话说明，溢出截断并用 `title` 保留全文）+ 右侧 actions。
-- `h1` 只占文本宽度并最多两行折行（`-webkit-line-clamp: 2`），meta 在同一行紧随标题（间距 4px），不因标题盒宽度被推开；meta 先收缩，标题最后收缩，任何宽度下都不产生页面横向滚动。
+- The heading row contains Back, `h1`, inline meta and right-aligned actions. Memory filters and their clear action share the next row, rather than the heading or a separate clear-action row.
+- The title occupies its text width and clamps to two lines. Inline meta follows with `--basalt-space-lg` spacing (8px); it shrinks before the title, truncates with a tooltip and never introduces horizontal page overflow.
 - 筛选、视图切换与主操作都在 `actions` 里，全部使用 Basalt 原生默认密度（34px）：`Button`/`Input`/`SelectTrigger` 不传 `size="sm"`，`ToggleGroup` 也保持默认。**同一行不允许混用 28px 与 34px**——`ViewSwitch` 没有 compact 变体，所以整行统一到 34px。主操作永远最后一个；窄屏整行折到标题下方。
 - 记忆库的分页行同样统一 34px；`MultiSelect` 外层 `space-y` 会给按钮加 8px 下边距（它后面还有一个 sr-only 计数元素），`octo-filter-choice` 的两条规则只为消除这个额外高度，让筛选行与按钮基线一致。
 - 工具栏里的字段不再用 `Field` 包一层标签行，改用控件自身的 `aria-label` 与 `title`。
 - 只为标注单张表格而存在的 `SectionRule` 标题带已删除：表格的 `aria-label` 就是它的名字。页面有 ≥2 个内容区块时才保留 `SectionRule`，并优先 `variant="label"`（单行细标），`variant="heading"` 只留给真正的区块入口。
 - 表单项多的筛选（用量、审计、搜索）收进 `Popover`，页头只留一个「筛选（N）」按钮；`FilterBar` 的字段、chips 与「清除」都在弹层内，不占页面行。
-- 记忆库保留一行紧凑筛选工具条（空间、类型、更多筛选、应用筛选），因为它是页面的主操作面。
+- Memory filters keep space, type, advanced toggle, apply and clear controls on one compact row with vertically aligned centers. Usage/audit popovers likewise keep clear/apply aligned with their adjacent filter controls.
+- Full-page tabular views (memories in list mode, spaces, keys, trash, usage and audit) fill the remaining desktop content island height. Only the table region scrolls; column headers and pagination remain visible. Multi-section analysis views and mobile pages retain natural document flow.
 
 1440×900 的基线（内容岛 832px，首个 surface 距岛顶）：总览/标签/空间/密钥/回收站 82px，每日用量 87px，审计 58px，关系图 82px，时间线 123px，记忆库 168px；改造前分别是 106/156/156/181/230、224、224、238、271、242px。关系图舞台因此从 570px 提升到 726px（内容岛的 87%）。

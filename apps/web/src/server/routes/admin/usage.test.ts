@@ -12,6 +12,9 @@ afterEach(async () => {
 function fixture() {
 	const fixtureData = queryFixture();
 	fixtureData.app.route("/api/admin/usage", adminUsageRoutes());
+	fixtureData.sqlite.exec(`INSERT INTO api_keys
+		(id,name,secret_hash,role,ops,scope,created_at,updated_at)
+		VALUES ('AAAAAAAAAAAA','Notebook agent','test-hash','admin','r','all',0,0)`);
 	fixtureData.sqlite.exec(`INSERT INTO usage_daily (day,key_id,calls,errors,writes,bytes_in,bytes_out) VALUES
 	('2026-10-16','AAAAAAAAAAAA',1,0,0,2,3),
 	('2026-10-17','AAAAAAAAAAAA',4,1,1,5,6),
@@ -34,7 +37,7 @@ describe("admin daily usage", () => {
 	it("lists per-day/per-key rows and filters inclusive UTC days and key", async () => {
 		const fixtureData = fixture();
 		const all = (await (await fixtureData.get()).json()) as {
-			items: Array<{ day: string; key_id: string }>;
+			items: Array<{ day: string; key_id: string; key_name: string | null }>;
 			next_cursor: string | null;
 		};
 		expect(all.items.map((row) => [row.day, row.key_id])).toEqual([
@@ -44,6 +47,12 @@ describe("admin daily usage", () => {
 			["2026-10-16", "AAAAAAAAAAAA"],
 		]);
 		expect(all.next_cursor).toBeNull();
+		expect(all.items.map((row) => row.key_name)).toEqual([
+			"Notebook agent",
+			null,
+			"Notebook agent",
+			"Notebook agent",
+		]);
 		expect(
 			await (await fixtureData.get("?from=2026-10-17&to=2026-10-17&key_id=AAAAAAAAAAAA")).json(),
 		).toEqual({
@@ -51,6 +60,7 @@ describe("admin daily usage", () => {
 				{
 					day: "2026-10-17",
 					key_id: "AAAAAAAAAAAA",
+					key_name: "Notebook agent",
 					calls: 4,
 					errors: 1,
 					writes: 1,
@@ -63,6 +73,20 @@ describe("admin daily usage", () => {
 		expect(await (await fixtureData.get("?key_id=CCCCCCCCCCCC")).json()).toEqual({
 			items: [],
 			next_cursor: null,
+		});
+	});
+
+	it("returns current names and preserves historical rows after the key is deleted", async () => {
+		const fixtureData = fixture();
+		fixtureData.sqlite.exec("UPDATE api_keys SET name = 'Renamed agent'");
+		const renamed = await fixtureData.get("?key_id=AAAAAAAAAAAA&limit=1");
+		expect(await renamed.json()).toMatchObject({
+			items: [{ key_id: "AAAAAAAAAAAA", key_name: "Renamed agent", calls: 10 }],
+		});
+		fixtureData.sqlite.exec("DELETE FROM api_keys");
+		const deleted = await fixtureData.get("?key_id=AAAAAAAAAAAA&limit=1");
+		expect(await deleted.json()).toMatchObject({
+			items: [{ key_id: "AAAAAAAAAAAA", key_name: null, calls: 10 }],
 		});
 	});
 

@@ -265,7 +265,7 @@ export function KeysPage() {
 		},
 	];
 	return (
-		<Grid columns={1} gap="lg" className="min-w-0">
+		<Grid columns={1} gap="lg" className="min-w-0 octo-table-page">
 			<PageHeader
 				title="接口密钥"
 				meta="明文仅展示一次"
@@ -315,7 +315,7 @@ export function KeysPage() {
 			{usageState.loading && usageState.snapshot && (
 				<p role="status">用量刷新中；当前图表为上次成功数据。</p>
 			)}
-			<LayerCard padding="none">
+			<LayerCard padding="none" className="octo-table-card octo-table-card--data">
 				{state.loading && state.items.length === 0 ? (
 					<LayerCard.Loading label="正在加载接口密钥" />
 				) : (

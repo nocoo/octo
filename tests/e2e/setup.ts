@@ -9,12 +9,12 @@ import { bddPaths } from "../../scripts/run-e2e-bdd";
 
 const execFileAsync = promisify(execFile);
 
-export async function accessHeaders(): Promise<Record<string, string>> {
+export async function accessHeaders(email = "l3@local"): Promise<Record<string, string>> {
 	const jwt = await signAccessJwt(await loadJwksState(), {
 		iss: l2AccessIss(Number(process.env.OCTO_JWKS_PORT)),
 		aud: L2_ACCESS_AUD,
 		exp: Math.floor(Date.now() / 1000) + 3600,
-		email: "l3@local",
+		email,
 	});
 	return { "Cf-Access-Jwt-Assertion": jwt, Origin: "http://127.0.0.1:27059" };
 }

@@ -1,5 +1,6 @@
 import type { Env } from "../../apps/web/src/server/env";
 import { worker } from "../../apps/web/src/server/index";
+import { profileTestEnv } from "./author-profiles";
 import { MEMORY_FIXTURE_SQL } from "./memories";
 
 const initialized = new WeakSet<D1Database>();
@@ -94,7 +95,7 @@ export default {
 				},
 			});
 		}
-		const response = await worker.fetch(request, env, execution);
+		const response = await worker.fetch(request, profileTestEnv(env), execution);
 		if (observe) ctx.waitUntil(observe());
 		return response;
 	},

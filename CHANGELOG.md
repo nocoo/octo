@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.0 — 2026-10-31
+
+### Added
+
+- Cache public author profiles by normalized-email SHA-256 hash in the Workers Cache API: 24 hours for hits, one hour for null profiles, and five minutes for upstream failures. Verify the signed-in profile through the existing Access-protected `GET /api/admin/whoami` endpoint, which returns email, actor, public name and avatar with `Cache-Control: no-store`. The third party receives only the hash, never the email.
+- Exercise public-profile hits, null responses and broken avatars through a local server-side test double, including the published `architie@gmail.com` hash vector. Tests never call the real profile service.
+
+### Changed
+
+- Render the sidebar brand as lowercase `octo` and retain the public name/avatar once per SPA session, including concurrent loads. Missing names retain the verified email; failed or absent avatar images fall back to initials in the same fixed-size box with no referrer disclosure.
+- Separate shared page titles from inline metadata using Basalt tokens. Keep memory clear/apply controls aligned with the filters on the row below the title, and align clear/apply with adjacent usage/audit filter fields inside their popovers.
+- Show key names in daily usage tables and charts. Deleted or unknown keys use the first eight ID characters. Only the admin usage response adds `key_name`; the API-key-authenticated v1 response is unchanged.
+- Fill the remaining desktop viewport with memory lists, spaces, keys, trash, usage and audit tables. Rows scroll internally while column headers and pagination remain visible; mobile pages keep natural document scrolling.
+
+### Validation
+
+- Strict TDD for profile caching, session loading, key labels and browser geometry; L1 retains all four coverage floors of 95%, strict typechecking, lint and every existing hook/gate.
+- L2 verifies profile identity and admin-only usage metadata. Real-Worker Chromium tests cover profile hit/null/image failure, navigation request counts, heading/filter alignment, key deletion fallback, table scrolling, sticky headers and usable pagination across desktop/mobile states.
+- No database migration, authentication change, production deployment or merge is included. Before/after 1440×900 screenshots are retained outside the repository.
+
 ## 0.7.0 — 2026-10-28
 
 ### Added

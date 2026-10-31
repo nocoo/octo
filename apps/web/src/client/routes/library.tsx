@@ -525,7 +525,7 @@ export function SpacesPage() {
 		},
 	];
 	return (
-		<Grid columns={1} gap="lg">
+		<Grid columns={1} gap="lg" className="octo-table-page">
 			<PageHeader
 				title="空间"
 				meta={state.ready ? `${state.spaces.length} 个空间` : undefined}
@@ -556,7 +556,7 @@ export function SpacesPage() {
 				hideError={creating || renaming !== null}
 			/>
 			{state.ready && (
-				<LayerCard padding="none">
+				<LayerCard padding="none" className="octo-table-card octo-table-card--data">
 					<DataTable
 						className="octo-table"
 						aria-label="空间"

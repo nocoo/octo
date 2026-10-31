@@ -1,0 +1,70 @@
+.octo-table-charts {
+	--octo-table-chart-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+@media (width >= 768px) {
+	.octo-island:has(> .octo-table-page) {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.octo-island > .octo-table-page {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-inline-size: 0;
+		min-block-size: 0;
+	}
+
+	.octo-island > .octo-table-page > :is(div, section, header) {
+		flex: 0 0 auto;
+	}
+
+	.octo-island .octo-table-page > .octo-table-card {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-inline-size: 0;
+		min-block-size: var(--basalt-space-40);
+	}
+
+	.octo-island .octo-table-card--data > div:has(> .basalt-focus-frame),
+	.octo-island .octo-table-card--data > div > .basalt-focus-frame,
+	.octo-island .octo-table-card--data > div > .basalt-focus-frame > [role="region"] {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-block-size: 0;
+		min-inline-size: 0;
+	}
+
+	.octo-island .octo-table-card > .octo-table-scroll {
+		flex: 1;
+		min-block-size: 0;
+		min-inline-size: 0;
+	}
+
+	.octo-island .octo-table-scroll > [data-slot="scroll-area-viewport"] {
+		min-block-size: 0;
+		flex-shrink: 1;
+	}
+
+	.octo-table-card > .octo-table-scroll table > thead {
+		position: sticky;
+		inset-block-start: 0;
+		z-index: 1;
+		background: hsl(var(--basalt-control));
+	}
+
+	.octo-table-page--usage > .octo-table-charts {
+		--octo-table-chart-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.octo-table-charts .ops-plot {
+		block-size: clamp(
+			calc(var(--basalt-space-56) - var(--basalt-space-layout)),
+			24dvh,
+			var(--basalt-space-56)
+		);
+	}
+}

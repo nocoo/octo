@@ -56,7 +56,7 @@ import {
 	Tags,
 	Trash2,
 } from "lucide-react";
-import { Fragment, type ReactElement, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactElement, Suspense, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
@@ -65,7 +65,7 @@ import {
 	initials,
 	navigation,
 	pageTitle,
-	ShellModel,
+	shellModel,
 	shortcut,
 } from "../../viewmodels/shell";
 import {
@@ -104,8 +104,7 @@ function HeaderHint({ label, children }: { label: string; children: ReactElement
 }
 
 export function AppShell() {
-	const model = useMemo(() => new ShellModel(), []);
-	const identity = useModel(model);
+	const identity = useModel(shellModel);
 	const identityLabel =
 		identity.email ?? (identity.error ? "Access 身份未知" : "Access 身份验证中");
 	const identityName = identity.name ?? identity.email?.split("@")[0] ?? identityLabel;
@@ -120,8 +119,8 @@ export function AppShell() {
 	const railToggle = useRef<HTMLButtonElement>(null);
 	const paletteOpener = useRef<HTMLElement | null>(null);
 	useEffect(() => {
-		void model.load();
-	}, [model]);
+		void shellModel.load();
+	}, []);
 	useEffect(() => {
 		const media = matchMedia("(max-width: 767px)");
 		const update = () => {
@@ -178,7 +177,13 @@ export function AppShell() {
 				tabIndex={isCollapsed ? 0 : undefined}
 			>
 				{identity.avatar && (
-					<AvatarImage src={identity.avatar} alt="" referrerPolicy="no-referrer" />
+					<AvatarImage
+						src={identity.avatar}
+						alt={`${identityName} 的头像`}
+						referrerPolicy="no-referrer"
+						width={36}
+						height={36}
+					/>
 				)}
 				<AvatarFallback>{initials(identityName)}</AvatarFallback>
 			</Avatar>
@@ -202,7 +207,7 @@ export function AppShell() {
 							/>
 							{!isCollapsed && (
 								<>
-									<strong className="octo-brand-title">Octo</strong>
+									<strong className="octo-brand-title">octo</strong>
 									<span className="octo-version">v{APP_VERSION}</span>
 								</>
 							)}
@@ -434,7 +439,7 @@ export function AppShell() {
 							variant="error"
 							role="alert"
 							description={identity.error}
-							action={<Banner.Action onClick={() => void model.load()}>重试</Banner.Action>}
+							action={<Banner.Action onClick={() => void shellModel.load()}>重试</Banner.Action>}
 						/>
 					)}
 					<Suspense fallback={<LayerCard.Loading label="正在加载页面…" />}>

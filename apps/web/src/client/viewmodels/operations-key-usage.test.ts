@@ -6,6 +6,7 @@ const path = "/usage?from=2026-09-18&to=2026-10-17&limit=200";
 const row = (day: string, key_id: string, calls: number) => ({
 	day,
 	key_id,
+	key_name: `Agent ${key_id}`,
 	calls,
 	errors: 0,
 	writes: 0,

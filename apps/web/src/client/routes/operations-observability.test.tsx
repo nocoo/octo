@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuditModel, UsageDaily, UsageModel } from "../viewmodels/operations-observability";
 import { AuditPage, UsagePage } from "./operations-observability";
 
-type UsageRow = UsageDaily & { error_rate: number };
+type UsageRow = UsageDaily & { error_rate: number; key_label: string };
 const fixture = vi.hoisted(() => ({
 	usage: {} as Partial<UsageModel["state"]>,
 	audit: {} as Partial<AuditModel["state"]> & { loaded?: boolean },
@@ -115,6 +115,7 @@ function render(page: "usage" | "audit") {
 const base: UsageDaily = {
 	day: "2026-10-17",
 	key_id: "key-ten",
+	key_name: null,
 	calls: 100,
 	errors: 0,
 	writes: 0,
@@ -122,9 +123,9 @@ const base: UsageDaily = {
 	bytes_out: 0,
 };
 const ids = (html: string) =>
-	[
-		...html.matchAll(/<td[^>]*><a[^>]*href="\/keys"[^>]*>(key-(?:ten|two|unknown))<\/a><\/td>/g),
-	].map((m) => m[1]);
+	[...html.matchAll(/<td[^>]*><a[^>]*href="\/keys"[^>]*>(key-(?:ten|two|unkn))<\/a><\/td>/g)].map(
+		(m) => m[1],
+	);
 
 beforeEach(() => {
 	fixture.usage = {};
@@ -212,12 +213,12 @@ describe("usage table sorting", () => {
 		};
 		for (const id of ["day"]) {
 			fixture.sort = { id, dir: "asc" };
-			expect(ids(render("usage"))).toEqual(["key-two", "key-ten", "key-unknown"]);
+			expect(ids(render("usage"))).toEqual(["key-two", "key-ten", "key-unkn"]);
 		}
 		expect(
 			fixture.columns
 				.find((column) => column.id === "day")
-				?.sortValue?.({ ...base, error_rate: 0 }),
+				?.sortValue?.({ ...base, key_label: "key-ten", error_rate: 0 }),
 		).toBe(Date.parse(base.day));
 	});
 });

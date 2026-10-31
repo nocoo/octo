@@ -15,7 +15,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
-import { Check, Filter } from "lucide-react";
+import { Check, Filter, X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useModel } from "../components/layout/use-model";
@@ -187,9 +187,6 @@ export function MemoryFilters({
 					<FilterBar
 						label="常用记忆筛选"
 						className="octo-memory-filter-bar"
-						active={chips.length > 0}
-						clearLabel="清除筛选"
-						onClear={() => onChange(removeMemoryFilter(params))}
 						chips={
 							chips.length > 0
 								? chips.map((chip) => (
@@ -231,6 +228,16 @@ export function MemoryFilters({
 							<Check aria-hidden="true" />
 							应用筛选
 						</Button>
+						{chips.length > 0 && (
+							<Button
+								type="button"
+								variant="ghost"
+								icon={<X aria-hidden="true" />}
+								onClick={() => onChange(removeMemoryFilter(params))}
+							>
+								清除筛选
+							</Button>
+						)}
 					</FilterBar>
 					{state.error && (
 						<Banner

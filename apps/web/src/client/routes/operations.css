@@ -26,7 +26,8 @@
 }
 
 .ops-date-range {
-	inline-size: min(100%, 34ch);
+	flex-basis: 100%;
+	inline-size: 100%;
 }
 
 .ops-filter-actions {
@@ -62,10 +63,6 @@
 .ops-plot {
 	inline-size: 100%;
 	block-size: clamp(14rem, 26vh, 20rem);
-}
-
-.ops-audit-scroll {
-	block-size: min(60vh, 32rem);
 }
 
 .ops-audit-table {

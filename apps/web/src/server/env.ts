@@ -1,5 +1,6 @@
 import type { ParsedUpload } from "./attachments/upload";
 import type { ApiPrincipal } from "./auth/authorize";
+import type { AuthorProfileFetcher } from "./lib/author-profile";
 import type { ApiError } from "./lib/errors";
 
 export type AppVars = {
@@ -23,6 +24,7 @@ export interface Env extends CloudflareBindings {
 	ATTACHMENT_URL_HOST?: string;
 	OCTO_SETTINGS_KEY?: string;
 	RESOURCE_ENV?: string;
+	AUTHOR_PROFILE_FETCHER?: AuthorProfileFetcher;
 	CF_ACCESS_TEAM_DOMAIN?: string;
 	CF_ACCESS_AUD?: string;
 	ACCESS_JWKS_URL?: string;

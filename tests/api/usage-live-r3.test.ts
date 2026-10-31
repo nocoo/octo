@@ -127,6 +127,7 @@ describe("live usage through the local Worker", () => {
 			items: [
 				{
 					...page.items[0],
+					key_name: `e2e-${key.id}`,
 					calls: 65,
 					bytes_out: bytesOut + new TextEncoder().encode(ownBody).byteLength,
 				},
@@ -138,5 +139,54 @@ describe("live usage through the local Worker", () => {
 		});
 		expect(hidden.status).toBe(200);
 		expect(await hidden.json()).toEqual({ items: [], next_cursor: null });
+	});
+
+	it("preserves daily counters with null names after deleting a key without exposing it to v1", async () => {
+		const database = await e2eD1();
+		await assertAsyncTestMarker(database);
+		const archived = await seedKey(database);
+		const expected = {
+			day: "2020-01-01",
+			key_id: archived.id,
+			calls: 2,
+			errors: 1,
+			writes: 1,
+			bytes_in: 3,
+			bytes_out: 4,
+		};
+		try {
+			await database([
+				"--command",
+				`INSERT INTO usage_daily(day,key_id,calls,errors,writes,bytes_in,bytes_out)
+				VALUES ('2020-01-01',${sqlText(archived.id)},2,1,1,3,4)`,
+			]);
+			const path = `usage?key_id=${archived.id}&from=2020-01-01&to=2020-01-01`;
+			const headers = { "Cf-Access-Jwt-Assertion": adminJwt };
+			const known = await fetch(`${base}/api/admin/${path}`, { headers });
+			expect(known.status).toBe(200);
+			expect(await known.json()).toEqual({
+				items: [{ ...expected, key_name: `e2e-${archived.id}` }],
+				next_cursor: null,
+			});
+			await database(["--command", `DELETE FROM api_keys WHERE id = ${sqlText(archived.id)}`]);
+			const deleted = await fetch(`${base}/api/admin/${path}`, { headers });
+			expect(deleted.status).toBe(200);
+			expect(await deleted.json()).toEqual({
+				items: [{ ...expected, key_name: null }],
+				next_cursor: null,
+			});
+			const hidden = await fetch(`${base}/api/v1/${path}`, {
+				headers: { Authorization: `Bearer ${other.token}` },
+			});
+			expect(hidden.status).toBe(200);
+			expect(await hidden.json()).toEqual({ items: [], next_cursor: null });
+		} finally {
+			await assertAsyncTestMarker(database);
+			await database([
+				"--command",
+				`DELETE FROM usage_daily WHERE key_id = ${sqlText(archived.id)};
+				DELETE FROM api_keys WHERE id = ${sqlText(archived.id)}`,
+			]);
+		}
 	});
 });

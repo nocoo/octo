@@ -5,6 +5,7 @@ import { operationsError } from "./operations-errors";
 export interface UsageDaily {
 	day: string;
 	key_id: string;
+	key_name: string | null;
 	calls: number;
 	errors: number;
 	writes: number;
@@ -108,15 +109,16 @@ export class UsageModel extends Store<{
 			error: null,
 		});
 	}
-	get rows(): Array<UsageDaily & { error_rate: number }> {
+	get rows(): Array<UsageDaily & { key_label: string; error_rate: number }> {
 		return this.state.items.map((row) => ({
 			...row,
+			key_label: row.key_name || row.key_id.slice(0, 8),
 			error_rate: row.calls > 0 ? (row.errors / row.calls) * 100 : 0,
 		}));
 	}
 	get chart(): Array<{ x: string; calls: number; error_rate: number }> {
 		return this.rows.map((row) => ({
-			x: `${row.day} / ${row.key_id}`,
+			x: `${row.day} / ${row.key_label}`,
 			calls: row.calls,
 			error_rate: row.error_rate,
 		}));

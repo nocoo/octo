@@ -126,7 +126,7 @@ describe("L3 runner", () => {
 		expect(order).toEqual(["marker+migrations", "worker", "ready"]);
 		const paths = bddPaths("unit-run", deps.root);
 		const config = parse(await readFile(join(paths.run, "wrangler.toml"), "utf8"));
-		expect(config.main).toBe(join(deps.root ?? "", "apps/web/src/server/index.ts"));
+		expect(config.main).toBe(join(deps.root ?? "", "tests/fixtures/profile-worker.ts"));
 		expect(config.assets).toMatchObject({ directory: join(paths.run, "client") });
 		expect(config.vectorize).toBeUndefined();
 		expect(config.routes).toBeUndefined();
