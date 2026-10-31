@@ -205,6 +205,7 @@ describe("runE2eApi", () => {
 						if (stage === "live") throw new Error("live failed");
 					},
 					spawnVitest: vitest,
+					authorProfileRuntime: async () => undefined,
 				}),
 			).rejects.toThrow(stage === "signal" ? "interrupted" : `${stage} failed`);
 			expect(close).toHaveBeenCalledTimes(1);
@@ -257,6 +258,7 @@ describe("runE2eApi", () => {
 				return { ready: Promise.resolve(new URL("http://127.0.0.1:18059")), dispose };
 			},
 			spawnVitest: vitest,
+			authorProfileRuntime: async () => undefined,
 		});
 		expect(code).toBe(0);
 		expect(vitest).toHaveBeenCalled();
@@ -307,6 +309,7 @@ describe("runE2eApi", () => {
 				wait: async () => undefined,
 				createRuntime: () => ({ ready: Promise.resolve(new URL("http://127.0.0.1")), dispose }),
 				spawnVitest: async () => undefined,
+				authorProfileRuntime: async () => undefined,
 			}),
 		).toBe(0);
 		await stopChild(child);
@@ -369,6 +372,7 @@ describe("runE2eApi", () => {
 				dispose: async () => undefined,
 			}),
 			spawnVitest: async () => undefined,
+			authorProfileRuntime: async () => undefined,
 		});
 		expect(killed).toEqual([]);
 		spy.mockRestore();

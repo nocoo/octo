@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import { Miniflare, type MiniflareOptions } from "miniflare";
+import { authorProfileOutboundFetch } from "../tests/fixtures/author-profile-outbound-data";
 import { ensureClientAssets } from "./ensure-dev-vars";
 import { tomlHasRemoteBinding } from "./gate-no-remote";
 import {
@@ -114,11 +115,12 @@ export async function waitLive(base: string, timeoutMs: number, sleeper = sleep)
 export function spawnVitestProcess(
 	env: Record<string, string>,
 	spawnFn: typeof spawn = spawn,
+	targets: string[] = ["tests/api", "--config", "vitest.e2e.config.ts"],
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const child = spawnFn(
 			join(root, "node_modules/.bin/vitest"),
-			["run", "tests/api", "--config", "vitest.e2e.config.ts"],
+			["run", ...targets],
 			{ cwd: root, env: { ...process.env, ...env }, stdio: "inherit", detached: true },
 		);
 		const onSignal = (): void => {
@@ -232,11 +234,89 @@ export function e2eEnvContents(jwksPort = L2_JWKS_PORT, workerPort = L2_WORKER_P
 	].join("\n");
 }
 
+export function authorProfileRuntimeEnvContents(
+	jwksPort = L2_JWKS_PORT,
+	workerPort = L2_WORKER_PORT,
+): string {
+	return `${e2eEnvContents(jwksPort, workerPort).trimEnd()}\nAUTHOR_PROFILE_REAL_FETCH=1\n`;
+}
+
+export const AUTHOR_PROFILE_L2_PORT = 17_058;
+
+export function attachAuthorProfileOutbound(config: MiniflareOptions): void {
+	const dev = config.workers?.[0]?.dev;
+	if (!dev) return;
+	dev.outboundService = {
+		type: "fetcher",
+		handler: (request, miniflare) => {
+			const url = new URL(request.url);
+			if (url.origin === "https://lizheng.blog" && url.pathname === "/api/authors/profile") {
+				return authorProfileOutboundFetch(request as unknown as Request);
+			}
+			return miniflare.dispatchFetch(request);
+		},
+	} as NonNullable<typeof dev.outboundService>;
+}
+
+export async function runAuthorProfileRuntimeL2(options: {
+	state: JwksState;
+	jwksPort: number;
+	jwksStatePath: string;
+	bundle?: typeof bundleWorker;
+	assertFree?: (port: number) => Promise<void>;
+	wait?: (base: string, timeoutMs: number) => Promise<void>;
+}): Promise<void> {
+	const port = AUTHOR_PROFILE_L2_PORT;
+	const runId = `author-profile-${Date.now()}`;
+	const persistTo = persistDir(runId);
+	const tmp = join(root, ".wrangler/e2e-run", runId);
+	await mkdir(join(tmp, "dist/client"), { recursive: true });
+	ensureClientAssets(join(tmp));
+	const configPath = join(tmp, "wrangler.toml");
+	const rootToml = await readFile(join(root, "wrangler.toml"), "utf8");
+	const rewritten = rewriteWranglerConfig(
+		rootToml,
+		port,
+		join(tmp, "dist/client"),
+		join(root, "tests/fixtures/worker.ts"),
+	);
+	await writeFile(configPath, rewritten);
+	const envContents = authorProfileRuntimeEnvContents(options.jwksPort, port);
+	await writeFile(join(tmp, ".env"), envContents);
+	await prepareE2eDb(persistTo, configPath);
+	await (options.assertFree ?? assertPortFree)(port);
+	const script = await (options.bundle ?? bundleWorker)(join(root, "tests/fixtures/worker.ts"));
+	const profileConfig = miniflareOptions(rewritten, persistTo, script, parseEnv(envContents));
+	attachAuthorProfileOutbound(profileConfig);
+	const runtime = new Miniflare(profileConfig);
+	try {
+		await runtime.ready;
+		const base = `http://127.0.0.1:${port}`;
+		await (options.wait ?? waitLive)(base, 60_000);
+		await spawnVitestProcess(
+			{
+				OCTO_E2E: base,
+				OCTO_JWKS_STATE: options.jwksStatePath,
+				OCTO_JWKS_PORT: String(options.jwksPort),
+				OCTO_E2E_PROFILE: "1",
+			},
+			spawn,
+			["--config", "vitest.e2e-profile.config.ts"],
+		);
+	} finally {
+		await runtime.dispose();
+	}
+}
+
 export type RunE2eOptions = {
 	runId?: string;
 	port?: number;
 	jwksPort?: number;
-	spawnVitest?: (env: Record<string, string>) => Promise<void>;
+	spawnVitest?: (
+		env: Record<string, string>,
+		spawnFn?: typeof spawn,
+		targets?: string[],
+	) => Promise<void>;
 	createRuntime?: (options: MiniflareOptions) => Pick<Miniflare, "ready" | "dispose">;
 	bundle?: typeof bundleWorker;
 	prepareDb?: (persistTo: string, config: string) => Promise<void>;
@@ -244,6 +324,7 @@ export type RunE2eOptions = {
 	assertFree?: (port: number) => Promise<void>;
 	generateJwks?: () => Promise<JwksState>;
 	startJwks?: (port: number, state: JwksState) => Promise<JwksStub>;
+	authorProfileRuntime?: typeof runAuthorProfileRuntimeL2;
 };
 
 export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
@@ -318,6 +399,14 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 			OCTO_JWKS_PORT: String(jwksPort),
 		};
 		await (options.spawnVitest ?? spawnVitestProcess)(env);
+		await (options.authorProfileRuntime ?? runAuthorProfileRuntimeL2)({
+			state,
+			jwksPort,
+			jwksStatePath,
+			...(options.bundle ? { bundle: options.bundle } : {}),
+			...(options.assertFree ? { assertFree: options.assertFree } : {}),
+			...(options.wait ? { wait: options.wait } : {}),
+		});
 		if (interrupted) throw new Error("L2 interrupted");
 		return 0;
 	} finally {

@@ -95,7 +95,11 @@ export default {
 				},
 			});
 		}
-		const response = await worker.fetch(request, profileTestEnv(env), execution);
+		const response = await worker.fetch(
+			request,
+			env.AUTHOR_PROFILE_REAL_FETCH === "1" ? env : profileTestEnv(env),
+			execution,
+		);
 		if (observe) ctx.waitUntil(observe());
 		return response;
 	},

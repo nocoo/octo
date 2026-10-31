@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1 — 2026-10-31
+
+### Fixed
+
+- Restore sidebar name and avatar enrichment on Workers: author profile lookup now uses `redirect: "manual"`, a bound default `fetch`, and a v2 cache key so prior five-minute failure entries do not block the fix after deploy. Upstream failures log only the failure kind and HTTP status.
+
+### Validation
+
+- Unit tests cover the default fetcher binding and redirect mode; L2 exercises `GET /api/admin/whoami` through workerd outbound fetch without `AUTHOR_PROFILE_FETCHER`.
+
 ## 0.8.0 — 2026-10-31
 
 ### Added

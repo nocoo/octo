@@ -9,9 +9,11 @@ export async function whoamiResponse(
 	const email = c.get("adminEmail");
 	const fetcher =
 		c.env.RESOURCE_ENV === "test"
-			? (c.env.AUTHOR_PROFILE_FETCHER ?? {
-					fetch: async () => Response.json({ name: null, avatar: null }),
-				})
+			? c.env.AUTHOR_PROFILE_REAL_FETCH === "1"
+				? undefined
+				: (c.env.AUTHOR_PROFILE_FETCHER ?? {
+						fetch: async () => Response.json({ name: null, avatar: null }),
+					})
 			: undefined;
 	const profile = await fetchAuthorProfile(email, fetcher);
 	return jsonOk({ email, actor: `admin:${email}`, ...profile }, 200, {
