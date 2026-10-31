@@ -20,6 +20,29 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 - 状态：URL 是筛选和选择的唯一真相；服务端数据由 ViewModel 缓存，SWR 风格（先显示旧数据，后台重新校验）。
 - 键盘：`⌘K` 打开 CommandPalette（跳转到 memory、页面或命令），`/` 聚焦搜索，`j/k` 上下移动，`e` 编辑，`⌘S` 保存。
 
+### Public sidebar identity
+
+The visible brand is lowercase `octo`. The shell loads Access-only
+`GET /api/admin/whoami` once per SPA session, sharing concurrent requests and
+retaining the public name/avatar across navigation. An explicit retry remains
+available after an identity request failure; a full reload starts a new session.
+
+The Worker normalizes the verified email with `trim().toLowerCase()`, hashes its
+UTF-8 bytes with SHA-256, and sends only the lowercase hex hash to
+`https://lizheng.blog/api/authors/profile`. Workers Cache API keys contain only
+that hash. Public profiles expire after 24 hours, null profiles after one hour,
+and failures (including 429, 5xx, timeout and network errors) after five minutes.
+Cache failures do not fail authentication. The upstream request has a 2.5-second
+timeout, rejects redirects and includes the application User-Agent. The identity
+endpoint itself is `Cache-Control: no-store` and remains protected by Access.
+
+Avatars use Basalt's native image/error fallback, a meaningful alt label,
+`referrerPolicy="no-referrer"` and a fixed 36px box. Missing or failed avatars
+show initials; missing names retain the verified email. Only credential-free
+HTTPS avatar URLs and bounded base64 PNG data URIs are accepted. Isolated tests
+inject a hash-indexed profile fetcher with local PNG data and signed identities
+for hits, nulls and image decode failures; they never call the public service.
+
 ## 3. 页面
 
 | 路由 | 页面 | 要点 |

@@ -1,5 +1,22 @@
 # Retrospective
 
+### 2026-10-31 - Measure scroll edges instead of intersection ratios
+
+The new desktop memory-table regression initially required an intersection
+ratio of exactly one for its final row. Chromium reported 0.9977 even though
+the row reached the scroll viewport edge and its content was visible. The
+assertion now compares all four row boundaries with the actual scroll region,
+allowing at most one pixel of subpixel rounding; header and pagination checks
+remain strict. Use physical edge tolerances for fractional table geometry,
+not a reduced visibility ratio that could hide meaningful clipping.
+
+The first table layout patch also supplied `undefined` explicitly to Basalt's
+optional `Grid.className`, which strict exact-optional typechecking rejected.
+Use an empty class or omit the prop instead, and run all three typecheck scopes
+before accepting a view-only patch. A screenshot capture initially used `type`
+instead of the supported `types` query parameter; subsequent captures use the
+real filter contract and assert the selected control before taking evidence.
+
 ### 2026-10-22 - Verify the selected browser test inventory
 
 The first section-title regression command included a nonexistent `library.spec.ts` while the real file was `library-layout.spec.ts`. Playwright still ran the other matching files, so a successful exit alone could not establish the requested library coverage. The missing library suite was run separately before commit. Resolve test paths from the repository and compare the executed inventory with the intended scope instead of trusting a multi-pattern command's exit status.
