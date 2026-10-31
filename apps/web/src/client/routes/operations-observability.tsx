@@ -161,7 +161,7 @@ export function UsagePage() {
 		</p>
 	);
 	return (
-		<Grid columns={1} gap="md" className="min-w-0">
+		<Grid columns={1} gap="md" className="octo-table-page octo-table-page--usage">
 			<PageHeader
 				title="每日用量"
 				meta="按 UTC 日期与密钥汇总；非实时数据"
@@ -291,7 +291,8 @@ export function UsagePage() {
 				<Grid
 					columns={2}
 					gap="sm"
-					style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 18rem), 1fr))" }}
+					className="octo-table-charts"
+					style={{ gridTemplateColumns: "var(--octo-table-chart-columns)" }}
 				>
 					<SectionRule variant="label" title="调用次数">
 						<LayerCard>
@@ -331,7 +332,11 @@ export function UsagePage() {
 					</SectionRule>
 				</Grid>
 			) : null}
-			<LayerCard id="usage-daily-table" padding="none">
+			<LayerCard
+				id="usage-daily-table"
+				padding="none"
+				className="octo-table-card octo-table-card--data"
+			>
 				{state.loading && state.items.length === 0 ? (
 					<LayerCard.Loading label="正在加载每日用量" />
 				) : (
@@ -423,7 +428,7 @@ export function AuditPage() {
 		return () => observer.disconnect();
 	}, [state.items.length]);
 	return (
-		<Grid columns={1} gap="md" className="min-w-0">
+		<Grid columns={1} gap="md" className="octo-table-page">
 			<PageHeader
 				title="审计日志"
 				meta="包含被拒绝的请求；不记录正文和凭据"
@@ -596,11 +601,11 @@ export function AuditPage() {
 				</p>
 			)}
 			{state.loading && <p role="status">正在刷新审计日志……</p>}
-			<LayerCard padding="none">
+			<LayerCard padding="none" className="octo-table-card">
 				<ScrollArea
 					ref={viewport}
 					orientation="both"
-					className={state.items.length ? "ops-audit-scroll" : ""}
+					className="octo-table-scroll"
 					tabIndex={0}
 					aria-label="可滚动的审计记录"
 					onScroll={(event) => {

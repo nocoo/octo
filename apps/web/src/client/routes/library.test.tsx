@@ -39,7 +39,11 @@ describe("library page installed-component boundaries", () => {
 		expect(html).not.toContain("octo-title-icon");
 		expect(html.match(/<h1\b/g)).toHaveLength(1);
 		expect(html).toContain("octo-page-header");
-		expect(html).toContain('class="grid gap-basalt-layout-lg"');
+		expect(html).toContain(
+			Page === SpacesPage
+				? 'class="grid gap-basalt-layout-lg octo-table-page"'
+				: 'class="grid gap-basalt-layout-lg"',
+		);
 		expect(html).not.toMatch(/class="library-(?:page|stack|actions|fields|search)/);
 		expect(html).toContain("正在加载资料库");
 	});

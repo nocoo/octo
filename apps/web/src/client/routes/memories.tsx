@@ -11,6 +11,7 @@ import {
 	Input,
 	Label,
 	LayerCard,
+	ScrollArea,
 	SegmentControl,
 	Sheet,
 	SheetContent,
@@ -225,7 +226,7 @@ export function MemoriesPage() {
 		return () => document.removeEventListener("keydown", key);
 	}, [params, setParams, state.items]);
 	return (
-		<Grid columns={1} gap="lg">
+		<Grid columns={1} gap="lg" className={cards ? "" : "octo-table-page"}>
 			<MemoryFilters params={params} onChange={setParams}>
 				<PageHeader
 					title="记忆库"
@@ -270,7 +271,7 @@ export function MemoriesPage() {
 				retry={() => void model.load(new URLSearchParams(query))}
 			/>
 			{state.loaded && !state.loading && !state.error && !state.items.length && (
-				<LayerCard>
+				<LayerCard className="octo-table-card">
 					<LayerCard.Empty
 						className="octo-empty octo-empty--page"
 						icon={<SearchX aria-hidden="true" />}
@@ -314,8 +315,8 @@ export function MemoriesPage() {
 				</Grid>
 			) : (
 				state.items.length > 0 && (
-					<LayerCard padding="none">
-						<Grid columns={1} className="octo-memory-overflow">
+					<LayerCard padding="none" className="octo-table-card">
+						<ScrollArea className="octo-table-scroll" orientation="both" aria-label="可滚动的记忆">
 							<Table className="octo-table octo-memory-table" aria-label="记忆">
 								<TableHeader>
 									<TableRow>
@@ -408,7 +409,7 @@ export function MemoriesPage() {
 									))}
 								</TableBody>
 							</Table>
-						</Grid>
+						</ScrollArea>
 					</LayerCard>
 				)
 			)}

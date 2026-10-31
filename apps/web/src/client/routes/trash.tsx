@@ -218,7 +218,7 @@ export function TrashPage() {
 		},
 	];
 	return (
-		<Grid columns={1} gap="lg" {...{ ref: region }} tabIndex={-1}>
+		<Grid columns={1} gap="lg" className="octo-table-page" {...{ ref: region }} tabIndex={-1}>
 			<PageHeader
 				title="回收站"
 				meta="不会自动清空 · 表头仅选择当前页"
@@ -390,7 +390,7 @@ export function TrashPage() {
 				/>
 			)}
 			{state.ready && (
-				<LayerCard padding="none">
+				<LayerCard padding="none" className="octo-table-card octo-table-card--data">
 					{state.memories.length > 0 ? (
 						<DataTable
 							className="octo-table"
