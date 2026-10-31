@@ -1,5 +1,16 @@
 # Retrospective
 
+### 2026-10-31 - Keep comparison captures outside the test inventory
+
+A one-off screenshot spec used the normal L3 filename pattern and defaulted
+to the before phase. Review caught that a later full suite would therefore
+overwrite the original baseline images. The temporary spec was removed before
+execution reached it; all original baseline timestamps remained unchanged.
+That interrupted test inventory failed as expected, and the clean suite was
+rerun. Comparison capture automation now runs outside the repository through
+the isolated runner's command callback, with an explicit phase and immutable
+before files. Never put destructive evidence-generation defaults in test discovery.
+
 ### 2026-10-31 - Measure scroll edges instead of intersection ratios
 
 The new desktop memory-table regression initially required an intersection
