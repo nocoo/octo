@@ -21,6 +21,32 @@ async function whoami(jwt?: string): Promise<Response> {
 }
 
 describe("GET /api/admin/whoami", () => {
+	it.each([
+		["l3@local", "Zheng Li", true],
+		["architie@gmail.com", "Zheng Li", true],
+		["l3-null@local", null, false],
+		["l3-broken@local", "Zheng Li", true],
+	] as const)(
+		"uses the server profile fixture for verified identity %s",
+		async (email, name, avatar) => {
+			const jwt = await signAccessJwt(await loadJwksState(), {
+				iss: l2AccessIss(jwksPort),
+				aud: L2_ACCESS_AUD,
+				exp: Math.floor(Date.now() / 1000) + 3600,
+				email,
+			});
+			const response = await whoami(jwt);
+			expect(response.status).toBe(200);
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(await response.json()).toEqual({
+				email,
+				actor: `admin:${email}`,
+				name,
+				avatar: avatar ? expect.stringMatching(/^data:image\/png;base64,/) : null,
+			});
+		},
+	);
+
 	it("accepts a valid Access JWT and rejects bad claims", async () => {
 		const state = await loadJwksState();
 		const iss = l2AccessIss(jwksPort);

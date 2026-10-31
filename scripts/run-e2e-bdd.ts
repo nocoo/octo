@@ -71,7 +71,7 @@ export async function runE2eBdd(options: RunBddOptions = {}): Promise<number> {
 		toml,
 		L3_WORKER_PORT,
 		assets,
-		join(cwd, "apps/web/src/server/index.ts"),
+		join(cwd, "tests/fixtures/profile-worker.ts"),
 	);
 	assertWranglerConfigLocal(localConfig);
 	await writeFile(config, localConfig);
