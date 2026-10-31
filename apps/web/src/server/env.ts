@@ -25,6 +25,7 @@ export interface Env extends CloudflareBindings {
 	OCTO_SETTINGS_KEY?: string;
 	RESOURCE_ENV?: string;
 	AUTHOR_PROFILE_FETCHER?: AuthorProfileFetcher;
+	AUTHOR_PROFILE_REAL_FETCH?: string;
 	CF_ACCESS_TEAM_DOMAIN?: string;
 	CF_ACCESS_AUD?: string;
 	ACCESS_JWKS_URL?: string;

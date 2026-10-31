@@ -49,7 +49,7 @@ bun run gate:security    # gitleaks + osv-scanner; missing tools fail
 
 ## Testing and quality contract
 
-Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-verify`; do not push unless Zheng asks.
+Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-verify`; do not push unless Zheng asks. External fetch paths need an L2 test that runs through the real runtime `fetch`, not only injected stubs.
 
 | Dimension | Required proof | Status |
 |---|---|---|

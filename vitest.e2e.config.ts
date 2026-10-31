@@ -4,6 +4,7 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: ["tests/api/**/*.test.ts"],
+		exclude: ["tests/api/author-profile-runtime.test.ts"],
 		fileParallelism: false,
 		maxWorkers: 1,
 		sequence: { shuffle: false },

@@ -57,6 +57,54 @@ describe("author profile enrichment", () => {
 		expect(network).not.toHaveBeenCalled();
 	});
 
+	it("invokes the default fetcher without an illegal invocation", async () => {
+		const request = vi.fn(async () => Response.json({ name: "Zheng Li", avatar: pngAvatar }));
+		vi.stubGlobal("fetch", request);
+		expect(await fetchAuthorProfile("architie@gmail.com")).toEqual({
+			name: "Zheng Li",
+			avatar: pngAvatar,
+		});
+		expect(request).toHaveBeenCalledOnce();
+		const init = (request.mock.calls[0] as unknown as [string, RequestInit] | undefined)?.[1];
+		expect(init?.redirect).toBe("manual");
+	});
+
+	it("treats redirect responses as unavailable", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValue(
+					new Response(null, { status: 302, headers: { Location: "https://lizheng.blog/other" } }),
+				),
+		);
+		expect(await fetchAuthorProfile("owner@example.test")).toEqual({ name: null, avatar: null });
+		expect(warn).toHaveBeenCalledWith("author profile unavailable", { kind: "http", status: 302 });
+	});
+
+	it.each([429, 500, 503])("warns on profile HTTP %s without leaking identity", async (status) => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status })));
+		expect(await fetchAuthorProfile("owner@example.test")).toEqual({ name: null, avatar: null });
+		expect(warn).toHaveBeenCalledWith("author profile unavailable", { kind: "http", status });
+	});
+
+	it.each([new Error("offline"), new DOMException("timed out", "TimeoutError")])(
+		"warns on an unavailable profile service: %s",
+		async (error) => {
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
+			expect(await fetchAuthorProfile("owner@example.test")).toEqual({ name: null, avatar: null });
+			expect(warn).toHaveBeenCalledWith(
+				"author profile unavailable",
+				error instanceof DOMException && error.name === "TimeoutError"
+					? { kind: "timeout" }
+					: { kind: "network" },
+			);
+		},
+	);
+
 	it("looks up the normalized email hash without sending the email", async () => {
 		const request = vi
 			.fn()
@@ -77,7 +125,7 @@ describe("author profile enrichment", () => {
 		);
 		expect(input).not.toContain("Owner");
 		expect(input).not.toContain("example.test");
-		expect(options.redirect).toBe("error");
+		expect(options.redirect).toBe("manual");
 		expect(new Headers(options.headers).get("User-Agent")).toBe(versionLabel(APP_VERSION));
 		expect(options.signal).toBeInstanceOf(AbortSignal);
 		expect(timeout).toHaveBeenCalledWith(2500);
@@ -129,6 +177,7 @@ describe("author profile enrichment", () => {
 	it.each([404, 503])(
 		"does not turn profile HTTP %s into an authentication failure",
 		async (status) => {
+			vi.spyOn(console, "warn").mockImplementation(() => {});
 			vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status })));
 			expect(await fetchAuthorProfile("owner@example.test")).toEqual({ name: null, avatar: null });
 		},
@@ -137,6 +186,7 @@ describe("author profile enrichment", () => {
 	it.each([new Error("offline"), new DOMException("timed out", "TimeoutError")])(
 		"tolerates an unavailable profile service",
 		async (error) => {
+			vi.spyOn(console, "warn").mockImplementation(() => {});
 			vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
 			expect(await fetchAuthorProfile("owner@example.test")).toEqual({ name: null, avatar: null });
 		},
@@ -161,7 +211,7 @@ describe("author profile enrichment", () => {
 		const profile = { name: "Zheng Li", avatar: pngAvatar };
 		expect(await fetchAuthorProfile("architie@gmail.com")).toEqual(profile);
 		const [key, response] = cache.put.mock.calls[0] as [string, Response];
-		expect(key).toBe(`https://octo.hexly.ai/_author-profiles/${emailHash}`);
+		expect(key).toBe(`https://octo.hexly.ai/_author-profiles/v2/${emailHash}`);
 		expect(response.headers.get("Cache-Control")).toBe("public, max-age=86400");
 		expect(await response.json()).toEqual(profile);
 		cache.advance(86_399);

@@ -125,7 +125,7 @@ describe("GET /api/admin/whoami", () => {
 		expect(response.headers.get("Cache-Control")).toBe("no-store");
 		expect(profileFetch).toHaveBeenCalledWith(
 			"https://lizheng.blog/api/authors/profile?hash=7ba563171c26fb9b82e9f7750840c0455602eb35025192027230bcb40aae1217",
-			expect.objectContaining({ redirect: "error", signal: expect.any(AbortSignal) }),
+			expect.objectContaining({ redirect: "manual", signal: expect.any(AbortSignal) }),
 		);
 		expect(request).not.toHaveBeenCalled();
 	});
