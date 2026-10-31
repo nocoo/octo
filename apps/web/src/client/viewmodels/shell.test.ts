@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AdminClient } from "../lib/api";
 import {
 	backTarget,
@@ -99,5 +99,49 @@ describe("shell navigation and identity", () => {
 			avatar: null,
 			error: null,
 		});
+	});
+	it("deduplicates repeated effects and keeps identity for the SPA session", async () => {
+		const identity = { email: "architie@gmail.com", name: "Zheng Li", avatar: "/avatar.png" };
+		const request = vi.fn(async () => identity);
+		const api = { request } as AdminClient;
+		const model = new ShellModel(api);
+		const first = model.load();
+		const repeated = model.load();
+		expect(repeated).toBe(first);
+		expect(request).toHaveBeenCalledExactlyOnceWith("/whoami");
+		await Promise.all([first, repeated]);
+		await model.load();
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(model.state).toEqual({ ...identity, error: null });
+		const nextSession = new ShellModel(api);
+		await nextSession.load();
+		expect(request).toHaveBeenCalledTimes(2);
+	});
+	it("keeps a null public profile without repeating the verified identity request", async () => {
+		const request = vi.fn(async () => ({
+			email: "owner@example.test",
+			name: null,
+			avatar: null,
+		}));
+		const model = new ShellModel({ request } as AdminClient);
+		await model.load();
+		await model.load();
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(model.state.email).toBe("owner@example.test");
+	});
+	it("allows the existing retry after an identity request fails", async () => {
+		const request = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("private failure"))
+			.mockResolvedValue({ email: "owner@example.test", name: null, avatar: null });
+		const model = new ShellModel({ request });
+		await Promise.all([model.load(), model.load()]);
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(model.state.error).toBe("无法验证 Access 身份，请刷新后重试。");
+		await model.load();
+		expect(request).toHaveBeenCalledTimes(2);
+		expect(model.state.error).toBeNull();
+		await model.load();
+		expect(request).toHaveBeenCalledTimes(2);
 	});
 });

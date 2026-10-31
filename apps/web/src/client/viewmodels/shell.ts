@@ -75,10 +75,17 @@ type ShellState = {
 };
 
 export class ShellModel extends Store<ShellState> {
+	private identityRequest: Promise<void> | null = null;
 	constructor(private readonly api: AdminClient = adminApi) {
 		super({ email: null, name: null, avatar: null, error: null });
 	}
-	async load(): Promise<void> {
+	load(): Promise<void> {
+		this.identityRequest ??= this.loadIdentity().finally(() => {
+			if (this.state.error) this.identityRequest = null;
+		});
+		return this.identityRequest;
+	}
+	private async loadIdentity(): Promise<void> {
 		try {
 			const identity = await this.api.request<{
 				email: string;
@@ -101,3 +108,5 @@ export class ShellModel extends Store<ShellState> {
 		}
 	}
 }
+
+export const shellModel = new ShellModel();
