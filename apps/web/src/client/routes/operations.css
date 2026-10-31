@@ -26,7 +26,8 @@
 }
 
 .ops-date-range {
-	inline-size: min(100%, 34ch);
+	flex-basis: 100%;
+	inline-size: 100%;
 }
 
 .ops-filter-actions {

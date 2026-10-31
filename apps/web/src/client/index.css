@@ -223,6 +223,7 @@ a {
 	letter-spacing: -0.01em;
 }
 .octo-page-meta {
+	margin-inline-start: var(--basalt-space-sm);
 	flex-shrink: 100;
 	min-inline-size: 0;
 	max-inline-size: var(--basalt-space-96);
@@ -323,6 +324,9 @@ a {
 }
 .octo-filter-choice > div {
 	display: flex;
+}
+.octo-memory-filter-bar > :first-child {
+	align-items: center;
 }
 .octo-search-controls {
 	display: flex;

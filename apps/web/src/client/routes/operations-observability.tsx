@@ -220,7 +220,7 @@ export function UsagePage() {
 												className="ops-date-range"
 												role="group"
 												aria-label="日期范围"
-												style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+												style={{ gridTemplateColumns: "repeat(2, minmax(0, 16ch))" }}
 											>
 												<Field label="开始日期">
 													<Input
@@ -441,7 +441,7 @@ export function AuditPage() {
 							</PopoverTrigger>
 							<PopoverContent
 								align="end"
-								style={{ width: "min(40rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
+								style={{ width: "min(52rem, calc(100vw - 2rem))", maxWidth: "calc(100vw - 2rem)" }}
 							>
 								<form
 									key={search}
@@ -484,7 +484,7 @@ export function AuditPage() {
 												className="ops-date-range"
 												role="group"
 												aria-label="日期范围"
-												style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
+												style={{ gridTemplateColumns: "repeat(2, minmax(0, 16ch))" }}
 											>
 												<Field label="开始日期">
 													<Input
