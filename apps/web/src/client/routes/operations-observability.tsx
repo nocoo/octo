@@ -67,7 +67,7 @@ export function UsagePage() {
 		void model.load(search);
 	}, [model, search]);
 	useEffect(() => () => model.dispose(), [model]);
-	const columns: DataTableColumn<UsageDaily & { error_rate: number }>[] = [
+	const columns: DataTableColumn<UsageDaily & { error_rate: number; key_label: string }>[] = [
 		{
 			id: "day",
 			header: "日期",
@@ -79,10 +79,10 @@ export function UsagePage() {
 			id: "key",
 			header: "密钥",
 			width: "18ch",
-			sortValue: (row) => row.key_id,
+			sortValue: (row) => row.key_label,
 			accessor: (row) => (
 				<Link href="/keys" className="octo-record-title">
-					{row.key_id}
+					{row.key_label}
 				</Link>
 			),
 		},

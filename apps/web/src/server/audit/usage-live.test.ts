@@ -84,6 +84,7 @@ describe("live daily usage accounting", () => {
 			items: [
 				{
 					...expected,
+					key_name: "usage-live",
 					calls: 65,
 					bytes_out: bytesOut + new TextEncoder().encode(usageBody).byteLength,
 				},

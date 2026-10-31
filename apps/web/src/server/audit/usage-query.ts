@@ -22,6 +22,7 @@ const cursorSchema = z.strictObject({
 type UsageRow = {
 	day: string;
 	key_id: string;
+	key_name?: string | null;
 	calls: number;
 	errors: number;
 	writes: number;
@@ -29,7 +30,12 @@ type UsageRow = {
 	bytes_out: number;
 };
 
-export async function queryUsage(env: Env, query: Record<string, string[]>, callerKeyId?: string) {
+export async function queryUsage(
+	env: Env,
+	query: Record<string, string[]>,
+	callerKeyId?: string,
+	includeKeyNames = false,
+) {
 	const filters = readQuery(querySchema, query);
 	validateRange(filters.from, filters.to);
 	const keyId =
@@ -58,7 +64,8 @@ export async function queryUsage(env: Env, query: Record<string, string[]>, call
 		values.push(cursor.day, cursor.day, cursor.key_id);
 	}
 	const result = await env.DB.prepare(
-		`SELECT day, key_id, calls, errors, writes, bytes_in, bytes_out FROM usage_daily
+		`SELECT day, key_id, calls, errors, writes, bytes_in, bytes_out${includeKeyNames ? ", api_keys.name AS key_name" : ""}
+		FROM usage_daily${includeKeyNames ? " LEFT JOIN api_keys ON api_keys.id = usage_daily.key_id" : ""}
 		WHERE ${where.join(" AND ")} ORDER BY day DESC, key_id DESC LIMIT ?`,
 	)
 		.bind(...values, filters.limit + 1)

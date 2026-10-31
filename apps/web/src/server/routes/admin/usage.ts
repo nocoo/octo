@@ -5,6 +5,8 @@ import { jsonOk } from "../../lib/errors";
 
 export function adminUsageRoutes(): Hono<{ Bindings: Env; Variables: AppVars }> {
 	const app = new Hono<{ Bindings: Env; Variables: AppVars }>();
-	app.get("/", async (context) => jsonOk(await queryUsage(context.env, context.req.queries())));
+	app.get("/", async (context) =>
+		jsonOk(await queryUsage(context.env, context.req.queries(), undefined, true)),
+	);
 	return app;
 }

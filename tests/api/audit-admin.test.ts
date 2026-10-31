@@ -220,8 +220,18 @@ describe("GET /api/admin/usage", () => {
 		const body = (await response.json()) as Page<UsageItem>;
 		expect(body.items.filter((row) => [reader.id, writer.id].includes(row.key_id))).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ day: "2020-01-02", key_id: reader.id, calls: 4 }),
-				expect.objectContaining({ day: "2020-01-02", key_id: writer.id, calls: 7 }),
+				expect.objectContaining({
+					day: "2020-01-02",
+					key_id: reader.id,
+					key_name: `e2e-${reader.id}`,
+					calls: 4,
+				}),
+				expect.objectContaining({
+					day: "2020-01-02",
+					key_id: writer.id,
+					key_name: `e2e-${writer.id}`,
+					calls: 7,
+				}),
 			]),
 		);
 		const own = await getAdmin(`usage?from=2020-01-01&to=2020-01-02&key_id=${reader.id}&limit=1`);
@@ -232,7 +242,7 @@ describe("GET /api/admin/usage", () => {
 			`usage?from=2020-01-01&to=2020-01-02&key_id=${reader.id}&limit=1&cursor=${first.next_cursor}`,
 		);
 		expect(await next.json()).toMatchObject({
-			items: [{ day: "2020-01-01", key_id: reader.id }],
+			items: [{ day: "2020-01-01", key_id: reader.id, key_name: `e2e-${reader.id}` }],
 			next_cursor: null,
 		});
 	});
@@ -257,6 +267,16 @@ describe("GET /api/v1/usage", () => {
 			const body = (await response.json()) as Page<UsageItem>;
 			expect(body.items.length).toBeGreaterThan(0);
 			expect(body.items.every((row) => row.key_id === expected)).toBe(true);
+			for (const row of body.items)
+				expect(Object.keys(row).sort()).toEqual([
+					"bytes_in",
+					"bytes_out",
+					"calls",
+					"day",
+					"errors",
+					"key_id",
+					"writes",
+				]);
 		}
 		const response = await fetch(
 			`${base}/api/v1/usage?key_id=%27%20OR%201=1--&from=2020-01-02&to=2020-01-02`,
@@ -269,6 +289,11 @@ describe("GET /api/v1/usage", () => {
 	});
 
 	it("rejects invalid queries and unauthenticated callers", async () => {
+		const enriched = await fetch(`${base}/api/v1/usage?includeKeyNames=true`, {
+			headers: bearer(),
+		});
+		expect(enriched.status).toBe(400);
+		expect(await enriched.json()).toMatchObject({ error: { code: "validation_failed" } });
 		const invalid = await fetch(`${base}/api/v1/usage?from=not-a-date`, { headers: bearer() });
 		expect(invalid.status).toBe(400);
 		expect(await invalid.json()).toMatchObject({ error: { code: "validation_failed" } });

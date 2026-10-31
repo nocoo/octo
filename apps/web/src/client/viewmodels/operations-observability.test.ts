@@ -14,6 +14,7 @@ const daily = [
 	{
 		day: "2026-10-17",
 		key_id: "key-a",
+		key_name: "Notebook agent",
 		calls: 10,
 		errors: 2,
 		writes: 3,
@@ -62,6 +63,23 @@ describe("URL filter contracts", () => {
 });
 
 describe("daily usage contract", () => {
+	it.each([
+		["AAAAAAAAAAAA", "Notebook agent", "Notebook agent"],
+		["BBBBBBBBBBBB", null, "BBBBBBBB"],
+		["short", null, "short"],
+		["CCCCCCCCCCCC", "", "CCCCCCCC"],
+	])("labels key %s without changing its identity", async (keyId, keyName, keyLabel) => {
+		const request = vi.fn().mockResolvedValue({
+			items: [{ ...daily[0], key_id: keyId, key_name: keyName }],
+			next_cursor: null,
+		});
+		const model = new UsageModel({ request });
+		await model.load();
+		expect(model.rows[0]).toMatchObject({ key_id: keyId, key_name: keyName, key_label: keyLabel });
+		expect(model.chart).toEqual([{ x: `2026-10-17 / ${keyLabel}`, calls: 10, error_rate: 20 }]);
+		expect(request).toHaveBeenCalledTimes(1);
+	});
+
 	it("ignores rejected requests after disposal", async () => {
 		let reject: (reason: Error) => void = () => {};
 		const request = vi.fn().mockImplementationOnce(
@@ -82,7 +100,7 @@ describe("daily usage contract", () => {
 			.fn()
 			.mockResolvedValueOnce({ items: daily, next_cursor: "next+/" })
 			.mockResolvedValueOnce({
-				items: [{ ...daily[0], day: "2026-10-18", calls: 0, errors: 0 }],
+				items: [{ ...daily[0], day: "2026-10-18", key_name: null, calls: 0, errors: 0 }],
 				next_cursor: null,
 			});
 		const model = new UsageModel({ request });
@@ -94,7 +112,11 @@ describe("daily usage contract", () => {
 			"/usage?key_id=key-a&from=2026-10-01&limit=200&cursor=next%2B%2F",
 		);
 		expect(model.rows.map((r) => r.error_rate)).toEqual([20, 0]);
-		expect(model.chart[0]).toEqual({ x: "2026-10-17 / key-a", calls: 10, error_rate: 20 });
+		expect(model.rows.map((item) => item.key_label)).toEqual(["Notebook agent", "key-a"]);
+		expect(model.chart).toEqual([
+			{ x: "2026-10-17 / Notebook agent", calls: 10, error_rate: 20 },
+			{ x: "2026-10-18 / key-a", calls: 0, error_rate: 0 },
+		]);
 		expect(model.state).not.toHaveProperty("health");
 		expect(model.state.loaded).toBe(true);
 		await model.loadMore();

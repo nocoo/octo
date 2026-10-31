@@ -65,6 +65,16 @@ describe("v1 usage", () => {
 			const body = (await res.json()) as { items: Array<{ key_id: string }> };
 			expect(body.items).toHaveLength(2);
 			expect(body.items.every((row) => row.key_id === fixtureData.own.row.id)).toBe(true);
+			for (const row of body.items)
+				expect(Object.keys(row).sort()).toEqual([
+					"bytes_in",
+					"bytes_out",
+					"calls",
+					"day",
+					"errors",
+					"key_id",
+					"writes",
+				]);
 		}
 		expect(await (await fixtureData.get("?from=2026-10-17&to=2026-10-17")).json()).toMatchObject({
 			items: [{ day: "2026-10-17", key_id: fixtureData.own.row.id }],
@@ -91,7 +101,14 @@ describe("v1 usage", () => {
 		const fixtureData = await fixture();
 		for (const token of [null, "bad"])
 			expect((await fixtureData.get("?limit=bad", token)).status).toBe(401);
-		for (const query of ["?to=bad", "?limit=0", "?key_id=x&key_id=y", "?unknown=1"]) {
+		for (const query of [
+			"?to=bad",
+			"?limit=0",
+			"?key_id=x&key_id=y",
+			"?unknown=1",
+			"?includeKeyNames=true",
+			"?key_name=other",
+		]) {
 			const res = await fixtureData.get(query);
 			expect(res.status).toBe(400);
 			expect(await res.json()).toMatchObject({ error: { code: "validation_failed" } });
