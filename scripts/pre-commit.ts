@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runIfMain } from "./cli";
+import { assertNodeRuntime } from "./node-runtime";
 
 export const L1_SCRIPTS = [
 	"typecheck",
@@ -13,6 +14,7 @@ export const L1_SCRIPTS = [
 	"gate:wrangler-vars",
 	"gate:client-fetch",
 	"gate:client-design",
+	"gate:coverage-script",
 	"test:coverage",
 ] as const;
 
@@ -61,6 +63,10 @@ export async function runPreCommit(
 }
 
 export async function main(run = runPreCommit): Promise<number> {
+	const runtime = assertNodeRuntime();
+	if (runtime !== 0) {
+		return runtime;
+	}
 	return run();
 }
 

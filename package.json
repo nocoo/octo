@@ -20,6 +20,7 @@
 		"gate:wrangler-vars": "bun run scripts/gate-wrangler-vars.ts",
 		"gate:client-fetch": "bun run scripts/gate-client-fetch.ts",
 		"gate:client-design": "bun run scripts/gate-client-design.ts",
+		"gate:coverage-script": "bun run scripts/gate-coverage-script.ts",
 		"gate:production": "bun run scripts/gate-production.ts",
 		"gate:security": "bun run scripts/gate-security.ts",
 		"prepare": "husky"
