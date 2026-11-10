@@ -31,7 +31,13 @@ function PageBackButton() {
 	);
 }
 
-export function PageHeader(props: PageHeaderProps) {
+/**
+ * Back button + Basalt PageHeader (title, description) + actions. Actions stay a sibling of the
+ * heading instead of Basalt's own `actions` slot: that slot switches to a row at the `md` viewport
+ * breakpoint and, beside the sidebar on tablets, crushes the title to one glyph per line. As a
+ * wrapping sibling the actions move to their own row once the heading needs the width.
+ */
+export function PageHeader({ actions, ...props }: PageHeaderProps) {
 	return (
 		<Grid
 			columns={1}
@@ -46,9 +52,24 @@ export function PageHeader(props: PageHeaderProps) {
 			}}
 		>
 			<PageBackButton />
-			<Grid columns={1} style={{ flex: "1 1 0", minInlineSize: 0 }}>
+			<Grid columns={1} style={{ flex: "1 1 auto", minInlineSize: 0 }}>
 				<BasaltPageHeader {...props} />
 			</Grid>
+			{actions ? (
+				<Grid
+					columns={1}
+					data-octo-page-actions=""
+					style={{
+						display: "flex",
+						flexWrap: "wrap",
+						alignItems: "center",
+						gap: "var(--basalt-space-sm)",
+						marginInlineStart: "auto",
+					}}
+				>
+					{actions}
+				</Grid>
+			) : null}
 		</Grid>
 	);
 }

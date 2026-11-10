@@ -55,6 +55,20 @@ function render(Page: () => React.JSX.Element, path: string) {
 	);
 }
 
+/** The page-header actions row: the balanced `div` carrying `data-octo-page-actions`. */
+function pageActions(html: string): string {
+	const start = html.lastIndexOf("<div", html.indexOf("data-octo-page-actions"));
+	if (start < 0) return "";
+	const tags = /<\/?div\b/g;
+	tags.lastIndex = start;
+	let depth = 0;
+	for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+		depth += tag[0] === "<div" ? 1 : -1;
+		if (depth === 0) return html.slice(start, tag.index);
+	}
+	return "";
+}
+
 describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 	it("separates memory identity, space and tags into distinct visible table columns", () => {
 		const html = render(MemoriesPage, "/memories");
@@ -144,7 +158,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 	});
 	it("keeps reader actions in the page header and metadata below it", () => {
 		const html = render(MemoryPage, "/memories/m1");
-		const header = html.match(/octo-page-header"[\s\S]*?<\/h1>[\s\S]*?<\/div><\/div>/)?.[0] ?? "";
+		const header = pageActions(html);
 		expect(header).toContain("版本历史");
 		expect(header).toContain("编辑记忆");
 		expect(html).toContain("本页目录");
