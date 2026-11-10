@@ -1,5 +1,12 @@
+import type { Locator } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { accessHeaders } from "./setup";
+
+async function expectBasaltAvatarSize(avatar: Locator) {
+	const box = await avatar.boundingBox();
+	expect(box?.width).toBeCloseTo(36, 0);
+	expect(box?.height).toBeCloseTo(36, 0);
+}
 
 test("loads the public sidebar identity once across SPA navigation", async ({ page, context }) => {
 	await context.setExtraHTTPHeaders(await accessHeaders("architie@gmail.com"));
@@ -22,7 +29,7 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	const footer = sidebar.locator('[data-slot="sidebar-footer"]');
 	await expect(footer.getByText("Zheng Li", { exact: true })).toBeVisible();
 	await expect(footer.getByText("architie@gmail.com", { exact: true })).toBeVisible();
-	const avatar = footer.getByRole("img", { name: "Zheng Li" });
+	const avatar = footer.getByRole("img", { name: "Zheng Li", exact: true });
 	const avatarImage = avatar.locator("img");
 	await expect(avatarImage).toBeVisible();
 	await expect(avatarImage).toHaveAttribute("src", identity.avatar);
@@ -30,8 +37,7 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	await expect(avatarImage).toHaveAttribute("referrerpolicy", "no-referrer");
 	await expect(avatarImage).toHaveAttribute("width", "36");
 	await expect(avatarImage).toHaveAttribute("height", "36");
-	await expect(avatar).toHaveCSS("width", "36px");
-	await expect(avatar).toHaveCSS("height", "36px");
+	await expectBasaltAvatarSize(avatar);
 	expect(
 		await avatarImage.evaluate((image: HTMLImageElement) => image.naturalWidth),
 	).toBeGreaterThan(0);
@@ -50,11 +56,14 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	await expect(footer.locator('[role="img"]')).toHaveAccessibleName(
 		"Zheng Li · architie@gmail.com",
 	);
-	await expect(footer.getByRole("img", { name: /Zheng Li/ })).toBeVisible();
+	await expect(footer.getByRole("img", { name: "Zheng Li", exact: true })).toBeVisible();
 	expect(identityRequests).toHaveLength(1);
 	await page.reload();
 	await expect(
-		page.locator('[data-slot="sidebar-footer"]').getByRole("img").locator("img"),
+		page
+			.locator('[data-slot="sidebar-footer"]')
+			.getByRole("img", { name: "Zheng Li", exact: true })
+			.locator("img"),
 	).toBeVisible();
 	expect(identityRequests).toHaveLength(2);
 });
@@ -78,11 +87,10 @@ test("keeps verified email and initials when the public profile is null", async 
 	});
 	const footer = page.locator('[data-slot="sidebar-footer"]');
 	await expect(footer.getByText("l3-null@local", { exact: true })).toBeVisible();
-	const avatar = footer.getByRole("img", { name: "l3-null" });
+	const avatar = footer.getByRole("img", { name: "l3-null", exact: true });
 	await expect(avatar).toHaveText("L3");
 	await expect(avatar.locator("img")).toHaveCount(0);
-	await expect(avatar).toHaveCSS("width", "36px");
-	await expect(avatar).toHaveCSS("height", "36px");
+	await expectBasaltAvatarSize(avatar);
 });
 
 test("uses the native Basalt fallback when a public avatar cannot decode", async ({
@@ -112,10 +120,9 @@ test("uses the native Basalt fallback when a public avatar cannot decode", async
 	const footer = page.locator('[data-slot="sidebar-footer"]');
 	await expect(footer.getByText("Zheng Li", { exact: true })).toBeVisible();
 	await expect(footer.getByText("l3-broken@local", { exact: true })).toBeVisible();
-	const avatar = footer.getByRole("img", { name: "Zheng Li" });
+	const avatar = footer.getByRole("img", { name: "Zheng Li", exact: true });
 	await expect(avatar).toHaveText("ZL");
 	await expect(avatar.locator("img")).toHaveCount(0);
 	await expect(avatar).toHaveAccessibleName("Zheng Li");
-	await expect(avatar).toHaveCSS("width", "36px");
-	await expect(avatar).toHaveCSS("height", "36px");
+	await expectBasaltAvatarSize(avatar);
 });
