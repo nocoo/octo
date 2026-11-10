@@ -315,7 +315,9 @@ export function AppShell() {
 				<SidebarFooter>
 					{isCollapsed ? (
 						<Tooltip>
-							<TooltipTrigger asChild>{avatar}</TooltipTrigger>
+							<TooltipTrigger asChild>
+								<span className="inline-flex">{avatar}</span>
+							</TooltipTrigger>
 							<TooltipContent side="right">
 								{identityName} · {identityLabel}
 							</TooltipContent>
