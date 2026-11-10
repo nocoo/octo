@@ -4,7 +4,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
 	[ -z "$local_sha" ] && continue
 	[ "$local_sha" = "$ZERO" ] && continue
 	if [ -z "$remote_sha" ] || [ "$remote_sha" = "$ZERO" ]; then
-		RANGES="$RANGES $local_sha"
+		RANGES="$RANGES origin/main..$local_sha"
 	else
 		RANGES="$RANGES $remote_sha..$local_sha"
 	fi

@@ -43,6 +43,8 @@ bun run gate:no-remote
 bun run gate:wrangler-vars
 bun run gate:client-fetch
 bun run gate:client-design # Basalt containers/controls and token-only spacing
+bun run gate:coverage-script # test:coverage must invoke vitest --coverage
+bun run gate:l1-probes       # L1 negative/healthy hook probes (CI prepare)
 bun run gate:production   # Empty Access bypass in production build inputs
 bun run gate:security    # gitleaks + osv-scanner; missing tools fail
 ```
@@ -53,7 +55,7 @@ Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-veri
 
 | Dimension | Required proof | Status |
 |---|---|---|
-| L1 pre-commit | Statements/branches/functions/lines each ≥95%, no skipped/focused tests, strict typecheck, Biome `--error-on-warnings`, on the index snapshot <30s | enforced |
+| L1 pre-commit | `bun run scripts/pre-commit.ts` on the **index snapshot** (`checkout-index` + symlinked `node_modules`); Node **≥26** (CI 26.12.1); scripts: `typecheck` → `lint` → `gate:test-skip` → `gate:no-remote` → `gate:wrangler-vars` → `gate:client-fetch` → `gate:client-design` → `gate:coverage-script` → `test:coverage`. **Measured 2026-11-09** (cloud VM, Bun 1.4.4, clean deps): warm wall **~37–38s** (target &lt;30s not met on this hardware); coverage **98.62 / 96.51 / 99.01 / 98.94** (statements / branches / functions / lines). Self-test: `bun run gate:l1-probes` (also CI `prepare-command`); rejects type/lint/skip/only/UT/coverage shortfall, staged-skip vs clean worktree, missing `bun`, interrupt, and fake `test:coverage` script. | enforced (S timing advisory) |
 | L2 API | Direct Miniflare/workerd HTTP over 100% endpoint × method, success/failure/auth, including finite oversize uploads | enforced |
 | L3 UI | Critical dashboard journeys in Chromium on isolated local Worker | CI gate; real admin integration covered |
 | G2 security | gitleaks over pushed ranges + osv-scanner on `bun.lock` | enforced |

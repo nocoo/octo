@@ -43,4 +43,25 @@ describe("pre-push checks", () => {
 			}
 		},
 	);
+
+	it("uses an origin/main range when the remote ref is missing", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "octo-pre-push-"));
+		try {
+			const log = join(dir, "calls");
+			const bun = join(dir, "bun");
+			await writeFile(
+				bun,
+				'#!/bin/sh\nprintf "%s %s\\n" "$2" "$GITLEAKS_LOG_OPTS" >> "$CALL_LOG"\nexit 0\n',
+			);
+			await chmod(bun, 0o755);
+			execFileSync("sh", [".husky/pre-push"], {
+				input: `refs/heads/cursor/l1 abc123 refs/heads/cursor/l1 ${"0".repeat(40)}\n`,
+				env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, CALL_LOG: log },
+			});
+			const calls = await readFile(log, "utf8");
+			expect(calls).toMatch(/gate:security\s+origin\/main\.\.abc123/);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
 });
