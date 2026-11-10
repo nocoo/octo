@@ -357,7 +357,6 @@ export function AppShell() {
 			)}
 			<AppMain tabIndex={-1}>
 				<AppHeader
-					className="octo-header"
 					breadcrumbs={
 						mobile ? headerCrumbs(location.pathname).slice(-1) : headerCrumbs(location.pathname)
 					}
