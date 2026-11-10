@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
+import { APP_VERSION } from "../../../lib/version";
 import { AppShell } from "./app-shell";
 import { PageHeader } from "./page-header";
 import { useModel } from "./use-model";
@@ -75,7 +76,7 @@ it("leaves the single page heading to PageHeader", () => {
 
 it("uses compact header chrome and monochrome navigation without mixed-language labels", () => {
 	const html = renderShell();
-	expect(html).toContain("octo-header");
+	expect(html).toContain("data-basalt-header");
 	expect(html).toContain("octo-nav-icon");
 	expect(html).not.toContain("data-tone");
 	expect(html).toContain("Octo 项目主页");
@@ -86,7 +87,8 @@ it("uses the adopted transparent seahorse in the application rail", () => {
 	const html = renderShell();
 	expect(html).toContain('src="/logo-24.png"');
 	expect(html).toContain('alt="Octo"');
-	expect(html).toContain('<strong class="octo-brand-title">octo</strong>');
+	expect(html).toContain(">octo</span>");
+	expect(html).toContain(`>v${APP_VERSION}</span>`);
 });
 
 it("separates the brand home link from the visible collapse control", () => {
@@ -99,7 +101,7 @@ it("separates the brand home link from the visible collapse control", () => {
 	expect(html.indexOf('aria-label="收起侧栏"')).toBeLessThan(
 		html.indexOf('data-slot="sidebar-nav"'),
 	);
-	expect(html).toContain("octo-version");
+	expect(html).toContain(`v${APP_VERSION}`);
 	expect(html).toContain('data-slot="sidebar-group"');
 	expect(html).toContain('href="https://hexly.ai/projects/octo"');
 	expect(html.indexOf('aria-label="GitHub 仓库"')).toBeLessThan(
@@ -152,7 +154,7 @@ it("keeps initials and the verified email when no public profile exists", () => 
 	const html = renderShell();
 	expect(html).toContain("l3-null@local");
 	expect(html).toContain(">L3</span>");
-	expect(html).toMatch(/class="[^"]*octo-avatar[^"]*"[^>]*aria-label="l3-null"/);
+	expect(html).toMatch(/role="img"[^>]*aria-label="l3-null"/);
 });
 
 it("links back to the library and memory from version history", () => {

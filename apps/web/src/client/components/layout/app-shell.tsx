@@ -33,6 +33,7 @@ import {
 import { AppHeader } from "@nocoo/basalt/components/app-header";
 import { AppMain, AppSkipLink, AppShell as Frame } from "@nocoo/basalt/components/app-shell";
 import { Banner } from "@nocoo/basalt/components/banner";
+import { LinkButton } from "@nocoo/basalt/components/button";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { Command } from "cmdk";
@@ -171,7 +172,7 @@ export function AppShell() {
 	function rail(isCollapsed: boolean) {
 		const avatar = (
 			<Avatar
-				className="octo-avatar"
+				className="h-9 w-9 shrink-0"
 				role="img"
 				aria-label={isCollapsed ? `${identityName} · ${identityLabel}` : identityName}
 				tabIndex={isCollapsed ? 0 : undefined}
@@ -190,49 +191,49 @@ export function AppShell() {
 		);
 		return (
 			<Sidebar collapsed={isCollapsed}>
-				<SidebarHeader>
-					<Grid className="octo-brand-row">
-						<Link
-							href="/"
-							className="octo-home-link"
-							aria-label="Octo 首页"
-							onClick={() => setDrawer(false)}
-						>
-							<img
-								src="/logo-24.png"
-								srcSet="/logo-24.png 1x, /logo-48.png 2x"
-								width={28}
-								height={28}
-								alt="Octo"
-							/>
-							{!isCollapsed && (
-								<>
-									<strong className="octo-brand-title">octo</strong>
-									<span className="octo-version">v{APP_VERSION}</span>
-								</>
-							)}
-						</Link>
+				<SidebarHeader className={isCollapsed ? "justify-center" : "justify-between"}>
+					<Link
+						href="/"
+						aria-label="Octo 首页"
+						className="flex min-w-0 items-center gap-basalt-space-lg text-basalt-foreground no-underline hover:no-underline"
+						onClick={() => setDrawer(false)}
+					>
+						<img
+							src="/logo-24.png"
+							srcSet="/logo-24.png 1x, /logo-48.png 2x"
+							width={28}
+							height={28}
+							alt="Octo"
+							className="h-7 w-7 shrink-0 object-contain"
+						/>
 						{!isCollapsed && (
-							<Button
-								ref={railToggle}
-								variant="ghost"
-								size="icon"
-								className="octo-collapse"
-								aria-label="收起侧栏"
-								aria-expanded={!isCollapsed}
-								onClick={() => (mobile ? setDrawer(false) : toggleRail())}
-							>
-								<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
-							</Button>
+							<>
+								<span className="text-basalt-xl font-semibold text-basalt-foreground">octo</span>
+								<span className="shrink-0 rounded-basalt-md bg-basalt-secondary px-basalt-space-md py-basalt-space-xs font-mono text-basalt-xs font-medium leading-basalt-tight text-basalt-muted-foreground">
+									v{APP_VERSION}
+								</span>
+							</>
 						)}
-					</Grid>
+					</Link>
+					{!isCollapsed && (
+						<Button
+							ref={railToggle}
+							variant="ghost"
+							size="icon"
+							aria-label="收起侧栏"
+							aria-expanded={!isCollapsed}
+							onClick={() => (mobile ? setDrawer(false) : toggleRail())}
+						>
+							<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
+						</Button>
+					)}
 				</SidebarHeader>
 				{isCollapsed ? (
 					<Button
 						ref={railToggle}
 						variant="ghost"
 						size="icon"
-						className="octo-expand"
+						className="mb-basalt-space-sm self-center"
 						aria-label="展开侧栏"
 						aria-expanded={false}
 						onClick={toggleRail}
@@ -240,7 +241,7 @@ export function AppShell() {
 						<PanelLeftOpen strokeWidth={1.5} aria-hidden="true" />
 					</Button>
 				) : (
-					<Grid columns={1} className="octo-search-inset">
+					<Grid columns={1} className="w-full px-basalt-nav-inset">
 						<SidebarSearch onClick={() => setPalette(true)} shortcut="⌘ K">
 							搜索与命令
 						</SidebarSearch>
@@ -314,7 +315,9 @@ export function AppShell() {
 				<SidebarFooter>
 					{isCollapsed ? (
 						<Tooltip>
-							<TooltipTrigger asChild>{avatar}</TooltipTrigger>
+							<TooltipTrigger asChild>
+								<span className="inline-flex">{avatar}</span>
+							</TooltipTrigger>
 							<TooltipContent side="right">
 								{identityName} · {identityLabel}
 							</TooltipContent>
@@ -357,7 +360,6 @@ export function AppShell() {
 			)}
 			<AppMain tabIndex={-1}>
 				<AppHeader
-					className="octo-header"
 					breadcrumbs={
 						mobile ? headerCrumbs(location.pathname).slice(-1) : headerCrumbs(location.pathname)
 					}
@@ -380,52 +382,54 @@ export function AppShell() {
 					actions={
 						<>
 							<HeaderHint label="GitHub 仓库 · 在新标签页打开">
-								<Button variant="ghost" size="icon" className="octo-header-link" asChild>
-									<a
-										href="https://github.com/nocoo/octo"
-										target="_blank"
-										rel="noopener noreferrer"
-										aria-label="GitHub 仓库"
+								<LinkButton
+									variant="ghost"
+									size="icon"
+									href="https://github.com/nocoo/octo"
+									target="_blank"
+									rel="noopener noreferrer"
+									aria-label="GitHub 仓库"
+								>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth={1.5}
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										aria-hidden="true"
+										className="h-[1.125rem] w-[1.125rem]"
 									>
-										<svg
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth={1.5}
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											aria-hidden="true"
-										>
-											<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-											<path d="M9 18c-4.51 2-5-2-7-2" />
-										</svg>
-										<span className="sr-only">GitHub 仓库</span>
-									</a>
-								</Button>
+										<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+										<path d="M9 18c-4.51 2-5-2-7-2" />
+									</svg>
+									<span className="sr-only">GitHub 仓库</span>
+								</LinkButton>
 							</HeaderHint>
 							<HeaderHint label="Octo 项目主页 · 在新标签页打开">
-								<Button variant="ghost" size="icon" className="octo-header-link" asChild>
-									<a
-										href="https://hexly.ai/projects/octo"
-										target="_blank"
-										rel="noopener noreferrer"
-										aria-label="Octo 项目主页"
+								<LinkButton
+									variant="ghost"
+									size="icon"
+									href="https://hexly.ai/projects/octo"
+									target="_blank"
+									rel="noopener noreferrer"
+									aria-label="Octo 项目主页"
+								>
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth={1.5}
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										aria-hidden="true"
+										className="h-[1.125rem] w-[1.125rem]"
 									>
-										<svg
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth={1.5}
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											aria-hidden="true"
-										>
-											<path d="m12 2 8.66 5v10L12 22l-8.66-5V7Z" />
-											<path d="M12 2v20M3.34 7l17.32 10m0-10L3.34 17" />
-										</svg>
-										<span className="sr-only">Octo 项目主页</span>
-									</a>
-								</Button>
+										<path d="m12 2 8.66 5v10L12 22l-8.66-5V7Z" />
+										<path d="M12 2v20M3.34 7l17.32 10m0-10L3.34 17" />
+									</svg>
+									<span className="sr-only">Octo 项目主页</span>
+								</LinkButton>
 							</HeaderHint>
 							<HeaderHint label="切换深色或浅色主题">
 								<ThemeToggle aria-label="切换深色或浅色主题" />
