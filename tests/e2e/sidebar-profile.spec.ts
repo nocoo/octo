@@ -48,7 +48,7 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	await expect(footer.locator('[role="img"]')).toHaveAccessibleName(
 		"Zheng Li · architie@gmail.com",
 	);
-	await expect(footer.getByRole("img", { name: "Zheng Li", exact: true })).toBeVisible();
+	await expect(footer.locator('[role="img"]')).toBeVisible();
 	expect(identityRequests).toHaveLength(1);
 	await page.reload();
 	await expect(
