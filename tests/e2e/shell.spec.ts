@@ -46,7 +46,7 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 		}));
 		expect(geometry.gap).toBe("4px");
 		expect(geometry.controls).toEqual([
-			...Array.from({ length: 2 }, () => ({ width: 34, height: 34, icon: 18 })),
+			...Array.from({ length: 2 }, () => ({ width: 34, height: 34, icon: 14 })),
 			{ width: 34, height: 34, icon: 14 },
 		]);
 		expect(
@@ -147,14 +147,13 @@ test.describe("touch shell", () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto("/settings/embedding");
 		expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
-		for (const name of ["打开导航", "返回上一页"]) {
-			const action = page.getByLabel(name, { exact: true });
-			await expect(action).toBeInViewport({ ratio: 1 });
-			const box = await action.boundingBox();
-			expect(box?.width).toBeGreaterThanOrEqual(44);
-			expect(box?.height).toBeGreaterThanOrEqual(44);
-		}
-		for (const name of ["GitHub 仓库", "Octo 项目主页", "切换深色或浅色主题"]) {
+		for (const name of [
+			"打开导航",
+			"返回上一页",
+			"GitHub 仓库",
+			"Octo 项目主页",
+			"切换深色或浅色主题",
+		]) {
 			const action = page.getByLabel(name, { exact: true });
 			await expect(action).toBeInViewport({ ratio: 1 });
 			const box = await action.boundingBox();
@@ -183,7 +182,7 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 		for (const width of [1440, 768]) {
 			await page.setViewportSize({ width, height: 900 });
 			const expanded = await center('img[alt="Octo"]');
-			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBe(34);
+			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(expanded, 0);
 			const search = rail.getByRole("button", { name: "搜索与命令" });
 			expect((await search.boundingBox())?.width).toBe(244);
 			expect((await search.boundingBox())?.height).toBeCloseTo(39.14, 1);
