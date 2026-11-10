@@ -32,9 +32,9 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	await expect(avatarImage).toHaveAttribute("height", "36");
 	await expect(avatar).toHaveCSS("width", "36px");
 	await expect(avatar).toHaveCSS("height", "36px");
-	expect(await avatarImage.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(
-		0,
-	);
+	expect(
+		await avatarImage.evaluate((image: HTMLImageElement) => image.naturalWidth),
+	).toBeGreaterThan(0);
 	await expect(avatar.locator(":scope > span")).toHaveCount(0);
 	for (const [label, path] of [
 		["记忆库", "/memories"],
