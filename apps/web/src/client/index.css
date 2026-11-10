@@ -127,19 +127,6 @@ a {
 	height: var(--basalt-size-icon-lg);
 	stroke-width: 1.5;
 }
-.octo-header-link {
-	inline-size: var(--basalt-space-8);
-	border-radius: var(--basalt-radius-md);
-	color: hsl(var(--basalt-muted-foreground));
-}
-.octo-header-link:hover {
-	color: hsl(var(--basalt-foreground));
-}
-.octo-header-link svg {
-	width: var(--basalt-text-xl);
-	height: var(--basalt-text-xl);
-	stroke-width: 1.5;
-}
 .octo-page-header {
 	display: flex;
 	flex-wrap: wrap;
@@ -198,7 +185,6 @@ a {
 	block-size: var(--basalt-space-5);
 }
 @media (pointer: coarse) {
-	.octo-header :is(button, a):has(svg),
 	.octo-page-back {
 		min-inline-size: var(--basalt-size-touch);
 		min-block-size: var(--basalt-size-touch);
