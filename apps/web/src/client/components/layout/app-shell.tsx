@@ -190,49 +190,49 @@ export function AppShell() {
 		);
 		return (
 			<Sidebar collapsed={isCollapsed}>
-				<SidebarHeader>
-					<Grid className="octo-brand-row">
-						<Link
-							href="/"
-							className="octo-home-link"
-							aria-label="Octo 首页"
-							onClick={() => setDrawer(false)}
-						>
-							<img
-								src="/logo-24.png"
-								srcSet="/logo-24.png 1x, /logo-48.png 2x"
-								width={28}
-								height={28}
-								alt="Octo"
-							/>
-							{!isCollapsed && (
-								<>
-									<strong className="octo-brand-title">octo</strong>
-									<span className="octo-version">v{APP_VERSION}</span>
-								</>
-							)}
-						</Link>
+				<SidebarHeader className={isCollapsed ? "justify-center" : "justify-between"}>
+					<Link
+						href="/"
+						aria-label="Octo 首页"
+						className="flex min-w-0 items-center gap-basalt-space-lg text-basalt-foreground no-underline hover:no-underline"
+						onClick={() => setDrawer(false)}
+					>
+						<img
+							src="/logo-24.png"
+							srcSet="/logo-24.png 1x, /logo-48.png 2x"
+							width={28}
+							height={28}
+							alt="Octo"
+							className="h-7 w-7 shrink-0 object-contain"
+						/>
 						{!isCollapsed && (
-							<Button
-								ref={railToggle}
-								variant="ghost"
-								size="icon"
-								className="octo-collapse"
-								aria-label="收起侧栏"
-								aria-expanded={!isCollapsed}
-								onClick={() => (mobile ? setDrawer(false) : toggleRail())}
-							>
-								<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
-							</Button>
+							<>
+								<span className="text-basalt-xl font-semibold text-basalt-foreground">octo</span>
+								<span className="shrink-0 rounded-basalt-md bg-basalt-secondary px-basalt-space-md py-basalt-space-xs font-mono text-basalt-xs font-medium leading-basalt-tight text-basalt-muted-foreground">
+									v{APP_VERSION}
+								</span>
+							</>
 						)}
-					</Grid>
+					</Link>
+					{!isCollapsed && (
+						<Button
+							ref={railToggle}
+							variant="ghost"
+							size="icon"
+							aria-label="收起侧栏"
+							aria-expanded={!isCollapsed}
+							onClick={() => (mobile ? setDrawer(false) : toggleRail())}
+						>
+							<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
+						</Button>
+					)}
 				</SidebarHeader>
 				{isCollapsed ? (
 					<Button
 						ref={railToggle}
 						variant="ghost"
 						size="icon"
-						className="octo-expand"
+						className="mb-basalt-space-sm self-center"
 						aria-label="展开侧栏"
 						aria-expanded={false}
 						onClick={toggleRail}
@@ -240,7 +240,7 @@ export function AppShell() {
 						<PanelLeftOpen strokeWidth={1.5} aria-hidden="true" />
 					</Button>
 				) : (
-					<Grid columns={1} className="octo-search-inset">
+					<Grid columns={1} className="w-full px-basalt-nav-inset">
 						<SidebarSearch onClick={() => setPalette(true)} shortcut="⌘ K">
 							搜索与命令
 						</SidebarSearch>
