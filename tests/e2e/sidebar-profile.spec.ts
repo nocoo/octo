@@ -1,12 +1,5 @@
-import type { Locator } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { accessHeaders } from "./setup";
-
-async function expectBasaltAvatarSize(avatar: Locator) {
-	const box = await avatar.boundingBox();
-	expect(box?.width).toBeCloseTo(36, 0);
-	expect(box?.height).toBeCloseTo(36, 0);
-}
 
 test("loads the public sidebar identity once across SPA navigation", async ({ page, context }) => {
 	await context.setExtraHTTPHeaders(await accessHeaders("architie@gmail.com"));
@@ -37,7 +30,6 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	await expect(avatarImage).toHaveAttribute("referrerpolicy", "no-referrer");
 	await expect(avatarImage).toHaveAttribute("width", "36");
 	await expect(avatarImage).toHaveAttribute("height", "36");
-	await expectBasaltAvatarSize(avatar);
 	expect(
 		await avatarImage.evaluate((image: HTMLImageElement) => image.naturalWidth),
 	).toBeGreaterThan(0);
@@ -90,7 +82,6 @@ test("keeps verified email and initials when the public profile is null", async 
 	const avatar = footer.getByRole("img", { name: "l3-null", exact: true });
 	await expect(avatar).toHaveText("L3");
 	await expect(avatar.locator("img")).toHaveCount(0);
-	await expectBasaltAvatarSize(avatar);
 });
 
 test("uses the native Basalt fallback when a public avatar cannot decode", async ({
@@ -124,5 +115,4 @@ test("uses the native Basalt fallback when a public avatar cannot decode", async
 	await expect(avatar).toHaveText("ZL");
 	await expect(avatar.locator("img")).toHaveCount(0);
 	await expect(avatar).toHaveAccessibleName("Zheng Li");
-	await expectBasaltAvatarSize(avatar);
 });

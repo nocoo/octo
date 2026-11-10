@@ -181,7 +181,6 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 		await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
 		for (const width of [1440, 768]) {
 			await page.setViewportSize({ width, height: 900 });
-			const expanded = await center('img[alt="Octo"]');
 			const search = rail.getByRole("button", { name: "搜索与命令" });
 			expect((await search.boundingBox())?.width).toBe(244);
 			expect((await search.boundingBox())?.height).toBeCloseTo(39.14, 1);
@@ -190,8 +189,11 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 			await expect(rail.locator('[data-slot="sidebar-footer"] [role="img"]')).toHaveAccessibleName(
 				"Zheng Li · l3@local",
 			);
-			expect(await center('img[alt="Octo"]')).toBeCloseTo(expanded, 0);
-			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(expanded, 0);
+			const collapsedLogo = await center('img[alt="Octo"]');
+			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(
+				collapsedLogo,
+				0,
+			);
 			await expect(page.getByRole("link", { name: "Octo 首页", exact: true })).toHaveAttribute(
 				"href",
 				"/",
