@@ -172,6 +172,11 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 	await expect(
 		rail.locator('[data-slot="sidebar-footer"] img[alt="Zheng Li 的头像"]'),
 	).toBeVisible();
+	const center = async (selector: string) => {
+		const box = await rail.locator(selector).boundingBox();
+		expect(box).not.toBeNull();
+		return (box?.x ?? 0) + (box?.width ?? 0) / 2;
+	};
 	for (const colorScheme of ["light", "dark"] as const) {
 		await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
 		for (const width of [1440, 768]) {
@@ -183,6 +188,11 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 			await expect(page.getByRole("button", { name: "展开侧栏", exact: true })).toBeVisible();
 			await expect(rail.locator('[data-slot="sidebar-footer"] [role="img"]')).toHaveAccessibleName(
 				"Zheng Li · l3@local",
+			);
+			const collapsedLogo = await center('img[alt="Octo"]');
+			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(
+				collapsedLogo,
+				0,
 			);
 			await expect(page.getByRole("link", { name: "Octo 首页", exact: true })).toHaveAttribute(
 				"href",

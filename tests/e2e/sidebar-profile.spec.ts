@@ -54,7 +54,10 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	expect(identityRequests).toHaveLength(1);
 	await page.reload();
 	await expect(
-		page.locator('[data-slot="sidebar-footer"]').getByRole("img").locator("img"),
+		page
+			.locator('[data-slot="sidebar-footer"]')
+			.getByRole("img", { name: "Zheng Li", exact: true })
+			.locator("img"),
 	).toBeVisible();
 	expect(identityRequests).toHaveLength(2);
 });
