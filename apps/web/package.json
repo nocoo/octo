@@ -10,7 +10,7 @@
 		"cmdk": "1.1.1",
 		"diff": "^9.0.0",
 		"github-slugger": "^2.0.0",
-		"hono": "4.13.14",
+		"hono": "4.13.17",
 		"lucide-react": "1.70.0",
 		"mdast-util-to-string": "^4.0.0",
 		"react": "^19.3.0",
