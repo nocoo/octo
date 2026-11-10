@@ -87,7 +87,8 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		const html = render(MemoriesPage, "/memories?selected=m1");
 		expect(html).toMatch(/<table[^>]*class="[^"]*octo-table/);
 		expect(html).not.toContain("octo-title-icon");
-		expect(html).toContain('class="octo-page-meta" title="1 条">1 条');
+		expect(html).toContain("1 条");
+		expect(html).toMatch(/<p[^>]*text-basalt-muted-foreground[^>]*>1 条<\/p>/);
 		expect(html).not.toContain("记忆列表");
 		for (const label of ["work"])
 			expect(html).toMatch(

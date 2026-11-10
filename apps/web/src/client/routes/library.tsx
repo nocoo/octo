@@ -239,7 +239,7 @@ export function TagsPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="标签"
-				meta={state.ready ? `${state.tags.length} 个标签` : undefined}
+				description={state.ready ? `${state.tags.length} 个标签` : undefined}
 				actions={
 					<>
 						<Input
@@ -528,7 +528,7 @@ export function SpacesPage() {
 		<Grid columns={1} gap="lg" className="octo-table-page">
 			<PageHeader
 				title="空间"
-				meta={state.ready ? `${state.spaces.length} 个空间` : undefined}
+				description={state.ready ? `${state.spaces.length} 个空间` : undefined}
 				actions={
 					<>
 						<Input
@@ -721,7 +721,7 @@ export function GraphPage() {
 		<Grid columns={1} gap="lg" className={populated ? "octo-graph-page" : ""}>
 			<PageHeader
 				title="关系图"
-				meta={meta}
+				description={meta}
 				actions={
 					<>
 						<ViewSwitch
@@ -809,7 +809,7 @@ export function TimelinePage() {
 				<Grid columns={1} gap="lg">
 					<PageHeader
 						title="时间线"
-						meta={
+						description={
 							state.ready
 								? `${timeline.groups.reduce((count, group) => count + group.items.length, 0)} 条记忆 · ${
 										timeline.groups.length

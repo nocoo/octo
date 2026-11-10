@@ -268,7 +268,7 @@ export function KeysPage() {
 		<Grid columns={1} gap="lg" className="min-w-0 octo-table-page">
 			<PageHeader
 				title="接口密钥"
-				meta="明文仅展示一次"
+				description="明文仅展示一次"
 				actions={
 					<>
 						<Button

@@ -119,56 +119,6 @@ a {
 	height: var(--basalt-size-icon-lg);
 	stroke-width: 1.5;
 }
-.octo-page-header {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	column-gap: var(--basalt-space-layout);
-	row-gap: var(--basalt-space-sm);
-}
-.octo-page-heading {
-	display: flex;
-	flex: 1 1 auto;
-	min-inline-size: 0;
-	max-inline-size: 100%;
-	align-items: center;
-	column-gap: var(--basalt-space-sm);
-}
-.octo-page-title {
-	display: -webkit-box;
-	flex: 0 1 auto;
-	max-inline-size: 100%;
-	min-inline-size: 0;
-	overflow: hidden;
-	overflow-wrap: anywhere;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	font-family: var(--basalt-font-display);
-	font-size: var(--basalt-text-3xl);
-	font-weight: 600;
-	line-height: var(--basalt-leading-tight);
-	letter-spacing: -0.01em;
-}
-.octo-page-meta {
-	margin-inline-start: var(--basalt-space-sm);
-	flex-shrink: 100;
-	min-inline-size: 0;
-	max-inline-size: var(--basalt-space-96);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: var(--basalt-text-sm);
-	color: hsl(var(--basalt-muted-foreground));
-	font-variant-numeric: tabular-nums;
-}
-.octo-page-actions {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	column-gap: var(--basalt-space-sm);
-	row-gap: var(--basalt-space-sm);
-	margin-inline-start: auto;
-}
 .octo-page-back {
 	color: hsl(var(--basalt-muted-foreground));
 }
