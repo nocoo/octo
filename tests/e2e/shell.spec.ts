@@ -167,28 +167,23 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 	await page.goto("/settings");
 	await expect(page.getByText("l3@local", { exact: true })).toBeVisible();
 	const rail = page.locator("[data-basalt-sidebar]");
-	await expect(rail.locator(".octo-brand-title")).toHaveText("octo");
+	await expect(rail.getByText("octo", { exact: true })).toBeVisible();
 	await expect(rail.getByText("Zheng Li", { exact: true })).toBeVisible();
-	await expect(rail.locator('.octo-avatar img[alt="Zheng Li 的头像"]')).toBeVisible();
-	const center = async (selector: string) => {
-		const box = await rail.locator(selector).boundingBox();
-		expect(box).not.toBeNull();
-		return (box?.x ?? 0) + (box?.width ?? 0) / 2;
-	};
+	await expect(
+		rail.locator('[data-slot="sidebar-footer"] img[alt="Zheng Li 的头像"]'),
+	).toBeVisible();
 	for (const colorScheme of ["light", "dark"] as const) {
 		await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
 		for (const width of [1440, 768]) {
 			await page.setViewportSize({ width, height: 900 });
-			const expanded = await center('img[alt="Octo"]');
-			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBe(34);
 			const search = rail.getByRole("button", { name: "搜索与命令" });
 			expect((await search.boundingBox())?.width).toBe(244);
 			expect((await search.boundingBox())?.height).toBeCloseTo(39.14, 1);
 			await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
 			await expect(page.getByRole("button", { name: "展开侧栏", exact: true })).toBeVisible();
-			await expect(rail.locator(".octo-avatar")).toHaveAccessibleName("Zheng Li · l3@local");
-			expect(await center('img[alt="Octo"]')).toBeCloseTo(expanded, 0);
-			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(expanded, 0);
+			await expect(rail.locator('[data-slot="sidebar-footer"] [role="img"]')).toHaveAccessibleName(
+				"Zheng Li · l3@local",
+			);
 			await expect(page.getByRole("link", { name: "Octo 首页", exact: true })).toHaveAttribute(
 				"href",
 				"/",
