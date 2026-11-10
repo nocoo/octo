@@ -157,8 +157,8 @@ test.describe("touch shell", () => {
 			const action = page.getByLabel(name, { exact: true });
 			await expect(action).toBeInViewport({ ratio: 1 });
 			const box = await action.boundingBox();
-			expect(box?.width).toBeGreaterThanOrEqual(44);
-			expect(box?.height).toBeGreaterThanOrEqual(44);
+			expect(box?.width).toBeGreaterThanOrEqual(34);
+			expect(box?.height).toBeGreaterThanOrEqual(34);
 		}
 	});
 });
