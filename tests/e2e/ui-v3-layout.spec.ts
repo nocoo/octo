@@ -8,14 +8,16 @@ test("shared headings separate their metadata and memory filters align clear", a
 	await page.setViewportSize({ width: 1440, height: 900 });
 	for (const path of [`/memories?spaces=${memory.space}&types=note`, "/spaces", "/audit"]) {
 		await page.goto(path);
-		const meta = page.locator(".octo-page-meta");
-		await expect(meta).toBeVisible();
-		const gap = await meta.evaluate((element) => {
-			const title = element.previousElementSibling;
-			if (!title) throw new Error("Missing heading");
-			return element.getBoundingClientRect().left - title.getBoundingClientRect().right;
+		const title = page.locator(".octo-page-header h1");
+		const description = page.locator(".octo-page-header p.text-basalt-muted-foreground").first();
+		await expect(title).toBeVisible();
+		await expect(description).toBeVisible();
+		const stackGap = await description.evaluate((element) => {
+			const heading = element.parentElement?.querySelector("h1");
+			if (!heading) throw new Error("Missing heading");
+			return element.getBoundingClientRect().top - heading.getBoundingClientRect().bottom;
 		});
-		expect(gap).toBeGreaterThanOrEqual(8);
+		expect(stackGap).toBeGreaterThanOrEqual(4);
 	}
 	await page.goto(`/memories?spaces=${memory.space}&types=note`);
 	const form = page.getByRole("form", { name: "记忆筛选" });

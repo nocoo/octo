@@ -52,6 +52,20 @@ function renderResult() {
 	);
 }
 
+/** The page-header actions row: the balanced `div` carrying `data-octo-page-actions`. */
+function pageActions(html: string): string {
+	const start = html.lastIndexOf("<div", html.indexOf("data-octo-page-actions"));
+	if (start < 0) return "";
+	const tags = /<\/?div\b/g;
+	tags.lastIndex = start;
+	let depth = 0;
+	for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+		depth += tag[0] === "<div" ? 1 : -1;
+		if (depth === 0) return html.slice(start, tag.index);
+	}
+	return "";
+}
+
 it("exposes compact search controls in the header without losing URL form values", () => {
 	const html = renderToStaticMarkup(
 		<ThemeProvider persist={false}>
@@ -68,10 +82,7 @@ it("exposes compact search controls in the header without losing URL form values
 	expect(html).not.toContain("octo-search-query-field");
 	expect(html).toContain("搜索记忆");
 	expect(html).toContain('aria-label="搜索选项"');
-	const heading =
-		html.match(/octo-page-header"[\s\S]*?<\/header>/)?.[0] ??
-		html.split("octo-page-actions")[1] ??
-		"";
+	const heading = pageActions(html);
 	expect(heading).toContain("data-search-input");
 	expect(heading).toContain('aria-label="搜索模式"');
 	expect(html).toContain('aria-label="常用记忆筛选"');

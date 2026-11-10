@@ -164,7 +164,7 @@ export function UsagePage() {
 		<Grid columns={1} gap="md" className="octo-table-page octo-table-page--usage">
 			<PageHeader
 				title="每日用量"
-				meta="按 UTC 日期与密钥汇总；非实时数据"
+				description="按 UTC 日期与密钥汇总；非实时数据"
 				actions={
 					<>
 						<Popover>
@@ -431,7 +431,7 @@ export function AuditPage() {
 		<Grid columns={1} gap="md" className="octo-table-page">
 			<PageHeader
 				title="审计日志"
-				meta="包含被拒绝的请求；不记录正文和凭据"
+				description="包含被拒绝的请求；不记录正文和凭据"
 				actions={
 					<>
 						<Popover>

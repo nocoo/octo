@@ -1,6 +1,8 @@
 import { capture, expect, test } from "./fixtures";
 
-test("back navigation sits left of the page title and inline metadata", async ({ page }, info) => {
+test("back navigation sits left of the page title with description below it", async ({
+	page,
+}, info) => {
 	for (const width of [1440, 390]) {
 		await page.setViewportSize({ width, height: 900 });
 		await page.goto("/audit");
@@ -9,17 +11,17 @@ test("back navigation sits left of the page title and inline metadata", async ({
 		const section = page.locator(".octo-page-header");
 		const back = section.getByRole("button", { name: "返回上一页" });
 		const title = section.getByRole("heading", { level: 1 });
-		const meta = section.locator(".octo-page-meta");
+		const description = section.getByText("包含被拒绝的请求；不记录正文和凭据");
 		await expect(back).toBeInViewport({ ratio: 1 });
 		await expect(back.locator("svg")).toHaveCSS("width", "20px");
 		const b = await back.boundingBox();
 		const t = await title.boundingBox();
-		const m = await meta.boundingBox();
-		expect(b && t && m).toBeTruthy();
-		if (!b || !t || !m) throw new Error("Missing page header geometry");
+		const d = await description.boundingBox();
+		expect(b && t && d).toBeTruthy();
+		if (!b || !t || !d) throw new Error("Missing page header geometry");
 		expect(b.x + b.width).toBeLessThan(t.x);
-		expect(t.x + t.width).toBeLessThan(m.x);
-		expect(Math.abs(b.y + b.height / 2 - (t.y + t.height / 2))).toBeLessThan(3);
+		expect(d.y).toBeGreaterThan(t.y + t.height - 1);
+		expect(Math.abs(b.y + b.height / 2 - (t.y + t.height / 2))).toBeLessThan(8);
 		await section.getByRole("button", { name: "审计筛选", exact: true }).click();
 		const filterForm = page
 			.locator("form")

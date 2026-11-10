@@ -300,7 +300,7 @@ export function OverviewPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="总览"
-				meta={
+				description={
 					data
 						? `近 ${range} 天 · ${data.totals.spaces} 个空间 · 回收站 ${formatNumber(data.totals.trash)}`
 						: `近 ${range} 天`

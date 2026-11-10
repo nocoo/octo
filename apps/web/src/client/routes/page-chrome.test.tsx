@@ -34,8 +34,7 @@ it.each([
 			</MemoryRouter>
 		</ThemeProvider>,
 	);
-	const header =
-		html.match(/class="grid gap-basalt-layout octo-page-header"[\s\S]*?<\/h1>/)?.[0] ?? "";
+	const header = html.match(/octo-page-header"[\s\S]*?<\/h1>/)?.[0] ?? "";
 	expect(header).toMatch(/<h1\b[^>]*>[\s\S]+?<\/h1>/);
 	expect(header).toContain('aria-label="返回上一页"');
 	expect(html.match(/<h1\b/g)).toHaveLength(1);

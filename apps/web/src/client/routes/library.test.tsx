@@ -89,7 +89,7 @@ describe("library page installed-component boundaries", () => {
 		const html = render(GraphPage, "/graph?cap=10");
 		const header = html.match(/octo-page-header"[\s\S]*?<\/div><\/div>/)?.[0] ?? "";
 		expect(header).toContain("9 个节点 · 8 条关联 · 已聚合 5 个");
-		expect(header).toContain('class="octo-page-meta"');
+		expect(header).toMatch(/text-basalt-muted-foreground/);
 		expect(html).not.toContain("知识关联");
 		expect(html).not.toMatch(/<h3[^>]*>\d+ 个节点/);
 	});

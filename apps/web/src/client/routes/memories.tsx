@@ -230,10 +230,14 @@ export function MemoriesPage() {
 			<MemoryFilters params={params} onChange={setParams}>
 				<PageHeader
 					title="记忆库"
-					meta={
-						state.items.length
+					// Always reserve the description line: Basalt stacks it under the title, so a
+					// late-arriving count would push the filter bar down mid-interaction.
+					description={
+						state.loaded
 							? `${state.items.length} 条${state.nextCursor ? " · 还有更多" : ""}`
-							: undefined
+							: state.error
+								? "加载失败"
+								: "正在加载…"
 					}
 					actions={
 						<ViewSwitch
@@ -510,7 +514,7 @@ export function MemoryPage() {
 			<Sheet open={tocOpen} onOpenChange={setTocOpen}>
 				<PageHeader
 					title={memory?.title ?? cachedTitle ?? "记忆"}
-					meta={memory ? `第 ${memory.version} 版` : undefined}
+					description={memory ? `第 ${memory.version} 版` : undefined}
 					actions={
 						<>
 							{memory && (
@@ -849,7 +853,7 @@ export function EditorPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="编辑记忆"
-				meta={
+				description={
 					state.base
 						? `基于第 ${state.base.version} 版${state.dirty ? " · 有未保存的修改" : ""}`
 						: undefined
@@ -1102,7 +1106,7 @@ export function HistoryPage() {
 		<Grid columns={1} gap="lg">
 			<PageHeader
 				title="版本历史"
-				meta={state.current?.title}
+				description={state.current?.title}
 				actions={
 					<>
 						<Choice
