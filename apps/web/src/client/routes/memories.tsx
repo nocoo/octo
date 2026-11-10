@@ -230,10 +230,14 @@ export function MemoriesPage() {
 			<MemoryFilters params={params} onChange={setParams}>
 				<PageHeader
 					title="记忆库"
+					// Always reserve the description line: Basalt stacks it under the title, so a
+					// late-arriving count would push the filter bar down mid-interaction.
 					description={
-						state.items.length
+						state.loaded
 							? `${state.items.length} 条${state.nextCursor ? " · 还有更多" : ""}`
-							: undefined
+							: state.error
+								? "加载失败"
+								: "正在加载…"
 					}
 					actions={
 						<ViewSwitch
