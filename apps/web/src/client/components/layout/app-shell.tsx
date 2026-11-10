@@ -172,7 +172,7 @@ export function AppShell() {
 	function rail(isCollapsed: boolean) {
 		const avatar = (
 			<Avatar
-				className="octo-avatar"
+				className="h-9 w-9 shrink-0"
 				role="img"
 				aria-label={isCollapsed ? `${identityName} · ${identityLabel}` : identityName}
 				tabIndex={isCollapsed ? 0 : undefined}

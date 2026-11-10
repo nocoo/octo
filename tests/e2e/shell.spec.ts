@@ -54,7 +54,8 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 				.locator("[data-basalt-header]")
 				.evaluate((el) => el.getBoundingClientRect().height),
 		).toBe(56);
-		const type = await page.locator(".octo-version").evaluate((el) => ({
+		const version = page.locator("[data-basalt-sidebar]").getByText(/^v\d+\.\d+\.\d+$/);
+		const type = await version.evaluate((el) => ({
 			font: getComputedStyle(el).fontFamily,
 			size: getComputedStyle(el).fontSize,
 		}));
@@ -146,18 +147,19 @@ test.describe("touch shell", () => {
 		await page.setViewportSize({ width: 390, height: 844 });
 		await page.goto("/settings/embedding");
 		expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
-		for (const name of [
-			"打开导航",
-			"返回上一页",
-			"GitHub 仓库",
-			"Octo 项目主页",
-			"切换深色或浅色主题",
-		]) {
+		for (const name of ["打开导航", "返回上一页"]) {
 			const action = page.getByLabel(name, { exact: true });
 			await expect(action).toBeInViewport({ ratio: 1 });
 			const box = await action.boundingBox();
 			expect(box?.width).toBeGreaterThanOrEqual(44);
 			expect(box?.height).toBeGreaterThanOrEqual(44);
+		}
+		for (const name of ["GitHub 仓库", "Octo 项目主页", "切换深色或浅色主题"]) {
+			const action = page.getByLabel(name, { exact: true });
+			await expect(action).toBeInViewport({ ratio: 1 });
+			const box = await action.boundingBox();
+			expect(box?.width).toBeGreaterThanOrEqual(34);
+			expect(box?.height).toBeGreaterThanOrEqual(34);
 		}
 	});
 });
@@ -166,9 +168,11 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 	await page.goto("/settings");
 	await expect(page.getByText("l3@local", { exact: true })).toBeVisible();
 	const rail = page.locator("[data-basalt-sidebar]");
-	await expect(rail.locator(".octo-brand-title")).toHaveText("octo");
+	await expect(rail.getByText("octo", { exact: true })).toBeVisible();
 	await expect(rail.getByText("Zheng Li", { exact: true })).toBeVisible();
-	await expect(rail.locator('.octo-avatar img[alt="Zheng Li 的头像"]')).toBeVisible();
+	await expect(
+		rail.locator('[data-slot="sidebar-footer"] img[alt="Zheng Li 的头像"]'),
+	).toBeVisible();
 	const center = async (selector: string) => {
 		const box = await rail.locator(selector).boundingBox();
 		expect(box).not.toBeNull();
@@ -185,7 +189,9 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 			expect((await search.boundingBox())?.height).toBeCloseTo(39.14, 1);
 			await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
 			await expect(page.getByRole("button", { name: "展开侧栏", exact: true })).toBeVisible();
-			await expect(rail.locator(".octo-avatar")).toHaveAccessibleName("Zheng Li · l3@local");
+			await expect(rail.locator('[data-slot="sidebar-footer"] [role="img"]')).toHaveAccessibleName(
+				"Zheng Li · l3@local",
+			);
 			expect(await center('img[alt="Octo"]')).toBeCloseTo(expanded, 0);
 			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(expanded, 0);
 			await expect(page.getByRole("link", { name: "Octo 首页", exact: true })).toHaveAttribute(

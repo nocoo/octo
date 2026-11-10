@@ -18,11 +18,11 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	expect(identity).toMatchObject({ email: "architie@gmail.com", name: "Zheng Li" });
 	expect(identity.avatar).toMatch(/^data:image\/png;base64,/);
 	const sidebar = page.locator("[data-basalt-sidebar]");
-	await expect(sidebar.locator(".octo-brand-title")).toHaveText("octo");
+	await expect(sidebar.getByText("octo", { exact: true })).toBeVisible();
 	const footer = sidebar.locator('[data-slot="sidebar-footer"]');
 	await expect(footer.getByText("Zheng Li", { exact: true })).toBeVisible();
 	await expect(footer.getByText("architie@gmail.com", { exact: true })).toBeVisible();
-	const avatar = footer.locator(".octo-avatar img");
+	const avatar = footer.locator('[role="img"] img');
 	await expect(avatar).toBeVisible();
 	await expect(avatar).toHaveAttribute("src", identity.avatar);
 	await expect(avatar).toHaveAttribute("alt", "Zheng Li 的头像");
@@ -32,7 +32,7 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	await expect(avatar).toHaveCSS("width", "36px");
 	await expect(avatar).toHaveCSS("height", "36px");
 	expect(await avatar.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
-	await expect(footer.locator(".octo-avatar > span")).toHaveCount(0);
+	await expect(footer.locator('[role="img"] > span')).toHaveCount(0);
 	for (const [label, path] of [
 		["记忆库", "/memories"],
 		["向量模型", "/settings/embedding"],
@@ -44,13 +44,13 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 		await expect(avatar).toBeVisible();
 	}
 	await sidebar.getByRole("button", { name: "收起侧栏", exact: true }).click();
-	await expect(footer.locator(".octo-avatar")).toHaveAccessibleName(
+	await expect(footer.locator('[role="img"]')).toHaveAccessibleName(
 		"Zheng Li · architie@gmail.com",
 	);
 	await expect(avatar).toBeVisible();
 	expect(identityRequests).toHaveLength(1);
 	await page.reload();
-	await expect(page.locator(".octo-avatar img")).toBeVisible();
+	await expect(page.locator('[data-slot="sidebar-footer"] [role="img"] img')).toBeVisible();
 	expect(identityRequests).toHaveLength(2);
 });
 
@@ -73,10 +73,10 @@ test("keeps verified email and initials when the public profile is null", async 
 	});
 	const footer = page.locator('[data-slot="sidebar-footer"]');
 	await expect(footer.getByText("l3-null@local", { exact: true })).toBeVisible();
-	await expect(footer.locator(".octo-avatar")).toHaveText("L3");
-	await expect(footer.locator(".octo-avatar img")).toHaveCount(0);
-	await expect(footer.locator(".octo-avatar")).toHaveCSS("width", "36px");
-	await expect(footer.locator(".octo-avatar")).toHaveCSS("height", "36px");
+	await expect(footer.locator('[role="img"]')).toHaveText("L3");
+	await expect(footer.locator('[role="img"] img')).toHaveCount(0);
+	await expect(footer.locator('[role="img"]')).toHaveCSS("width", "36px");
+	await expect(footer.locator('[role="img"]')).toHaveCSS("height", "36px");
 });
 
 test("uses the native Basalt fallback when a public avatar cannot decode", async ({
@@ -106,9 +106,9 @@ test("uses the native Basalt fallback when a public avatar cannot decode", async
 	const footer = page.locator('[data-slot="sidebar-footer"]');
 	await expect(footer.getByText("Zheng Li", { exact: true })).toBeVisible();
 	await expect(footer.getByText("l3-broken@local", { exact: true })).toBeVisible();
-	await expect(footer.locator(".octo-avatar")).toHaveText("ZL");
-	await expect(footer.locator(".octo-avatar img")).toHaveCount(0);
-	await expect(footer.locator(".octo-avatar")).toHaveAccessibleName("Zheng Li");
-	await expect(footer.locator(".octo-avatar")).toHaveCSS("width", "36px");
-	await expect(footer.locator(".octo-avatar")).toHaveCSS("height", "36px");
+	await expect(footer.locator('[role="img"]')).toHaveText("ZL");
+	await expect(footer.locator('[role="img"] img')).toHaveCount(0);
+	await expect(footer.locator('[role="img"]')).toHaveAccessibleName("Zheng Li");
+	await expect(footer.locator('[role="img"]')).toHaveCSS("width", "36px");
+	await expect(footer.locator('[role="img"]')).toHaveCSS("height", "36px");
 });
