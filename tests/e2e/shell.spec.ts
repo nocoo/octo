@@ -99,7 +99,7 @@ test("sidebar groups, collapsed search and content insets match the reference sh
 	await group.click();
 	await expect(rail.getByRole("button", { name: "记忆库", exact: true })).toBeVisible();
 	await rail.getByRole("button", { name: "收起侧栏", exact: true }).click();
-	await rail.getByRole("button", { name: "搜索命令 (⌘K)", exact: true }).click();
+	await rail.getByRole("button", { name: "搜索与命令 (⌘ K)", exact: true }).click();
 	await expect(page.getByRole("listbox")).toBeVisible();
 	await page.keyboard.press("Escape");
 	await rail.getByRole("button", { name: "展开侧栏", exact: true }).click();
@@ -138,8 +138,9 @@ test("sidebar toggles preserve keyboard focus and report the active rail state",
 	await page.keyboard.press("Enter");
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole("button", { name: "打开导航", exact: true }).click();
-	await expect(close).toHaveAttribute("aria-expanded", "true");
-	await close.click();
+	const dismiss = page.getByRole("button", { name: "关闭导航", exact: true });
+	await expect(dismiss).toBeVisible();
+	await dismiss.click();
 	await expect(page.getByRole("button", { name: "打开导航", exact: true })).toBeFocused();
 });
 

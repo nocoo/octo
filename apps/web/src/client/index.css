@@ -25,12 +25,6 @@ a {
 	margin-inline: var(--basalt-space-layout-sm);
 	margin-bottom: var(--basalt-space-layout-sm);
 }
-.octo-mobile-rail {
-	padding: unset;
-	width: fit-content;
-	max-width: 100%;
-	background: hsl(var(--basalt-background));
-}
 .octo-command-dialog[role="dialog"] {
 	display: flex;
 	flex-direction: column;

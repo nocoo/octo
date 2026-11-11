@@ -2,7 +2,6 @@ import {
 	Avatar,
 	AvatarFallback,
 	AvatarImage,
-	Button,
 	CommandGroup,
 	CommandInput,
 	CommandItem,
@@ -11,31 +10,30 @@ import {
 	Dialog,
 	DialogContent,
 	DialogTitle,
+	LayerCard,
 	Link,
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetTitle,
 	Sidebar,
+	SidebarBrand,
+	SidebarDrawer,
 	SidebarFooter,
 	SidebarGroup,
 	SidebarHeader,
 	SidebarIconItem,
 	SidebarItem,
 	SidebarNav,
+	SidebarProvider,
 	SidebarSearch,
+	SidebarToggle,
 	SidebarUser,
 	ThemeToggle,
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "@nocoo/basalt";
-import { AppHeader } from "@nocoo/basalt/components/app-header";
+import { AppHeader, AppHeaderMenuButton, ProjectLinks } from "@nocoo/basalt/components/app-header";
 import { AppMain, AppSkipLink, AppShell as Frame } from "@nocoo/basalt/components/app-shell";
 import { Banner } from "@nocoo/basalt/components/banner";
-import { LinkButton } from "@nocoo/basalt/components/button";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { LayerCard } from "@nocoo/basalt/components/layer-card";
 import { Command } from "cmdk";
 import {
 	Activity,
@@ -47,18 +45,14 @@ import {
 	Database,
 	KeyRound,
 	LayoutDashboard,
-	Menu,
 	Network,
-	PanelLeftClose,
-	PanelLeftOpen,
 	Search,
 	Settings,
 	ShieldCheck,
 	Tags,
 	Trash2,
 } from "lucide-react";
-import { Fragment, type ReactElement, Suspense, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { Fragment, Suspense, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
 import {
@@ -75,6 +69,8 @@ import {
 	restoreMarkdownHeading,
 } from "./markdown-navigation";
 import { useModel } from "./use-model";
+
+const ACCESS_LOGOUT_HREF = "https://nocoo.cloudflareaccess.com/cdn-cgi/access/logout";
 
 const icons = {
 	overview: LayoutDashboard,
@@ -95,20 +91,142 @@ const icons = {
 const sidebarNavigation = navigation.filter((item) => item.href !== "/search");
 const navigationGroups = [...new Set(navigation.map((item) => item.group))];
 
-function HeaderHint({ label, children }: { label: string; children: ReactElement }) {
+type Identity = {
+	email: string | null;
+	name: string | null;
+	avatar: string | null;
+	error: string | null;
+};
+
+function ShellSidebar({
+	identity,
+	collapsed,
+	drawerDismiss = false,
+	onDrawerDismiss,
+	onOpenPalette,
+	onNavigate,
+}: {
+	identity: Identity;
+	collapsed: boolean;
+	drawerDismiss?: boolean;
+	onDrawerDismiss?: () => void;
+	onOpenPalette: () => void;
+	onNavigate: (path: string) => void;
+}) {
+	const identityLabel =
+		identity.email ?? (identity.error ? "Access 身份未知" : "Access 身份验证中");
+	const identityName = identity.name ?? identity.email?.split("@")[0] ?? identityLabel;
+	const location = useLocation();
+	const active = (href: string) =>
+		href === "/"
+			? location.pathname === "/"
+			: location.pathname === href ||
+				(href === "/memories" && location.pathname.startsWith("/memories/"));
+	const avatar = (
+		<Avatar role="img" aria-label={identityName}>
+			{identity.avatar ? (
+				<AvatarImage
+					src={identity.avatar}
+					alt={`${identityName} 的头像`}
+					referrerPolicy="no-referrer"
+				/>
+			) : null}
+			<AvatarFallback>{initials(identityName)}</AvatarFallback>
+		</Avatar>
+	);
 	return (
-		<Tooltip>
-			<TooltipTrigger asChild>{children}</TooltipTrigger>
-			<TooltipContent side="bottom">{label}</TooltipContent>
-		</Tooltip>
+		<Sidebar resizable={!drawerDismiss}>
+			<SidebarHeader>
+				<SidebarBrand
+					logo={
+						<Link href="/" aria-label="Octo 首页" onClick={() => onDrawerDismiss?.()}>
+							<img src="/logo-24.png" srcSet="/logo-24.png 1x, /logo-48.png 2x" alt="Octo" />
+						</Link>
+					}
+					name="octo"
+					version={`v${APP_VERSION}`}
+					action={
+						drawerDismiss ? (
+							<SidebarToggle
+								mode="dismiss"
+								onDismiss={() => onDrawerDismiss?.()}
+								dismissLabel="关闭导航"
+							/>
+						) : (
+							<SidebarToggle collapseLabel="收起侧栏" expandLabel="展开侧栏" />
+						)
+					}
+				/>
+			</SidebarHeader>
+			<SidebarNav aria-label="主导航">
+				<SidebarSearch onClick={onOpenPalette} shortcut="⌘ K">
+					搜索与命令
+				</SidebarSearch>
+				{navigationGroups.map((group) => {
+					const items = sidebarNavigation
+						.filter((item) => item.group === group)
+						.map((item) => {
+							const Icon = icons[item.icon];
+							const icon = (
+								<Icon
+									key={item.href}
+									className="octo-nav-icon"
+									size={18}
+									strokeWidth={1.5}
+									aria-hidden="true"
+								/>
+							);
+							return collapsed ? (
+								<Tooltip key={item.href}>
+									<TooltipTrigger asChild>
+										<SidebarIconItem
+											active={active(item.href)}
+											aria-current={active(item.href) ? "page" : undefined}
+											aria-label={item.label}
+											onClick={() => onNavigate(item.href)}
+										>
+											{icon}
+										</SidebarIconItem>
+									</TooltipTrigger>
+									<TooltipContent side="right">{item.label}</TooltipContent>
+								</Tooltip>
+							) : (
+								<SidebarItem
+									key={item.href}
+									active={active(item.href)}
+									aria-current={active(item.href) ? "page" : undefined}
+									onClick={() => onNavigate(item.href)}
+								>
+									{icon}
+									<span>{item.label}</span>
+								</SidebarItem>
+							);
+						});
+					return collapsed ? (
+						<Fragment key={group}>{items}</Fragment>
+					) : (
+						<SidebarGroup key={group} label={group} defaultOpen>
+							{items}
+						</SidebarGroup>
+					);
+				})}
+			</SidebarNav>
+			<SidebarFooter>
+				<SidebarUser
+					name={identityName}
+					email={identityLabel}
+					avatar={avatar}
+					tooltip={`${identityName} · ${identityLabel}`}
+					signOutHref={ACCESS_LOGOUT_HREF}
+					signOutLabel="退出登录"
+				/>
+			</SidebarFooter>
+		</Sidebar>
 	);
 }
 
 export function AppShell() {
 	const identity = useModel(shellModel);
-	const identityLabel =
-		identity.email ?? (identity.error ? "Access 身份未知" : "Access 身份验证中");
-	const identityName = identity.name ?? identity.email?.split("@")[0] ?? identityLabel;
 	const location = useLocation();
 	const navigate = useNavigate();
 	const [collapsed, setCollapsed] = useState(false);
@@ -117,7 +235,6 @@ export function AppShell() {
 	const [palette, setPalette] = useState(false);
 	const [query, setQuery] = useState("");
 	const menuButton = useRef<HTMLButtonElement>(null);
-	const railToggle = useRef<HTMLButtonElement>(null);
 	const paletteOpener = useRef<HTMLElement | null>(null);
 	useEffect(() => {
 		void shellModel.load();
@@ -160,175 +277,11 @@ export function AppShell() {
 		setQuery("");
 		void navigate(path);
 	}
-	const active = (href: string) =>
-		href === "/"
-			? location.pathname === "/"
-			: location.pathname === href ||
-				(href === "/memories" && location.pathname.startsWith("/memories/"));
-	function toggleRail() {
-		flushSync(() => setCollapsed((current) => !current));
-		railToggle.current?.focus();
-	}
-	function rail(isCollapsed: boolean) {
-		const avatar = (
-			<Avatar
-				className="h-9 w-9 shrink-0"
-				role="img"
-				aria-label={isCollapsed ? `${identityName} · ${identityLabel}` : identityName}
-				tabIndex={isCollapsed ? 0 : undefined}
-			>
-				{identity.avatar && (
-					<AvatarImage
-						src={identity.avatar}
-						alt={`${identityName} 的头像`}
-						referrerPolicy="no-referrer"
-						width={36}
-						height={36}
-					/>
-				)}
-				<AvatarFallback>{initials(identityName)}</AvatarFallback>
-			</Avatar>
-		);
-		return (
-			<Sidebar collapsed={isCollapsed}>
-				<SidebarHeader className={isCollapsed ? "justify-center" : "justify-between"}>
-					<Link
-						href="/"
-						aria-label="Octo 首页"
-						className="flex min-w-0 items-center gap-basalt-space-lg text-basalt-foreground no-underline hover:no-underline"
-						onClick={() => setDrawer(false)}
-					>
-						<img
-							src="/logo-24.png"
-							srcSet="/logo-24.png 1x, /logo-48.png 2x"
-							width={28}
-							height={28}
-							alt="Octo"
-							className="h-7 w-7 shrink-0 object-contain"
-						/>
-						{!isCollapsed && (
-							<>
-								<span className="text-basalt-xl font-semibold text-basalt-foreground">octo</span>
-								<span className="shrink-0 rounded-basalt-md bg-basalt-secondary px-basalt-space-md py-basalt-space-xs font-mono text-basalt-xs font-medium leading-basalt-tight text-basalt-muted-foreground">
-									v{APP_VERSION}
-								</span>
-							</>
-						)}
-					</Link>
-					{!isCollapsed && (
-						<Button
-							ref={railToggle}
-							variant="ghost"
-							size="icon"
-							aria-label="收起侧栏"
-							aria-expanded={!isCollapsed}
-							onClick={() => (mobile ? setDrawer(false) : toggleRail())}
-						>
-							<PanelLeftClose strokeWidth={1.5} aria-hidden="true" />
-						</Button>
-					)}
-				</SidebarHeader>
-				{isCollapsed ? (
-					<Button
-						ref={railToggle}
-						variant="ghost"
-						size="icon"
-						className="mb-basalt-space-sm self-center"
-						aria-label="展开侧栏"
-						aria-expanded={false}
-						onClick={toggleRail}
-					>
-						<PanelLeftOpen strokeWidth={1.5} aria-hidden="true" />
-					</Button>
-				) : (
-					<Grid columns={1} className="w-full px-basalt-nav-inset">
-						<SidebarSearch onClick={() => setPalette(true)} shortcut="⌘ K">
-							搜索与命令
-						</SidebarSearch>
-					</Grid>
-				)}
-				<SidebarNav aria-label="主导航">
-					{isCollapsed && (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<SidebarIconItem aria-label="搜索命令 (⌘K)" onClick={() => setPalette(true)}>
-									<Search
-										className="octo-nav-icon"
-										size={18}
-										strokeWidth={1.5}
-										aria-hidden="true"
-									/>
-								</SidebarIconItem>
-							</TooltipTrigger>
-							<TooltipContent side="right">搜索与命令 · ⌘ K</TooltipContent>
-						</Tooltip>
-					)}
-					{navigationGroups.map((group) => {
-						const items = sidebarNavigation
-							.filter((item) => item.group === group)
-							.map((item) => {
-								const Icon = icons[item.icon];
-								const icon = (
-									<Icon
-										key={item.href}
-										className="octo-nav-icon"
-										size={18}
-										strokeWidth={1.5}
-										aria-hidden="true"
-									/>
-								);
-								return isCollapsed ? (
-									<Tooltip key={item.href}>
-										<TooltipTrigger asChild>
-											<SidebarIconItem
-												active={active(item.href)}
-												aria-current={active(item.href) ? "page" : undefined}
-												aria-label={item.label}
-												onClick={() => go(item.href)}
-											>
-												{icon}
-											</SidebarIconItem>
-										</TooltipTrigger>
-										<TooltipContent side="right">{item.label}</TooltipContent>
-									</Tooltip>
-								) : (
-									<SidebarItem
-										key={item.href}
-										active={active(item.href)}
-										aria-current={active(item.href) ? "page" : undefined}
-										onClick={() => go(item.href)}
-									>
-										{icon}
-										<span>{item.label}</span>
-									</SidebarItem>
-								);
-							});
-						return isCollapsed ? (
-							<Fragment key={group}>{items}</Fragment>
-						) : (
-							<SidebarGroup key={group} label={group} defaultOpen>
-								{items}
-							</SidebarGroup>
-						);
-					})}
-				</SidebarNav>
-				<SidebarFooter>
-					{isCollapsed ? (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<span className="inline-flex">{avatar}</span>
-							</TooltipTrigger>
-							<TooltipContent side="right">
-								{identityName} · {identityLabel}
-							</TooltipContent>
-						</Tooltip>
-					) : (
-						<SidebarUser name={identityName} email={identityLabel} avatar={avatar} />
-					)}
-				</SidebarFooter>
-			</Sidebar>
-		);
-	}
+	const sidebarProps = {
+		identity,
+		onOpenPalette: () => setPalette(true),
+		onNavigate: go,
+	};
 	return (
 		<Frame layout="responsive" className="basalt-ui">
 			<AppSkipLink
@@ -341,22 +294,24 @@ export function AppShell() {
 				跳到主内容
 			</AppSkipLink>
 			{mobile ? (
-				<Sheet open={drawer} onOpenChange={setDrawer}>
-					<SheetContent
-						side="left"
-						className="octo-mobile-rail"
-						onCloseAutoFocus={(event) => {
-							event.preventDefault();
-							menuButton.current?.focus();
-						}}
-					>
-						<SheetTitle className="sr-only">主导航</SheetTitle>
-						<SheetDescription className="sr-only">选择工作台页面</SheetDescription>
-						{rail(false)}
-					</SheetContent>
-				</Sheet>
+				<SidebarDrawer
+					open={drawer}
+					onOpenChange={setDrawer}
+					returnFocusRef={menuButton}
+					title="主导航"
+					description="选择工作台页面"
+				>
+					<ShellSidebar
+						{...sidebarProps}
+						collapsed={false}
+						drawerDismiss
+						onDrawerDismiss={() => setDrawer(false)}
+					/>
+				</SidebarDrawer>
 			) : (
-				rail(collapsed)
+				<SidebarProvider collapsed={collapsed} onCollapsedChange={setCollapsed}>
+					<ShellSidebar {...sidebarProps} collapsed={collapsed} />
+				</SidebarProvider>
 			)}
 			<AppMain tabIndex={-1}>
 				<AppHeader
@@ -364,76 +319,32 @@ export function AppShell() {
 						mobile ? headerCrumbs(location.pathname).slice(-1) : headerCrumbs(location.pathname)
 					}
 					leading={
-						mobile && (
-							<Button
+						mobile ? (
+							<AppHeaderMenuButton
 								ref={menuButton}
-								variant="ghost"
-								size="icon"
-								aria-label="打开导航"
-								onClick={(event) => {
-									event.currentTarget.focus();
-									setDrawer(true);
-								}}
-							>
-								<Menu aria-hidden="true" />
-							</Button>
-						)
+								label="打开导航"
+								onClick={() => setDrawer(true)}
+							/>
+						) : null
 					}
 					actions={
 						<>
-							<HeaderHint label="GitHub 仓库 · 在新标签页打开">
-								<LinkButton
-									variant="ghost"
-									size="icon"
-									href="https://github.com/nocoo/octo"
-									target="_blank"
-									rel="noopener noreferrer"
-									aria-label="GitHub 仓库"
-								>
-									<svg
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										strokeWidth={1.5}
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										aria-hidden="true"
-										className="h-[1.125rem] w-[1.125rem]"
-									>
-										<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
-										<path d="M9 18c-4.51 2-5-2-7-2" />
-									</svg>
-									<span className="sr-only">GitHub 仓库</span>
-								</LinkButton>
-							</HeaderHint>
-							<HeaderHint label="Octo 项目主页 · 在新标签页打开">
-								<LinkButton
-									variant="ghost"
-									size="icon"
-									href="https://hexly.ai/projects/octo"
-									target="_blank"
-									rel="noopener noreferrer"
-									aria-label="Octo 项目主页"
-								>
-									<svg
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										strokeWidth={1.5}
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										aria-hidden="true"
-										className="h-[1.125rem] w-[1.125rem]"
-									>
-										<path d="m12 2 8.66 5v10L12 22l-8.66-5V7Z" />
-										<path d="M12 2v20M3.34 7l17.32 10m0-10L3.34 17" />
-									</svg>
-									<span className="sr-only">Octo 项目主页</span>
-								</LinkButton>
-							</HeaderHint>
-							<HeaderHint label="切换深色或浅色主题">
-								<ThemeToggle aria-label="切换深色或浅色主题" />
-							</HeaderHint>
+							<ProjectLinks
+								github="nocoo/octo"
+								hexly="octo"
+								name="Octo"
+								githubLabel="GitHub 仓库"
+								hexlyLabel="Octo 项目主页"
+								newTabLabel="在新标签页打开"
+							/>
+							<ThemeToggle
+								aria-label="切换深色或浅色主题"
+								labels={{
+									light: "切换浅色主题",
+									dark: "切换深色主题",
+									system: "跟随系统主题",
+								}}
+							/>
 						</>
 					}
 				/>
