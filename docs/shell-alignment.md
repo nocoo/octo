@@ -17,7 +17,7 @@ Chrome computed-style comparison at 1440px established these shared dimensions:
 | Sidebar header / application header | 56px |
 | Brand mark | 28px; stable horizontal center at 34px |
 | Desktop title | 20px / 28.57px; semibold |
-| Version pill | 11px / 13.2px; monospace |
+| Version pill | 12px auxiliary tier; sans |
 | Sidebar search / items | 228px wide, 38px high |
 | Navigation labels | 14px / 22px; group labels 11px |
 | Identity avatar | 36px |

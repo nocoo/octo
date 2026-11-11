@@ -61,7 +61,7 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 			font: getComputedStyle(el).fontFamily,
 			size: getComputedStyle(el).fontSize,
 		}));
-		expect(type.font).toContain("mono");
+		expect(type.font).toMatch(/Inter/i);
 		expect(type.size).toBe("12px");
 		await expect(page.locator("html")).toHaveAttribute("data-accent", "sky");
 		const colors = await page.evaluate(() => {
