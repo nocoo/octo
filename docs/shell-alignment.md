@@ -1,6 +1,6 @@
 # Shell reference alignment
 
-Octo uses the published `@nocoo/basalt@3.3.2` artifact, tag reference
+Octo uses the published `@nocoo/basalt@3.3.3` artifact, tag reference
 `857b5a238ff8595c9998c2de7dad6144cd839c72`. The package's `ai/INTEGRATION.md`,
 `ai/RECIPES.md`, declarations and compiled components define the current contract.
 Octo keeps standalone CSS and app-owned routing, data and identity.

@@ -22,7 +22,7 @@ Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not re
 - Every memory write is one D1 batch: row, version snapshot, tags, FTS, change event (see docs/02 §3).
 - Tests never use remote Cloudflare resources or deploy `-test` resources; Vectorize is replaced locally by the D1 brute-force `VectorStore`.
 - Embedding gateway settings (base URL, AES-GCM-encrypted API key under `OCTO_SETTINGS_KEY`, model, dims, backfill toggle default off) are dashboard/Access-only and never exposed via `/api/v1`; outbound embedding calls always send a User-Agent.
-- Dashboard uses only `@nocoo/basalt@3.3.2` controls; MVVM with the single `fetch` in `src/client/lib/api.ts`.
+- Dashboard uses only `@nocoo/basalt@3.3.3` controls; MVVM with the single `fetch` in `src/client/lib/api.ts`.
 - Timestamps are stored in UTC and displayed only through `formatTimestamp` in `src/client/lib/format.ts`: browser-local `2026-09-30，13:42`, never a zone label, never a second formatter. UTC calendar-day buckets (usage, dashboard ranges) stay UTC days.
 - Page headings keep `h1` + inline meta with token spacing; view switches and primary actions stay in `PageHeader.actions`. Memory filters and their clear action share the next row; larger filter sets stay together in popovers. Use consistent native 34px control density. Full-page tables fill the remaining desktop height with internal scrolling and visible headers/pagination. Never use Basalt's `description`/`filters` slots, a `Field` label row inside a toolbar, or a `SectionRule` heading that only names the single table below it; see docs/06 §8.
 
