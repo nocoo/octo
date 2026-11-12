@@ -124,8 +124,8 @@ test("mobile navigation restores focus to its opener", async ({ page }) => {
 	await expect(opener).toBeFocused();
 });
 
-// Basalt 3.3.2: SheetContent keeps p-basalt-card / sm:p-basalt-card-lg, which overrides
-// SidebarDrawer padding:0 until 3.3.3. No site CSS compensation — this guards the upgrade.
+// Basalt 3.3.3: SidebarDrawer must keep zero horizontal padding (3.3.2 regressed at sm).
+// No site CSS compensation.
 test("mobile SidebarDrawer content has no horizontal sheet padding", async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto("/settings");
