@@ -43,7 +43,7 @@
 ### 建议的 agent 分配
 
 - review：固定组合 Codex `group/auto-gpt-6-astra` `high`。
-- 实现：先用 system 仓的 `sys0-quick-decide` 决定；参考做法是 M1 / M4 这类逻辑密集的包用较高档位，M3 / M5 / M6 这类模式明确的包用较低档位。
+- 实现：先用 system 仓的 `system0-quick-decide` 决定；参考做法是 M1 / M4 这类逻辑密集的包用较高档位，M3 / M5 / M6 这类模式明确的包用较低档位。
 - 并行方式：MacBook 上的 herdr `octo` workspace（主控右侧开受控 pane）+ Cursor cloud agents（仓库 `https://github.com/nocoo/octo`）。每个包一个分支或 worktree，PR 合并到 main。Mac Studio 不参与。
 
 ## 阶段 2 预览

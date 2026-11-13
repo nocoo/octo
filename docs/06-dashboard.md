@@ -11,7 +11,7 @@ Vite + React 19 SPA，由同一个 Worker 的 `[assets]` 托管，受 Cloudflare
 - 遵循 Basalt 的 MVP 顺序：Providers + CSS → 应用框架（`AppShell`、`Sidebar`、`AppHeader`、`ContentIsland`）→ `PageHeader` → `LayerCard` / `SectionRule`。因为 Access 负责登录，所以**没有应用内登录页**；身份信息（Access email）显示在 `SidebarUser`。
 - 控件：Button / Input / Field / Dialog / Sheet / DropdownMenu / CommandPalette / SegmentControl / Switch / Checkbox / Badge / Table + TablePager / DataTable / DatePicker / StatStrip / Meter / DescriptionList / Toaster / ConfirmDialog，图表用 `@nocoo/basalt/charts/*`（需要 recharts peer）。禁止裸的 `input` / `button` / `select`。
 - 只用 design token，不写死颜色和间距；字号不小于 11px；尽量压缩纵向空间。
-- 设计审计和实现按 system 仓已安装的 `sys1-design-basalt` skill 执行（标准、审计、升级）。
+- 设计审计和实现按 system 仓已安装的 `system1-design-basalt` skill 执行（标准、审计、升级）。
 
 ## 2. 架构（MVVM）
 
