@@ -83,24 +83,25 @@ it("uses compact header chrome and monochrome navigation without mixed-language 
 	expect(html).not.toContain("Octo on Hexly");
 });
 
-it("uses the adopted transparent seahorse in the application rail", () => {
+it("uses SidebarBrand with the adopted transparent seahorse", () => {
 	const html = renderShell();
+	expect(html).toContain('data-slot="sidebar-brand"');
 	expect(html).toContain('src="/logo-24.png"');
 	expect(html).toContain('alt="Octo"');
 	expect(html).toContain(">octo</span>");
 	expect(html).toContain(`>v${APP_VERSION}</span>`);
 });
 
-it("separates the brand home link from the visible collapse control", () => {
+it("separates the brand home link from the sidebar toggle", () => {
 	const html = renderShell();
 	expect(html).toMatch(/<a\b[^>]*aria-label="Octo 首页"[^>]*>/);
-	const collapse = html.match(/<button\b[^>]*aria-label="收起侧栏"[^>]*>[\s\S]*?<\/button>/)?.[0];
+	const collapse = html.match(
+		/<button\b[^>]*data-slot="sidebar-toggle"[^>]*aria-label="收起侧栏"[^>]*>/,
+	)?.[0];
 	expect(collapse).toBeDefined();
-	expect(collapse).not.toContain("logo-24.png");
+	expect(html).not.toMatch(/<button\b[^>]*aria-label="收起侧栏"[^>]*>[\s\S]*logo-24\.png/);
 	expect(html).toContain('aria-label="返回上一页"');
-	expect(html.indexOf('aria-label="收起侧栏"')).toBeLessThan(
-		html.indexOf('data-slot="sidebar-nav"'),
-	);
+	expect(html).toContain('data-slot="sidebar-toggle"');
 	expect(html).toContain(`v${APP_VERSION}`);
 	expect(html).toContain('data-slot="sidebar-group"');
 	expect(html).toContain('href="https://hexly.ai/projects/octo"');
@@ -136,17 +137,30 @@ it("shows the person supplied by the author service rather than a workspace iden
 	expect(html).not.toContain("私人知识工作台");
 });
 
-it("gives the public avatar a useful description and fixed private image attributes", () => {
+it("gives the public avatar a useful description without overriding basalt sizing", () => {
 	identity.email = "architie@gmail.com";
 	identity.name = "Zheng Li";
 	identity.avatar = "https://lizheng.blog/avatar-80.jpg";
 	const html = renderShell();
+	const avatarRoot = html.match(
+		/<span\b[^>]*role="img"[^>]*>[\s\S]*?avatar-80\.jpg[\s\S]*?<\/span>/,
+	)?.[0];
+	expect(avatarRoot).toBeDefined();
+	expect(avatarRoot).toContain("h-basalt-9");
+	expect(avatarRoot).toContain("w-basalt-9");
+	expect(avatarRoot).not.toContain("h-9");
 	const avatar = html.match(/<img\b[^>]*src="https:\/\/lizheng.blog\/avatar-80.jpg"[^>]*>/)?.[0];
 	expect(avatar).toBeDefined();
 	expect(avatar).toContain('alt="Zheng Li 的头像"');
 	expect(avatar).toContain('referrerPolicy="no-referrer"');
-	expect(avatar).toContain('width="36"');
-	expect(avatar).toContain('height="36"');
+	expect(avatar).not.toContain('width="');
+});
+
+it("wires the sidebar sign-out control to Cloudflare Access", () => {
+	const html = renderShell();
+	expect(html).toContain('data-slot="sidebar-user-sign-out"');
+	expect(html).toContain('href="https://nocoo.cloudflareaccess.com/cdn-cgi/access/logout"');
+	expect(html).toContain('aria-label="退出登录"');
 });
 
 it("keeps initials and the verified email when no public profile exists", () => {

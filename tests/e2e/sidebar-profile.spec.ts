@@ -28,8 +28,9 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 	await expect(avatarImage).toHaveAttribute("src", identity.avatar);
 	await expect(avatarImage).toHaveAttribute("alt", "Zheng Li 的头像");
 	await expect(avatarImage).toHaveAttribute("referrerpolicy", "no-referrer");
-	await expect(avatarImage).toHaveAttribute("width", "36");
-	await expect(avatarImage).toHaveAttribute("height", "36");
+	await expect(avatar).toHaveCSS("width", "36px");
+	await expect(avatar).toHaveCSS("height", "36px");
+	await expect(footer.getByRole("link", { name: "退出登录", exact: true })).toBeVisible();
 	expect(
 		await avatarImage.evaluate((image: HTMLImageElement) => image.naturalWidth),
 	).toBeGreaterThan(0);
@@ -45,12 +46,8 @@ test("loads the public sidebar identity once across SPA navigation", async ({ pa
 		await expect(avatarImage).toBeVisible();
 	}
 	await sidebar.getByRole("button", { name: "收起侧栏", exact: true }).click();
-	await expect(footer.locator('[role="img"]')).toHaveAccessibleName(
-		"Zheng Li · architie@gmail.com",
-	);
-	await expect(
-		footer.getByRole("img", { name: "Zheng Li · architie@gmail.com", exact: true }),
-	).toBeVisible();
+	await expect(footer.locator('[role="img"]')).toHaveAccessibleName("Zheng Li");
+	await expect(footer.getByRole("img", { name: "Zheng Li", exact: true })).toBeVisible();
 	expect(identityRequests).toHaveLength(1);
 	await page.reload();
 	await expect(

@@ -1,6 +1,6 @@
 # Shell reference alignment
 
-Octo uses the published `@nocoo/basalt@3.2.1` artifact, tag reference
+Octo uses the published `@nocoo/basalt@3.3.3` artifact, tag reference
 `857b5a238ff8595c9998c2de7dad6144cd839c72`. The package's `ai/INTEGRATION.md`,
 `ai/RECIPES.md`, declarations and compiled components define the current contract.
 Octo keeps standalone CSS and app-owned routing, data and identity.
@@ -17,8 +17,8 @@ Chrome computed-style comparison at 1440px established these shared dimensions:
 | Sidebar header / application header | 56px |
 | Brand mark | 28px; stable horizontal center at 34px |
 | Desktop title | 20px / 28.57px; semibold |
-| Version pill | 11px / 13.2px; monospace |
-| Sidebar search / items | 244px wide, 38px high |
+| Version pill | 12px auxiliary tier; sans |
+| Sidebar search / items | 228px wide, 38px high |
 | Navigation labels | 14px / 22px; group labels 11px |
 | Identity avatar | 36px |
 | Framework icon controls | 34px square |

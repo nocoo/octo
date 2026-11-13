@@ -48,8 +48,8 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 		}));
 		expect(geometry.gap).toBe("4px");
 		expect(geometry.controls).toEqual([
-			...Array.from({ length: 2 }, () => ({ width: 34, height: 34, icon: 14 })),
-			{ width: 34, height: 34, icon: 14 },
+			...Array.from({ length: 2 }, () => ({ width: 34, height: 34, icon: 18 })),
+			{ width: 34, height: 34, icon: 18 },
 		]);
 		expect(
 			await page
@@ -61,7 +61,7 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 			font: getComputedStyle(el).fontFamily,
 			size: getComputedStyle(el).fontSize,
 		}));
-		expect(type.font).toContain("mono");
+		expect(type.font).toMatch(/Inter/i);
 		expect(type.size).toBe("12px");
 		await expect(page.locator("html")).toHaveAttribute("data-accent", "sky");
 		const colors = await page.evaluate(() => {
@@ -99,7 +99,7 @@ test("sidebar groups, collapsed search and content insets match the reference sh
 	await group.click();
 	await expect(rail.getByRole("button", { name: "记忆库", exact: true })).toBeVisible();
 	await rail.getByRole("button", { name: "收起侧栏", exact: true }).click();
-	await rail.getByRole("button", { name: "搜索命令 (⌘K)", exact: true }).click();
+	await rail.getByRole("button", { name: "搜索与命令 (⌘ K)", exact: true }).click();
 	await expect(page.getByRole("listbox")).toBeVisible();
 	await page.keyboard.press("Escape");
 	await rail.getByRole("button", { name: "展开侧栏", exact: true }).click();
@@ -124,6 +124,18 @@ test("mobile navigation restores focus to its opener", async ({ page }) => {
 	await expect(opener).toBeFocused();
 });
 
+// Basalt 3.3.3: SidebarDrawer must keep zero horizontal padding (3.3.2 regressed at sm).
+// No site CSS compensation.
+test("mobile SidebarDrawer content has no horizontal sheet padding", async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto("/settings");
+	await page.getByRole("button", { name: "打开导航", exact: true }).click();
+	const drawer = page.locator('[data-basalt-sheet][data-slot="sidebar-drawer"]');
+	await expect(drawer).toBeVisible();
+	await expect(drawer).toHaveCSS("padding-left", "0px");
+	await expect(drawer).toHaveCSS("padding-right", "0px");
+});
+
 test("sidebar toggles preserve keyboard focus and report the active rail state", async ({
 	page,
 }) => {
@@ -138,8 +150,9 @@ test("sidebar toggles preserve keyboard focus and report the active rail state",
 	await page.keyboard.press("Enter");
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole("button", { name: "打开导航", exact: true }).click();
-	await expect(close).toHaveAttribute("aria-expanded", "true");
-	await close.click();
+	const dismiss = page.getByRole("button", { name: "关闭导航", exact: true });
+	await expect(dismiss).toBeVisible();
+	await dismiss.click();
 	await expect(page.getByRole("button", { name: "打开导航", exact: true })).toBeFocused();
 });
 
@@ -152,8 +165,8 @@ test.describe("touch shell", () => {
 		for (const name of [
 			"打开导航",
 			"返回上一页",
-			"GitHub 仓库",
-			"Octo 项目主页",
+			"GitHub 仓库 在新标签页打开",
+			"Octo 项目主页 在新标签页打开",
 			"切换深色或浅色主题",
 		]) {
 			const action = page.getByLabel(name, { exact: true });
@@ -184,12 +197,12 @@ test("shell keeps brand and identity aligned through rail and theme changes", as
 		for (const width of [1440, 768]) {
 			await page.setViewportSize({ width, height: 900 });
 			const search = rail.getByRole("button", { name: "搜索与命令" });
-			expect((await search.boundingBox())?.width).toBe(244);
+			expect((await search.boundingBox())?.width).toBe(228);
 			expect((await search.boundingBox())?.height).toBeCloseTo(39.14, 1);
 			await page.getByRole("button", { name: "收起侧栏", exact: true }).click();
 			await expect(page.getByRole("button", { name: "展开侧栏", exact: true })).toBeVisible();
 			await expect(rail.locator('[data-slot="sidebar-footer"] [role="img"]')).toHaveAccessibleName(
-				"Zheng Li · l3@local",
+				"Zheng Li",
 			);
 			const collapsedLogo = await center('img[alt="Octo"]');
 			expect(await center('[data-slot="sidebar-footer"] [role="img"]')).toBeCloseTo(
@@ -223,7 +236,11 @@ test("memory breadcrumbs link ancestors and retain the current page on mobile", 
 	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(header.getByText("版本历史", { exact: true })).toBeVisible();
-	for (const action of ["GitHub 仓库", "Octo 项目主页", "切换深色或浅色主题"])
+	for (const action of [
+		"GitHub 仓库 在新标签页打开",
+		"Octo 项目主页 在新标签页打开",
+		"切换深色或浅色主题",
+	])
 		await expect(header.getByLabel(action, { exact: true })).toBeInViewport({ ratio: 1 });
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await header.getByRole("link", { name: "记忆详情", exact: true }).click();
