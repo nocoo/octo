@@ -48,7 +48,7 @@ failures before a response and response-stream failures still fail the test.
 Production requests and the vector authorization regression do not use this
 test-only adapter.
 
-- **端口 7059 系列已获 Zheng 批准（2026-10-17）**，nmem 记录 `octo-local-ports`。`octo.dev.hexly.ai` 的映射写在本机 `/opt/homebrew/etc/Caddyfile`（照 `system0-dev-machine-caddy` 的模板：HTTP → HTTPS 跳转 + mkcert 证书 + `reverse_proxy localhost:7059`）；`workflow/caddy/Caddyfile` 副本由 workflow 维护 bot 同步，本仓库不改 workflow。
+- **端口 7059 系列已获 Zheng 批准（2026-10-17）**，nmem 记录 `octo-local-ports`。`octo.dev.hexly.ai` 的映射写在本机 `/opt/homebrew/etc/Caddyfile`（照 system 仓已安装的 `sys0-dev-machine-caddy` 模板：HTTP → HTTPS 跳转 + mkcert 证书 + `reverse_proxy localhost:7059`）；`workflow/caddy/Caddyfile` 副本由 workflow 维护 bot 同步，本仓库不改 workflow。
 - `*.dev.hexly.ai` 通配证书已经覆盖了这个域名，不需要动证书。
 - 日常开发、截图、验收都用 HTTPS 域名；loopback 只作为内部上游和自动化测试的端点。
 - `bun run dev` 同时启动 Vite 和 wrangler sidecar，跑在 herdr 同一个 space 里名为 `dev server` 的 tab 中（机器规则：不在后台跑）。
