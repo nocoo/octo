@@ -53,29 +53,38 @@ bun run gate:security    # gitleaks + osv-scanner; missing tools fail
 
 Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-verify`; do not push unless Zheng asks. External fetch paths need an L2 test that runs through the real runtime `fetch`, not only injected stubs.
 
-| Dimension | Required proof | Status |
-|---|---|---|
-| L1 pre-commit | `bun run scripts/pre-commit.ts` on the **index snapshot** (`checkout-index` + symlinked `node_modules`); Node **≥26** (CI 26.12.1); scripts: `typecheck` → `lint` → `gate:test-skip` → `gate:no-remote` → `gate:wrangler-vars` → `gate:client-fetch` → `gate:client-design` → `gate:coverage-script` → `test:coverage`. **Measured 2026-11-09** (cloud VM, Bun 1.4.4, clean deps): warm wall **~37–38s** (target &lt;30s not met on this hardware); coverage **98.62 / 96.51 / 99.01 / 98.94** (statements / branches / functions / lines). Self-test: `bun run gate:l1-probes` (also CI `prepare-command`); rejects type/lint/skip/only/UT/coverage shortfall, staged-skip vs clean worktree, missing `bun`, interrupt, and fake `test:coverage` script. | enforced (S timing advisory) |
-| L2 API | Direct Miniflare/workerd HTTP over 100% endpoint × method, success/failure/auth, including finite oversize uploads | enforced |
-| L3 UI | Critical dashboard journeys in Chromium on isolated local Worker | CI gate; real admin integration covered |
-| G2 security | gitleaks over pushed ranges + osv-scanner on `bun.lock` | enforced |
-| D1 isolation | Per-run local persistence and ports, local-mode assertion, `_test_marker env=test` before fixtures/cleanup | enforced |
+Quality follows System1 v1.3.0 Native Mode (`nocoo/base-ci v2026.15`) in `.github/workflows/quality-slots.yml` and `.github/workflows/ci.yml`.
+
+| Slot              | Status   | Evidence                                                                          |
+| ----------------- | -------- | --------------------------------------------------------------------------------- |
+| `S1` Types        | enforced | `bun run typecheck` (pre-commit + CI)                                             |
+| `S2` Lint         | enforced | `bun run lint` (Biome, pre-commit + CI)                                           |
+| `S3` Workflow     | enforced | SHA-pinned workflow action check in CI                                            |
+| `G1` Secrets      | enforced | `gitleaks` (`.gitleaks.toml`) in pre-push + CI                                    |
+| `G2` Dependencies | enforced | `osv-scanner` (`bun.lock`) in pre-push + CI                                       |
+| `B1` Build        | enforced | `bun run build && wrangler deploy --dry-run` in CI                                |
+| `L1` Unit         | enforced | `bun run scripts/pre-commit.ts` + `test:coverage` (≥95%) + `gate:l1-probes` in CI |
+| `L2` Runtime      | N/A      | Miniflare/workerd integration covered by `L3` API E2E                             |
+| `L3` Integration  | enforced | `bun run test:e2e:api` (direct Miniflare/workerd HTTP) in CI                      |
+| `L4` E2E          | enforced | `bun run test:e2e:bdd` (Playwright Chromium) in CI                                |
+| `P1` Package      | N/A      | Private repo, not published to npm                                                |
+| `Z1` Gate         | enforced | `quality / Z1: Gate` required status check on `main`                              |
 
 Details: [docs/07-dev-workflow.md](docs/07-dev-workflow.md).
 
 ## Release, CI and deploy
 
 - Release: no release script. Version lives only in root `package.json` (`X.Y.Z`); tags and GitHub Releases use `vX.Y.Z`. Usually bump Z, Y for feature changes, X only with Zheng's approval. Manual cut per the workflow `nocoo-repo-steward` versioning reference: bump `package.json`, `bun install` to sync `bun.lock`, update root `CHANGELOG.md` (create it on the first release; no tags exist yet) from commits since the last tag, commit through hooks, push, then `git tag vX.Y.Z && git push origin vX.Y.Z` and `gh release create vX.Y.Z`. Release only when Zheng asks or another bot needs the change.
-- CI (`.github/workflows/ci.yml`, push and PR to `main`, via `nocoo/base-ci` `quality.yml`): gates `test-skip`, `no-remote`, `wrangler-vars`, `client-fetch`; typecheck; Biome lint; `test:coverage` (≥95%); build (`bun run build` incl. `gate:production`, plus `wrangler deploy --dry-run`); L2 `test:e2e:api`; L3 `test:e2e:bdd`. Merge only when green.
+- CI (`.github/workflows/ci.yml`, push and PR to `main`, via `.github/workflows/quality-slots.yml`): gates `test-skip`, `no-remote`, `wrangler-vars`, `client-fetch`, `l1-probes`; typecheck; Biome lint; `test:coverage` (≥95%); build (`bun run build` incl. `gate:production`, plus `wrangler deploy --dry-run`); `L3` `test:e2e:api`; `L4` `test:e2e:bdd`. Merge only when green.
 - Deploy: Cloudflare Worker `octo` at `https://octo.hexly.ai` (custom domain, D1 `octo-db`, R2 `octo-files`, Vectorize). Main-push CI success triggers `.github/workflows/release.yml` (`deploy-worker.yml@633a5545…`, environment `production`): proven source, remote D1 migrations, locked Wrangler deploy, `/api/live` version and `git_sha` verify. Manual retry via Release `workflow_dispatch` + successful CI run ID. Mac wrangler deploy remains an emergency fallback. Never print secrets.
 
 ## Resources and isolation
 
-| Lane | Ports (approved 2026-10-17, nmem `octo-local-ports`) | Boundary |
-|---|---|---|
-| Daily dev | Vite 7059, Worker 37059 | Caddy `octo.dev.hexly.ai`; local D1/R2 |
-| L2 | 17059 (direct Miniflare) | per-run `.wrangler/e2e/<run-id>`; D1/R2 under `v3` |
-| L3 | 27059 | per-run `.wrangler/e2e-pw/<run-id>` |
+| Lane      | Ports (approved 2026-10-17, nmem `octo-local-ports`) | Boundary                                           |
+| --------- | ---------------------------------------------------- | -------------------------------------------------- |
+| Daily dev | Vite 7059, Worker 37059                              | Caddy `octo.dev.hexly.ai`; local D1/R2             |
+| L2        | 17059 (direct Miniflare)                             | per-run `.wrangler/e2e/<run-id>`; D1/R2 under `v3` |
+| L3        | 27059                                                | per-run `.wrangler/e2e-pw/<run-id>`                |
 
 ## Retrospective
 

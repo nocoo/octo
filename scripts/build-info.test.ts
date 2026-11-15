@@ -68,8 +68,8 @@ describe("Worker build identity", () => {
 		expect(config.main).toBe("apps/web/src/server/index.ts");
 		expect(config.build).toMatchObject({ command: "bun run scripts/build-info.ts" });
 		expect(config.alias).toEqual({ "../../lib/build-info": "./.wrangler/build-info.ts" });
-		const workflow = await readFile(".github/workflows/ci.yml", "utf8");
-		expect(workflow).toContain("build: true");
+		const workflow = await readFile(".github/workflows/quality-slots.yml", "utf8");
+		expect(workflow).toContain("b1-build:");
 		expect(workflow).toContain(
 			"bun run build && ./node_modules/.bin/wrangler deploy --dry-run --outdir dist/worker",
 		);
