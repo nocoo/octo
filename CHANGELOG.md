@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.4 — 2026-11-18
+
+### Fixed
+
+- Remove duplicate Basalt rings and shadows from overview chart frames, keeping the outer visualization cards as the only bordered surfaces.
+
+### Validation
+
+- Typecheck, Biome, design gates and 2,697 L1 tests pass; four coverage metrics remain above 95%.
+
 ## 0.8.3 — 2026-11-18
 
 ### Changed
