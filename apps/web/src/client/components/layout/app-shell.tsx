@@ -379,7 +379,7 @@ export function AppShell() {
 					setPalette(open);
 					if (!open) {
 						setQuery("");
-						paletteOpener.current?.focus();
+						requestAnimationFrame(() => paletteOpener.current?.focus());
 					}
 				}}
 				className="octo-command-dialog"
