@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.3 — 2026-11-18
+
+### Changed
+
+- Upgrade the dashboard to `@nocoo/basalt` 3.5.1 and adopt its Tailwind CSS contract, direct icon exports, command palette, chart primitives and responsive sidebar chrome.
+- Preserve Octo's domain navigation, search, charts, graph tables and table density while applying Basalt card rings, shadows and fixed candy chart tokens consistently.
+- Remove direct UI fork dependencies from the app and keep the browser, Worker and shared package version on the root manifest.
+
+### Security
+
+- Add a reviewed 30-day OSV waiver for the dev-only `picomatch` advisory GHSA-fc5q-39xc-vjpf and make local/CI scans load the same configuration. No fixed upstream version is available.
+
+### Validation
+
+- Typecheck, Biome, coverage, design and workflow gates pass; four coverage metrics remain above 95%.
+- L2 API E2E passes 330 runtime tests and the L3 Chromium suite passes 132 browser tests, including populated/empty layouts, command keyboard behavior and light/dark responsive visual checks.
+- Frozen-lockfile installation and build pass with no registry mirror URLs retained in `bun.lock`.
+
 ## 0.8.1 — 2026-10-31
 
 ### Fixed
