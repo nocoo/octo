@@ -82,7 +82,6 @@ export function OperationTrendChart({ rows }: { rows: DailyRow[] }) {
 	return (
 		<ChartShell
 			ariaLabel="记忆操作趋势"
-			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="bar" />}
 			summary={
@@ -167,7 +166,6 @@ export function SpaceTrendChart({ data }: { data: SeriesChart }) {
 	return (
 		<ChartShell
 			ariaLabel="各空间记忆操作趋势"
-			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={series} shape="line" />}
 			summary={
@@ -235,7 +233,6 @@ export function BotOperationChart({ data, rows }: { data: SeriesChart; rows: Dai
 	return (
 		<ChartShell
 			ariaLabel="Bot 记忆操作趋势"
-			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="bar" />}
 			summary={
@@ -327,7 +324,6 @@ export function BotCallChart({ data, rows }: { data: SeriesChart; rows: DailyRow
 	return (
 		<ChartShell
 			ariaLabel="Bot 调用与错误率"
-			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="line" />}
 			summary={
@@ -425,12 +421,7 @@ export function OverviewDonut({
 			className="octo-donut"
 			style={{ gridTemplateColumns: "var(--octo-grid-columns)" }}
 		>
-			<ChartShell
-				ariaLabel={ariaLabel}
-				className="ring-1 ring-basalt-border/80 shadow-basalt-card"
-				size="octo-chart-donut w-full"
-				summary={summary}
-			>
+			<ChartShell ariaLabel={ariaLabel} size="octo-chart-donut w-full" summary={summary}>
 				<ResponsiveContainer {...RESPONSIVE_CONTAINER_PROPS}>
 					<PieChart>
 						<Pie

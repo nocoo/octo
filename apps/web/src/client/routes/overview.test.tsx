@@ -115,6 +115,17 @@ it("renders every section title outside its card in Basalt section chrome", () =
 	expect(html).toContain("操作构成");
 });
 
+it("keeps chart chrome inside the outer visualization card only", () => {
+	snapshot.state = idle(data);
+	const html = render();
+	expect(html).not.toMatch(
+		/class="[^"]*octo-(?:chart-plot|chart-donut|rank-spark)[^"]*(?:ring-basalt-border\/80|shadow-basalt-card)[^"]*"/,
+	);
+	expect(html).not.toMatch(
+		/data-testid="chart-shell" class="[^"]*(?:ring-basalt-border\/80|shadow-basalt-card)[^"]*"/,
+	);
+});
+
 it("lists memory types and shares in the donut legend", () => {
 	snapshot.state = idle(data);
 	const html = render();

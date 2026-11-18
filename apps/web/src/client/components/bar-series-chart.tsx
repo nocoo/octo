@@ -37,7 +37,6 @@ export function BarSeriesChart({
 }) {
 	return (
 		<ChartFrame
-			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			ariaLabel={ariaLabel}
 			size={size}
 			summary={summary}
