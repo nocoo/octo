@@ -1,5 +1,4 @@
 import { Button, Field, Input, LayerCard, Link, ScrollArea, toast } from "@nocoo/basalt";
-import { BarChart } from "@nocoo/basalt/charts/bar";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { FilterBar, FilterChip } from "@nocoo/basalt/components/filter-bar";
 import { Grid } from "@nocoo/basalt/components/grid";
@@ -24,9 +23,10 @@ import {
 	RefreshCw,
 	ScrollText,
 	X,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { BarSeriesChart } from "../components/bar-series-chart";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { RecordTime } from "../components/record-display";
@@ -298,9 +298,8 @@ export function UsagePage() {
 						<LayerCard>
 							<LayerCard.Body>
 								<Grid columns={1} gap="sm">
-									<BarChart
-										className="ops-plot"
-										showAxes
+									<BarSeriesChart
+										size="ops-plot"
 										data={model.chart}
 										series={[{ key: "calls", label: "调用次数" }]}
 										ariaLabel="各密钥的每日调用次数"
@@ -315,9 +314,8 @@ export function UsagePage() {
 						<LayerCard>
 							<LayerCard.Body>
 								<Grid columns={1} gap="sm">
-									<BarChart
-										className="ops-plot"
-										showAxes
+									<BarSeriesChart
+										size="ops-plot"
 										yDomain={[0, 100]}
 										data={model.chart}
 										series={[{ key: "error_rate", label: "错误率（%）" }]}

@@ -1,4 +1,4 @@
-import { Link } from "@nocoo/basalt";
+import { LayerCard, Link } from "@nocoo/basalt";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
@@ -59,57 +59,61 @@ export function GraphTables({
 	];
 	return (
 		<Grid columns={1} gap="lg" className="octo-graph-tables">
-			<DataTable
-				className="octo-table"
-				aria-label="图谱节点"
-				data={graph.nodes}
-				columns={columns}
-				getRowId={(node) => node.id}
-				selected={selected}
-				onSelectedChange={onSelected}
-				pageSize={10}
-			/>
-			<DataTable
-				className="octo-table"
-				aria-label="图谱关系"
-				data={graph.links}
-				columns={[
-					{
-						id: "source",
-						header: "起点",
-						width: "24ch",
-						accessor: (link) => (
-							<span className="octo-record-title" title={labels.get(link.source)}>
-								{labels.get(link.source)}
-							</span>
-						),
-						sortValue: (link) => labels.get(link.source) ?? link.source,
-						wrap: true,
-					},
-					{
-						id: "target",
-						header: "终点",
-						width: "24ch",
-						accessor: (link) => (
-							<span className="octo-record-title" title={labels.get(link.target)}>
-								{labels.get(link.target)}
-							</span>
-						),
-						sortValue: (link) => labels.get(link.target) ?? link.target,
-						wrap: true,
-					},
-					{
-						id: "value",
-						header: "关联强度",
-						width: "12ch",
-						accessor: (link) => formatNumber(link.value),
-						sortValue: (link) => link.value,
-						textAlign: "end",
-					},
-				]}
-				getRowId={(link) => JSON.stringify([link.source, link.target])}
-				pageSize={10}
-			/>
+			<LayerCard padding="none">
+				<DataTable
+					className="octo-table"
+					aria-label="图谱节点"
+					data={graph.nodes}
+					columns={columns}
+					getRowId={(node) => node.id}
+					selected={selected}
+					onSelectedChange={onSelected}
+					pageSize={10}
+				/>
+			</LayerCard>
+			<LayerCard padding="none">
+				<DataTable
+					className="octo-table"
+					aria-label="图谱关系"
+					data={graph.links}
+					columns={[
+						{
+							id: "source",
+							header: "起点",
+							width: "24ch",
+							accessor: (link) => (
+								<span className="octo-record-title" title={labels.get(link.source)}>
+									{labels.get(link.source)}
+								</span>
+							),
+							sortValue: (link) => labels.get(link.source) ?? link.source,
+							wrap: true,
+						},
+						{
+							id: "target",
+							header: "终点",
+							width: "24ch",
+							accessor: (link) => (
+								<span className="octo-record-title" title={labels.get(link.target)}>
+									{labels.get(link.target)}
+								</span>
+							),
+							sortValue: (link) => labels.get(link.target) ?? link.target,
+							wrap: true,
+						},
+						{
+							id: "value",
+							header: "关联强度",
+							width: "12ch",
+							accessor: (link) => formatNumber(link.value),
+							sortValue: (link) => link.value,
+							textAlign: "end",
+						},
+					]}
+					getRowId={(link) => JSON.stringify([link.source, link.target])}
+					pageSize={10}
+				/>
+			</LayerCard>
 		</Grid>
 	);
 }

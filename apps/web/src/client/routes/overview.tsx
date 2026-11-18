@@ -1,5 +1,4 @@
 import { Button, LayerCard, StatStrip } from "@nocoo/basalt";
-import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { Banner } from "@nocoo/basalt/components/banner";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
@@ -21,9 +20,10 @@ import {
 	ChartNoAxesCombined,
 	RefreshCw,
 	TrendingUp,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router";
+import { BarSeriesChart } from "../components/bar-series-chart";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { formatNumber, formatPercent } from "../lib/format";
@@ -91,13 +91,12 @@ function BotsPanel({ rows, onSelect }: { rows: BotRow[]; onSelect: (id: string) 
 							</span>
 							<span className="octo-rank-meta">{botMeta(row)}</span>
 						</span>
-						<Sparkline
+						<BarSeriesChart
 							data={row.sparkline}
-							series={[{ key: "value", color: "hsl(var(--basalt-chart-1))" }]}
+							series={[{ key: "value", label: "每日操作量" }]}
 							ariaLabel={`${row.name} 每日操作量`}
-							accessibilityLayer={false}
 							summary={<span className="sr-only">{row.name} 每日操作量迷你条形图。</span>}
-							className="octo-rank-spark"
+							size="octo-rank-spark"
 						/>
 						<span className="octo-rank-value">
 							{formatNumber(row.calls)}
@@ -133,13 +132,12 @@ function SpacesPanel({ rows, onSelect }: { rows: SpaceRow[]; onSelect: (id: stri
 								{` · ${formatNumber(row.ops)} 次操作`}
 							</span>
 						</span>
-						<Sparkline
+						<BarSeriesChart
 							data={row.sparkline}
-							series={[{ key: "value", color: "hsl(var(--basalt-chart-3))" }]}
+							series={[{ key: "value", label: "每日操作量" }]}
 							ariaLabel={`${row.name} 每日操作量`}
-							accessibilityLayer={false}
 							summary={<span className="sr-only">{row.name} 每日操作量迷你条形图。</span>}
-							className="octo-rank-spark"
+							size="octo-rank-spark"
 						/>
 						<span className="octo-rank-value">
 							{formatPercent(row.share, 1)}
@@ -391,7 +389,11 @@ export function OverviewPage() {
 					},
 				]}
 			/>
-			{!data && !state.error ? <LayerCard.Loading label="正在汇总总览" /> : null}
+			{!data && !state.error ? (
+				<LayerCard>
+					<LayerCard.Loading label="正在汇总总览" />
+				</LayerCard>
+			) : null}
 			{quiet ? (
 				<LayerCard>
 					<LayerCard.Empty

@@ -1,4 +1,3 @@
-import "@nocoo/basalt/styles/standalone";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import "./index.css";

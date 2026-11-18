@@ -1,13 +1,15 @@
 import {
 	ANIMATION_PROPS,
 	BAR_RADIUS,
+	ChartLegend,
+	ChartShell,
+	ChartTooltipRow,
 	cartesianAxisProps,
 	chartTooltipProps,
 	GRID_PROPS,
-} from "@nocoo/basalt/charts/config";
-import { ChartShell } from "@nocoo/basalt/charts/frame";
-import { ChartLegend } from "@nocoo/basalt/charts/legend";
-import { ChartTooltipRow } from "@nocoo/basalt/charts/tooltip";
+	getChartColor,
+	RESPONSIVE_CONTAINER_PROPS,
+} from "@nocoo/basalt/components/chart";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { Text } from "@nocoo/basalt/components/text";
 import type { ReactNode } from "react";
@@ -20,6 +22,7 @@ import {
 	LineChart,
 	Pie,
 	PieChart,
+	ResponsiveContainer,
 	Tooltip,
 	XAxis,
 	YAxis,
@@ -33,26 +36,18 @@ import {
 	type SeriesChart,
 } from "../viewmodels/overview";
 
-const token = (index: number) => `hsl(var(--basalt-chart-${index}))`;
-const SERIES_COLORS = [1, 7, 5, 4, 3, 6, 2, 8, 17].map(token);
 const SERIES_MUTED = "hsl(var(--basalt-muted-foreground))";
-const SECONDARY_LINE = token(17);
+const SECONDARY_LINE = getChartColor(4);
 const ERROR_LINE = "hsl(var(--basalt-destructive))";
 
 export function seriesColor(colorIndex: number): string {
 	if (colorIndex < 0) return SERIES_MUTED;
-	return SERIES_COLORS[colorIndex % SERIES_COLORS.length] ?? token(1);
+	return getChartColor(colorIndex);
 }
 
-export const OP_COLORS: Record<OpBucket, string> = {
-	created: token(5),
-	updated: token(1),
-	moved: token(3),
-	restored: token(7),
-	rolled_back: token(4),
-	trashed: token(6),
-	purged: token(2),
-};
+export const OP_COLORS: Record<OpBucket, string> = Object.fromEntries(
+	OP_BUCKETS.map((bucket, index) => [bucket.key, getChartColor(index)]),
+) as Record<OpBucket, string>;
 
 function dayLabel(value: string | number): string {
 	return String(value).slice(5);
@@ -87,75 +82,78 @@ export function OperationTrendChart({ rows }: { rows: DailyRow[] }) {
 	return (
 		<ChartShell
 			ariaLabel="记忆操作趋势"
+			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="bar" />}
 			summary={
 				<span className="sr-only">每日记忆操作按类型堆叠（左轴），净增记忆数为折线（右轴）。</span>
 			}
 		>
-			<ComposedChart
-				data={rows}
-				margin={{ top: 8, right: 6, bottom: 0, left: 0 }}
-				barCategoryGap={1}
-			>
-				<CartesianGrid {...GRID_PROPS} />
-				<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
-				<YAxis yAxisId="ops" {...cartesianAxisProps()} allowDecimals={false} width={30} />
-				<YAxis
-					yAxisId="net"
-					orientation="right"
-					{...cartesianAxisProps()}
-					allowDecimals={false}
-					width={34}
-				/>
-				<Tooltip
-					{...chartTooltipProps({ cursor: "bar" })}
-					content={({ active, payload }) => {
-						const row = payload?.[0]?.payload as DailyRow | undefined;
-						if (!active || !row) return null;
-						return (
-							<ChartTip title={row.x}>
-								{buckets.map((bucket) => (
+			<ResponsiveContainer {...RESPONSIVE_CONTAINER_PROPS}>
+				<ComposedChart
+					data={rows}
+					margin={{ top: 8, right: 6, bottom: 0, left: 0 }}
+					barCategoryGap={1}
+				>
+					<CartesianGrid {...GRID_PROPS} />
+					<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
+					<YAxis yAxisId="ops" {...cartesianAxisProps()} allowDecimals={false} width={30} />
+					<YAxis
+						yAxisId="net"
+						orientation="right"
+						{...cartesianAxisProps()}
+						allowDecimals={false}
+						width={34}
+					/>
+					<Tooltip
+						{...chartTooltipProps({ cursor: "bar" })}
+						content={({ active, payload }) => {
+							const row = payload?.[0]?.payload as DailyRow | undefined;
+							if (!active || !row) return null;
+							return (
+								<ChartTip title={row.x}>
+									{buckets.map((bucket) => (
+										<ChartTooltipRow
+											key={bucket.key}
+											label={bucket.label}
+											color={OP_COLORS[bucket.key]}
+											value={row[bucket.key]}
+										/>
+									))}
+									<ChartTooltipRow label="净增" color={SECONDARY_LINE} value={row.net} />
 									<ChartTooltipRow
-										key={bucket.key}
-										label={bucket.label}
-										color={OP_COLORS[bucket.key]}
-										value={row[bucket.key]}
+										label="接口调用"
+										hideIndicator
+										value={`${formatNumber(row.calls)} · 错误 ${formatNumber(row.errors)}`}
 									/>
-								))}
-								<ChartTooltipRow label="净增" color={SECONDARY_LINE} value={row.net} />
-								<ChartTooltipRow
-									label="接口调用"
-									hideIndicator
-									value={`${formatNumber(row.calls)} · 错误 ${formatNumber(row.errors)}`}
-								/>
-							</ChartTip>
-						);
-					}}
-				/>
-				{buckets.map((bucket, index) => (
-					<Bar
-						key={bucket.key}
-						yAxisId="ops"
-						dataKey={bucket.key}
-						name={bucket.label}
-						stackId="ops"
-						fill={OP_COLORS[bucket.key]}
-						{...(index === buckets.length - 1 ? { radius: BAR_RADIUS.vertical } : {})}
+								</ChartTip>
+							);
+						}}
+					/>
+					{buckets.map((bucket, index) => (
+						<Bar
+							key={bucket.key}
+							yAxisId="ops"
+							dataKey={bucket.key}
+							name={bucket.label}
+							stackId="ops"
+							fill={OP_COLORS[bucket.key]}
+							{...(index === buckets.length - 1 ? { radius: BAR_RADIUS.vertical } : {})}
+							{...ANIMATION_PROPS}
+						/>
+					))}
+					<Line
+						yAxisId="net"
+						dataKey="net"
+						name="净增"
+						stroke={SECONDARY_LINE}
+						strokeWidth={2}
+						dot={false}
+						type="monotone"
 						{...ANIMATION_PROPS}
 					/>
-				))}
-				<Line
-					yAxisId="net"
-					dataKey="net"
-					name="净增"
-					stroke={SECONDARY_LINE}
-					strokeWidth={2}
-					dot={false}
-					type="monotone"
-					{...ANIMATION_PROPS}
-				/>
-			</ComposedChart>
+				</ComposedChart>
+			</ResponsiveContainer>
 		</ChartShell>
 	);
 }
@@ -169,49 +167,52 @@ export function SpaceTrendChart({ data }: { data: SeriesChart }) {
 	return (
 		<ChartShell
 			ariaLabel="各空间记忆操作趋势"
+			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={series} shape="line" />}
 			summary={
 				<span className="sr-only">按日比较操作量最高的空间，折线为当天全部记忆操作数。</span>
 			}
 		>
-			<LineChart data={data.rows} margin={{ top: 8, right: 6, bottom: 0, left: 0 }}>
-				<CartesianGrid {...GRID_PROPS} />
-				<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
-				<YAxis {...cartesianAxisProps()} allowDecimals={false} width={30} />
-				<Tooltip
-					{...chartTooltipProps({ cursor: "line" })}
-					content={({ active, payload, label }) => {
-						if (!active || !payload?.length) return null;
-						return (
-							<ChartTip title={String(label)}>
-								{series.map((item) => (
-									<ChartTooltipRow
-										key={item.key}
-										label={item.label}
-										color={item.color}
-										value={Number(
-											(payload.find((entry) => entry.dataKey === item.key)?.value as number) ?? 0,
-										)}
-									/>
-								))}
-							</ChartTip>
-						);
-					}}
-				/>
-				{series.map((item) => (
-					<Line
-						key={item.key}
-						dataKey={item.key}
-						name={item.label}
-						stroke={item.color}
-						strokeWidth={2}
-						dot={false}
-						type="monotone"
-						{...ANIMATION_PROPS}
+			<ResponsiveContainer {...RESPONSIVE_CONTAINER_PROPS}>
+				<LineChart data={data.rows} margin={{ top: 8, right: 6, bottom: 0, left: 0 }}>
+					<CartesianGrid {...GRID_PROPS} />
+					<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
+					<YAxis {...cartesianAxisProps()} allowDecimals={false} width={30} />
+					<Tooltip
+						{...chartTooltipProps({ cursor: "line" })}
+						content={({ active, payload, label }) => {
+							if (!active || !payload?.length) return null;
+							return (
+								<ChartTip title={String(label)}>
+									{series.map((item) => (
+										<ChartTooltipRow
+											key={item.key}
+											label={item.label}
+											color={item.color}
+											value={Number(
+												(payload.find((entry) => entry.dataKey === item.key)?.value as number) ?? 0,
+											)}
+										/>
+									))}
+								</ChartTip>
+							);
+						}}
 					/>
-				))}
-			</LineChart>
+					{series.map((item) => (
+						<Line
+							key={item.key}
+							dataKey={item.key}
+							name={item.label}
+							stroke={item.color}
+							strokeWidth={2}
+							dot={false}
+							type="monotone"
+							{...ANIMATION_PROPS}
+						/>
+					))}
+				</LineChart>
+			</ResponsiveContainer>
 		</ChartShell>
 	);
 }
@@ -234,6 +235,7 @@ export function BotOperationChart({ data, rows }: { data: SeriesChart; rows: Dai
 	return (
 		<ChartShell
 			ariaLabel="Bot 记忆操作趋势"
+			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="bar" />}
 			summary={
@@ -242,68 +244,70 @@ export function BotOperationChart({ data, rows }: { data: SeriesChart; rows: Dai
 				</span>
 			}
 		>
-			<ComposedChart
-				data={mergedRows(data, rows)}
-				margin={{ top: 8, right: 6, bottom: 0, left: 0 }}
-				barCategoryGap={1}
-			>
-				<CartesianGrid {...GRID_PROPS} />
-				<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
-				<YAxis yAxisId="ops" {...cartesianAxisProps()} allowDecimals={false} width={30} />
-				<YAxis
-					yAxisId="calls"
-					orientation="right"
-					{...cartesianAxisProps()}
-					allowDecimals={false}
-					width={34}
-				/>
-				<Tooltip
-					{...chartTooltipProps({ cursor: "bar" })}
-					content={({ active, payload }) => {
-						const row = payload?.[0]?.payload as Record<string, number> | undefined;
-						if (!active || !row) return null;
-						return (
-							<ChartTip title={String(row.x)}>
-								{series.map((item) => (
+			<ResponsiveContainer {...RESPONSIVE_CONTAINER_PROPS}>
+				<ComposedChart
+					data={mergedRows(data, rows)}
+					margin={{ top: 8, right: 6, bottom: 0, left: 0 }}
+					barCategoryGap={1}
+				>
+					<CartesianGrid {...GRID_PROPS} />
+					<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
+					<YAxis yAxisId="ops" {...cartesianAxisProps()} allowDecimals={false} width={30} />
+					<YAxis
+						yAxisId="calls"
+						orientation="right"
+						{...cartesianAxisProps()}
+						allowDecimals={false}
+						width={34}
+					/>
+					<Tooltip
+						{...chartTooltipProps({ cursor: "bar" })}
+						content={({ active, payload }) => {
+							const row = payload?.[0]?.payload as Record<string, number> | undefined;
+							if (!active || !row) return null;
+							return (
+								<ChartTip title={String(row.x)}>
+									{series.map((item) => (
+										<ChartTooltipRow
+											key={item.key}
+											label={item.label}
+											color={item.color}
+											value={Number(row[item.key] ?? 0)}
+										/>
+									))}
 									<ChartTooltipRow
-										key={item.key}
-										label={item.label}
-										color={item.color}
-										value={Number(row[item.key] ?? 0)}
+										label="接口调用"
+										color={SECONDARY_LINE}
+										value={Number(row.calls ?? 0)}
 									/>
-								))}
-								<ChartTooltipRow
-									label="接口调用"
-									color={SECONDARY_LINE}
-									value={Number(row.calls ?? 0)}
-								/>
-							</ChartTip>
-						);
-					}}
-				/>
-				{series.map((item, index) => (
-					<Bar
-						key={item.key}
-						yAxisId="ops"
-						dataKey={item.key}
-						name={item.label}
-						stackId="ops"
-						fill={item.color}
-						{...(index === series.length - 1 ? { radius: BAR_RADIUS.vertical } : {})}
+								</ChartTip>
+							);
+						}}
+					/>
+					{series.map((item, index) => (
+						<Bar
+							key={item.key}
+							yAxisId="ops"
+							dataKey={item.key}
+							name={item.label}
+							stackId="ops"
+							fill={item.color}
+							{...(index === series.length - 1 ? { radius: BAR_RADIUS.vertical } : {})}
+							{...ANIMATION_PROPS}
+						/>
+					))}
+					<Line
+						yAxisId="calls"
+						dataKey="calls"
+						name="接口调用"
+						stroke={SECONDARY_LINE}
+						strokeWidth={2}
+						dot={false}
+						type="monotone"
 						{...ANIMATION_PROPS}
 					/>
-				))}
-				<Line
-					yAxisId="calls"
-					dataKey="calls"
-					name="接口调用"
-					stroke={SECONDARY_LINE}
-					strokeWidth={2}
-					dot={false}
-					type="monotone"
-					{...ANIMATION_PROPS}
-				/>
-			</ComposedChart>
+				</ComposedChart>
+			</ResponsiveContainer>
 		</ChartShell>
 	);
 }
@@ -323,76 +327,79 @@ export function BotCallChart({ data, rows }: { data: SeriesChart; rows: DailyRow
 	return (
 		<ChartShell
 			ariaLabel="Bot 调用与错误率"
+			className="ring-1 ring-basalt-border/80 shadow-basalt-card"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="line" />}
 			summary={
 				<span className="sr-only">每日接口调用按密钥堆叠（左轴），当天错误率为折线（右轴）。</span>
 			}
 		>
-			<ComposedChart
-				data={merged}
-				margin={{ top: 8, right: 6, bottom: 0, left: 0 }}
-				barCategoryGap={1}
-			>
-				<CartesianGrid {...GRID_PROPS} />
-				<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
-				<YAxis yAxisId="calls" {...cartesianAxisProps()} allowDecimals={false} width={30} />
-				<YAxis
-					yAxisId="rate"
-					orientation="right"
-					{...cartesianAxisProps()}
-					width={38}
-					tickFormatter={(value: number) => `${Math.round(value)}%`}
-				/>
-				<Tooltip
-					{...chartTooltipProps({ cursor: "bar" })}
-					content={({ active, payload }) => {
-						const row = payload?.[0]?.payload as Record<string, number | null> | undefined;
-						if (!active || !row) return null;
-						return (
-							<ChartTip title={String(row.x)}>
-								{series.map((item) => (
+			<ResponsiveContainer {...RESPONSIVE_CONTAINER_PROPS}>
+				<ComposedChart
+					data={merged}
+					margin={{ top: 8, right: 6, bottom: 0, left: 0 }}
+					barCategoryGap={1}
+				>
+					<CartesianGrid {...GRID_PROPS} />
+					<XAxis dataKey="x" {...cartesianAxisProps()} tickFormatter={dayLabel} minTickGap={24} />
+					<YAxis yAxisId="calls" {...cartesianAxisProps()} allowDecimals={false} width={30} />
+					<YAxis
+						yAxisId="rate"
+						orientation="right"
+						{...cartesianAxisProps()}
+						width={38}
+						tickFormatter={(value: number) => `${Math.round(value)}%`}
+					/>
+					<Tooltip
+						{...chartTooltipProps({ cursor: "bar" })}
+						content={({ active, payload }) => {
+							const row = payload?.[0]?.payload as Record<string, number | null> | undefined;
+							if (!active || !row) return null;
+							return (
+								<ChartTip title={String(row.x)}>
+									{series.map((item) => (
+										<ChartTooltipRow
+											key={item.key}
+											label={item.label}
+											color={item.color}
+											value={Number(row[item.key] ?? 0)}
+										/>
+									))}
 									<ChartTooltipRow
-										key={item.key}
-										label={item.label}
-										color={item.color}
-										value={Number(row[item.key] ?? 0)}
+										label="错误率"
+										color={ERROR_LINE}
+										formatter={(value) => formatPercent(value / 100)}
+										value={row.errorRate ?? null}
 									/>
-								))}
-								<ChartTooltipRow
-									label="错误率"
-									color={ERROR_LINE}
-									formatter={(value) => formatPercent(value / 100)}
-									value={row.errorRate ?? null}
-								/>
-							</ChartTip>
-						);
-					}}
-				/>
-				{series.map((item, index) => (
-					<Bar
-						key={item.key}
-						yAxisId="calls"
-						dataKey={item.key}
-						name={item.label}
-						stackId="calls"
-						fill={item.color}
-						{...(index === series.length - 1 ? { radius: BAR_RADIUS.vertical } : {})}
+								</ChartTip>
+							);
+						}}
+					/>
+					{series.map((item, index) => (
+						<Bar
+							key={item.key}
+							yAxisId="calls"
+							dataKey={item.key}
+							name={item.label}
+							stackId="calls"
+							fill={item.color}
+							{...(index === series.length - 1 ? { radius: BAR_RADIUS.vertical } : {})}
+							{...ANIMATION_PROPS}
+						/>
+					))}
+					<Line
+						yAxisId="rate"
+						dataKey="errorRate"
+						name="错误率"
+						stroke={ERROR_LINE}
+						strokeWidth={2}
+						dot={false}
+						connectNulls={false}
+						type="monotone"
 						{...ANIMATION_PROPS}
 					/>
-				))}
-				<Line
-					yAxisId="rate"
-					dataKey="errorRate"
-					name="错误率"
-					stroke={ERROR_LINE}
-					strokeWidth={2}
-					dot={false}
-					connectNulls={false}
-					type="monotone"
-					{...ANIMATION_PROPS}
-				/>
-			</ComposedChart>
+				</ComposedChart>
+			</ResponsiveContainer>
 		</ChartShell>
 	);
 }
@@ -418,40 +425,47 @@ export function OverviewDonut({
 			className="octo-donut"
 			style={{ gridTemplateColumns: "var(--octo-grid-columns)" }}
 		>
-			<ChartShell ariaLabel={ariaLabel} size="octo-chart-donut w-full" summary={summary}>
-				<PieChart>
-					<Pie
-						data={data.map((item) => ({ name: item.name, value: item.value }))}
-						dataKey="value"
-						nameKey="name"
-						innerRadius="58%"
-						outerRadius="90%"
-						paddingAngle={0.6}
-						stroke="none"
-						{...ANIMATION_PROPS}
-					>
-						{data.map((item) => (
-							<Cell key={item.key} fill={colorOf(item)} />
-						))}
-					</Pie>
-					<Tooltip
-						{...chartTooltipProps({ cursor: false, formatter: formatNumber })}
-						content={({ active, payload }) => {
-							const item = payload?.[0];
-							if (!active || !item) return null;
-							const value = Number(item.value ?? 0);
-							return (
-								<ChartTip title={String(item.name)}>
-									<ChartTooltipRow label="数量" value={value} />
-									<ChartTooltipRow
-										label="占比"
-										value={formatPercent(total > 0 ? value / total : null)}
-									/>
-								</ChartTip>
-							);
-						}}
-					/>
-				</PieChart>
+			<ChartShell
+				ariaLabel={ariaLabel}
+				className="ring-1 ring-basalt-border/80 shadow-basalt-card"
+				size="octo-chart-donut w-full"
+				summary={summary}
+			>
+				<ResponsiveContainer {...RESPONSIVE_CONTAINER_PROPS}>
+					<PieChart>
+						<Pie
+							data={data.map((item) => ({ name: item.name, value: item.value }))}
+							dataKey="value"
+							nameKey="name"
+							innerRadius="58%"
+							outerRadius="90%"
+							paddingAngle={0.6}
+							stroke="none"
+							{...ANIMATION_PROPS}
+						>
+							{data.map((item) => (
+								<Cell key={item.key} fill={colorOf(item)} />
+							))}
+						</Pie>
+						<Tooltip
+							{...chartTooltipProps({ cursor: false, formatter: formatNumber })}
+							content={({ active, payload }) => {
+								const item = payload?.[0];
+								if (!active || !item) return null;
+								const value = Number(item.value ?? 0);
+								return (
+									<ChartTip title={String(item.name)}>
+										<ChartTooltipRow label="数量" value={value} />
+										<ChartTooltipRow
+											label="占比"
+											value={formatPercent(total > 0 ? value / total : null)}
+										/>
+									</ChartTip>
+								);
+							}}
+						/>
+					</PieChart>
+				</ResponsiveContainer>
 			</ChartShell>
 			<dl className="octo-donut-legend">
 				{data.map((item) => (

@@ -44,7 +44,7 @@ import {
 	RotateCcw,
 	SlidersHorizontal,
 	Tags,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
@@ -775,7 +775,13 @@ export function GraphPage() {
 				</LayerCard>
 			)}
 			{populated && (
-				<Suspense fallback={<LayerCard.Loading label="正在加载图谱…" />}>
+				<Suspense
+					fallback={
+						<LayerCard>
+							<LayerCard.Loading label="正在加载图谱…" />
+						</LayerCard>
+					}
+				>
 					<GraphCanvas graph={graph} />
 				</Suspense>
 			)}

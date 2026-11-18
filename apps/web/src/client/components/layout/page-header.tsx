@@ -4,7 +4,7 @@ import {
 	PageHeader as BasaltPageHeader,
 	type PageHeaderProps as BasaltPageHeaderProps,
 } from "@nocoo/basalt/components/page-header";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@nocoo/basalt/icons";
 import { useLocation, useNavigate } from "react-router";
 import { backTarget } from "../../viewmodels/shell";
 

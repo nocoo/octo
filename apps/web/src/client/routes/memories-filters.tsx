@@ -15,7 +15,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
-import { Check, Filter, X } from "lucide-react";
+import { Check, Filter, X } from "@nocoo/basalt/icons";
 import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useModel } from "../components/layout/use-model";

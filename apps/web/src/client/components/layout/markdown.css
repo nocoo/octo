@@ -62,7 +62,7 @@
 }
 .octo-markdown code {
 	font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
-	font-size: var(--basalt-text-lg);
+	font-size: inherit;
 }
 .octo-memory-diff code {
 	white-space: pre-wrap;

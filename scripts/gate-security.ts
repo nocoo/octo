@@ -53,7 +53,10 @@ export function securityTasks(
 		}
 	}
 	if (arg !== "--secrets") {
-		tasks.push({ cmd: ["osv-scanner", "--lockfile=bun.lock"], label: "osv-scanner" });
+		tasks.push({
+			cmd: ["osv-scanner", "--lockfile=bun.lock", "--config=.osv-scanner.toml"],
+			label: "osv-scanner",
+		});
 	}
 	return tasks;
 }

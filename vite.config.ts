@@ -1,7 +1,9 @@
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { DEV_VITE_PORT, DEV_WORKER_PORT } from "./scripts/ports";
 
 export default defineConfig({
+	plugins: [tailwindcss()],
 	root: "apps/web",
 	build: {
 		outDir: "../../dist/client",

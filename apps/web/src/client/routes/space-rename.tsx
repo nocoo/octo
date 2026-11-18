@@ -1,7 +1,7 @@
 import { Button, DialogFooter, Field, Input } from "@nocoo/basalt";
 import { Banner } from "@nocoo/basalt/components/banner";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { Save } from "lucide-react";
+import { Save } from "@nocoo/basalt/icons";
 
 export function SpaceRenameForm({
 	name,

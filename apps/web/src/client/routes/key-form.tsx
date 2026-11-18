@@ -9,7 +9,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@nocoo/basalt/components/select";
-import { CircleAlert, RefreshCw, Save } from "lucide-react";
+import { CircleAlert, RefreshCw, Save } from "@nocoo/basalt/icons";
 import { useId, useRef, useState } from "react";
 import {
 	type KeyDraft,

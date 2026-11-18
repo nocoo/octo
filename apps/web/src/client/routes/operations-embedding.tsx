@@ -21,7 +21,7 @@ import {
 	Save,
 	Settings2,
 	Trash2,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { PageHeader } from "../components/layout/page-header";

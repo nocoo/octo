@@ -58,7 +58,7 @@ import {
 	RotateCcw,
 	Save,
 	SearchX,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Link,

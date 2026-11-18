@@ -13,7 +13,6 @@ import {
 	LayerCard,
 	toast,
 } from "@nocoo/basalt";
-import { Sparkline } from "@nocoo/basalt/charts/sparkline";
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
@@ -30,8 +29,9 @@ import {
 	RotateCw,
 	Trash2,
 	X,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useEffect, useRef, useState } from "react";
+import { BarSeriesChart } from "../components/bar-series-chart";
 import { PageHeader } from "../components/layout/page-header";
 import { useModel } from "../components/layout/use-model";
 import { RecordTime } from "../components/record-display";
@@ -180,11 +180,12 @@ export function KeysPage() {
 							? "用量不可用"
 							: "用量尚未加载";
 				return (
-					<Sparkline
+					<BarSeriesChart
 						data={usage.data}
 						series={[{ key: "calls", label: "调用次数" }]}
 						ariaLabel={`${key.name} 近 30 天每日调用量`}
-						summary={`${formatNumber(usage.total)} 次调用`}
+						size="h-basalt-5 w-basalt-28"
+						summary={<span className="sr-only">{formatNumber(usage.total)} 次调用</span>}
 						dataAlternative={
 							<span className="sr-only">
 								{usageState.snapshot?.from} 至 {usageState.snapshot?.to}：

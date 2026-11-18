@@ -6,10 +6,8 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
+	CommandPalette,
 	ContentIsland,
-	Dialog,
-	DialogContent,
-	DialogTitle,
 	LayerCard,
 	Link,
 	Sidebar,
@@ -34,7 +32,6 @@ import { AppHeader, AppHeaderMenuButton, ProjectLinks } from "@nocoo/basalt/comp
 import { AppMain, AppSkipLink, AppShell as Frame } from "@nocoo/basalt/components/app-shell";
 import { Banner } from "@nocoo/basalt/components/banner";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { Command } from "cmdk";
 import {
 	Activity,
 	ArrowUpDown,
@@ -51,7 +48,7 @@ import {
 	ShieldCheck,
 	Tags,
 	Trash2,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { Fragment, Suspense, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { APP_VERSION } from "../../../lib/version";
@@ -186,6 +183,7 @@ function ShellSidebar({
 											onClick={() => onNavigate(item.href)}
 										>
 											{icon}
+											<span className="sr-only">{item.label}</span>
 										</SidebarIconItem>
 									</TooltipTrigger>
 									<TooltipContent side="right">{item.label}</TooltipContent>
@@ -261,7 +259,11 @@ export function AppShell() {
 			const action = shortcut(event.key, event.metaKey || event.ctrlKey, editable);
 			if (!action || event.altKey) return;
 			event.preventDefault();
-			if (action === "palette") setPalette((current) => !current);
+			if (action === "palette")
+				setPalette((current) => {
+					if (!current) paletteOpener.current = document.activeElement as HTMLElement;
+					return !current;
+				});
 			else {
 				const search = document.querySelector<HTMLInputElement>("[data-search-input]");
 				if (search) search.focus();
@@ -279,7 +281,10 @@ export function AppShell() {
 	}
 	const sidebarProps = {
 		identity,
-		onOpenPalette: () => setPalette(true),
+		onOpenPalette: () => {
+			paletteOpener.current = document.activeElement as HTMLElement;
+			setPalette(true);
+		},
 		onNavigate: go,
 	};
 	return (
@@ -357,89 +362,83 @@ export function AppShell() {
 							action={<Banner.Action onClick={() => void shellModel.load()}>重试</Banner.Action>}
 						/>
 					)}
-					<Suspense fallback={<LayerCard.Loading label="正在加载页面…" />}>
+					<Suspense
+						fallback={
+							<LayerCard>
+								<LayerCard.Loading label="正在加载页面…" />
+							</LayerCard>
+						}
+					>
 						<RouteContent />
 					</Suspense>
 				</ContentIsland>
 			</AppMain>
-			<Dialog
+			<CommandPalette
 				open={palette}
 				onOpenChange={(open) => {
 					setPalette(open);
-					if (!open) setQuery("");
-				}}
-			>
-				<DialogContent
-					size="lg"
-					className="octo-command-dialog"
-					aria-describedby={undefined}
-					onOpenAutoFocus={() => {
-						paletteOpener.current = document.activeElement as HTMLElement;
-					}}
-					onCloseAutoFocus={(event) => {
-						event.preventDefault();
+					if (!open) {
+						setQuery("");
 						paletteOpener.current?.focus();
-					}}
-				>
-					<DialogTitle className="sr-only">搜索与命令</DialogTitle>
-					<Command label="搜索页面或记忆" className="octo-command-root">
-						<CommandInput
-							aria-label="搜索页面或记忆"
-							placeholder="跳转页面，或搜索记忆…"
-							value={query}
-							onValueChange={setQuery}
-						/>
-						<CommandList label="搜索结果" className="octo-command-list">
-							{query.trim() && (
-								<CommandGroup heading="搜索记忆" forceMount>
-									<CommandItem
-										value="search-memories"
-										forceMount
-										onSelect={() => go(`/search?q=${encodeURIComponent(query.trim())}`)}
-									>
-										<Search aria-hidden="true" />
-										<span className="octo-command-label">搜索记忆：{query.trim()}</span>
-										<CornerDownLeft className="octo-command-enter" aria-hidden="true" />
-									</CommandItem>
-								</CommandGroup>
-							)}
-							{navigationGroups.map((group) => (
-								<CommandGroup key={group} heading={group}>
-									{navigation
-										.filter((item) => item.group === group)
-										.map((item) => {
-											const Icon = icons[item.icon];
-											return (
-												<CommandItem
-													key={item.href}
-													value={`${item.label} ${item.href}`}
-													onSelect={() => go(item.href)}
-												>
-													<Icon aria-hidden="true" />
-													<span className="octo-command-label">{item.label}</span>
-													<CornerDownLeft className="octo-command-enter" aria-hidden="true" />
-												</CommandItem>
-											);
-										})}
-								</CommandGroup>
-							))}
-						</CommandList>
-						<Grid className="octo-command-footer">
-							<span>
-								<ArrowUpDown aria-hidden="true" />
-								选择
-							</span>
-							<span>
-								<CornerDownLeft aria-hidden="true" />
-								打开
-							</span>
-							<span>
-								<kbd>Esc</kbd>关闭
-							</span>
-						</Grid>
-					</Command>
-				</DialogContent>
-			</Dialog>
+					}
+				}}
+				className="octo-command-dialog"
+			>
+				<CommandInput
+					aria-label="搜索页面或记忆"
+					placeholder="跳转页面，或搜索记忆…"
+					value={query}
+					onValueChange={setQuery}
+				/>
+				<CommandList label="搜索结果" className="octo-command-list">
+					{query.trim() && (
+						<CommandGroup heading="搜索记忆" forceMount>
+							<CommandItem
+								value="search-memories"
+								forceMount
+								onSelect={() => go(`/search?q=${encodeURIComponent(query.trim())}`)}
+							>
+								<Search aria-hidden="true" />
+								<span className="octo-command-label">搜索记忆：{query.trim()}</span>
+								<CornerDownLeft className="octo-command-enter" aria-hidden="true" />
+							</CommandItem>
+						</CommandGroup>
+					)}
+					{navigationGroups.map((group) => (
+						<CommandGroup key={group} heading={group}>
+							{navigation
+								.filter((item) => item.group === group)
+								.map((item) => {
+									const Icon = icons[item.icon];
+									return (
+										<CommandItem
+											key={item.href}
+											value={`${item.label} ${item.href}`}
+											onSelect={() => go(item.href)}
+										>
+											<Icon aria-hidden="true" />
+											<span className="octo-command-label">{item.label}</span>
+											<CornerDownLeft className="octo-command-enter" aria-hidden="true" />
+										</CommandItem>
+									);
+								})}
+						</CommandGroup>
+					))}
+				</CommandList>
+				<Grid className="octo-command-footer">
+					<span>
+						<ArrowUpDown aria-hidden="true" />
+						选择
+					</span>
+					<span>
+						<CornerDownLeft aria-hidden="true" />
+						打开
+					</span>
+					<span>
+						<kbd>Esc</kbd>关闭
+					</span>
+				</Grid>
+			</CommandPalette>
 		</Frame>
 	);
 }

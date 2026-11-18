@@ -1,6 +1,6 @@
 import { Button, ConfirmDialog, Field, Input, toast } from "@nocoo/basalt";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { FolderInput, Tags, Trash2 } from "lucide-react";
+import { FolderInput, Tags, Trash2 } from "@nocoo/basalt/icons";
 import { useState } from "react";
 import { useModel } from "../components/layout/use-model";
 import type { LibraryMemory } from "../viewmodels/library";

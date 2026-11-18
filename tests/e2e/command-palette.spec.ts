@@ -41,7 +41,7 @@ test("command palette keeps one sidebar search entry and keyboard search navigat
 	await expect(rail.getByRole("button", { name: "搜索", exact: true })).toHaveCount(0);
 	const opener = rail.getByRole("button", { name: /搜索与命令/ });
 	await opener.click();
-	const input = page.getByRole("combobox", { name: "搜索页面或记忆" });
+	const input = page.getByPlaceholder("跳转页面，或搜索记忆…", { exact: true });
 	await input.fill("garden & tea");
 	const search = page.getByRole("option", { name: /搜索记忆/ });
 	await expect(search).toHaveAttribute("aria-selected", "true");

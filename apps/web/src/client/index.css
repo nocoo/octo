@@ -1,3 +1,6 @@
+@import "@nocoo/basalt/styles";
+@import "tailwindcss";
+
 html,
 body,
 #root {
@@ -30,21 +33,21 @@ a {
 	flex-direction: column;
 	overflow: hidden;
 	padding: unset;
-	max-block-size: calc(100dvh - var(--basalt-space-layout-xl));
 	background: hsl(var(--basalt-card));
 }
-.octo-command-root {
-	display: flex;
-	flex-direction: column;
+.octo-command-dialog > [cmdk-root] {
+	flex: 1;
 	min-block-size: 0;
 }
-.octo-command-root [cmdk-input-wrapper] {
+.octo-command-dialog [cmdk-input-wrapper] {
 	padding-inline: var(--basalt-space-layout);
 }
-.octo-command-root [cmdk-input] {
+.octo-command-dialog [cmdk-input] {
 	min-block-size: var(--basalt-space-12);
 }
 .octo-command-list {
+	flex: 1 1 auto;
+	min-block-size: 0;
 	max-block-size: var(--basalt-space-96);
 	overscroll-behavior: contain;
 	scroll-padding-block: var(--basalt-space-lg);
@@ -58,7 +61,7 @@ a {
 }
 .octo-command-list svg,
 .octo-command-footer svg,
-.octo-command-root :where([cmdk-input-wrapper]) svg {
+.octo-command-dialog :where([cmdk-input-wrapper]) svg {
 	flex-shrink: 0;
 	inline-size: var(--basalt-space-5);
 	block-size: var(--basalt-space-5);

@@ -13,7 +13,17 @@ import {
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
 import { ToggleGroup, ToggleGroupItem } from "@nocoo/basalt/components/toggle-group";
 import { Toolbar } from "@nocoo/basalt/components/toolbar";
-import { ListTree, Maximize2, Minus, Pause, Play, Plus, Table2, Tags, X } from "lucide-react";
+import {
+	ListTree,
+	Maximize2,
+	Minus,
+	Pause,
+	Play,
+	Plus,
+	Table2,
+	Tags,
+	X,
+} from "@nocoo/basalt/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
 import { useSearchParams } from "react-router";

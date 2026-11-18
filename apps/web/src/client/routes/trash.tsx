@@ -36,7 +36,7 @@ import {
 	RotateCcw,
 	Trash2,
 	X,
-} from "lucide-react";
+} from "@nocoo/basalt/icons";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";

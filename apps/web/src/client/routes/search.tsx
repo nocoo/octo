@@ -8,7 +8,14 @@ import {
 import { DataTable, type DataTableColumn } from "@nocoo/basalt/components/data-table";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
-import { CircleAlert, FilterX, Pencil, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
+import {
+	CircleAlert,
+	FilterX,
+	Pencil,
+	RotateCcw,
+	Search,
+	SlidersHorizontal,
+} from "@nocoo/basalt/icons";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { PageHeader } from "../components/layout/page-header";
