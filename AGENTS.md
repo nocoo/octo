@@ -1,91 +1,70 @@
 # Octo
 
 Private, API-first memory / knowledge-base SaaS on Zheng's Cloudflare account, replacing Nowledge Mem.
+Docs: [README.md](README.md) · [Design docs](docs/README.md) · [Dashboard](docs/06-dashboard.md) · [Dev workflow](docs/07-dev-workflow.md) · [MCP](docs/09-mcp.md) · [Retrospective](Retrospective.md)
 
-Direction: [design docs index](docs/README.md) (Chinese). Frameworks must not rewrite this file.
+## Commands
 
-## Scope and instruction sources
+Run from root with Bun 1.4, Node >=26.12, TypeScript 7 strict, Hono, Vite 8, Biome 2.6, Vitest 5 + V8, Husky. Local env vars live in `dev.vars.example` (never commit `.dev.vars`).
 
-- This file is the only project handbook. Do not create a `CLAUDE.md` alias or copy.
-- Contract lives here and in `docs/`; hooks, CI and configuration must enforce it once code exists. Raise weaker enforcement instead of lowering the contract.
-- Machine rules: global `AGENTS.md` and `rules/` in the workflow repo. Accident narratives: [Retrospective.md](Retrospective.md).
+```sh
+bun install --frozen-lockfile
+bun run dev                  # https://octo.dev.hexly.ai -> Vite 127.0.0.1:7059 + wrangler 37059
+bun run seed:demo            # Local-only: 84 active memories + 6 trash (docs/local-demo-seed.md)
+bun run typecheck            # S1 (root, client, scripts tsconfigs)
+bun run lint                 # S2 biome check --error-on-warnings
+bun run test:coverage        # L1 >=95% statements/branches/functions/lines
+bun run test:e2e:api         # L3 direct Miniflare/workerd HTTP on 17059
+bun run test:e2e:bdd         # L4 real Chromium Playwright on 27059
+bun run build                # B1 gate:production + vite build (CI also wrangler deploy --dry-run)
+bun run gate:test-skip       # No .only/.skip/.todo/xtest
+bun run gate:no-remote       # Reject remote bindings in wrangler/tests
+bun run gate:wrangler-vars   # Sync wrangler [vars] vs dev.vars.example; no secrets in vars
+bun run gate:client-fetch    # Single fetch boundary in src/client/lib/api.ts
+bun run gate:client-design   # Basalt containers/controls and token-only spacing
+bun run gate:coverage-script # test:coverage invokes vitest --coverage
+bun run gate:l1-probes       # L1 negative/healthy hook probes
+bun run gate:production      # Empty Access bypass in production build inputs
+bun run gate:security        # G1/G2 gitleaks + osv-scanner; missing tools fail
+```
 
-## Project invariants
+## Invariants
 
-- Single Hono Worker serving `/api/v1/*` (API-key auth), `/api/admin/*` + SPA (Cloudflare Access) and `/mcp` (the same API keys). MCP uses official SDK 1.32.1, fresh Web Standard Streamable HTTP transports per request, JSON responses and no sessions; contract and bot setup: [docs/09-mcp.md](docs/09-mcp.md). No Durable Objects. No rate limiting.
-- Production `https://octo.hexly.ai` (`workers_dev = false`); local `https://octo.dev.hexly.ai` via Caddy.
-- Access: verify `Cf-Access-Jwt-Assertion` against `https://nocoo.cloudflareaccess.com` JWKS, `iss` and AUD `9ab761cf…88d67` (code constants in `server/lib/access-config.ts` as in giraffe; not secrets; env overrides only in tests). `/api/v1/*` and `/mcp` bypass Access and use Worker-verified API keys.
+- Single Hono Worker serves `/api/v1/*` (API keys), `/api/admin/*` + SPA (Cloudflare Access), and `/mcp` (same API keys) at `https://octo.hexly.ai` (`workers_dev = false`); no Durable Objects or rate limiting.
+- MCP uses official `@modelcontextprotocol/sdk` with a fresh Web Standard Streamable HTTP transport per request, JSON responses, and no sessions; contract and bot setup live in [docs/09-mcp.md](docs/09-mcp.md).
+- Access verifies `Cf-Access-Jwt-Assertion` (`https://nocoo.cloudflareaccess.com` JWKS, `iss`, non-secret AUD in `apps/web/src/server/lib/access-config.ts`, test-only env overrides); `/api/v1/*` & `/mcp` bypass Access.
 - D1 `octo-db` is the source of truth; Vectorize is a derived index rebuilt from vectors stored in D1; R2 `octo-files` holds attachments.
-- API keys are stored as HMAC hashes only; plaintext appears once at mint/rotate and never in logs, URLs, D1 or browser storage. No key or permission management through `/api/v1`.
+- API keys are stored as HMAC hashes only; plaintext appears once at mint/rotate and never in logs, URLs, D1, or browser storage. No key or permission management through `/api/v1`.
 - Default deny; out-of-scope spaces are invisible (404, absent from lists/search/counts). Every call is audited without bodies or keys.
 - Delete moves to trash and is never auto-purged; hard delete exists only in the dashboard.
-- Every memory write is one D1 batch: row, version snapshot, tags, FTS, change event (see docs/02 §3).
+- Every memory write is one D1 batch: row, version snapshot, tags, FTS, and change event ([docs/02-data-model.md](docs/02-data-model.md) §3).
 - Tests never use remote Cloudflare resources or deploy `-test` resources; Vectorize is replaced locally by the D1 brute-force `VectorStore`.
-- Embedding gateway settings (base URL, AES-GCM-encrypted API key under `OCTO_SETTINGS_KEY`, model, dims, backfill toggle default off) are dashboard/Access-only and never exposed via `/api/v1`; outbound embedding calls always send a User-Agent.
-- Dashboard uses only `@nocoo/basalt@3.3.3` controls; MVVM with the single `fetch` in `src/client/lib/api.ts`.
-- Timestamps are stored in UTC and displayed only through `formatTimestamp` in `src/client/lib/format.ts`: browser-local `2026-09-30，13:42`, never a zone label, never a second formatter. UTC calendar-day buckets (usage, dashboard ranges) stay UTC days.
-- Page headings keep `h1` + inline meta with token spacing; view switches and primary actions stay in `PageHeader.actions`. Memory filters and their clear action share the next row; larger filter sets stay together in popovers. Use consistent native 34px control density. Full-page tables fill the remaining desktop height with internal scrolling and visible headers/pagination. Never use Basalt's `description`/`filters` slots, a `Field` label row inside a toolbar, or a `SectionRule` heading that only names the single table below it; see docs/06 §8.
+- External fetch paths require an API E2E test (`test:e2e:api`) exercising the real runtime `fetch`, not only injected stubs.
+- Embedding gateway settings (base URL, `OCTO_SETTINGS_KEY` AES-GCM key, model, dims, backfill toggle default off) are Access-only, never exposed on `/api/v1`; outbound embedding calls always send `User-Agent`.
+- Dashboard uses only `@nocoo/basalt` controls (pinned in `apps/web/package.json`); MVVM with the single `fetch` in `apps/web/src/client/lib/api.ts`.
+- Store timestamps in UTC; display only via `formatTimestamp` (`apps/web/src/client/lib/format.ts`, browser-local `YYYY-MM-DD，HH:mm`, no zone label or second formatter). Usage/dashboard ranges stay UTC calendar days.
+- Dashboard layout: single-row `PageHeader` (no `description`/`filters`), 34px controls, internal-scroll tables, no toolbar `Field` or single-table `SectionRule` ([docs/06-dashboard.md](docs/06-dashboard.md) §8).
+- Manual releases (`package.json` `X.Y.Z`, tags `vX.Y.Z`, `CHANGELOG.md`) require explicit authorization or bot need; follow [docs/07-dev-workflow.md](docs/07-dev-workflow.md) §5.
+- Green `main` CI triggers `.github/workflows/release.yml` (`production` D1 migrations, Wrangler deploy, `/api/live` SHA/version verify); retry via `workflow_dispatch`, Mac deploy emergency-only. Never print secrets.
 
-## Setup and commands
+## Quality & Local Gates
 
-Bun 1.4, TypeScript 7 strict, Hono, Vite 8, Biome 2.5, Vitest 5 + V8 coverage, Husky. Install with a temporary registry (`BUN_CONFIG_REGISTRY=… bun install`); never set a global bun registry.
+Follows `system1-quality` with strict TDD; CI slot definitions and pinned `base-ci` revision live in `.github/workflows/quality-slots.yml` via `.github/workflows/ci.yml` (`quality / Z1: Gate` required on `main`). Raise weaker enforcement instead of lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
-```
-bun run dev              # Vite 127.0.0.1:7059 + wrangler sidecar 37059
-bun run seed:demo        # Local-only: 84 active memories + 6 trash; docs/local-demo-seed.md
-bun run typecheck
-bun run lint             # biome check --error-on-warnings
-bun run test:coverage    # L1, four metrics ≥95%
-bun run test:e2e:api     # L2 direct Miniflare/workerd HTTP on 17059
-bun run test:e2e:bdd     # L3 real Chromium on 27059
-bun run gate:test-skip
-bun run gate:no-remote
-bun run gate:wrangler-vars
-bun run gate:client-fetch
-bun run gate:client-design # Basalt containers/controls and token-only spacing
-bun run gate:coverage-script # test:coverage must invoke vitest --coverage
-bun run gate:l1-probes       # L1 negative/healthy hook probes (CI prepare)
-bun run gate:production   # Empty Access bypass in production build inputs
-bun run gate:security    # gitleaks + osv-scanner; missing tools fail
-```
+- **Exceptions / gaps**: `L2 Runtime` is `N/A` (Miniflare/workerd integration covered by `L3` `test:e2e:api`); `P1 Package` is `N/A` (private repo, not published to npm).
+- **Coverage scope**: `L1` >=95% on `apps/web/src/**` and `scripts/**`, excluding tests, `client/routes/**`, `client/components/layout/**`, `client/main.tsx`, and `client/app.tsx` (`server/routes` stays included).
+- **Local hooks**: installed via `prepare` (`.husky/`); `pre-commit` (`scripts/pre-commit.ts`) checks staged index (`S1/S2`, structural gates, `L1`). Never `--no-verify`.
+- **Pre-push**: `.husky/pre-push` checks pushed ref ranges with `gate:no-remote`, then runs `L3` (`test:e2e:api`) and `G1/G2` (`gate:security`) in parallel.
 
-## Testing and quality contract
+## Resources & Isolation
 
-Strict TDD; atomic Conventional Commits staging explicit paths; never `--no-verify`; do not push unless Zheng asks. External fetch paths need an L2 test that runs through the real runtime `fetch`, not only injected stubs.
-
-Quality follows System1 v1.3.0 Native Mode (`nocoo/base-ci v2026.15`) in `.github/workflows/quality-slots.yml` and `.github/workflows/ci.yml`.
-
-| Slot              | Status   | Evidence                                                                          |
-| ----------------- | -------- | --------------------------------------------------------------------------------- |
-| `S1` Types        | enforced | `bun run typecheck` (pre-commit + CI)                                             |
-| `S2` Lint         | enforced | `bun run lint` (Biome, pre-commit + CI)                                           |
-| `S3` Workflow     | enforced | SHA-pinned workflow action check in CI                                            |
-| `G1` Secrets      | enforced | `gitleaks` (`.gitleaks.toml`) in pre-push + CI                                    |
-| `G2` Dependencies | enforced | `osv-scanner` (`bun.lock`) in pre-push + CI                                       |
-| `B1` Build        | enforced | `bun run build && wrangler deploy --dry-run` in CI                                |
-| `L1` Unit         | enforced | `bun run scripts/pre-commit.ts` + `test:coverage` (≥95%) + `gate:l1-probes` in CI |
-| `L2` Runtime      | N/A      | Miniflare/workerd integration covered by `L3` API E2E                             |
-| `L3` Integration  | enforced | `bun run test:e2e:api` (direct Miniflare/workerd HTTP) in CI                      |
-| `L4` E2E          | enforced | `bun run test:e2e:bdd` (Playwright Chromium) in CI                                |
-| `P1` Package      | N/A      | Private repo, not published to npm                                                |
-| `Z1` Gate         | enforced | `quality / Z1: Gate` required status check on `main`                              |
-
-Details: [docs/07-dev-workflow.md](docs/07-dev-workflow.md).
-
-## Release, CI and deploy
-
-- Release: no release script. Version lives only in root `package.json` (`X.Y.Z`); tags and GitHub Releases use `vX.Y.Z`. Usually bump Z, Y for feature changes, X only with Zheng's approval. Manual cut per the workflow `nocoo-repo-steward` versioning reference: bump `package.json`, `bun install` to sync `bun.lock`, update root `CHANGELOG.md` (create it on the first release; no tags exist yet) from commits since the last tag, commit through hooks, push, then `git tag vX.Y.Z && git push origin vX.Y.Z` and `gh release create vX.Y.Z`. Release only when Zheng asks or another bot needs the change.
-- CI (`.github/workflows/ci.yml`, push and PR to `main`, via `.github/workflows/quality-slots.yml`): gates `test-skip`, `no-remote`, `wrangler-vars`, `client-fetch`, `l1-probes`; typecheck; Biome lint; `test:coverage` (≥95%); build (`bun run build` incl. `gate:production`, plus `wrangler deploy --dry-run`); `L3` `test:e2e:api`; `L4` `test:e2e:bdd`. Merge only when green.
-- Deploy: Cloudflare Worker `octo` at `https://octo.hexly.ai` (custom domain, D1 `octo-db`, R2 `octo-files`, Vectorize). Main-push CI success triggers `.github/workflows/release.yml` (`deploy-worker.yml@633a5545…`, environment `production`): proven source, remote D1 migrations, locked Wrangler deploy, `/api/live` version and `git_sha` verify. Manual retry via Release `workflow_dispatch` + successful CI run ID. Mac wrangler deploy remains an emergency fallback. Never print secrets.
-
-## Resources and isolation
-
-| Lane      | Ports (approved 2026-10-17, nmem `octo-local-ports`) | Boundary                                           |
-| --------- | ---------------------------------------------------- | -------------------------------------------------- |
-| Daily dev | Vite 7059, Worker 37059                              | Caddy `octo.dev.hexly.ai`; local D1/R2             |
-| L2        | 17059 (direct Miniflare)                             | per-run `.wrangler/e2e/<run-id>`; D1/R2 under `v3` |
-| L3        | 27059                                                | per-run `.wrangler/e2e-pw/<run-id>`                |
+| Lane | Endpoint / State | Boundary |
+| --- | --- | --- |
+| Daily dev | `https://octo.dev.hexly.ai` -> Vite `7059`, Worker `37059`; `.wrangler/state` | Caddy + mkcert; local D1/R2; preserve running server |
+| API E2E (L3) | Direct Miniflare `127.0.0.1:17059`; JWKS stub `17057`; `.wrangler/e2e/<run-id>/v3` | Per-run isolated dir + `_test_marker` (`env=test`); never remote |
+| Browser E2E (L4) | Playwright Chromium `127.0.0.1:27059`; `.wrangler/e2e-pw/<run-id>` | Isolated local fixtures only |
+| Prod | `https://octo.hexly.ai` (Worker `octo`, D1 `octo-db`, R2 `octo-files`, Vectorize) | Read-only checks unless deployment is authorized |
 
 ## Retrospective
 
-Narratives live in [Retrospective.md](Retrospective.md); keep only recurring rules here.
+Record incident narratives in [Retrospective.md](Retrospective.md); promote recurring project constraints to `Invariants` above and enforceable safeguards to tests/hooks.

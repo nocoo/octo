@@ -76,6 +76,13 @@ run `bun run seed:demo` after starting the dev server. See
 - 部署后验证 `GET https://octo.hexly.ai/api/live`，确认版本号、`git_sha`、`build_time` 和 D1 `SELECT 1`；dry-run 不证明远程部署身份。禁止跳过 Wrangler custom build 或手工注入陈旧生成文件。
 - 首次部署前的一次性资源准备（需要 Zheng 授权）：`wrangler d1 create octo-db`、`wrangler r2 bucket create octo-files`、`wrangler vectorize create octo-vec-<profile> --dimensions=<d> --metric=cosine`，以及 7 个 `create-metadata-index`，最后用 `wrangler secret put API_KEY_PEPPER` 写入 secret。
 
+### 版本发布与紧急回退
+
+- 无独立发版脚本；版本号只维护在根目录 `package.json`（`X.Y.Z`），Git tag 与 GitHub Release 使用 `vX.Y.Z`。
+- 版本号规则：常规增量升 `Z`，功能变更升 `Y`，主版本 `X` 须经 Zheng 批准；仅在 Zheng 要求或其他 bot 需要该变更时发版。
+- 手动发版步骤：修改根 `package.json` 版本号 → 运行 `bun install` 同步 `bun.lock` → 按上一个 tag 之后的提交更新根目录 `CHANGELOG.md` → 经正常 hooks 提交并推送 → 执行 `git tag vX.Y.Z && git push origin vX.Y.Z` 与 `gh release create vX.Y.Z`。
+- GitHub Actions 自动部署不可用时，本机 Mac 执行 `wrangler deploy` 作为紧急回退手段；禁止打印任何 secret。
+
 ## 6. 多 agent 并行开发
 
 - 主控在 herdr 的 `octo` workspace 里调度，受控 agent 在主控 pane 右侧开；按 workflow 的「启动参数」和「调度规范」选择 agent 和 reasoning level；review 用固定组合（Codex `group/auto-gpt-6-astra` `high`）。
