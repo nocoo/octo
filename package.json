@@ -64,7 +64,7 @@
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "1.32.2",
 		"diff": "^9.0.0",
-		"hono": "4.13.17",
+		"hono": "4.13.19",
 		"zod": "^4.6.7"
 	}
 }

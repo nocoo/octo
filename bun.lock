@@ -7,7 +7,7 @@
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.32.2",
         "diff": "^9.0.0",
-        "hono": "4.13.17",
+        "hono": "4.13.19",
         "zod": "^4.6.7",
       },
       "devDependencies": {
@@ -37,7 +37,7 @@
         "@nocoo/basalt": "^3.5.1",
         "diff": "^9.0.0",
         "github-slugger": "^2.0.0",
-        "hono": "4.13.17",
+        "hono": "4.13.19",
         "mdast-util-to-string": "^4.0.0",
         "react": "^19.3.0",
         "react-dom": "^19.3.0",
@@ -797,7 +797,7 @@
 
     "highlight.js": ["highlight.js@11.11.2", "", {}, "sha512-oaXMACAU0kzOMXBjWpNcX+vlwSBCIAiZ9BHa7gA15NOTtT2L/l8OSZDuqS2XppOhZBPJ7hm4o8ep2kyuip2uEQ=="],
 
-    "hono": ["hono@4.13.17", "", {}, "sha512-vZIcbkvjOR5hHRWERbGkr8fGfF0GGM1ooYkuH448iO3b2AdVEr3AXZSw4Z3Kn+1L5z0CVoVeyV29VGYmFh05kQ=="],
+    "hono": ["hono@4.13.19", "", {}, "sha512-KmXvQAXwcAHV+muzbIwoJ23niEB5nMoDVr9WcRkU8mvjUECm/1+7v4Jgp7P7a+H6MLFrh+vXrGonGrGS+RQfkA=="],
 
     "html-url-attributes": ["html-url-attributes@3.0.1", "", {}, "sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ=="],
 
