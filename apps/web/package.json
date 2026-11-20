@@ -16,7 +16,7 @@
 		"react-force-graph-2d": "^1.29.0",
 		"react-markdown": "^10.1.0",
 		"react-router": "8.5.2",
-		"recharts": "^3.10.1",
+		"recharts": "^3.11.0",
 		"rehype-highlight": "^7.0.2",
 		"remark-gfm": "^4.0.1",
 		"remark-parse": "^11.0.0",
