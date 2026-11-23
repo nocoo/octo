@@ -69,10 +69,12 @@ test("header actions match Giraffe geometry and logo accent in both themes", asy
 			return {
 				swatch: style.getPropertyValue("--basalt-accent-2").trim(),
 				primary: style.getPropertyValue("--basalt-primary").trim(),
+				link: style.getPropertyValue("--basalt-link").trim(),
 			};
 		});
 		expect(colors.swatch).toBe(colorScheme === "light" ? "210 72% 56%" : "210 72% 68%");
-		expect(colors.primary).toBe(colorScheme === "light" ? "210 72% 41%" : "210 72% 68%");
+		expect(colors.primary).toBe(colorScheme === "light" ? "210 72% 41%" : "210 72% 46%");
+		expect(colors.link).toBe(colorScheme === "light" ? "210 72% 41%" : "210 72% 68%");
 	}
 });
 

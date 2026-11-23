@@ -321,3 +321,8 @@ html:not(.dark) {
 .octo-search-advanced[hidden] {
 	display: none;
 }
+
+/* Basalt 3.6.0 SheetContent defaults showCloseButton=true without exposing an opt-out on SidebarDrawer, overlapping SidebarToggle mode="dismiss". */
+[data-slot="sidebar-drawer"] > [data-slot="sheet-close"] {
+	display: none;
+}

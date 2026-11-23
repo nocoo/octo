@@ -20,15 +20,13 @@
 	width: fit-content;
 	border: var(--basalt-border-width) solid hsl(var(--basalt-border));
 	border-radius: var(--basalt-radius-full);
-	background: hsl(var(--basalt-popover) / 0.88);
-	backdrop-filter: blur(var(--basalt-sheet-backdrop-blur));
+	background: hsl(var(--basalt-popover));
 	padding: var(--basalt-space-0_5);
 }
 
 .octo-graph-panel {
 	position: absolute;
-	background: hsl(var(--basalt-popover) / 0.9);
-	backdrop-filter: blur(var(--basalt-sheet-backdrop-blur));
+	background: hsl(var(--basalt-popover));
 }
 
 .octo-graph-panel--directory {

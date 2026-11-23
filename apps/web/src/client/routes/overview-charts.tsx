@@ -38,7 +38,7 @@ import {
 
 const SERIES_MUTED = "hsl(var(--basalt-muted-foreground))";
 const SECONDARY_LINE = getChartColor(4);
-const ERROR_LINE = "hsl(var(--basalt-destructive))";
+const ERROR_LINE = "hsl(var(--basalt-danger))";
 
 export function seriesColor(colorIndex: number): string {
 	if (colorIndex < 0) return SERIES_MUTED;
