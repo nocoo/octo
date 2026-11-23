@@ -243,7 +243,7 @@ describe("memory pages use installed Basalt layouts and Chinese copy", () => {
 		expect(source).toContain(
 			"if (target && navigateToMarkdownHeading(target)) event.preventDefault()",
 		);
-		expect(source).toContain("toast.error(state.error");
+		expect(source).toContain("toast.danger(state.error");
 	});
 	it("preserves readable metadata beside long titles in the scrolling list", () => {
 		overrides.list = {

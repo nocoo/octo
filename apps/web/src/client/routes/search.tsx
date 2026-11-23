@@ -354,7 +354,7 @@ export function SearchPage() {
 			{state.error && (
 				<Banner
 					role="alert"
-					variant="error"
+					tone="danger"
 					icon={<CircleAlert aria-hidden="true" />}
 					title="搜索失败"
 					description={state.error}
@@ -368,7 +368,7 @@ export function SearchPage() {
 			)}
 			{state.fallback && (
 				<Banner
-					variant="alert"
+					tone="warning"
 					icon={<CircleAlert aria-hidden="true" />}
 					title="语义搜索暂不可用"
 					description={
@@ -381,7 +381,7 @@ export function SearchPage() {
 			)}
 			{result?.channels.fts.partial && (
 				<Banner
-					variant="alert"
+					tone="warning"
 					icon={<CircleAlert aria-hidden="true" />}
 					title="全文搜索结果不完整"
 					description="短查询扫描已达到候选数量上限。缩小筛选范围可获得更精确的结果。"
@@ -389,7 +389,7 @@ export function SearchPage() {
 			)}
 			{result?.channels.vector.truncated && (
 				<Banner
-					variant="alert"
+					tone="warning"
 					icon={<CircleAlert aria-hidden="true" />}
 					title="向量候选结果已截断"
 					description="后置筛选移除了部分向量候选结果。请缩小查询或筛选范围，减少遗漏。"

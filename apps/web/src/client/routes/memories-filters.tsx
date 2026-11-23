@@ -241,7 +241,7 @@ export function MemoryFilters({
 					</FilterBar>
 					{state.error && (
 						<Banner
-							variant="alert"
+							tone="warning"
 							description={state.error}
 							action={<Banner.Action onClick={() => void model.load()}>重试</Banner.Action>}
 						/>

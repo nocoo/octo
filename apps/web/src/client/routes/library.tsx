@@ -681,7 +681,7 @@ export function SpacesPage() {
 							{createError && (
 								<Banner
 									role="alert"
-									variant="error"
+									tone="danger"
 									size="sm"
 									title="创建失败"
 									description={createError}

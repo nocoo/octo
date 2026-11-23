@@ -1,4 +1,4 @@
-import { Button, LayerCard, StatStrip } from "@nocoo/basalt";
+import { Button, LayerCard, StatCard, StatGrid } from "@nocoo/basalt";
 import { Banner } from "@nocoo/basalt/components/banner";
 import { Grid } from "@nocoo/basalt/components/grid";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
@@ -332,7 +332,7 @@ export function OverviewPage() {
 			/>
 			{state.error ? (
 				<Banner
-					variant="error"
+					tone="danger"
 					role="alert"
 					icon={<AlertCircle aria-hidden="true" />}
 					description={state.error}
@@ -349,46 +349,36 @@ export function OverviewPage() {
 					}
 				/>
 			) : null}
-			<StatStrip
-				loading={!data}
-				items={[
-					{
-						label: (
-							<span className="octo-stat-label text-basalt-tag-blue-foreground">
-								<BookOpen aria-hidden="true" />
-								有效记忆
-							</span>
-						),
-						value: formatNumber(data?.totals.memories ?? null),
-					},
-					{
-						label: (
-							<span className="octo-stat-label text-basalt-tag-teal-foreground">
-								<Activity aria-hidden="true" />近 {range} 天操作
-							</span>
-						),
-						value: formatNumber(stats?.ops ?? null),
-					},
-					{
-						label: (
-							<span className="octo-stat-label text-basalt-tag-violet-foreground">
-								<TrendingUp aria-hidden="true" />
-								区间净增
-							</span>
-						),
-						value: stats ? signed(stats.net) : "—",
-					},
-					{
-						label: (
-							<span className="octo-stat-label text-basalt-tag-amber-foreground">
-								<Bot aria-hidden="true" />
-								活跃 Bot
-							</span>
-						),
-						value: stats ? `${formatNumber(stats.activeBots)} / ${formatNumber(stats.bots)}` : "—",
-					},
-				]}
-			/>
+			<StatGrid columns={4}>
+				<StatCard
+					loading={!data}
+					icon={<BookOpen aria-hidden="true" />}
+					iconColor="text-basalt-tag-blue-foreground"
+					label="有效记忆"
+					value={formatNumber(data?.totals.memories ?? null)}
+				/>
+				<StatCard
+					loading={!data}
+					icon={<Activity aria-hidden="true" />}
+					iconColor="text-basalt-tag-teal-foreground"
+					label={`近 ${range} 天操作`}
+					value={formatNumber(stats?.ops ?? null)}
+				/>
+				<StatCard
+					loading={!data}
+					icon={<TrendingUp aria-hidden="true" />}
+					iconColor="text-basalt-tag-violet-foreground"
+					label="区间净增"
+					value={stats ? signed(stats.net) : "—"}
+				/>
+				<StatCard
+					loading={!data}
+					icon={<Bot aria-hidden="true" />}
+					iconColor="text-basalt-tag-amber-foreground"
+					label="活跃 Bot"
+					value={stats ? `${formatNumber(stats.activeBots)} / ${formatNumber(stats.bots)}` : "—"}
+				/>
+			</StatGrid>
 			{!data && !state.error ? (
 				<LayerCard>
 					<LayerCard.Loading label="正在汇总总览" />

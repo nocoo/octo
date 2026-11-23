@@ -147,7 +147,7 @@ describe("trash post-action selection", () => {
 		expect(description).toContain('role="alert"');
 		expect(description).toContain("text-basalt-danger");
 		expect(html.match(/role="alert"/g)).toHaveLength(1);
-		dialog?.onOpenChange(false);
+		dialog?.onOpenChange?.(false);
 		const event = { preventDefault: vi.fn() };
 		dialog?.onCloseAutoFocus?.(event as never);
 		expect(model?.state).toMatchObject({ confirmation: null, error: null });

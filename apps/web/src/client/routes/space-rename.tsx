@@ -47,7 +47,7 @@ export function SpaceRenameForm({
 					/>
 				</Field>
 				{error && !fieldError && (
-					<Banner role="alert" variant="error" size="sm" title="保存失败" description={error} />
+					<Banner role="alert" tone="danger" size="sm" title="保存失败" description={error} />
 				)}
 			</Grid>
 			<DialogFooter>

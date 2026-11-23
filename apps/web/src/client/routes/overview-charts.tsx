@@ -1,8 +1,8 @@
 import {
 	ANIMATION_PROPS,
 	BAR_RADIUS,
+	ChartFrame,
 	ChartLegend,
-	ChartShell,
 	ChartTooltipRow,
 	cartesianAxisProps,
 	chartTooltipProps,
@@ -80,7 +80,7 @@ export function OperationTrendChart({ rows }: { rows: DailyRow[] }) {
 		{ key: "net", label: "净增 · 右轴", color: SECONDARY_LINE },
 	];
 	return (
-		<ChartShell
+		<ChartFrame
 			ariaLabel="记忆操作趋势"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="bar" />}
@@ -153,7 +153,7 @@ export function OperationTrendChart({ rows }: { rows: DailyRow[] }) {
 					/>
 				</ComposedChart>
 			</ResponsiveContainer>
-		</ChartShell>
+		</ChartFrame>
 	);
 }
 
@@ -164,7 +164,7 @@ export function SpaceTrendChart({ data }: { data: SeriesChart }) {
 		color: seriesColor(item.colorIndex),
 	}));
 	return (
-		<ChartShell
+		<ChartFrame
 			ariaLabel="各空间记忆操作趋势"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={series} shape="line" />}
@@ -211,7 +211,7 @@ export function SpaceTrendChart({ data }: { data: SeriesChart }) {
 					))}
 				</LineChart>
 			</ResponsiveContainer>
-		</ChartShell>
+		</ChartFrame>
 	);
 }
 
@@ -231,7 +231,7 @@ export function BotOperationChart({ data, rows }: { data: SeriesChart; rows: Dai
 	}));
 	const legend = [...series, { key: "calls", label: "接口调用 · 右轴", color: SECONDARY_LINE }];
 	return (
-		<ChartShell
+		<ChartFrame
 			ariaLabel="Bot 记忆操作趋势"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="bar" />}
@@ -305,7 +305,7 @@ export function BotOperationChart({ data, rows }: { data: SeriesChart; rows: Dai
 					/>
 				</ComposedChart>
 			</ResponsiveContainer>
-		</ChartShell>
+		</ChartFrame>
 	);
 }
 
@@ -322,7 +322,7 @@ export function BotCallChart({ data, rows }: { data: SeriesChart; rows: DailyRow
 	});
 	const legend = [...series, { key: "errorRate", label: "错误率 · 右轴", color: ERROR_LINE }];
 	return (
-		<ChartShell
+		<ChartFrame
 			ariaLabel="Bot 调用与错误率"
 			size="octo-chart-plot w-full"
 			legend={<ChartLegend items={legend} shape="line" />}
@@ -396,7 +396,7 @@ export function BotCallChart({ data, rows }: { data: SeriesChart; rows: DailyRow
 					/>
 				</ComposedChart>
 			</ResponsiveContainer>
-		</ChartShell>
+		</ChartFrame>
 	);
 }
 
@@ -421,7 +421,7 @@ export function OverviewDonut({
 			className="octo-donut"
 			style={{ gridTemplateColumns: "var(--octo-grid-columns)" }}
 		>
-			<ChartShell ariaLabel={ariaLabel} size="octo-chart-donut w-full" summary={summary}>
+			<ChartFrame ariaLabel={ariaLabel} size="octo-chart-donut w-full" summary={summary}>
 				<ResponsiveContainer {...RESPONSIVE_CONTAINER_PROPS}>
 					<PieChart>
 						<Pie
@@ -457,7 +457,7 @@ export function OverviewDonut({
 						/>
 					</PieChart>
 				</ResponsiveContainer>
-			</ChartShell>
+			</ChartFrame>
 			<dl className="octo-donut-legend">
 				{data.map((item) => (
 					<Grid

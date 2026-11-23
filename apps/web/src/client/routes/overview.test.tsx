@@ -98,7 +98,7 @@ it("keeps one page heading, the range switch and no feature entry points", () =>
 	])
 		expect(html).not.toContain(entry);
 	expect(html).not.toMatch(/<table/);
-	expect(html.match(/class="basalt-stat-strip|octo-stat-label/g)).toBeTruthy();
+	expect(html).toContain('data-slot="stat-grid"');
 });
 
 it("renders every section title outside its card in Basalt section chrome", () => {

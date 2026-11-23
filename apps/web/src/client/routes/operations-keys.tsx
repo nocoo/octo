@@ -117,12 +117,12 @@ export function KeysPage() {
 			sortValue: (key) => statusLabels[keyStatus(key)],
 			accessor: (key) => (
 				<Badge
-					variant={
+					tone={
 						keyStatus(key) === "active"
 							? "success"
 							: keyStatus(key) === "expired"
 								? "warning"
-								: "error"
+								: "danger"
 					}
 				>
 					{keyStatus(key) === "active" ? (
@@ -559,7 +559,7 @@ export function KeysPage() {
 									await navigator.clipboard.writeText(secret);
 									if (active.current && revision === secretRevision.current) setCopied(true);
 								} catch {
-									toast.error("无法复制，请选中密钥后手动复制。");
+									toast.danger("无法复制，请选中密钥后手动复制。");
 								} finally {
 									if (active.current) setCopying(false);
 								}

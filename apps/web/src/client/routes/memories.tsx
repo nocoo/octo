@@ -34,7 +34,6 @@ import { Banner } from "@nocoo/basalt/components/banner";
 import { CodeBlock } from "@nocoo/basalt/components/code";
 import { FileDropzone } from "@nocoo/basalt/components/file-dropzone";
 import { Grid } from "@nocoo/basalt/components/grid";
-import { InputArea } from "@nocoo/basalt/components/input-area";
 import { SectionRule } from "@nocoo/basalt/components/section-rule";
 import {
 	Table,
@@ -45,6 +44,7 @@ import {
 	TableRow,
 } from "@nocoo/basalt/components/table";
 import { TagBadge } from "@nocoo/basalt/components/tag-badge";
+import { Textarea } from "@nocoo/basalt/components/textarea";
 import {
 	BookOpen,
 	ChevronRight,
@@ -109,7 +109,7 @@ function Feedback({
 			{error && (
 				<Banner
 					role="alert"
-					variant="error"
+					tone="danger"
 					icon={<CircleAlert aria-hidden="true" />}
 					title="请求失败"
 					description={error}
@@ -618,7 +618,7 @@ export function MemoryPage() {
 													void model
 														.attachmentUrl(attachment.id)
 														.then((url) => window.location.assign(url))
-														.catch(() => toast.error("无法加载附件"));
+														.catch(() => toast.danger("无法加载附件"));
 												}}
 											>
 												<span className="octo-record-title" title={attachment.filename}>
@@ -770,7 +770,7 @@ function ConflictDialog({
 										</Grid>
 										{field === "body" && (
 											<Field label="合并后的正文" htmlFor="merged-body">
-												<InputArea
+												<Textarea
 													id="merged-body"
 													value={conflict.merged.body}
 													rows={8}
@@ -841,7 +841,7 @@ export function EditorPage() {
 		if (state.notice) toast.success(state.notice);
 	}, [state.notice]);
 	useEffect(() => {
-		if (state.error) toast.error(state.error, { id: "memory-editor-error" });
+		if (state.error) toast.danger(state.error, { id: "memory-editor-error" });
 		else toast.dismiss("memory-editor-error");
 	}, [state.error]);
 	const draft = state.draft;
@@ -990,7 +990,7 @@ export function EditorPage() {
 						>
 							<LayerCard>
 								<LayerCard.Body>
-									<InputArea
+									<Textarea
 										required
 										id="memory-body"
 										value={draft.body}
@@ -1340,7 +1340,7 @@ export function HistoryPage() {
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{state.error && (
-						<Banner role="alert" variant="error" title="回滚失败" description={state.error} />
+						<Banner role="alert" tone="danger" title="回滚失败" description={state.error} />
 					)}
 					<AlertDialogFooter>
 						<AlertDialogCancel asChild>

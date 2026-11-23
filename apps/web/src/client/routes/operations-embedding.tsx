@@ -236,7 +236,7 @@ export function EmbeddingPage() {
 									</Grid>
 									{state.error && state.loaded && !clearing && (
 										<Banner
-											variant="error"
+											tone="danger"
 											role="alert"
 											icon={<CircleAlert aria-hidden="true" />}
 											description={state.error}
@@ -246,10 +246,8 @@ export function EmbeddingPage() {
 									{state.testResult && !state.error && !clearing && (
 										<Grid columns={1} gap="sm">
 											<Banner
-												variant={
-													state.testResult.match && !state.testResult.error_code
-														? "default"
-														: "error"
+												tone={
+													state.testResult.match && !state.testResult.error_code ? "info" : "danger"
 												}
 												role={
 													state.testResult.match && !state.testResult.error_code
@@ -396,7 +394,7 @@ export function SettingsPage() {
 			width: "12ch",
 			sortValue: (profile) => (profile.active ? "已启用" : "未启用"),
 			accessor: (profile) => (
-				<Badge variant={profile.active ? "success" : "secondary"}>
+				<Badge tone={profile.active ? "success" : "neutral"}>
 					{profile.active ? "已启用" : "未启用"}
 				</Badge>
 			),

@@ -24,7 +24,7 @@ export function LibraryBulkActions({
 		if (!(await model.apply(memories, selected, action))) return;
 		setDeleting(false);
 		const message = `已更新 ${model.state.succeeded.length} / ${selected.length} 条记忆`;
-		if (model.state.failures.length) toast.error(message);
+		if (model.state.failures.length) toast.danger(message);
 		else toast.success(message);
 		await onComplete(model.state.succeeded);
 	}

@@ -117,7 +117,7 @@ function GraphDirectory({
 				<Grid columns={2} className="octo-graph-directory-head">
 					<Grid columns={2} className="octo-graph-directory-title">
 						<span>节点</span>
-						<Badge variant="secondary">{formatNumber(visible.length)}</Badge>
+						<Badge tone="neutral">{formatNumber(visible.length)}</Badge>
 					</Grid>
 					<span className="text-basalt-sm text-basalt-muted-foreground">
 						共 {formatNumber(total)}

@@ -125,7 +125,7 @@ export function KeyForm({
 			<Grid columns={1} gap="md">
 				{error && (
 					<Banner
-						variant="error"
+						tone="danger"
 						size="sm"
 						role="alert"
 						icon={<CircleAlert aria-hidden="true" />}
@@ -334,7 +334,7 @@ export function KeyForm({
 						{spacesLoading && <p role="status">正在加载空间…</p>}
 						{spacesError && (
 							<Banner
-								variant="error"
+								tone="danger"
 								size="sm"
 								role="alert"
 								description={spacesError}

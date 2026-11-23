@@ -93,7 +93,7 @@ export function TrashPage() {
 	}, [model, selectionKey]);
 	useEffect(() => {
 		if (state.notice) {
-			if (model.state.error || model.state.failures.length) toast.error(state.notice);
+			if (model.state.error || model.state.failures.length) toast.danger(state.notice);
 			else toast.success(state.notice);
 		}
 	}, [model, state.notice]);
@@ -287,7 +287,7 @@ export function TrashPage() {
 			{!state.ready && !state.error && <Text role="status">正在加载回收站…</Text>}
 			{state.error && confirmation?.kind !== "single" && (
 				<Banner
-					variant="error"
+					tone="danger"
 					size="sm"
 					role="alert"
 					icon={<AlertCircle size={16} aria-hidden="true" />}
@@ -301,7 +301,7 @@ export function TrashPage() {
 			)}
 			{state.spacesError && (
 				<Banner
-					variant="error"
+					tone="danger"
 					size="sm"
 					role="alert"
 					description={`空间列表加载失败：${state.spacesError}`}
@@ -314,7 +314,7 @@ export function TrashPage() {
 				<Grid columns={1} gap="sm" role="region" aria-label="批量操作回收站">
 					<Banner
 						size="sm"
-						variant="secondary"
+						tone="neutral"
 						icon={<ListChecks size={16} aria-hidden="true" />}
 						description={`已选择 ${selectedCount} 条记忆${selection.all ? "，范围为当前筛选的全部匹配项。" : "。表头只选择当前页。"}`}
 						action={
@@ -374,7 +374,7 @@ export function TrashPage() {
 			)}
 			{state.failures.length > 0 && (
 				<Banner
-					variant="error"
+					tone="danger"
 					size="sm"
 					role="alert"
 					title={`${state.failures.length} 条记忆未完成`}

@@ -175,7 +175,7 @@ describe("revoked key deletion", () => {
 		expect(html).toContain("永久删除 Beta？");
 		expect(html).toContain("无法恢复");
 		expect(html).toContain("审计记录将保留");
-		fixture.deleteDialog?.onOpenChange(false);
+		fixture.deleteDialog?.onOpenChange?.(false);
 		expect(fixture.model?.state).toMatchObject({ deleting: null, items: keys });
 		expect(request).not.toHaveBeenCalled();
 	});

@@ -66,7 +66,7 @@ describe("installed Basalt operations composition", () => {
 				<Page />
 			</MemoryRouter>,
 		);
-		expect(html).toMatch(/^<div class="grid gap-basalt-layout/);
+		expect(html).toMatch(/^<div data-slot="grid" class="grid gap-basalt-layout/);
 		expect(html.match(/<h1\b/g)).toHaveLength(1);
 		if (Page === KeysPage) expect(html).not.toMatch(/<h2[^>]*>密钥列表/);
 		else expect(html).toContain(region);
@@ -98,7 +98,8 @@ describe("installed Basalt operations composition", () => {
 			expect(html).toContain(title);
 			expect(html).toContain(`lucide-${icon}`);
 			expect(html).toContain(action);
-			expect(html).toContain("text-center p-basalt-card");
+			expect(html).toContain("text-center");
+			expect(html).toContain("p-basalt-card");
 			expect(html).toMatch(new RegExp(`bg-basalt-primary[^>]*>[\\s\\S]*?${action}</(?:button|a)>`));
 		},
 	);

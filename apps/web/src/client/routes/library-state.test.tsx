@@ -146,7 +146,7 @@ describe("library unknown, failed and empty states", () => {
 			snapshot.state = { ...new LibraryModel("graph").state, ready: true };
 			const html = render(Page, url);
 			expect(html).toContain(empty);
-			expect(html).toMatch(/size-basalt-8[^>]*><svg/);
+			expect(html).toMatch(/size-basalt-10[^>]*><svg/);
 			expect(html).toContain(Page === SpacesPage ? "创建空间" : "浏览记忆");
 		},
 	);

@@ -310,7 +310,7 @@ describe("key form", () => {
 		});
 		const tree = render();
 		expect(control(tree, Banner).props).toMatchObject({
-			variant: "error",
+			tone: "danger",
 			role: "alert",
 			description: "请检查标记的字段。",
 		});

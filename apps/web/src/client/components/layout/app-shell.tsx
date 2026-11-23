@@ -356,7 +356,7 @@ export function AppShell() {
 				<ContentIsland className="octo-island">
 					{identity.error && (
 						<Banner
-							variant="error"
+							tone="danger"
 							role="alert"
 							description={identity.error}
 							action={<Banner.Action onClick={() => void shellModel.load()}>重试</Banner.Action>}

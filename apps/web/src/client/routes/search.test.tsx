@@ -270,7 +270,7 @@ it("preserves ranked results without local pagination and safely renders snippet
 	expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;<mark>worker</mark>");
 	expect(html).not.toContain("<script>");
 	expect(html).not.toContain('aria-label="Pagination"');
-	expect(html.match(/<tbody>[\s\S]*?<\/tbody>/)?.[0].match(/<tr\b/g)).toHaveLength(30);
+	expect(html.match(/<tbody\b[^>]*>[\s\S]*?<\/tbody>/)?.[0].match(/<tr\b/g)).toHaveLength(30);
 });
 
 it("distinguishes successful zero matches from unavailable results", () => {
