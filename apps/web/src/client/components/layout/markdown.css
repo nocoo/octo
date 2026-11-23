@@ -22,19 +22,19 @@
 	margin-block-start: var(--basalt-space-layout-sm);
 }
 .octo-markdown h1 {
-	font-size: var(--basalt-text-4xl);
-}
-.octo-markdown h2 {
 	font-size: var(--basalt-text-3xl);
 }
+.octo-markdown h2 {
+	font-size: 1.3125rem;
+}
 .octo-markdown h3 {
-	font-size: var(--basalt-text-2xl);
+	font-size: 1.1875rem;
 }
 .octo-markdown :is(h4, h5, h6) {
 	font-size: inherit;
 }
 .octo-markdown a {
-	color: hsl(var(--basalt-primary));
+	color: hsl(var(--basalt-link));
 	text-decoration: underline;
 }
 .octo-markdown hr {
@@ -74,7 +74,7 @@
 .octo-markdown :not(pre) > code {
 	padding: var(--basalt-space-xs) var(--basalt-space-sm);
 	border-radius: var(--basalt-radius-sm);
-	color: hsl(var(--basalt-primary));
+	color: hsl(var(--basalt-link));
 	background: hsl(var(--basalt-bright));
 }
 .octo-markdown blockquote {
@@ -129,7 +129,7 @@
 	color: var(--basalt-tag-success-foreground);
 }
 .octo-markdown :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal) {
-	color: hsl(var(--basalt-primary));
+	color: hsl(var(--basalt-link));
 }
 .octo-markdown :is(.hljs-number, .hljs-built_in, .hljs-type) {
 	color: hsl(var(--basalt-warning));
@@ -223,10 +223,10 @@
 	color: var(--basalt-tag-success-foreground);
 }
 .octo-memory-diff [data-change="removed"] {
-	color: hsl(var(--basalt-destructive));
+	color: hsl(var(--basalt-danger));
 }
 .octo-memory-diff [data-change="hunk"] {
-	color: hsl(var(--basalt-primary));
+	color: hsl(var(--basalt-link));
 }
 .octo-memory-mobile {
 	display: none;
@@ -253,7 +253,7 @@
 	}
 	.octo-memory-editor textarea {
 		height: 55dvh;
-		min-height: var(--basalt-space-48);
+		min-height: var(--basalt-space-40);
 	}
 	.octo-memory-editor[data-pane="write"] > :last-child {
 		display: none;
