@@ -1,4 +1,5 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
@@ -18,7 +19,7 @@ import {
 	startJwksStub,
 } from "./jwks-stub";
 import { localWranglerConfig } from "./local-config";
-import { applyMigrations, assertTestMarker, createD1Exec, writeTestMarker } from "./local-d1";
+import { applyMigrations, assertTestMarker, type createD1Exec, writeTestMarker } from "./local-d1";
 import { bundleWorker, miniflareOptions } from "./miniflare";
 import { L2_JWKS_PORT, L2_WORKER_PORT } from "./ports";
 
@@ -157,16 +158,60 @@ export async function createExclusiveDir(path: string): Promise<void> {
 	}
 }
 
+export async function prepareE2eDbDirect(
+	persistTo: string,
+	config: string,
+	migrationsDir = join(root, "migrations"),
+): Promise<void> {
+	const { getPlatformProxy, unstable_splitSqlQuery } = await import("wrangler");
+	const proxy = await getPlatformProxy<{ DB: import("@cloudflare/workers-types").D1Database }>({
+		configPath: config,
+		persist: { path: join(persistTo, "v3") },
+		remoteBindings: false,
+		envFiles: [],
+	});
+	try {
+		const db = proxy.env.DB;
+		await db.batch([
+			db.prepare(
+				"CREATE TABLE IF NOT EXISTS _test_marker (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+			),
+			db.prepare("INSERT INTO _test_marker (key, value) VALUES ('env', 'test')"),
+		]);
+		const marker = await db
+			.prepare("SELECT value FROM _test_marker WHERE key = 'env'")
+			.first<{ value: string }>();
+		if (marker?.value !== "test") {
+			throw new Error("refusing to mutate D1 without _test_marker env=test");
+		}
+		const statements: string[] = [];
+		for (const file of readdirSync(migrationsDir)
+			.filter((name) => name.endsWith(".sql"))
+			.sort()) {
+			statements.push(...unstable_splitSqlQuery(readFileSync(join(migrationsDir, file), "utf8")));
+		}
+		if (statements.length > 0) {
+			await db.batch(statements.map((sql) => db.prepare(sql)));
+		}
+	} finally {
+		await proxy.dispose();
+	}
+}
+
 export async function prepareE2eDb(
 	persistTo: string,
 	config: string,
-	execFactory: typeof createD1Exec = createD1Exec,
+	execFactory?: typeof createD1Exec,
 ): Promise<void> {
 	await createExclusiveDir(persistTo);
-	const d1 = execFactory(join(root, "node_modules/.bin/wrangler"), root, persistTo, config);
-	writeTestMarker(d1);
-	assertTestMarker(d1);
-	applyMigrations(d1);
+	if (execFactory) {
+		const d1 = execFactory(join(root, "node_modules/.bin/wrangler"), root, persistTo, config);
+		writeTestMarker(d1);
+		assertTestMarker(d1);
+		applyMigrations(d1);
+		return;
+	}
+	await prepareE2eDbDirect(persistTo, config);
 }
 
 export function stopProcessGroup(pid: number | undefined, signal: NodeJS.Signals): void {
@@ -263,6 +308,7 @@ export async function runAuthorProfileRuntimeL2(options: {
 	state: JwksState;
 	jwksPort: number;
 	jwksStatePath: string;
+	script?: string;
 	bundle?: typeof bundleWorker;
 	assertFree?: (port: number) => Promise<void>;
 	wait?: (base: string, timeoutMs: number) => Promise<void>;
@@ -284,9 +330,13 @@ export async function runAuthorProfileRuntimeL2(options: {
 	await writeFile(configPath, rewritten);
 	const envContents = authorProfileRuntimeEnvContents(options.jwksPort, port);
 	await writeFile(join(tmp, ".env"), envContents);
-	await prepareE2eDb(persistTo, configPath);
-	await (options.assertFree ?? assertPortFree)(port);
-	const script = await (options.bundle ?? bundleWorker)(join(root, "tests/fixtures/worker.ts"));
+	const [, , script] = await Promise.all([
+		prepareE2eDb(persistTo, configPath),
+		(options.assertFree ?? assertPortFree)(port),
+		options.script !== undefined
+			? Promise.resolve(options.script)
+			: (options.bundle ?? bundleWorker)(join(root, "tests/fixtures/worker.ts")),
+	]);
 	const profileConfig = miniflareOptions(rewritten, persistTo, script, parseEnv(envContents));
 	attachAuthorProfileOutbound(profileConfig);
 	const runtime = new Miniflare(profileConfig);
@@ -349,13 +399,15 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 	const envFile = join(tmp, ".env");
 	const jwksPort = options.jwksPort ?? L2_JWKS_PORT;
 	await writeFile(envFile, e2eEnvContents(jwksPort, port));
-	const state = await (options.generateJwks ?? generateJwksPair)();
+	const assertFree = options.assertFree ?? assertPortFree;
+	const [state] = await Promise.all([
+		(options.generateJwks ?? generateJwksPair)(),
+		(options.prepareDb ?? prepareE2eDb)(persistTo, configPath),
+		assertFree(port),
+		assertFree(jwksPort),
+	]);
 	const jwksStatePath = join(tmp, "jwks-state.json");
 	await writeFile(jwksStatePath, JSON.stringify(state));
-	await (options.prepareDb ?? prepareE2eDb)(persistTo, configPath);
-	const assertFree = options.assertFree ?? assertPortFree;
-	await assertFree(port);
-	await assertFree(jwksPort);
 	const jwks = await (options.startJwks ?? startJwksStub)(jwksPort, state);
 	const base = `http://127.0.0.1:${port}`;
 	let runtime: Pick<Miniflare, "ready" | "dispose"> | undefined;
@@ -404,6 +456,7 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 			state,
 			jwksPort,
 			jwksStatePath,
+			script,
 			...(options.bundle ? { bundle: options.bundle } : {}),
 			...(options.assertFree ? { assertFree: options.assertFree } : {}),
 			...(options.wait ? { wait: options.wait } : {}),

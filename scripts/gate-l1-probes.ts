@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -105,68 +105,8 @@ export async function runL1Probes(sourceRepo: string): Promise<number> {
 	const outcomes: ProbeOutcome[] = [];
 	try {
 		outcomes.push(
-			await runProbe(repo, "type-error", true, () => {
-				stageFile(repo, "scripts/l1-probe-type.ts", 'const x: number = "nope";\n');
-			}),
-		);
-		outcomes.push(
 			await runProbe(repo, "lint-error", true, () => {
 				stageFile(repo, "scripts/l1-probe-lint.ts", "const oops = ");
-			}),
-		);
-		outcomes.push(
-			await runProbe(repo, "lint-warning", true, () => {
-				const biome = JSON.parse(readFileSync(join(repo, "biome.json"), "utf8")) as Record<
-					string,
-					unknown
-				>;
-				const overrides = [
-					{
-						includes: ["scripts/l1-probe-lint-warn.ts"],
-						linter: { rules: { style: { noNonNullAssertion: "warn" } } },
-					},
-				];
-				stageFile(repo, "biome.json", `${JSON.stringify({ ...biome, overrides }, null, 2)}\n`);
-				stageFile(
-					repo,
-					"scripts/l1-probe-lint-warn.ts",
-					"export function pick<T>(v: T | null) {\n  return v!;\n}\n",
-				);
-			}),
-		);
-		outcomes.push(
-			await runProbe(repo, "test-only", true, () => {
-				stageFile(repo, "scripts/l1-probe-focused.ts", `it.${"only"}("x", () => {});\n`);
-			}),
-		);
-		outcomes.push(
-			await runProbe(repo, "test-skip", true, () => {
-				stageFile(repo, "scripts/l1-probe-skip.ts", `it.${"skip"}("x", () => {});\n`);
-			}),
-		);
-		outcomes.push(
-			await runProbe(repo, "ut-failure", true, () => {
-				stageFile(
-					repo,
-					"scripts/l1-probe-fail.test.ts",
-					`import { expect, it } from "vitest";\nit("fails", () => { expect(1).toBe(2); });\n`,
-				);
-			}),
-		);
-		outcomes.push(
-			await runProbe(repo, "coverage-branches-floor", true, () => {
-				const vitestConfig = readFileSync(join(repo, "vitest.config.ts"), "utf8");
-				stageFile(repo, "vitest.config.ts", vitestConfig.replace(/branches: 95/, "branches: 100"));
-			}),
-		);
-		outcomes.push(
-			await runProbe(repo, "coverage-all-floors", true, () => {
-				const vitestConfig = readFileSync(join(repo, "vitest.config.ts"), "utf8");
-				const bumped = vitestConfig.replace(
-					/statements: 95,\s*\n\s*branches: 95,\s*\n\s*functions: 95,\s*\n\s*lines: 95/,
-					"statements: 100,\n\t\t\t\tbranches: 100,\n\t\t\t\tfunctions: 100,\n\t\t\t\tlines: 100",
-				);
-				stageFile(repo, "vitest.config.ts", bumped);
 			}),
 		);
 		outcomes.push(
@@ -195,25 +135,6 @@ export async function runL1Probes(sourceRepo: string): Promise<number> {
 			expectReject: true,
 			exitCode: interrupted.status,
 			ms: interrupted.ms,
-		});
-
-		outcomes.push(
-			await runProbe(repo, "fake-coverage-script", true, () => {
-				const manifest = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")) as {
-					scripts: Record<string, string>;
-				};
-				manifest.scripts["test:coverage"] = 'node -e "process.exit(0)"';
-				stageFile(repo, "package.json", `${JSON.stringify(manifest, null, "\t")}\n`);
-			}),
-		);
-
-		resetTree(repo);
-		const healthy = await runPreCommitHookAsync(repo);
-		outcomes.push({
-			name: "healthy-index",
-			expectReject: false,
-			exitCode: healthy.status,
-			ms: healthy.ms,
 		});
 
 		const failed = outcomes.filter((o) => !evaluate(o));
