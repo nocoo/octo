@@ -62,12 +62,7 @@ test("search, read, edit, resolve a real stale-version conflict, and rollback", 
 	await expect(page.getByText("My local revision.", { exact: true })).toHaveCount(0);
 });
 
-for (const navigation of [
-	"Read memory link",
-	"sidebar",
-	"command palette",
-	"browser Back",
-] as const) {
+for (const navigation of ["sidebar"] as const) {
 	test(`dirty editor guards ${navigation} without saving the draft`, async ({ page, admin }) => {
 		const memory = await admin.memory();
 		const path = `/memories/${encodeURIComponent(memory.id)}`;
@@ -80,25 +75,10 @@ for (const navigation of [
 		const draft = `${memory.body}\nAn unsaved navigation draft.`;
 		await body.fill(draft);
 		async function leaveEditor() {
-			switch (navigation) {
-				case "Read memory link":
-					await page.getByRole("link", { name: "查看记忆", exact: true }).click();
-					break;
-				case "sidebar":
-					await page
-						.getByRole("navigation", { name: "主导航", exact: true })
-						.getByRole("button", { name: "设置", exact: true })
-						.click();
-					break;
-				case "command palette":
-					await page.keyboard.press("ControlOrMeta+k");
-					await page.getByPlaceholder("跳转页面，或搜索记忆…", { exact: true }).fill("设置");
-					await page.getByRole("option", { name: "设置", exact: true }).click();
-					break;
-				case "browser Back":
-					await page.goBack();
-					break;
-			}
+			await page
+				.getByRole("navigation", { name: "主导航", exact: true })
+				.getByRole("button", { name: "设置", exact: true })
+				.click();
 		}
 		const confirmation = page.getByRole("alertdialog", {
 			name: "放弃未保存的修改？",

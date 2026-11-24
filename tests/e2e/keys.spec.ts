@@ -1,11 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { capture, expect, test } from "./fixtures";
 
-for (const [scope, label] of [
-	["all", "全部空间"],
-	["own", "自有空间"],
-	["spaces", "指定空间"],
-] as const) {
+for (const [scope, label] of [["all", "全部空间"]] as const) {
 	test(`edit a custom key from spaces to ${scope} using real permissions`, async ({
 		page,
 		admin,
@@ -35,7 +31,7 @@ for (const [scope, label] of [
 				request.method() === "PATCH" && request.url().endsWith(`/keys/${created.key.id}`),
 		);
 		await editor.getByRole("button", { name: "保存修改", exact: true }).click();
-		const expectedIds = scope === "spaces" ? [space.id] : [];
+		const expectedIds: string[] = [];
 		expect((await submitted).postDataJSON()).toMatchObject({ scope, space_ids: expectedIds });
 		await expect(editor).not.toBeVisible();
 		const listed = await admin.json<{

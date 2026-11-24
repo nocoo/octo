@@ -1,6 +1,8 @@
 import type { Page } from "@playwright/test";
 import { capture, expect, test } from "./fixtures";
 
+test.describe.configure({ mode: "serial" });
+
 async function moveToTrash(page: Page, title: string): Promise<void> {
 	await page.goto("/memories");
 	const row = page

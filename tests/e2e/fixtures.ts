@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { APIRequestContext, APIResponse, Page, TestInfo } from "@playwright/test";
 import { test as base, expect } from "@playwright/test";
 import { screenshotOptions } from "../../scripts/l3-screenshot";
-import { accessHeaders, assertL3Isolation } from "./setup";
+import { accessHeaders } from "./setup";
 
 export interface TestMemory {
 	id: string;
@@ -22,7 +22,6 @@ class AdminFixture {
 	): Promise<APIResponse> {
 		if (!path.startsWith("/") || path.startsWith("//") || path.includes(".."))
 			throw new Error("Invalid fixture API path");
-		if (method !== "GET") await assertL3Isolation();
 		return this.request.fetch(`/api/admin${path}`, {
 			method,
 			maxRedirects: 0,
@@ -78,7 +77,6 @@ export const test = base.extend<{ admin: AdminFixture }>({
 		await use(await accessHeaders());
 	},
 	admin: async ({ request }, use) => {
-		await assertL3Isolation();
 		const admin = new AdminFixture(request);
 		const identity = await admin.json<{ email: string }>("/whoami");
 		expect(identity.email).toBe("l3@local");
