@@ -23,7 +23,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@6424d395d36a815d931f10e557762eb635d511c0 # v2026.16
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
       - run: bun run typecheck
@@ -36,7 +36,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@6424d395d36a815d931f10e557762eb635d511c0 # v2026.16
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
       - run: bun run lint
@@ -93,7 +93,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@6424d395d36a815d931f10e557762eb635d511c0 # v2026.16
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
       - run: bun run build && ./node_modules/.bin/wrangler deploy --dry-run --outdir dist/worker
@@ -106,7 +106,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@6424d395d36a815d931f10e557762eb635d511c0 # v2026.16
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
       - run: |
@@ -132,7 +132,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@6424d395d36a815d931f10e557762eb635d511c0 # v2026.16
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
       - run: bun run test:e2e:api
@@ -145,7 +145,7 @@ jobs:
       - uses: nocoo/base-ci/.github/actions/setup-js@6424d395d36a815d931f10e557762eb635d511c0 # v2026.16
         with:
           package-manager: bun
-          bun-version: ${{ env.BUN_VERSION }}
+          runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
       - run: bunx playwright install --with-deps chromium && bun run test:e2e:bdd
