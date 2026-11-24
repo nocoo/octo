@@ -52,7 +52,7 @@ bun run gate:security        # G1/G2 gitleaks + osv-scanner; missing tools fail
 Follows `system1-quality` with strict TDD; CI slot definitions and pinned `base-ci` revision live in `.github/workflows/quality-slots.yml` via `.github/workflows/ci.yml` (`quality / Z1: Gate` required on `main`). Raise weaker enforcement instead of lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
 - **Exceptions / gaps**: `L2 Runtime` is `N/A` (Miniflare/workerd integration covered by `L3` `test:e2e:api`); `P1 Package` is `N/A` (private repo, not published to npm).
-- **Coverage scope**: `L1` >=95% on `apps/web/src/**` and `scripts/**`, excluding tests, `client/routes/**`, `client/components/layout/**`, `client/main.tsx`, and `client/app.tsx` (`server/routes` stays included).
+- **Coverage scope**: `L1` >=95% on `apps/web/src/**` and `scripts/**`, excluding tests, `client/routes/**`, `client/components/**`, `client/main.tsx`, and `client/app.tsx` (`server/routes` stays included).
 - **Local hooks**: installed via `prepare` (`.husky/`); `pre-commit` (`scripts/pre-commit.ts`) checks staged index (`S1/S2`, structural gates, `L1`). Never `--no-verify`.
 - **Pre-push**: `.husky/pre-push` checks pushed ref ranges with `gate:no-remote`, then runs `L3` (`test:e2e:api`) and `G1/G2` (`gate:security`) in parallel.
 
