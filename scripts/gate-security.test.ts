@@ -46,7 +46,7 @@ describe("gate:security", () => {
 		expect(gitleaksRanges(undefined, "abc def")).toEqual(["abc", "def"]);
 		expect(securityTasks("--deps", [])).toEqual([
 			{
-				cmd: ["osv-scanner", "--lockfile=bun.lock", "--config=.osv-scanner.toml"],
+				cmd: ["osv-scanner", "--lockfile=bun.lock", "--config=osv-scanner.toml"],
 				label: "osv-scanner",
 			},
 		]);
