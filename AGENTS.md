@@ -51,7 +51,8 @@ bun run gate:security        # G1/G2 gitleaks + osv-scanner; missing tools fail
 
 Follows `system1-quality` with strict TDD; CI slot definitions and pinned `base-ci` revision live in `.github/workflows/quality-slots.yml` via `.github/workflows/ci.yml` (`quality / Z1: Gate` required on `main`). Raise weaker enforcement instead of lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
-- **Exceptions / gaps**: `L2 Runtime` is `N/A` (Miniflare/workerd integration covered by `L3` `test:e2e:api`). `P1 Package` is `enforced` (`wrangler deploy --dry-run --outdir dist/worker` on `B1` artifact).
+- **Exceptions / gaps**: `L2 Runtime` is `N/A` (Miniflare/workerd integration covered by `L3` `test:e2e:api`). `L3` runs direct `node:sqlite` fixture access with `isolate: false` against local Miniflare; `L4` reuses the `B1` client artifact via `OCTO_SKIP_BUILD=1` and `setup-playwright`. `P1 Package` is `enforced` (`wrangler deploy --dry-run --outdir dist/worker` on `B1` artifact).
+- **CI contract**: workflows pin `nocoo/base-ci` `v2026.18` (`bfaac83b5a4d5c7ed26320bb5b09f3ca0a01932c`) and verify slots with checkout-free `z1-gate`.
 - **Coverage scope**: `L1` >=80% on `apps/web/src/**` and `scripts/**`, excluding tests, `client/routes/**`, `client/components/**`, `client/main.tsx`, and `client/app.tsx` (`server/routes` stays included).
 - **Local hooks**: installed via `prepare` (`.husky/`); `pre-commit` (`scripts/pre-commit.ts`) checks staged index (`S1/S2`, structural gates, `L1`). Never `--no-verify`.
 - **Pre-push**: `.husky/pre-push` checks pushed ref ranges with `gate:no-remote`, then runs `L3` (`test:e2e:api`) and `G1/G2` (`gate:security`) in parallel.

@@ -7,6 +7,7 @@ export default defineConfig({
 		exclude: ["tests/api/author-profile-runtime.test.ts"],
 		fileParallelism: false,
 		maxWorkers: 1,
+		isolate: false,
 		sequence: { shuffle: false },
 		server: { deps: { inline: ["wrangler"] } },
 		hookTimeout: 180_000,

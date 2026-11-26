@@ -450,6 +450,7 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 			OCTO_CONFIG: configPath,
 			OCTO_JWKS_STATE: jwksStatePath,
 			OCTO_JWKS_PORT: String(jwksPort),
+			OCTO_E2E_DIRECT_D1: "1",
 		};
 		await (options.spawnVitest ?? spawnVitestProcess)(env);
 		await (options.authorProfileRuntime ?? runAuthorProfileRuntimeL2)({

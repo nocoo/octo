@@ -1,8 +1,9 @@
 import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { openFixtureD1, waitForFixtureBackground } from "./fixture-d1";
+import { openDirectSqliteD1, openFixtureD1, waitForFixtureBackground } from "./fixture-d1";
 
 const platform = vi.hoisted(() => ({ open: vi.fn(), split: vi.fn<(sql: string) => string[]>() }));
 vi.mock("wrangler", () => ({
@@ -240,5 +241,34 @@ describe("official local fixture D1 runtime", () => {
 		binding();
 		await expect(openFixtureD1(f.persist, f.configPath)).rejects.toThrow();
 		expect(platform.open).not.toHaveBeenCalled();
+	});
+
+	it("opens an isolated direct SQLite store, enforces _test_marker, and executes queries", async () => {
+		const f = await layout();
+		const dbDir = join(f.persist, "v3/d1/miniflare-D1DatabaseObject");
+		await mkdir(dbDir, { recursive: true });
+		const dbPath = join(dbDir, "store.sqlite");
+		const seedDb = new DatabaseSync(dbPath);
+		seedDb.exec(
+			"CREATE TABLE _test_marker (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO _test_marker VALUES ('env', 'test'); CREATE TABLE items (id TEXT PRIMARY KEY);",
+		);
+		seedDb.close();
+
+		const session = await openDirectSqliteD1(f.persist, f.configPath);
+		try {
+			await session.exec(["--command", "INSERT INTO items VALUES ('a')"]);
+			const rows = JSON.parse(await session.exec(["--command", "SELECT id FROM items", "--json"]));
+			expect(rows).toEqual([{ results: [{ id: "a" }], success: true }]);
+			await expect(session.exec(["--json"])).rejects.toThrow("fixture SQL");
+		} finally {
+			await session.dispose();
+			await session.dispose();
+		}
+		await expect(session.exec(["--command", "SELECT 1"])).rejects.toThrow("disposed");
+
+		const badMarker = new DatabaseSync(dbPath);
+		badMarker.exec("UPDATE _test_marker SET value = 'production'");
+		badMarker.close();
+		await expect(openDirectSqliteD1(f.persist, f.configPath)).rejects.toThrow("env=test");
 	});
 });

@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runIfMain } from "./cli";
 import {
@@ -77,7 +77,11 @@ export async function runE2eBdd(options: RunBddOptions = {}): Promise<number> {
 	await writeFile(config, localConfig);
 	const envFile = join(paths.run, ".env");
 	const command = options.command ?? runCommand;
-	await command("vite", ["build", "--outDir", assets], {}, cwd);
+	if (process.env.OCTO_SKIP_BUILD === "1") {
+		await cp(join(cwd, "dist/client"), assets, { recursive: true });
+	} else {
+		await command("vite", ["build", "--outDir", assets], {}, cwd);
+	}
 	await (options.prepareDb ?? prepareE2eDb)(paths.persist, config);
 	const assertFree = options.assertFree ?? assertPortFree;
 	await assertFree(L3_WORKER_PORT);

@@ -2,6 +2,7 @@ import { afterAll } from "vitest";
 import { generateApiKeyMaterial, hashSecret } from "../../apps/web/src/server/auth/api-key";
 import {
 	type FixtureD1Session,
+	openDirectSqliteD1,
 	openFixtureD1,
 	waitForFixtureBackground,
 } from "../../scripts/fixture-d1";
@@ -38,7 +39,8 @@ export async function e2eD1(): Promise<AsyncD1Exec> {
 		throw new Error("fixture D1 cannot change isolated runs before disposal");
 	}
 	await waitForFixtureBackground(base);
-	session ??= { persist, config, opened: openFixtureD1(persist, config) };
+	const opener = process.env.OCTO_E2E_DIRECT_D1 === "1" ? openDirectSqliteD1 : openFixtureD1;
+	session ??= { persist, config, opened: opener(persist, config) };
 	const runtime = await session.opened;
 	const exec: AsyncD1Exec = async (args) => {
 		await waitForFixtureBackground(base);

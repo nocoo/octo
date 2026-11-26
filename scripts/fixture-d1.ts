@@ -1,5 +1,6 @@
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { D1Database } from "@cloudflare/workers-types";
 import { parse } from "smol-toml";
 import { valueHasRemoteTrue } from "./gate-no-remote";
@@ -110,6 +111,87 @@ export async function openFixtureD1(
 			if (disposed) return;
 			disposed = true;
 			await proxy.dispose();
+		},
+	};
+}
+
+async function findSqliteStore(state: string): Promise<string> {
+	const dir = join(state, "d1", "miniflare-D1DatabaseObject");
+	const entries = await readdir(dir);
+	const file = entries.find((name) => name.endsWith(".sqlite"));
+	if (!file) throw new Error(`fixture SQLite store missing in ${dir}`);
+	return join(dir, file);
+}
+
+/** Fast direct-SQLite fixture D1 session reusing the same isolation and marker checks without spawning Miniflare per file. */
+export async function openDirectSqliteD1(
+	persist: string,
+	configPath: string,
+): Promise<FixtureD1Session> {
+	assertRunPaths(persist, configPath);
+	const [persistRoot, config, state] = await Promise.all([
+		realpath(persist),
+		realpath(configPath),
+		realpath(join(persist, "v3")),
+	]);
+	assertRunPaths(persistRoot, config);
+	if (state !== join(persistRoot, "v3")) throw new Error("fixture D1 persistence must be isolated");
+	const settings = parse(await readFile(config, "utf8"));
+	const databases = settings.d1_databases;
+	if (
+		valueHasRemoteTrue(settings) ||
+		settings.vectorize ||
+		settings.routes ||
+		!Array.isArray(databases) ||
+		databases.length !== 1 ||
+		(databases[0] as Record<string, unknown>).binding !== "DB"
+	) {
+		throw new Error("unsafe fixture D1 configuration");
+	}
+	await assertIsolatedStore(state);
+	const sqlitePath = await findSqliteStore(state);
+	const db = new DatabaseSync(sqlitePath);
+	db.exec("PRAGMA busy_timeout = 5000;");
+	const checkMarker = () => {
+		try {
+			const row = db.prepare("SELECT value FROM _test_marker WHERE key = 'env'").get() as
+				| { value?: string }
+				| undefined;
+			if (row?.value === "test") return;
+		} catch {}
+		throw new Error("refusing fixture SQL without _test_marker env=test");
+	};
+	try {
+		checkMarker();
+	} catch (err) {
+		db.close();
+		throw err;
+	}
+	let disposed = false;
+	return {
+		async exec(args) {
+			if (disposed) throw new Error("fixture D1 runtime disposed");
+			if (
+				args[0] !== "--command" ||
+				!args[1]?.trim() ||
+				args.length > 3 ||
+				(args.length === 3 && args[2] !== "--json")
+			) {
+				throw new Error("expected fixture SQL command");
+			}
+			checkMarker();
+			const sql = args[1].trim();
+			if (args[2] === "--json") {
+				const results = db.prepare(sql).all();
+				return JSON.stringify([{ results, success: true }]);
+			}
+			db.exec(sql);
+			return JSON.stringify([{ results: [], success: true }]);
+		},
+		async dispose() {
+			if (disposed) return;
+			disposed = true;
+			db.close();
 		},
 	};
 }

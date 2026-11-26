@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "smol-toml";
@@ -324,6 +324,28 @@ describe("L3 runner", () => {
 			await expect(runE2eBdd(deps)).rejects.toThrow("allocated local JWKS port");
 			expect(close).toHaveBeenCalledOnce();
 			expect(deps.startWorker).not.toHaveBeenCalled();
+		}
+	});
+
+	it("reuses prebuilt dist/client when OCTO_SKIP_BUILD is set", async () => {
+		const deps = await options();
+		const clientDir = join(deps.root ?? "", "dist/client");
+		await mkdir(clientDir, { recursive: true });
+		await writeFile(join(clientDir, "index.html"), "<!doctype html><title>octo</title>");
+		vi.stubEnv("OCTO_SKIP_BUILD", "1");
+		try {
+			expect(await runE2eBdd(deps)).toBe(0);
+			expect(deps.command).toHaveBeenCalledTimes(1);
+			expect(deps.command).toHaveBeenCalledWith(
+				"playwright",
+				["test", "--config", "playwright.config.ts"],
+				expect.any(Object),
+				deps.root,
+			);
+			const paths = bddPaths("unit-run", deps.root);
+			expect(await readFile(join(paths.run, "client/index.html"), "utf8")).toContain("octo");
+		} finally {
+			vi.unstubAllEnvs();
 		}
 	});
 });
