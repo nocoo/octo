@@ -14,6 +14,7 @@ import {
 	listenError,
 	listenErrorCode,
 	occupyingPid,
+	parseShardFlag,
 	persistDir,
 	prepareE2eDb,
 	rewriteWranglerConfig,
@@ -415,6 +416,64 @@ describe("runE2eApi", () => {
 		}) as ChildProcess["kill"];
 		await stopChild(child, async () => undefined);
 		expect(signals).toEqual(["SIGTERM", "SIGKILL"]);
+	});
+
+	it("parses --shard flags and rejects invalid values", () => {
+		expect(parseShardFlag([])).toBeUndefined();
+		expect(parseShardFlag(["--shard=1/2"])).toEqual({ raw: "1/2", index: 1, total: 2 });
+		expect(parseShardFlag(["--shard", "2/2"])).toEqual({ raw: "2/2", index: 2, total: 2 });
+		expect(() => parseShardFlag(["--shard"])).toThrow("missing value");
+		expect(() => parseShardFlag(["--shard=0/2"])).toThrow("invalid --shard value");
+		expect(() => parseShardFlag(["--shard=3/2"])).toThrow("invalid --shard range");
+	});
+
+	it("forwards --shard to vitest and runs authorProfileRuntime only on the last shard", async () => {
+		const vitest = vi.fn<
+			(
+				env: Record<string, string>,
+				spawnFn?: typeof import("node:child_process").spawn,
+				targets?: string[],
+			) => Promise<void>
+		>(async () => undefined);
+		const profile = vi.fn(async () => undefined);
+		const baseOpts = {
+			bundle: async () => "export default {}",
+			prepareDb: async () => undefined,
+			assertFree: async () => undefined,
+			wait: async () => undefined,
+			generateJwks: async () => ({
+				kid: "e2e",
+				privateJwk: { kty: "RSA" },
+				publicJwk: { kty: "RSA", kid: "e2e" },
+			}),
+			startJwks: async () => ({
+				url: "http://127.0.0.1:17057/cdn-cgi/access/certs",
+				close: async () => undefined,
+			}),
+			createRuntime: () => ({
+				ready: Promise.resolve(new URL("http://127.0.0.1")),
+				dispose: async () => undefined,
+			}),
+			spawnVitest: vitest,
+			authorProfileRuntime: profile,
+		};
+		await runE2eApi({ ...baseOpts, shard: { raw: "1/2", index: 1, total: 2 } });
+		expect(vitest.mock.calls[0]?.[2]).toEqual([
+			"tests/api",
+			"--config",
+			"vitest.e2e.config.ts",
+			"--shard=1/2",
+		]);
+		expect(profile).not.toHaveBeenCalled();
+
+		await runE2eApi({ ...baseOpts, shard: { raw: "2/2", index: 2, total: 2 } });
+		expect(vitest.mock.calls[1]?.[2]).toEqual([
+			"tests/api",
+			"--config",
+			"vitest.e2e.config.ts",
+			"--shard=2/2",
+		]);
+		expect(profile).toHaveBeenCalledTimes(1);
 	});
 
 	it("resolves or rejects the vitest child", async () => {

@@ -156,8 +156,8 @@ jobs:
     steps:
       - run: echo "N/A - Miniflare/workerd integration covered by L3 API E2E"
 
-  l3-integration:
-    name: "L3: Integration"
+  l3-integration-1:
+    name: "L3: Integration (1/2)"
     runs-on: ubuntu-latest
     outputs:
       tested-sha: ${{ steps.record-sha.outputs.sha }}
@@ -169,7 +169,26 @@ jobs:
           runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
-      - run: bun run test:e2e:api
+      - run: bun run test:e2e:api -- --shard=1/2
+      - name: Record tested SHA
+        id: record-sha
+        if: always()
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  l3-integration-2:
+    name: "L3: Integration (2/2)"
+    runs-on: ubuntu-latest
+    outputs:
+      tested-sha: ${{ steps.record-sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: nocoo/base-ci/.github/actions/setup-js@e5876a604547b1ddb0916f16dd841a4f832609a0 # v2026.20
+        with:
+          package-manager: bun
+          runtime-version: ${{ env.BUN_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+          install-policy: project
+      - run: bun run test:e2e:api -- --shard=2/2
       - name: Record tested SHA
         id: record-sha
         if: always()
@@ -244,7 +263,8 @@ jobs:
       - b1-build
       - l1-unit
       - l2-runtime
-      - l3-integration
+      - l3-integration-1
+      - l3-integration-2
       - l4-e2e
       - p1-package
     outputs:
@@ -264,7 +284,8 @@ jobs:
             g2-dependencies=G2: Dependencies
             b1-build=B1: Build
             l1-unit=L1: Unit
-            l3-integration=L3: Integration
+            l3-integration-1=L3: Integration (1/2)
+            l3-integration-2=L3: Integration (2/2)
             l4-e2e=L4: E2E
             p1-package=P1: Package
           skipped-jobs: |

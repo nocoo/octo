@@ -359,10 +359,43 @@ export async function runAuthorProfileRuntimeL2(options: {
 	}
 }
 
+export type ShardSpec = {
+	raw: string;
+	index: number;
+	total: number;
+};
+
+export function parseShardFlag(argv: readonly string[]): ShardSpec | undefined {
+	let raw: string | undefined;
+	for (let i = 0; i < argv.length; i += 1) {
+		const arg = argv[i];
+		if (!arg) continue;
+		if (arg === "--shard") {
+			raw = argv[i + 1];
+			if (!raw) throw new Error("missing value for --shard");
+			i += 1;
+		} else if (arg.startsWith("--shard=")) {
+			raw = arg.slice("--shard=".length);
+		}
+	}
+	if (raw === undefined) return undefined;
+	const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(raw);
+	if (!match) {
+		throw new Error(`invalid --shard value: ${raw}`);
+	}
+	const index = Number(match[1]);
+	const total = Number(match[2]);
+	if (index > total) {
+		throw new Error(`invalid --shard range: ${raw}`);
+	}
+	return { raw, index, total };
+}
+
 export type RunE2eOptions = {
 	runId?: string;
 	port?: number;
 	jwksPort?: number;
+	shard?: ShardSpec;
 	spawnVitest?: (
 		env: Record<string, string>,
 		spawnFn?: typeof spawn,
@@ -452,16 +485,25 @@ export async function runE2eApi(options: RunE2eOptions = {}): Promise<number> {
 			OCTO_JWKS_PORT: String(jwksPort),
 			OCTO_E2E_DIRECT_D1: "1",
 		};
-		await (options.spawnVitest ?? spawnVitestProcess)(env);
-		await (options.authorProfileRuntime ?? runAuthorProfileRuntimeL2)({
-			state,
-			jwksPort,
-			jwksStatePath,
-			script,
-			...(options.bundle ? { bundle: options.bundle } : {}),
-			...(options.assertFree ? { assertFree: options.assertFree } : {}),
-			...(options.wait ? { wait: options.wait } : {}),
-		});
+		const targets = [
+			"tests/api",
+			"--config",
+			"vitest.e2e.config.ts",
+			...(options.shard ? [`--shard=${options.shard.raw}`] : []),
+		];
+		await (options.spawnVitest ?? spawnVitestProcess)(env, spawn, targets);
+		const runProfile = !options.shard || options.shard.index === options.shard.total;
+		if (runProfile) {
+			await (options.authorProfileRuntime ?? runAuthorProfileRuntimeL2)({
+				state,
+				jwksPort,
+				jwksStatePath,
+				script,
+				...(options.bundle ? { bundle: options.bundle } : {}),
+				...(options.assertFree ? { assertFree: options.assertFree } : {}),
+				...(options.wait ? { wait: options.wait } : {}),
+			});
+		}
 		if (interrupted) throw new Error("L2 interrupted");
 		return 0;
 	} finally {
