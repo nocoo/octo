@@ -37,7 +37,7 @@
 		"@types/bun": "1.4.5",
 		"@types/react": "^19.3.3",
 		"@types/react-dom": "^19.2.0",
-		"@vitest/coverage-v8": "5.1.1",
+		"@vitest/coverage-v8": "5.1.2",
 		"husky": "9.1.7",
 		"miniflare": "5.20260930.0-alpha",
 		"oxc-parser": "0.160.0",
