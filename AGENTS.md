@@ -45,14 +45,14 @@ bun run gate:security        # G1/G2 gitleaks + osv-scanner; missing tools fail
 - Store timestamps in UTC; display only via `formatTimestamp` (`apps/web/src/client/lib/format.ts`, browser-local `YYYY-MM-DD，HH:mm`, no zone label or second formatter). Usage/dashboard ranges stay UTC calendar days.
 - Dashboard layout: single-row `PageHeader` (no `description`/`filters`), 34px controls, internal-scroll tables, no toolbar `Field` or single-table `SectionRule` ([docs/06-dashboard.md](docs/06-dashboard.md) §8).
 - Manual releases (`package.json` `X.Y.Z`, tags `vX.Y.Z`, `CHANGELOG.md`) require explicit authorization or bot need; follow [docs/07-dev-workflow.md](docs/07-dev-workflow.md) §5.
-- Green `main` CI triggers `.github/workflows/release.yml` (`production` D1 migrations, Wrangler deploy, `/api/live` SHA/version verify); retry via `workflow_dispatch`, Mac deploy emergency-only. Never print secrets.
+- `main` push (or `workflow_dispatch` with `deploy=true` on `main`) runs `.github/workflows/pipeline.yml` (`quality` -> `D1`–`D5` Worker deploy reusing `B1` `b1-dist-client`, `octo-db` D1 migrations, Wrangler deploy, `/api/live` SHA/version verify); Mac deploy emergency-only. Never print secrets.
 
 ## Quality & Local Gates
 
-Follows `system1-quality` with strict TDD; CI slot definitions and pinned `base-ci` revision live in `.github/workflows/quality-slots.yml` via `.github/workflows/ci.yml` (`quality / Z1: Gate` required on `main`). Raise weaker enforcement instead of lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
+Follows `system1-quality` with strict TDD; CI slot definitions and pinned `base-ci` revision live in `.github/workflows/quality-slots.yml` via `.github/workflows/pipeline.yml` (`quality` -> `D1`–`D5` Worker deploy on `main` push; `quality / Z1: Gate` required on `main`). Raise weaker enforcement instead of lowering the contract. Status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
 - **Exceptions / gaps**: `L2 Runtime` is `N/A` (Miniflare/workerd integration covered by `L3` `test:e2e:api`). `L3` runs direct `node:sqlite` fixture access with `isolate: false` against local Miniflare; `L4` reuses the `B1` client artifact via `OCTO_SKIP_BUILD=1` and `setup-playwright`. `P1 Package` is `enforced` (`wrangler deploy --dry-run --outdir dist/worker` on `B1` artifact).
-- **CI contract**: workflows pin `nocoo/base-ci` `v2026.20` (`e5876a604547b1ddb0916f16dd841a4f832609a0`) and verify slots with checkout-free `z1-gate`.
+- **CI contract**: workflows pin `nocoo/base-ci` `v2026.24` (`3703a073693d598159e87f77f99587e586c14cfe`) and verify slots with checkout-free `z1-gate`.
 - **Coverage scope**: `L1` >=80% on `apps/web/src/**` and `scripts/**`, excluding tests, `client/routes/**`, `client/components/**`, `client/main.tsx`, and `client/app.tsx` (`server/routes` stays included).
 - **Local hooks**: installed via `prepare` (`.husky/`); `pre-commit` (`scripts/pre-commit.ts`) checks staged index (`S1/S2`, structural gates, `L1`). Never `--no-verify`.
 - **Pre-push**: `.husky/pre-push` checks pushed ref ranges with `gate:no-remote`, then runs `L3` (`test:e2e:api`) and `G1/G2` (`gate:security`) in parallel.
