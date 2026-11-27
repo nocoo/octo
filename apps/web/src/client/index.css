@@ -252,11 +252,11 @@ html:not(.dark) {
 	block-size: var(--basalt-space-12);
 	stroke-width: 1.5;
 }
-.octo-empty > p:first-of-type {
-	font-size: var(--basalt-text-xl);
-}
 .octo-empty > p {
 	max-inline-size: 42ch;
+}
+.octo-empty > p:first-of-type {
+	font-size: var(--basalt-text-xl);
 }
 .octo-empty :is(button, a) {
 	scroll-margin-block: var(--basalt-space-layout);
