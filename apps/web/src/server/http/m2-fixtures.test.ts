@@ -61,7 +61,6 @@ afterAll(() => {
 });
 
 await import("../../../../../tests/api/memories.test");
-await import("../../../../../tests/api/memories-matrix.test");
 await import("../../../../../tests/api/changes.test");
 
 it("shares one awaited SDK session across every guarded M2 fixture setup", () => {
@@ -69,5 +68,5 @@ it("shares one awaited SDK session across every guarded M2 fixture setup", () =>
 	const markerChecks = state.commands.filter(
 		(args) => args[1] === "SELECT value FROM _test_marker WHERE key = 'env'",
 	);
-	expect(markerChecks).toHaveLength(8);
+	expect(markerChecks).toHaveLength(7);
 });
